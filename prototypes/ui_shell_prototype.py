@@ -90,12 +90,13 @@ def allocation_chart(height: str = '260px') -> None:
 
 def transaction_form(on_done=None) -> None:
     """Fields change with the transaction type and with automatic FX conversion (spec 3.3)."""
-    state = {'typ': 'Zakup', 'konto': 'IKE (XTB)', 'waluta': 'USD'}
+    state = {'typ': 'Zakup', 'konto': 'IKE (XTB)', 'waluta': 'USD', 'xtb_fee': False}
 
     @ui.refreshable
     def fields() -> None:
         typ, konto, waluta = state['typ'], state['konto'], state['waluta']
-        needs_conversion = waluta not in ACCOUNTS[konto]['cash']
+        # PLN-only account buying/selling in a foreign currency: the only case where conversion happens.
+        foreign_on_pln_account = waluta not in ACCOUNTS[konto]['cash'] and typ in ('Zakup', 'Sprzedaż', 'Dywidenda')
         if typ in ('Zakup', 'Sprzedaż'):
             ui.input('Instrument', placeholder='np. CSPX').classes('w-full')
             with ui.row().classes('w-full no-wrap'):
@@ -109,12 +110,18 @@ def transaction_form(on_done=None) -> None:
             with ui.row().classes('w-full no-wrap'):
                 ui.number(f'Brutto ({waluta})').classes('grow')
                 ui.number(f'Podatek u źródła ({waluta})').classes('grow')
-        if needs_conversion and typ in ('Zakup', 'Sprzedaż', 'Dywidenda'):
-            fee = ACCOUNTS[konto]['fx_fee']
-            with ui.card().classes('w-full bg-amber-50'):
-                ui.label(f'Automatyczne przewalutowanie {waluta}→PLN (opłata {fee}%)').classes('font-medium')
-                ui.number('Kwota PLN pobrana przez brokera *').classes('w-full')
-                ui.label('Kurs efektywny i opłata zostaną wyliczone z tej kwoty.').classes('text-xs text-gray-600')
+        if foreign_on_pln_account:
+            def toggle_fee(e):
+                state['xtb_fee'] = e.value
+                fields.refresh()
+            ui.checkbox('Prowizja XTB (przewalutowanie 0,5%)', value=state['xtb_fee'], on_change=toggle_fee)
+            if state['xtb_fee']:
+                with ui.card().classes('w-full bg-amber-50'):
+                    ui.label(f'Przewalutowanie {waluta}→PLN z opłatą 0,5%').classes('font-medium')
+                    ui.number('Kwota PLN pobrana przez XTB *').classes('w-full')
+                    ui.label('Kurs efektywny i opłata zostaną wyliczone z tej kwoty.').classes('text-xs text-gray-600')
+            else:
+                ui.number(f'Kurs {waluta}/PLN', placeholder='puste = kurs NBP z dnia przed transakcją').classes('w-full')
         elif waluta != 'PLN' and len(ACCOUNTS[konto]['cash']) > 1:
             ui.select(['z gotówki ' + waluta, 'z PLN (przewalutowanie)'], label='Płatność',
                       value='z gotówki ' + waluta).classes('w-full')
