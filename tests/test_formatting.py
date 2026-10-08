@@ -3,7 +3,14 @@ from decimal import Decimal
 
 import pytest
 
-from financial_app.domain.formatting import format_date, format_percent, format_pln, parse_date, parse_number
+from financial_app.domain.formatting import (
+    format_date,
+    format_exact,
+    format_percent,
+    format_pln,
+    parse_date,
+    parse_number,
+)
 
 NBSP = " "
 
@@ -66,3 +73,11 @@ def test_parse_date_reads_day_first_dates() -> None:
 def test_parse_date_rejects_other_formats_and_impossible_dates(text: str) -> None:
     with pytest.raises(ValueError):
         parse_date(text)
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [(Decimal("0.5"), "0,50"), (Decimal("135.4275"), "135,4275"), (Decimal(12850), "12\xa0850,00")],
+)
+def test_format_exact_keeps_every_decimal_so_editing_never_rounds(value: Decimal, expected: str) -> None:
+    assert format_exact(value) == expected

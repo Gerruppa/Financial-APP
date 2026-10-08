@@ -21,6 +21,12 @@ def format_number(value: float | Decimal, decimals: int = 2, signed: bool = Fals
     return f"{rounded:{sign},.{decimals}f}".replace(",", NBSP).replace(".", ",")
 
 
+def format_exact(value: Decimal) -> str:
+    """Format a stored value for an edit field with all its decimals (at least two), so re-saving never rounds it."""
+    exponent = value.as_tuple().exponent
+    return format_number(value, decimals=max(2, -exponent if isinstance(exponent, int) else 0))
+
+
 def format_pln(value: float | Decimal, signed: bool = False) -> str:
     """Format an amount in PLN, e.g. 15912.3 -> '15 912,30 zł' (non-breaking spaces)."""
     return f"{format_number(value, signed=signed)}{NBSP}zł"

@@ -73,3 +73,29 @@ class TransactionRow(Base):
     # PLN, as exact decimal text like the FX Conversion Fee
     actual_amount: Mapped[str] = mapped_column(String(30))
     comment: Mapped[str] = mapped_column(Text)
+
+
+class AssetClassRow(Base):
+    """An Asset Class (spec 3.2); ``position`` keeps the sheet's order, with classes the user adds at the end."""
+
+    __tablename__ = "asset_classes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(100, collation="NOCASE"), unique=True)
+    position: Mapped[int] = mapped_column(Integer)
+
+
+class InstrumentRow(Base):
+    """An Instrument (spec 3.2); ``domain.instruments.Instrument`` is its in-memory form."""
+
+    __tablename__ = "instruments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(200, collation="NOCASE"), unique=True)
+    asset_class_id: Mapped[int] = mapped_column(ForeignKey("asset_classes.id"), index=True)
+    quote_currency: Mapped[str] = mapped_column(String(3))
+    market: Mapped[str] = mapped_column(String(100))
+    # In the quote currency, as exact decimal text like the FX Conversion Fee
+    manual_price: Mapped[str | None] = mapped_column(String(30))
+
+    asset_class: Mapped[AssetClassRow] = relationship()

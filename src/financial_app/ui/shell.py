@@ -6,8 +6,8 @@ from dataclasses import dataclass
 from nicegui import ui
 from sqlalchemy import Engine
 
-from financial_app.ui.accounts import build_settings_page
 from financial_app.ui.portfolio import PortfolioPage
+from financial_app.ui.settings import build_settings_page
 from financial_app.ui.transactions import TransactionsPage, open_transaction_dialog
 
 APP_TITLE = "Moje inwestycje"

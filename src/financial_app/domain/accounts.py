@@ -1,9 +1,10 @@
 """Accounts, Account Types and the Tax Regime each type maps to (spec 3.1)."""
 
-import re
 from dataclasses import dataclass, field
 from decimal import Decimal
 from enum import StrEnum
+
+from financial_app.domain.currencies import is_currency_code
 
 
 class AccountError(ValueError):
@@ -71,7 +72,6 @@ def tax_regime_for(account_type: AccountType) -> TaxRegime:
     return _TAX_REGIMES[account_type]
 
 
-_CURRENCY_CODE = re.compile(r"[A-Z]{3}")
 _MAX_FEE_PERCENT = Decimal(100)
 
 
@@ -95,7 +95,7 @@ class AccountDraft:
         if not currencies:
             raise AccountError("Podaj co najmniej jedną walutę rachunku.")
         for code in currencies:
-            if not _CURRENCY_CODE.fullmatch(code):
+            if not is_currency_code(code):
                 raise AccountError(f"Nieprawidłowy kod waluty: {code}. Użyj trzyliterowego kodu, np. PLN.")
         fee = self.fx_conversion_fee_percent
         if fee is not None and not (0 <= fee < _MAX_FEE_PERCENT):

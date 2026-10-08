@@ -7,7 +7,7 @@ from nicegui import ui
 from sqlalchemy import Engine
 
 from financial_app.domain.accounts import Account, AccountDraft, AccountError, AccountType, tax_regime_for
-from financial_app.domain.formatting import format_number, format_percent, parse_number
+from financial_app.domain.formatting import format_exact, format_percent, parse_number
 from financial_app.persistence.accounts import add_account, list_accounts, update_account
 
 ACCOUNT_TYPE_OPTIONS = {account_type.value: account_type.label for account_type in AccountType}
@@ -114,11 +114,7 @@ class AccountsSection:
 
 
 def _fee_text(fee: Decimal | None) -> str:
-    """The fee as the user typed it, keeping every decimal so re-saving never rounds it."""
-    if fee is None:
-        return ""
-    exponent = fee.as_tuple().exponent
-    return format_number(fee, decimals=max(2, -exponent if isinstance(exponent, int) else 0))
+    return "" if fee is None else format_exact(fee)
 
 
 def _parse_percent(text: str) -> Decimal | None:
@@ -129,8 +125,3 @@ def _parse_percent(text: str) -> Decimal | None:
         return parse_number(text)
     except ValueError:
         raise AccountError(f"Opłata za przewalutowanie musi być liczbą, a nie „{text.strip()}”.") from None
-
-
-def build_settings_page(engine: Engine) -> None:
-    ui.label("Ustawienia").classes("text-2xl font-bold")
-    AccountsSection(engine).build()
