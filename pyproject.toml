@@ -22,6 +22,10 @@ dev = [
 [project.scripts]
 financial-app = "financial_app.app:main"
 
+# No console window: this is what the desktop shortcut starts.
+[project.gui-scripts]
+financial-app-gui = "financial_app.app:main"
+
 [build-system]
 requires = ["setuptools>=80"]
 build-backend = "setuptools.build_meta"
