@@ -40,8 +40,12 @@ _Avoid_: category, asset type
 The percentage breakdown of one Multi-asset Instrument across Asset Classes, summing to 100%.
 _Avoid_: allocation, look-through
 
+**View Scope** (Widok):
+What a screen is computed for: **Total** (all Accounts) or a single Account. Accounts are the sub-portfolios; there is no grouping level between them and Total.
+_Avoid_: sub-portfolio, portfolio group, filter
+
 **Investment Strategy** (Strategia inwestycyjna):
-The set of Allocation Targets for the portfolio, optionally refined by Instrument Targets inside each Asset Class.
+The set of Allocation Targets, optionally refined by Instrument Targets inside each Asset Class. Total has one; each Account may optionally have its own.
 _Avoid_: model portfolio, plan
 
 **Allocation Target** (Cel %):
