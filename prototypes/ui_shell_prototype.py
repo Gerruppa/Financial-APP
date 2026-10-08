@@ -12,7 +12,7 @@ Run:  .venv/Scripts/python.exe prototypes/ui_shell_prototype.py
 from nicegui import ui
 
 VARIANTS = {'A': 'Zakładki jak w arkuszu', 'B': 'Menu boczne i karty', 'C': 'Gęsty arkusz'}
-TABS = ['Dashboard', 'Wyniki', 'Portfolio', 'Transakcje', 'Strategia inwestycyjna', 'Obligacje', 'Benchmarki', 'Ustawienia']
+TABS = ['Dashboard', 'Wyniki', 'Portfolio', 'Transakcje', 'Obligacje', 'Benchmarki', 'Ustawienia']
 
 # --- fake data (invented) -----------------------------------------------------
 ACCOUNTS = {
@@ -256,7 +256,7 @@ def variant_b() -> None:
     with ui.left_drawer(value=True).classes('bg-indigo-950 text-white').props('width=220'):
         ui.label('Moje inwestycje').classes('text-lg font-bold mb-4')
         icons = {'Dashboard': 'dashboard', 'Wyniki': 'insights', 'Portfolio': 'account_balance_wallet',
-                 'Transakcje': 'receipt_long', 'Strategia inwestycyjna': 'flag', 'Obligacje': 'savings', 'Benchmarki': 'compare_arrows',
+                 'Transakcje': 'receipt_long', 'Obligacje': 'savings', 'Benchmarki': 'compare_arrows',
                  'Ustawienia': 'settings'}
         for t in TABS:
             ui.button(t, icon=icons[t], on_click=lambda t=t: (current.update(page=t), content.refresh())) \
@@ -297,7 +297,7 @@ def variant_b() -> None:
         deposit = max(0.0, max(needed, default=total) - total) if abs(target_sum - 100) < 0.01 else None
 
         with ui.row().classes('w-full items-center'):
-            ui.label('Strategia inwestycyjna – cele i rebalansowanie').classes('text-lg font-bold')
+            ui.label('Strategia inwestycyjna').classes('text-lg font-bold')
             ui.space()
             ui.label(f'Suma celów: {target_sum:g}%').classes(
                 'text-sm ' + ('text-green-700' if abs(target_sum - 100) < 0.01 else 'text-red-600 font-bold'))
@@ -394,9 +394,6 @@ def variant_b() -> None:
                         ui.label(t['data']).classes('text-xs text-gray-500')
                         ui.label(pln(t['kwota'])).classes('font-semibold')
                         ui.icon('edit').classes('text-gray-400')
-        elif page == 'Strategia inwestycyjna':
-            with ui.card().classes('w-full'):
-                rebalancing()
         else:
             ui.label('Poza zakresem prototypu').classes('text-gray-400')
 
