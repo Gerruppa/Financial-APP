@@ -1,0 +1,3 @@
+# Structured price sources only; MF data is authoritative for bonds
+
+GOOGLEFINANCE is unavailable outside Google Sheets, and the spreadsheet's HTML scraping of Google Finance, FT and Biznesradar breaks on layout changes. We use sources with structured data — Bossa (GPW), Yahoo (foreign, crypto, metals), Stooq (history, indices), analizy.pl/bankier.pl (funds), gpwcatalyst.pl, gov.pl (IZ nominal), NBP (FX), GUS (CPI) and the MF retail-bond XLS — each behind a swappable source module with fallback order and Manual Price override. For retail bonds the MF-published rate is the source of truth; CPI+margin is used only for not-yet-published periods and flagged as an Estimated Rate.

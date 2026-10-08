@@ -1,0 +1,3 @@
+# Local NiceGUI app on SQLite, with a UI-independent domain core
+
+The app is single-user and runs locally on Windows (own window via NiceGUI native mode, launched from a desktop shortcut), storing data in one SQLite file (SQLAlchemy + migrations) outside the repo. NiceGUI was chosen because the owner reads Python but not JavaScript/HTML; Django+HTMX, Streamlit and FastAPI+React were rejected for that reason or for weak form/editing support. All calculations (FIFO, valuation, bonds, returns, tax) live in a pure-Python domain package with no UI or DB imports, so the UI can be replaced and the app later moved to a server or multiple users without rewriting the logic.

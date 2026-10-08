@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+*.pyc
+.idea/
+
+# Local copy of the original spreadsheet (personal financial data)
+reference/
