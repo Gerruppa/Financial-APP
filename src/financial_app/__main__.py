@@ -1,5 +1,3 @@
-"""Start the app: .venv/Scripts/python.exe main.py"""
-
 from financial_app.app import main
 
 if __name__ == "__main__":

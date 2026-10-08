@@ -5,3 +5,10 @@ __pycache__/
 
 # Local copy of the original spreadsheet (personal financial data)
 reference/
+
+# Tooling caches and build metadata
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+build/
