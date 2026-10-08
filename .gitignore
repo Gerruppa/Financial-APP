@@ -12,3 +12,6 @@ reference/
 .ruff_cache/
 *.egg-info/
 build/
+
+# Local knowledge-graph output from the graphify skill
+graphify-out/
