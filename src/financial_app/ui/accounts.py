@@ -1,13 +1,13 @@
 """Ustawienia > Konta: the managed list of Accounts with an add/edit dialog (spec 3.1)."""
 
 from dataclasses import dataclass
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 
 from nicegui import ui
 from sqlalchemy import Engine
 
 from financial_app.domain.accounts import Account, AccountDraft, AccountError, AccountType, tax_regime_for
-from financial_app.domain.formatting import format_number, format_percent
+from financial_app.domain.formatting import format_number, format_percent, parse_number
 from financial_app.persistence.accounts import add_account, list_accounts, update_account
 
 ACCOUNT_TYPE_OPTIONS = {account_type.value: account_type.label for account_type in AccountType}
@@ -123,16 +123,12 @@ def _fee_text(fee: Decimal | None) -> str:
 
 def _parse_percent(text: str) -> Decimal | None:
     """Read a percentage typed the Polish way ("0,5"); empty means no fee."""
-    cleaned = text.strip().removesuffix("%").strip().replace(",", ".")
-    if not cleaned:
+    if not text.strip():
         return None
     try:
-        value = Decimal(cleaned)
-    except InvalidOperation:
-        value = None
-    if value is None or not value.is_finite():
-        raise AccountError(f"Opłata za przewalutowanie musi być liczbą, a nie „{text.strip()}”.")
-    return value
+        return parse_number(text)
+    except ValueError:
+        raise AccountError(f"Opłata za przewalutowanie musi być liczbą, a nie „{text.strip()}”.") from None
 
 
 def build_settings_page(engine: Engine) -> None:

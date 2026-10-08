@@ -7,6 +7,8 @@ from nicegui import ui
 from sqlalchemy import Engine
 
 from financial_app.ui.accounts import build_settings_page
+from financial_app.ui.portfolio import PortfolioPage
+from financial_app.ui.transactions import TransactionsPage, open_transaction_dialog
 
 APP_TITLE = "Moje inwestycje"
 
@@ -35,6 +37,14 @@ VIEW_SCOPES = ["Total"]
 
 def build_shell(engine: Engine) -> None:
     """Build the whole window; tabs are client-side sub-pages backed by the database at ``engine``."""
+    transactions_page = TransactionsPage(engine)
+    portfolio_page = PortfolioPage(engine)
+
+    def transactions_changed() -> None:
+        # Only the tab on screen has something to redraw; the others rebuild from the database when opened
+        transactions_page.refresh()
+        portfolio_page.refresh()
+
     with ui.header().classes("bg-indigo-900 items-center").mark("header"):
         ui.label(APP_TITLE).classes("text-lg font-bold")
         ui.space()
@@ -47,11 +57,13 @@ def build_shell(engine: Engine) -> None:
             ).classes("w-full")
 
     with ui.page_sticky(position="bottom-right", x_offset=24, y_offset=24):
-        ui.button(icon="add", on_click=open_transaction_dialog).props(
+        ui.button(icon="add", on_click=lambda: open_transaction_dialog(engine, transactions_changed)).props(
             'fab color=indigo aria-label="Dodaj transakcję"'
         ).mark("add-transaction")
 
     pages: dict[str, Callable[[], None]] = {tab.path: _placeholder_page(tab.label) for tab in TABS}
+    pages["/transakcje"] = transactions_page.build
+    pages["/portfolio"] = portfolio_page.build
     pages["/ustawienia"] = lambda: build_settings_page(engine)
     ui.sub_pages(pages).classes("w-full").mark("page-content")
 
@@ -62,15 +74,3 @@ def _placeholder_page(title: str) -> Callable[[], None]:
         ui.label("Ta zakładka jest w przygotowaniu.").classes("text-gray-500")
 
     return build
-
-
-def open_transaction_dialog() -> None:
-    """Open a fresh transaction dialog; it is built on demand and removed when closed."""
-    dialog = ui.dialog()
-    dialog.on("hide", dialog.delete)
-    with dialog, ui.card().classes("w-[460px]"):
-        ui.label("Nowa transakcja").classes("text-lg font-bold")
-        ui.label("Formularze transakcji pojawią się w kolejnych etapach.").classes("text-gray-500")
-        with ui.row().classes("w-full justify-end"):
-            ui.button("Zamknij", on_click=dialog.close).props("flat")
-    dialog.open()

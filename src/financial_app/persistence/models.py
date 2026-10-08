@@ -1,6 +1,8 @@
 """ORM models. The schema itself is created and evolved only by Alembic migrations."""
 
-from sqlalchemy import Boolean, ForeignKey, Integer, MetaData, String, Text
+import datetime as dt
+
+from sqlalchemy import Boolean, Date, ForeignKey, Integer, MetaData, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 # Deterministic constraint names so SQLite batch migrations can alter them later
@@ -54,3 +56,20 @@ class AccountCashCurrency(Base):
     account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE"), primary_key=True)
     currency: Mapped[str] = mapped_column(String(3), primary_key=True)
     position: Mapped[int] = mapped_column(Integer)
+
+
+class TransactionRow(Base):
+    """A Transaction (spec 3.3); ``domain.transactions.Transaction`` is its in-memory form.
+
+    Tax Amount and Origin join in later migrations (issues #15, #20).
+    """
+
+    __tablename__ = "transactions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id"), index=True)
+    date: Mapped[dt.date] = mapped_column(Date)
+    transaction_type: Mapped[str] = mapped_column(String(20))
+    # PLN, as exact decimal text like the FX Conversion Fee
+    actual_amount: Mapped[str] = mapped_column(String(30))
+    comment: Mapped[str] = mapped_column(Text)
