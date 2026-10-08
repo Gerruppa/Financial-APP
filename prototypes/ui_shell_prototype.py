@@ -12,7 +12,7 @@ Run:  .venv/Scripts/python.exe prototypes/ui_shell_prototype.py
 from nicegui import ui
 
 VARIANTS = {'A': 'Zakładki jak w arkuszu', 'B': 'Menu boczne i karty', 'C': 'Gęsty arkusz'}
-TABS = ['Dashboard', 'Wyniki', 'Portfolio', 'Transakcje', 'Obligacje', 'Benchmarki', 'Ustawienia']
+TABS = ['Dashboard', 'Wyniki', 'Portfolio', 'Transakcje', 'Strategie inwestycyjne', 'Obligacje', 'Benchmarki', 'Ustawienia']
 
 # --- fake data (invented) -----------------------------------------------------
 ACCOUNTS = {
@@ -73,6 +73,19 @@ def split_deposit(values: dict[str, float], targets: dict[str, float], amount: f
 # Allocation Targets per Asset Class (editable on the Dashboard)
 TARGETS = {'Obligacje skarbowe polskie': 50.0, 'Akcje zagraniczne': 35.0, 'Akcje polskie': 5.0,
            'Metale i surowce': 10.0, 'Gotówka': 0.0}
+
+# Targets inside an Asset Class, per Instrument (% of the class). May name instruments not held yet.
+SUBTARGETS: dict[str, dict[str, float]] = {
+    'Akcje zagraniczne': {'iShares Core S&P 500 (CSPX)': 50.0, 'iShares MSCI ACWI (SSAC)': 50.0,
+                          'Vanguard FTSE All-World (VWCE)': 0.0},
+}
+CATALOG = {  # instruments available to add to a class strategy (invented)
+    'Akcje zagraniczne': ['iShares MSCI ACWI (SSAC)', 'Vanguard S&P 500 (VUAA)', 'iShares Core MSCI EM IMI (EMIM)'],
+    'Akcje polskie': ['Beta ETF WIG20TR', 'Beta ETF mWIG40TR', 'Beta ETF sWIG80TR'],
+    'Obligacje skarbowe polskie': ['EDO0735', 'COI1029', 'ROD1038'],
+    'Metale i surowce': ['Złoto (moneta 1 oz)', 'Srebro (moneta 1 oz)'],
+}
+OPEN: set[str] = set()  # expanded classes on the strategy page
 
 TOTAL = sum(p['wartosc'] for p in POSITIONS)
 COST = sum(p['koszt'] for p in POSITIONS)
@@ -246,8 +259,8 @@ def variant_a() -> None:
 
 
 # --- Variant B: left navigation menu, cards per account, dialog with steps -----------------
-def variant_b() -> None:
-    current = {'page': 'Dashboard'}
+def variant_b(start_page: str = 'Dashboard') -> None:
+    current = {'page': start_page if start_page in TABS else 'Dashboard'}
 
     with ui.dialog() as dialog, ui.card().classes('w-[460px]'):
         ui.label('Nowa transakcja').classes('text-lg font-bold')
@@ -256,7 +269,7 @@ def variant_b() -> None:
     with ui.left_drawer(value=True).classes('bg-indigo-950 text-white').props('width=220'):
         ui.label('Moje inwestycje').classes('text-lg font-bold mb-4')
         icons = {'Dashboard': 'dashboard', 'Wyniki': 'insights', 'Portfolio': 'account_balance_wallet',
-                 'Transakcje': 'receipt_long', 'Obligacje': 'savings', 'Benchmarki': 'compare_arrows',
+                 'Transakcje': 'receipt_long', 'Strategie inwestycyjne': 'flag', 'Obligacje': 'savings', 'Benchmarki': 'compare_arrows',
                  'Ustawienia': 'settings'}
         for t in TABS:
             ui.button(t, icon=icons[t], on_click=lambda t=t: (current.update(page=t), content.refresh())) \
@@ -298,6 +311,9 @@ def variant_b() -> None:
 
         with ui.row().classes('w-full items-center'):
             ui.label('Strategia inwestycyjna').classes('text-lg font-bold')
+            ui.button('Szczegóły', icon='arrow_forward',
+                      on_click=lambda: (current.update(page='Strategie inwestycyjne'), content.refresh())) \
+                .props('flat dense no-caps')
             ui.space()
             ui.label(f'Suma celów: {target_sum:g}%').classes(
                 'text-sm ' + ('text-green-700' if abs(target_sum - 100) < 0.01 else 'text-red-600 font-bold'))
@@ -335,6 +351,117 @@ def variant_b() -> None:
             ui.label('Cele muszą sumować się do 100%, aby policzyć dopłatę.').classes('text-red-600 text-sm')
         else:
             ui.label(f'Pełne wyrównanie portfela samymi wpłatami (bez sprzedaży) wymaga wpłaty {pln(deposit)}.')                 .classes('text-sm text-gray-600 mt-2')
+
+    @ui.refreshable
+    def strategy_page() -> None:
+        alloc = allocation()
+        total = sum(alloc.values())
+        target_sum = sum(TARGETS.values())
+        class_plan = split_deposit(alloc, TARGETS, PLAN['deposit']) if abs(target_sum - 100) < 0.01 else {}
+
+        def set_plan(e):
+            PLAN['deposit'] = float(e.value or 0)
+            strategy_page.refresh()
+        with ui.row().classes('w-full items-center'):
+            ui.number('Planuję wpłacić', value=PLAN['deposit'], min=0, step=100, suffix='zł', on_change=set_plan) \
+                .props('dense outlined debounce=600').classes('w-48')
+            ui.label('Wpłata dzielona jest najpierw między klasy, potem wewnątrz klasy między instrumenty.') \
+                .classes('text-xs text-gray-500')
+            ui.space()
+            ui.label(f'Suma celów klas: {target_sum:g}%').classes(
+                'text-sm ' + ('text-green-700' if abs(target_sum - 100) < 0.01 else 'text-red-600 font-bold'))
+
+        cols = '2.2fr 0.8fr 1.2fr 1fr 0.9fr 1.5fr 1.2fr'
+        for c in sorted(set(alloc) | set(TARGETS), key=lambda c: -TARGETS.get(c, 0)):
+            value = alloc.get(c, 0)
+            share = 100 * value / total
+            target = TARGETS.get(c, 0)
+            class_buy = class_plan.get(c, 0)
+            held = {p['instrument']: p['wartosc'] for p in POSITIONS
+                    if p['klasa'] == c and p['instrument'] != 'Gotówka'}
+            subs = SUBTARGETS.setdefault(c, {})
+            for name in held:
+                subs.setdefault(name, 0.0)
+
+            def on_open(e, c=c):
+                (OPEN.add if e.value else OPEN.discard)(c)
+            with ui.expansion(value=c in OPEN, on_value_change=on_open) \
+                    .classes('w-full bg-white shadow rounded').props('dense') as exp:
+                with exp.add_slot('header'):
+                    with ui.grid(columns=cols).classes('w-full items-center gap-x-3 text-sm whitespace-nowrap'):
+                        ui.label(c).classes('font-bold')
+                        ui.label(pct(share))
+                        ui.label(pln(value))
+
+                        def set_target(e, c=c):
+                            TARGETS[c] = float(e.value or 0)
+                            strategy_page.refresh()
+                        ui.number(value=target, min=0, max=100, step=1, suffix='%', on_change=set_target) \
+                            .props('dense outlined debounce=600').classes('w-24').on('click.stop', lambda: None)
+                        ui.label(pct(share - target, signed=True, unit='pp')).classes(
+                            'text-red-600' if share < target else 'text-green-700')
+                        shift = target / 100 * total - value
+                        ui.label(('dokup ' if shift > 0 else 'nadwyżka ') + pln(abs(shift)))
+                        ui.label(pln(class_buy) if class_buy > 0 else '–') \
+                            .classes('font-semibold' if class_buy > 0 else 'text-gray-400')
+
+                if c == 'Gotówka':
+                    ui.label('Gotówka nie ma podziału na instrumenty.').classes('text-xs text-gray-500 p-2')
+                    continue
+                sub_sum = sum(subs.values())
+                sub_ok = abs(sub_sum - 100) < 0.01
+                values_in = {n: held.get(n, 0.0) for n in subs}
+                no_strategy = sub_sum == 0
+                if no_strategy:  # no inner strategy: split proportionally to current values
+                    held_total = sum(held.values())
+                    inner_plan = {n: class_buy * v / held_total for n, v in held.items()} if held_total else {}
+                else:
+                    inner_plan = split_deposit(values_in, subs, class_buy) if sub_ok else {}
+                class_target_value = target / 100 * (total + PLAN['deposit'])
+                with ui.column().classes('w-full pl-6 pr-2 pb-2 gap-1'):
+                    with ui.grid(columns=cols).classes('w-full items-center gap-x-3 text-sm whitespace-nowrap'):
+                        for h in ['Instrument', 'Udział w klasie', 'Wartość', 'Cel w klasie', 'Różnica',
+                                  'Przesunięcie do celu', 'Kup za (z wpłaty)']:
+                            ui.label(h).classes('text-xs text-gray-500')
+                        for name, sub_target in sorted(subs.items(), key=lambda kv: -kv[1]):
+                            v = held.get(name, 0.0)
+                            in_share = 100 * v / value if value else 0.0
+                            ui.label(name + ('' if name in held else ' · nieposiadany')) \
+                                .classes('' if name in held else 'text-gray-500 italic')
+                            ui.label(pct(in_share))
+                            ui.label(pln(v))
+
+                            def set_sub(e, c=c, name=name):
+                                SUBTARGETS[c][name] = float(e.value or 0)
+                                strategy_page.refresh()
+                            ui.number(value=sub_target, min=0, max=100, step=5, suffix='%', on_change=set_sub) \
+                                .props('dense outlined debounce=600').classes('w-24')
+                            ui.label(pct(in_share - sub_target, signed=True, unit='pp')).classes(
+                                'text-red-600' if in_share < sub_target else 'text-green-700')
+                            ishift = sub_target / 100 * class_target_value - v
+                            ui.label(('dokup ' if ishift > 0 else 'nadwyżka ') + pln(abs(ishift)))
+                            buy = inner_plan.get(name, 0)
+                            ui.label(pln(buy) if buy > 0 else '–') \
+                                .classes('font-semibold' if buy > 0 else 'text-gray-400')
+                    with ui.row().classes('w-full items-center'):
+                        options = [n for n in CATALOG.get(c, []) if n not in subs]
+
+                        def add(e, c=c):
+                            if e.value:
+                                SUBTARGETS[c][e.value] = 0.0
+                                strategy_page.refresh()
+                        if options:
+                            ui.select(options, label='Dodaj instrument do strategii', on_change=add) \
+                                .props('dense outlined').classes('w-80')
+                        ui.space()
+                        if no_strategy:
+                            ui.label('Brak strategii w klasie – kwota dzielona proporcjonalnie do obecnych wartości')                                 .classes('text-xs text-gray-500')
+                        else:
+                            ui.label(f'Suma celów w klasie: {sub_sum:g}%').classes(
+                                'text-xs ' + ('text-green-700' if sub_ok else 'text-red-600 font-bold'))
+                    if not sub_ok and not no_strategy and class_buy > 0:
+                        ui.label('Cele w klasie muszą sumować się do 100%, aby rozdzielić kwotę na instrumenty.') \
+                            .classes('text-xs text-red-600')
 
     with ui.page_sticky(position='bottom-right', x_offset=24, y_offset=80):
         ui.button(icon='add', on_click=dialog.open).props('fab color=indigo')
@@ -383,6 +510,8 @@ def variant_b() -> None:
                                 ui.label(pln(r['wartosc']))
                                 ui.label(f"{r['zysk_pct']:+.2f} %").classes(
                                     'text-xs ' + ('text-green-600' if r['zysk'] >= 0 else 'text-red-600'))
+        elif page == 'Strategie inwestycyjne':
+            strategy_page()
         elif page == 'Transakcje':
             ui.label('Kliknij transakcję, aby ją edytować lub usunąć. Portfolio jest tylko do odczytu.')                 .classes('text-xs text-gray-500')
             for t in reversed(TRANSACTIONS):
@@ -466,10 +595,10 @@ def variant_c() -> None:
 
 # --- page + floating switcher -------------------------------------------------------------
 @ui.page('/')
-def index(variant: str = 'A') -> None:
+def index(variant: str = 'A', page: str = 'Dashboard') -> None:
     variant = variant.upper() if variant.upper() in VARIANTS else 'A'
     keys = list(VARIANTS)
-    {'A': variant_a, 'B': variant_b, 'C': variant_c}[variant]()
+    variant_b(page) if variant == 'B' else {'A': variant_a, 'C': variant_c}[variant]()
 
     def go(step: int) -> None:
         ui.navigate.to(f'/?variant={keys[(keys.index(variant) + step) % len(keys)]}')
