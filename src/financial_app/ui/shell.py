@@ -37,10 +37,10 @@ def build_shell() -> None:
         ui.space()
         ui.select(VIEW_SCOPES, value=VIEW_SCOPES[0], label="Widok").props("dense dark standout").classes("w-48")
 
-    with ui.left_drawer(value=True).classes("bg-indigo-950").props("width=230").mark("nav-menu"):
+    with ui.left_drawer(value=True).classes("bg-indigo-950").props("width=260").mark("nav-menu"):
         for tab in TABS:
             ui.button(tab.label, icon=tab.icon, on_click=lambda path=tab.path: ui.navigate.to(path)).props(
-                "flat align=left no-caps color=white"
+                "flat align=left no-caps no-wrap color=white"
             ).classes("w-full")
 
     with ui.page_sticky(position="bottom-right", x_offset=24, y_offset=24):
