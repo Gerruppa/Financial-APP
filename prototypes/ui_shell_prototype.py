@@ -16,10 +16,10 @@ TABS = ['Dashboard', 'Wyniki', 'Portfolio', 'Transakcje', 'Obligacje', 'Benchmar
 
 # --- fake data (invented) -----------------------------------------------------
 ACCOUNTS = {
-    'IKE (XTB)': {'cash': ['PLN'], 'fx_fee': 0.5},
-    'IKZE (XTB)': {'cash': ['PLN'], 'fx_fee': 0.5},
-    'Konto zwykłe (mBank)': {'cash': ['PLN', 'USD'], 'fx_fee': 0.0},
-    'Obligacje (PKO)': {'cash': ['PLN'], 'fx_fee': 0.0},
+    'IKE (XTB)': {'cash': ['PLN'], 'fx_fee': 0.5, 'broker': 'XTB'},
+    'IKZE (XTB)': {'cash': ['PLN'], 'fx_fee': 0.5, 'broker': 'XTB'},
+    'Konto zwykłe (mBank)': {'cash': ['PLN', 'USD'], 'fx_fee': 0.0, 'broker': 'mBank'},
+    'Obligacje (PKO)': {'cash': ['PLN'], 'fx_fee': 0.0, 'broker': 'PKO'},
 }
 POSITIONS = [
     {'konto': 'IKE (XTB)', 'instrument': 'Vanguard FTSE All-World (VWCE)', 'klasa': 'Akcje zagraniczne',
@@ -41,15 +41,19 @@ for p in POSITIONS:
 
 TRANSACTIONS = [
     {'data': '2026-04-17', 'konto': 'IKE (XTB)', 'typ': 'Wpłata', 'instrument': 'Gotówka', 'liczba': 1, 'cena': 25000, 'kwota': 25000.00},
-    {'data': '2026-04-18', 'konto': 'IKE (XTB)', 'typ': 'Zakup', 'instrument': 'VWCE', 'liczba': 42, 'cena': 122.40, 'kwota': 22150.00},
-    {'data': '2026-05-02', 'konto': 'IKE (XTB)', 'typ': 'Zakup', 'instrument': 'CSPX', 'liczba': 9, 'cena': 618.20, 'kwota': 21890.10},
+    {'data': '2026-04-18', 'konto': 'IKE (XTB)', 'typ': 'Zakup', 'waluta': 'EUR', 'instrument': 'VWCE', 'liczba': 42, 'cena': 122.40, 'kwota': 22150.00},
+    {'data': '2026-05-02', 'konto': 'IKE (XTB)', 'typ': 'Zakup', 'waluta': 'USD', 'instrument': 'CSPX', 'liczba': 9, 'cena': 618.20, 'kwota': 21890.10},
     {'data': '2026-05-20', 'konto': 'Obligacje (PKO)', 'typ': 'Zakup', 'instrument': 'EDO0735', 'liczba': 150, 'cena': 100, 'kwota': 15000.00},
     {'data': '2026-06-11', 'konto': 'IKZE (XTB)', 'typ': 'Zakup', 'instrument': 'ETFBW20TR', 'liczba': 60, 'cena': 100.33, 'kwota': 6020.00},
-    {'data': '2026-08-11', 'konto': 'Konto zwykłe (mBank)', 'typ': 'Zakup', 'instrument': 'Złoto 1 oz', 'liczba': 2, 'cena': 2530, 'kwota': 19800.00},
+    {'data': '2026-08-11', 'konto': 'Konto zwykłe (mBank)', 'typ': 'Zakup', 'waluta': 'USD', 'instrument': 'Złoto 1 oz', 'liczba': 2, 'cena': 2530, 'kwota': 19800.00},
 ]
 HISTORY_DATES = ['05-01', '05-15', '06-01', '06-15', '07-01', '07-15', '08-01', '08-15', '09-01', '09-15', '10-01']
 HISTORY_VALUE = [25000, 47300, 47900, 63500, 64800, 70100, 70900, 91200, 92800, 90400, 91596]
 HISTORY_DEPOSITS = [25000, 47000, 47000, 62000, 62000, 68000, 68000, 88000, 88000, 88000, 88000]
+
+# Allocation Targets per Asset Class (editable on the Dashboard)
+TARGETS = {'Obligacje skarbowe polskie': 50.0, 'Akcje zagraniczne': 35.0, 'Akcje polskie': 5.0,
+           'Metale i surowce': 10.0, 'Gotówka': 0.0}
 
 TOTAL = sum(p['wartosc'] for p in POSITIONS)
 COST = sum(p['koszt'] for p in POSITIONS)
@@ -88,9 +92,12 @@ def allocation_chart(height: str = '260px') -> None:
     }).style(f'height: {height}')
 
 
-def transaction_form(on_done=None) -> None:
-    """Fields change with the transaction type and with automatic FX conversion (spec 3.3)."""
-    state = {'typ': 'Zakup', 'konto': 'IKE (XTB)', 'waluta': 'USD', 'xtb_fee': False}
+def transaction_form(on_done=None, initial: dict | None = None, on_delete=None) -> None:
+    """Fields change with the transaction type and with FX conversion (spec 3.3).
+    With `initial` the form edits an existing Transaction and offers deletion."""
+    initial = initial or {}
+    state = {'typ': initial.get('typ', 'Zakup'), 'konto': initial.get('konto', 'IKE (XTB)'),
+             'waluta': initial.get('waluta', 'PLN' if initial else 'USD'), 'xtb_fee': False}
 
     @ui.refreshable
     def fields() -> None:
@@ -98,27 +105,30 @@ def transaction_form(on_done=None) -> None:
         # PLN-only account buying/selling in a foreign currency: the only case where conversion happens.
         foreign_on_pln_account = waluta not in ACCOUNTS[konto]['cash'] and typ in ('Zakup', 'Sprzedaż', 'Dywidenda')
         if typ in ('Zakup', 'Sprzedaż'):
-            ui.input('Instrument', placeholder='np. CSPX').classes('w-full')
+            ui.input('Instrument', placeholder='np. CSPX', value=initial.get('instrument', '')).classes('w-full')
             with ui.row().classes('w-full no-wrap'):
-                ui.number('Liczba', value=1).classes('grow')
-                ui.number(f'Cena ({waluta})', value=100).classes('grow')
+                ui.number('Liczba', value=initial.get('liczba', 1)).classes('grow')
+                ui.number(f'Cena ({waluta})', value=initial.get('cena', 100)).classes('grow')
             ui.number(f'Prowizja ({waluta})', value=0).classes('w-full')
         elif typ in ('Wpłata', 'Wypłata', 'Koszty'):
-            ui.number(f'Kwota ({waluta})', value=1000).classes('w-full')
+            ui.number(f'Kwota ({waluta})', value=initial.get('kwota', 1000)).classes('w-full')
         elif typ == 'Dywidenda':
             ui.input('Instrument').classes('w-full')
             with ui.row().classes('w-full no-wrap'):
                 ui.number(f'Brutto ({waluta})').classes('grow')
                 ui.number(f'Podatek u źródła ({waluta})').classes('grow')
+        fee = ACCOUNTS[konto]['fx_fee']
         if foreign_on_pln_account:
-            def toggle_fee(e):
-                state['xtb_fee'] = e.value
-                fields.refresh()
-            ui.checkbox('Prowizja XTB (przewalutowanie 0,5%)', value=state['xtb_fee'], on_change=toggle_fee)
-            if state['xtb_fee']:
+            if fee:  # checkbox only on Accounts with an FX Conversion Fee configured (Q56b)
+                def toggle_fee(e):
+                    state['xtb_fee'] = e.value
+                    fields.refresh()
+                ui.checkbox(f"Prowizja {ACCOUNTS[konto]['broker']} (przewalutowanie {fee:g}%)".replace('.', ','),
+                            value=state['xtb_fee'], on_change=toggle_fee)
+            if fee and state['xtb_fee']:
                 with ui.card().classes('w-full bg-amber-50'):
-                    ui.label(f'Przewalutowanie {waluta}→PLN z opłatą 0,5%').classes('font-medium')
-                    ui.number('Kwota PLN pobrana przez XTB *').classes('w-full')
+                    ui.label(f'Przewalutowanie {waluta}→PLN z opłatą {fee:g}%'.replace('.', ',')).classes('font-medium')
+                    ui.number(f"Kwota PLN pobrana przez {ACCOUNTS[konto]['broker']} *").classes('w-full')
                     ui.label('Kurs efektywny i opłata zostaną wyliczone z tej kwoty.').classes('text-xs text-gray-600')
             else:
                 ui.number(f'Kurs {waluta}/PLN', placeholder='puste = kurs NBP z dnia przed transakcją').classes('w-full')
@@ -132,13 +142,13 @@ def transaction_form(on_done=None) -> None:
             fields.refresh()
         return handler
 
-    ui.toggle(['Zakup', 'Sprzedaż', 'Wpłata', 'Wypłata', 'Dywidenda', 'Koszty'], value='Zakup',
+    ui.toggle(['Zakup', 'Sprzedaż', 'Wpłata', 'Wypłata', 'Dywidenda', 'Koszty'], value=state['typ'],
               on_change=set_('typ')).props('dense no-caps')
     with ui.row().classes('w-full no-wrap'):
         ui.select(list(ACCOUNTS), label='Konto', value=state['konto'], on_change=set_('konto')).classes('grow')
         ui.select(['PLN', 'USD', 'EUR', 'GBP'], label='Waluta', value=state['waluta'],
                   on_change=set_('waluta')).classes('w-28')
-    ui.input('Data', value='2026-10-08').classes('w-full')
+    ui.input('Data', value=initial.get('data', '2026-10-08')).classes('w-full')
     fields()
     ui.input('Komentarz').classes('w-full')
 
@@ -147,7 +157,10 @@ def transaction_form(on_done=None) -> None:
         if on_done:
             on_done()
 
-    ui.button('Zapisz transakcję', on_click=save).classes('w-full')
+    with ui.row().classes('w-full no-wrap'):
+        if on_delete:
+            ui.button('Usuń', icon='delete', on_click=on_delete).props('flat color=red')
+        ui.button('Zapisz zmiany' if initial else 'Zapisz transakcję', on_click=save).classes('grow')
 
 
 # --- Variant A: top tabs like the spreadsheet, side panel form ----------------------
@@ -210,7 +223,7 @@ def variant_a() -> None:
 
 # --- Variant B: left navigation menu, cards per account, dialog with steps -----------------
 def variant_b() -> None:
-    current = {'page': 'Portfolio'}
+    current = {'page': 'Dashboard'}
 
     with ui.dialog() as dialog, ui.card().classes('w-[460px]'):
         ui.label('Nowa transakcja').classes('text-lg font-bold')
@@ -226,6 +239,72 @@ def variant_b() -> None:
                 .props('flat align=left no-caps color=white').classes('w-full')
         ui.space()
         ui.label(f'Wartość portfela\n{pln(TOTAL)}').classes('whitespace-pre-line text-sm mt-6 opacity-80')
+
+    def open_edit(t: dict) -> None:
+        def delete() -> None:
+            with ui.dialog() as confirm, ui.card():
+                ui.label(f"Usunąć transakcję {t['typ']} {t['instrument']} z {t['data']}?")
+                ui.label('Partie i salda zostaną przeliczone. Jeśli późniejsza sprzedaż straci pokrycie, '
+                         'usunięcie zostanie zablokowane.').classes('text-xs text-gray-500')
+                with ui.row():
+                    ui.button('Anuluj', on_click=confirm.close).props('flat')
+                    def really():
+                        TRANSACTIONS.remove(t)
+                        confirm.close()
+                        edit.close()
+                        content.refresh()
+                        ui.notify('PROTOTYP: usunięto tylko z pamięci')
+                    ui.button('Usuń', on_click=really).props('color=red')
+            confirm.open()
+
+        with ui.dialog() as edit, ui.card().classes('w-[460px]'):
+            ui.label('Edycja transakcji').classes('text-lg font-bold')
+            transaction_form(on_done=edit.close, initial=t, on_delete=delete)
+        edit.open()
+
+    @ui.refreshable
+    def rebalancing() -> None:
+        alloc = allocation()
+        total = sum(alloc.values())
+        classes = sorted(set(alloc) | set(TARGETS), key=lambda c: -TARGETS.get(c, 0))
+        target_sum = sum(TARGETS.get(c, 0) for c in classes)
+        # Smallest deposit that brings every class to its target without selling anything.
+        needed = [alloc.get(c, 0) / (TARGETS[c] / 100) for c in classes if TARGETS.get(c, 0) > 0]
+        deposit = max(0.0, max(needed, default=total) - total) if abs(target_sum - 100) < 0.01 else None
+
+        with ui.row().classes('w-full items-center'):
+            ui.label('Cele alokacji i rebalansowanie').classes('text-lg font-bold')
+            ui.space()
+            ui.label(f'Suma celów: {target_sum:g}%').classes(
+                'text-sm ' + ('text-green-700' if abs(target_sum - 100) < 0.01 else 'text-red-600 font-bold'))
+        with ui.grid(columns='2fr 1fr 1fr 1fr 1.3fr 1.3fr').classes('w-full items-center gap-y-1 text-sm'):
+            for h in ['Klasa aktywów', 'Obecnie', 'Cel %', 'Różnica', 'Przesunięcie do celu', 'Kup za (z dopłaty)']:
+                ui.label(h).classes('text-xs text-gray-500')
+            for c in classes:
+                value = alloc.get(c, 0)
+                share = 100 * value / total
+                target = TARGETS.get(c, 0)
+                shift = target / 100 * total - value
+                ui.label(c)
+                ui.label(f'{share:.1f}% · {pln(value)}')
+
+                def set_target(e, c=c):
+                    TARGETS[c] = float(e.value or 0)
+                    rebalancing.refresh()
+                ui.number(value=target, min=0, max=100, step=1, suffix='%', on_change=set_target)                     .props('dense outlined debounce=600').classes('w-24')
+                ui.label(f'{share - target:+.1f} pp').classes('text-red-600' if share < target else 'text-green-700')
+                ui.label(('dokup ' if shift > 0 else 'nadwyżka ') + pln(abs(shift)))
+                if deposit is None:
+                    ui.label('–')
+                else:
+                    buy = target / 100 * (total + deposit) - value
+                    ui.label(pln(buy) if buy >= -0.005 else
+                             ('wykorzystaj ' if c == 'Gotówka' else 'sprzedaj ') + pln(-buy))
+        if deposit is None:
+            ui.label('Cele muszą sumować się do 100%, aby policzyć dopłatę.').classes('text-red-600 text-sm')
+        else:
+            ui.label(f'Aby wyrównać portfel samymi dopłatami (bez sprzedaży), wpłać {pln(deposit)} '
+                     f'i kup według kolumny „Kup za”.').classes('font-medium mt-2')
 
     with ui.page_sticky(position='bottom-right', x_offset=24, y_offset=80):
         ui.button(icon='add', on_click=dialog.open).props('fab color=indigo')
@@ -249,6 +328,8 @@ def variant_b() -> None:
                     value_chart()
                 with ui.card():
                     allocation_chart()
+            with ui.card().classes('w-full'):
+                rebalancing()
         elif page == 'Portfolio':
             for konto in ACCOUNTS:
                 rows = [p for p in POSITIONS if p['konto'] == konto]
@@ -273,14 +354,16 @@ def variant_b() -> None:
                                 ui.label(f"{r['zysk_pct']:+.2f} %").classes(
                                     'text-xs ' + ('text-green-600' if r['zysk'] >= 0 else 'text-red-600'))
         elif page == 'Transakcje':
+            ui.label('Kliknij transakcję, aby ją edytować lub usunąć. Portfolio jest tylko do odczytu.')                 .classes('text-xs text-gray-500')
             for t in reversed(TRANSACTIONS):
-                with ui.card().classes('w-full'):
+                with ui.card().classes('w-full cursor-pointer hover:bg-indigo-50')                         .on('click', lambda t=t: open_edit(t)):
                     with ui.row().classes('w-full items-center'):
                         ui.badge(t['typ'], color='indigo')
                         ui.label(f"{t['instrument']} · {t['konto']}").classes('font-medium')
                         ui.space()
                         ui.label(t['data']).classes('text-xs text-gray-500')
                         ui.label(pln(t['kwota'])).classes('font-semibold')
+                        ui.icon('edit').classes('text-gray-400')
         else:
             ui.label('Poza zakresem prototypu').classes('text-gray-400')
 
