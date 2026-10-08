@@ -79,7 +79,12 @@ COST = sum(p['koszt'] for p in POSITIONS)
 
 
 def pln(x: float) -> str:
-    return f'{x:,.2f} zł'.replace(',', ' ').replace('.', ',')
+    # non-breaking spaces so an amount never wraps between digits and "zł"
+    return f'{x:,.2f} zł'.replace(',', ' ').replace('.', ',')
+
+
+def pct(x: float, signed: bool = False, unit: str = '%') -> str:
+    return (f'{x:+.1f}' if signed else f'{x:.1f}').replace('.', ',') + ' ' + unit
 
 
 def allocation() -> dict[str, float]:
@@ -304,8 +309,9 @@ def variant_b() -> None:
         with ui.row().classes('items-center'):
             ui.number('Planuję wpłacić', value=PLAN['deposit'], min=0, step=100, suffix='zł', on_change=set_plan)                 .props('dense outlined debounce=600').classes('w-48')
             ui.label('→ kolumna „Kup za” pokazuje, jak ją rozdzielić bez sprzedaży.').classes('text-xs text-gray-500')
-        with ui.grid(columns='2fr 1fr 1fr 1fr 1.3fr 1.3fr').classes('w-full items-center gap-y-1 text-sm'):
-            for h in ['Klasa aktywów', 'Obecnie', 'Cel %', 'Różnica', 'Przesunięcie do celu', 'Kup za (z planowanej wpłaty)']:
+        with ui.grid(columns='1.8fr 0.7fr 1.1fr 1fr 0.8fr 1.5fr 1.2fr')                 .classes('w-full items-center gap-x-3 gap-y-1 text-sm whitespace-nowrap'):
+            for h in ['Klasa aktywów', 'Udział', 'Wartość', 'Cel %', 'Różnica', 'Przesunięcie do celu',
+                      'Kup za (z wpłaty)']:
                 ui.label(h).classes('text-xs text-gray-500')
             for c in classes:
                 value = alloc.get(c, 0)
@@ -313,13 +319,15 @@ def variant_b() -> None:
                 target = TARGETS.get(c, 0)
                 shift = target / 100 * total - value
                 ui.label(c)
-                ui.label(f'{share:.1f}% · {pln(value)}')
+                ui.label(pct(share))
+                ui.label(pln(value))
 
                 def set_target(e, c=c):
                     TARGETS[c] = float(e.value or 0)
                     rebalancing.refresh()
                 ui.number(value=target, min=0, max=100, step=1, suffix='%', on_change=set_target)                     .props('dense outlined debounce=600').classes('w-24')
-                ui.label(f'{share - target:+.1f} pp').classes('text-red-600' if share < target else 'text-green-700')
+                ui.label(pct(share - target, signed=True, unit='pp')).classes(
+                    'text-red-600' if share < target else 'text-green-700')
                 ui.label(('dokup ' if shift > 0 else 'nadwyżka ') + pln(abs(shift)))
                 buy = plan.get(c, 0)
                 ui.label(pln(buy) if buy > 0 else '–').classes('font-semibold' if buy > 0 else 'text-gray-400')
