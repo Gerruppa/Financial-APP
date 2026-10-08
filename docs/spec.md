@@ -23,7 +23,7 @@ Re-implement the inwestomat.eu "Portfolio tracker" Google Sheet (v2.0.1, 01.07.2
 ## 3. Data model
 
 ### 3.1 Accounts (Q14, Q48, Q49)
-- Managed list (not free text). Fields: name, Account Type, Cash Currencies (e.g. PLN only, or PLN+USD), FX Conversion Fee % (e.g. XTB 0.5%), flag "exclude FX result from Dashboard P&L", active/inactive.
+- Managed list (not free text). Fields: name, broker name, Account Type, Cash Currencies (e.g. PLN only, or PLN+USD), optional FX Conversion Fee % (e.g. XTB 0.5%; empty for most accounts), flag "exclude FX result from Dashboard P&L", active/inactive.
 - Account Types: Regular, IKE, IKZE, OIPE, PPK, OKI, Deposit/Savings. Each type maps to a **Tax Regime** module:
   - Regular: 19% Belka per sale, reported in PIT-38.
   - IKE/OIPE: exempt on a qualifying withdrawal, otherwise tax on the whole gain.
@@ -48,7 +48,10 @@ Each Transaction stores:
 - FX Conversion Fee amount when an automatic conversion happened;
 - **Origin**: manual / spreadsheet import / broker import, plus external id (e.g. XTB order number) and reconciliation date (Q52, Q53).
 
-Automatic FX conversion (Q49, Q50, Q50b): on an Account without a Cash Currency matching the trade, Buy uses effective rate = market × (1 + fee), Sell/Dividend market × (1 − fee). The user **must enter the PLN amount charged by the broker**; the app derives the effective rate and the fee, records the fee as a Cost (Dashboard "Prowizje i koszty"; deductible cost in PIT-38 for Regular accounts). On an Account with a matching Cash Currency the user chooses the payment source (foreign cash without fee, or PLN with conversion). The form offers "exchange currency automatically" to create Currency Exchange + Buy in one go (Q19).
+FX conversion on a PLN-only Account (Q49, Q50, Q50b, Q56, prototype verdict): conversion happens only when a Buy/Sell/Dividend is in a currency the Account does not hold.
+- By default the form shows a rate field (`Kurs USD/PLN`, empty = NBP D-1); Actual Amount = quantity × price × rate ± commission.
+- Below the commission, a checkbox "Prowizja <broker> (przewalutowanie X%)" appears **only on Accounts with an FX Conversion Fee configured**, **unchecked by default**. When checked, the user **must enter the PLN amount charged by the broker**; the app derives the effective rate and the fee and records the fee as a Cost (Dashboard "Prowizje i koszty"; deductible cost in PIT-38 for Regular accounts).
+- On an Account with a matching Cash Currency the user chooses the payment source (foreign cash, or PLN with conversion). The form offers "exchange currency automatically" to create Currency Exchange + Buy in one go (Q19).
 
 Validation at save time (Q36):
 - Block: selling more than held on that Account at that date; Split before the first Buy or malformed ratio; missing NBP rate (never silently 0 PLN).
@@ -88,10 +91,14 @@ Dropped: Google Finance, FT, Biznesradar scraping. Each source is a module with 
 
 ## 5. Screens (tabs)
 
-- **Dashboard**: totals (account value, net deposits, open positions, cash, unrealised, realised, dividends, fees+costs, XIRR); per-Account table (up to any number of Accounts) with FX-exclusion flag; allocation vs Allocation Targets with over/under amounts (Multi-asset split applied); currency exposure **per currency** (Q40); price refresh status/errors. 9 charts from the sheet: dividends by year/account, currency exposure doughnut, Asset Class share over time (switchable month/quarter/half-year/year), Account values, allocation, value vs net deposits, P&L, XIRR, drawdown — each with date range and Account filter (Q43).
+Shell (UI prototype verdict, branch `prototype/ui-shell`, issue #1): **left navigation menu**, Dashboard as tiles and cards, **"+" floating button** opening the transaction dialog. Number format everywhere: Polish (decimal comma, non-breaking thousand separators and before "zł"/"%"), produced by one shared formatter; amounts never wrap.
+
+- **Dashboard**: section **Strategia inwestycyjna** (Allocation Targets per Asset Class, current share and value, difference in pp, shift to target allowing sales, "Planuję wpłacić" amount and its no-sale split per class, the deposit needed for full rebalancing without sales, link "Szczegóły" to the Strategie inwestycyjne tab); class values include Multi-asset Splits (Q58).
+- **Dashboard** also has: totals (account value, net deposits, open positions, cash, unrealised, realised, dividends, fees+costs, XIRR); per-Account table (up to any number of Accounts) with FX-exclusion flag; currency exposure **per currency** (Q40); price refresh status/errors. 9 charts from the sheet: dividends by year/account, currency exposure doughnut, Asset Class share over time (switchable month/quarter/half-year/year), Account values, allocation, value vs net deposits, P&L, XIRR, drawdown — each with date range and Account filter (Q43).
 - **Wyniki** (new, Q39, Q39b): XIRR and TWR; drawdown on TWR; real (CPI-adjusted) return; YTD / 1y / 3y / since-inception per portfolio and per Account; max drawdown and recovery days; annualised volatility of daily TWR.
-- **Portfolio**: open Positions grouped by Account: quantity, average price, cost PLN, average FX, current FX, price, daily change, value PLN, P&L % in instrument currency and in PLN, P&L PLN; Lot details.
-- **Transakcje**: ledger with filters; forms per transaction type.
+- **Strategie inwestycyjne** (Q58, Q60): the same class rows as the Dashboard section, each expandable to Instrument Targets within the class (% of the class, may include instruments not held yet, added from the catalog). A planned deposit is split class → instrument without selling, filling the most under-target items first ("water-filling"). A class with no Instrument Targets splits its amount proportionally to current values; Instrument Targets that do not sum to 100% block the split with a warning. One strategy for the whole portfolio; per-Account strategies are a possible later extension.
+- **Portfolio** (**read-only**): open Positions as expandable cards per Account (total and P&L in the header): quantity, average price, cost PLN, average FX, current FX, price, daily change, value PLN, P&L % in instrument currency and in PLN, P&L PLN; Lot details.
+- **Transakcje**: ledger with filters; forms per transaction type in a dialog; clicking a Transaction opens the same dialog for **editing or deleting** it (deletion confirmed; edits/deletes revalidated so no later Sell loses coverage).
 - **Obligacje**: Lots of retail bonds with rate per year (official/estimated), current value, net value after early redemption and tax, coupons, calendar.
 - **Multi-asset**, **Benchmarki**, **Sprzedaż Podsumowanie**, **Ustawienia** (Accounts, Asset Classes, Instruments and Source Symbols, sources order, limits), technical views (FX rates, prices with timestamps, CPI).
 
@@ -137,6 +144,6 @@ Dropped: Google Finance, FT, Biznesradar scraping. Each source is a module with 
 | 1 Transactions & Portfolio | Accounts (incl. OKI, FX fee), Instruments, Asset Classes, all transaction types with forms and validation, NBP rates, FIFO engine, cash, Portfolio with Manual Prices, importer framework + spreadsheet import, parity tests, CSV/XLSX export | Replace the sheet for bookkeeping |
 | 2 Automatic prices | Price Source modules, Source Symbol mapping, refresh, status, price history cache, metals Buyback Spread | Automatic valuation |
 | 3 Bonds | MF file, GUS CPI, Bond Series and Lots, sheet-parity valuation, ROR/DOR, net value, calendar, sale and Rollover | Obligacje tab |
-| 4 Dashboard, History, Results | Recomputed History, 11 charts, allocation/rebalancing, Multi-asset, currency exposure, XIRR/TWR/drawdown, Wyniki tab, Historia parity check | Full Dashboard |
+| 4 Dashboard, History, Results | Recomputed History, 11 charts, Investment Strategy (Dashboard section + Strategie inwestycyjne tab), Multi-asset, currency exposure, XIRR/TWR/drawdown, Wyniki tab, Historia parity check | Full Dashboard |
 | 5 Reports | Benchmarks, Sell Summary | Full parity with sheet v2.0.1 |
 | 6 Beyond the sheet | PIT-38 / PIT/ZG, contribution limits, XTB importer + Reconciliation, .exe installer, OKI tax when law is final | Extensions |

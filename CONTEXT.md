@@ -21,7 +21,7 @@ A currency in which an Account can hold cash. An Account with only PLN converts 
 _Avoid_: sub-account, currency account
 
 **FX Conversion Fee** (Opłata za przewalutowanie):
-A percentage a broker adds to the market rate when it converts currency automatically (e.g. 0.5% at XTB). Recorded as a Cost of the transaction.
+A percentage a broker adds to the market rate when it converts currency for a foreign-currency trade on a PLN Account (e.g. 0.5% at XTB). Applied per Transaction only when the user marks it; recorded as a Cost of the transaction.
 _Avoid_: spread, FX commission
 
 **Instrument** (Instrument):
@@ -40,9 +40,21 @@ _Avoid_: category, asset type
 The percentage breakdown of one Multi-asset Instrument across Asset Classes, summing to 100%.
 _Avoid_: allocation, look-through
 
+**Investment Strategy** (Strategia inwestycyjna):
+The set of Allocation Targets for the portfolio, optionally refined by Instrument Targets inside each Asset Class.
+_Avoid_: model portfolio, plan
+
 **Allocation Target** (Cel %):
 The desired share of an Asset Class in the whole portfolio, used for rebalancing.
 _Avoid_: target weight
+
+**Instrument Target** (Cel w klasie):
+The desired share of an Instrument within its Asset Class; may name an Instrument not held yet.
+_Avoid_: sub-target, weight
+
+**Planned Deposit** (Planowana wpłata):
+An amount the user intends to invest, split across Asset Classes and Instruments toward the Investment Strategy without selling anything.
+_Avoid_: contribution, top-up
 
 **Buyback Spread** (Spread odkupu):
 The percentage below spot price at which a dealer buys back a physical metal Instrument.
