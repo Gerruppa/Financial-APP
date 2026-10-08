@@ -26,5 +26,7 @@ def main() -> None:
     attach_log_when_windowless(log_path())
     # Back up before migrating, so a failed migration never touches the only copy.
     backup_database(database_path(), backups_dir())
-    init_db(database_path()).dispose()
-    ui.run(build_shell, title=APP_TITLE, native=True, window_size=(1400, 900), reload=False, language="pl")
+    engine = init_db(database_path())
+    ui.run(
+        lambda: build_shell(engine), title=APP_TITLE, native=True, window_size=(1400, 900), reload=False, language="pl"
+    )

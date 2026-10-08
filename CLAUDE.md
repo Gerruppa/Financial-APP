@@ -4,12 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project state
 
-Stage 0 skeleton (issue #8). The git remote `origin` is https://github.com/Gerruppa/Financial-APP.git, and the default branch is `main`. Update this file as the architecture grows.
+Stage 1 in progress (Accounts done, issue #10). The git remote `origin` is https://github.com/Gerruppa/Financial-APP.git, and the default branch is `main`. Update this file as the architecture grows.
 
 Layout (`src/financial_app/`, see ADR-0001):
 - `domain/`: pure-Python calculations. It must never import NiceGUI, SQLAlchemy, Alembic or pywebview; `tests/test_architecture.py` enforces this. `domain/formatting.py` is the single Polish number formatter (`format_pln`, `format_percent`); use it for every amount shown in the UI.
 - `persistence/`: SQLite through SQLAlchemy. `models.py` holds the ORM models, `migrations/` holds Alembic revisions, and `db.init_db(path)` applies them at start-up, right after `backup.backup_database` copies the file into `paths.backups_dir()` (newest 30 kept). The database lives in the user's app-data folder (`paths.data_dir()`, overridable with `FINANCIAL_APP_DATA_DIR`), never in the repo. Change the schema only through a new migration: `.venv/Scripts/python.exe -m alembic revision --autogenerate -m "..."`. `tests/test_database.py` fails if the models and migrations drift apart.
-- `ui/shell.py`: the NiceGUI window (left menu, header with the View Scope switcher, "+" transaction button). Tabs are `ui.sub_pages` routes.
+- `domain/accounts.py`: Account Types, the Tax Regime registry (`tax_regime_for`; OKI is a placeholder) and `AccountDraft`, which validates Account fields and raises `AccountError` with a Polish message. `persistence/accounts.py` saves Accounts (`list_accounts`, `add_account`, `update_account`) and enforces case-insensitive unique names.
+- `ui/shell.py`: the NiceGUI window (left menu, header with the View Scope switcher, "+" transaction button). Tabs are `ui.sub_pages` routes; `build_shell(engine)` hands the engine to the pages that need the database (e.g. `ui/accounts.py`, the Ustawienia › Konta page).
 - `app.py`: entry point, also used by `main.py` and by the console-less `financial-app-gui.exe` that the desktop shortcut starts (`scripts/create_desktop_shortcut.ps1`). Without a console, stdout/stderr go to `paths.log_path()`.
 
 The app re-implements the inwestomat.eu "Portfolio tracker" Google Sheet. The agreed spec is `docs/spec.md`, the glossary is `CONTEXT.md` and key decisions are in `docs/adr/`. `reference/` holds the user's spreadsheet export and its Apps Script source; it is git-ignored because it contains personal financial data, so never commit it or copy its data into tracked files.

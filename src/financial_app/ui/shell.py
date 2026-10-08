@@ -4,6 +4,9 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from nicegui import ui
+from sqlalchemy import Engine
+
+from financial_app.ui.accounts import build_settings_page
 
 APP_TITLE = "Moje inwestycje"
 
@@ -26,12 +29,12 @@ TABS = [
     Tab("Ustawienia", "/ustawienia", "settings"),
 ]
 
-# Only Total for now; Accounts join the switcher once they exist (spec section 5, View Scope)
+# Only Total for now; Accounts join the switcher in Stage 4 (spec section 5, View Scope)
 VIEW_SCOPES = ["Total"]
 
 
-def build_shell() -> None:
-    """Build the whole window; tabs are client-side sub-pages."""
+def build_shell(engine: Engine) -> None:
+    """Build the whole window; tabs are client-side sub-pages backed by the database at ``engine``."""
     with ui.header().classes("bg-indigo-900 items-center").mark("header"):
         ui.label(APP_TITLE).classes("text-lg font-bold")
         ui.space()
@@ -48,7 +51,9 @@ def build_shell() -> None:
             'fab color=indigo aria-label="Dodaj transakcję"'
         ).mark("add-transaction")
 
-    ui.sub_pages({tab.path: _placeholder_page(tab.label) for tab in TABS}).classes("w-full").mark("page-content")
+    pages: dict[str, Callable[[], None]] = {tab.path: _placeholder_page(tab.label) for tab in TABS}
+    pages["/ustawienia"] = lambda: build_settings_page(engine)
+    ui.sub_pages(pages).classes("w-full").mark("page-content")
 
 
 def _placeholder_page(title: str) -> Callable[[], None]:
