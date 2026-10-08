@@ -12,7 +12,7 @@ Run:  .venv/Scripts/python.exe prototypes/ui_shell_prototype.py
 from nicegui import ui
 
 VARIANTS = {'A': 'Zakładki jak w arkuszu', 'B': 'Menu boczne i karty', 'C': 'Gęsty arkusz'}
-TABS = ['Dashboard', 'Wyniki', 'Portfolio', 'Transakcje', 'Obligacje', 'Benchmarki', 'Ustawienia']
+TABS = ['Dashboard', 'Wyniki', 'Portfolio', 'Transakcje', 'Strategia inwestycyjna', 'Obligacje', 'Benchmarki', 'Ustawienia']
 
 # --- fake data (invented) -----------------------------------------------------
 ACCOUNTS = {
@@ -50,6 +50,25 @@ TRANSACTIONS = [
 HISTORY_DATES = ['05-01', '05-15', '06-01', '06-15', '07-01', '07-15', '08-01', '08-15', '09-01', '09-15', '10-01']
 HISTORY_VALUE = [25000, 47300, 47900, 63500, 64800, 70100, 70900, 91200, 92800, 90400, 91596]
 HISTORY_DEPOSITS = [25000, 47000, 47000, 62000, 62000, 68000, 68000, 88000, 88000, 88000, 88000]
+
+PLAN = {'deposit': 2000.0}
+
+
+def split_deposit(values: dict[str, float], targets: dict[str, float], amount: float) -> dict[str, float]:
+    """Split a planned deposit across classes without selling: fill the most under-target classes first,
+    so that afterwards every bought class sits at the same fraction of its target ("water-filling")."""
+    t = {c: targets[c] / 100 for c in targets if targets[c] > 0}
+    if amount <= 0 or not t:
+        return {}
+    lo, hi = 0.0, max(values.get(c, 0) / t[c] for c in t) + amount / min(t.values())
+    for _ in range(100):  # find level k with sum(max(0, k*t_c - v_c)) == amount
+        k = (lo + hi) / 2
+        if sum(max(0.0, k * t[c] - values.get(c, 0)) for c in t) > amount:
+            hi = k
+        else:
+            lo = k
+    return {c: round(max(0.0, lo * t[c] - values.get(c, 0)), 2) for c in t}
+
 
 # Allocation Targets per Asset Class (editable on the Dashboard)
 TARGETS = {'Obligacje skarbowe polskie': 50.0, 'Akcje zagraniczne': 35.0, 'Akcje polskie': 5.0,
@@ -232,7 +251,7 @@ def variant_b() -> None:
     with ui.left_drawer(value=True).classes('bg-indigo-950 text-white').props('width=220'):
         ui.label('Moje inwestycje').classes('text-lg font-bold mb-4')
         icons = {'Dashboard': 'dashboard', 'Wyniki': 'insights', 'Portfolio': 'account_balance_wallet',
-                 'Transakcje': 'receipt_long', 'Obligacje': 'savings', 'Benchmarki': 'compare_arrows',
+                 'Transakcje': 'receipt_long', 'Strategia inwestycyjna': 'flag', 'Obligacje': 'savings', 'Benchmarki': 'compare_arrows',
                  'Ustawienia': 'settings'}
         for t in TABS:
             ui.button(t, icon=icons[t], on_click=lambda t=t: (current.update(page=t), content.refresh())) \
@@ -273,12 +292,20 @@ def variant_b() -> None:
         deposit = max(0.0, max(needed, default=total) - total) if abs(target_sum - 100) < 0.01 else None
 
         with ui.row().classes('w-full items-center'):
-            ui.label('Cele alokacji i rebalansowanie').classes('text-lg font-bold')
+            ui.label('Strategia inwestycyjna – cele i rebalansowanie').classes('text-lg font-bold')
             ui.space()
             ui.label(f'Suma celów: {target_sum:g}%').classes(
                 'text-sm ' + ('text-green-700' if abs(target_sum - 100) < 0.01 else 'text-red-600 font-bold'))
+        plan = split_deposit(alloc, TARGETS, PLAN['deposit']) if abs(target_sum - 100) < 0.01 else {}
+
+        def set_plan(e):
+            PLAN['deposit'] = float(e.value or 0)
+            rebalancing.refresh()
+        with ui.row().classes('items-center'):
+            ui.number('Planuję wpłacić', value=PLAN['deposit'], min=0, step=100, suffix='zł', on_change=set_plan)                 .props('dense outlined debounce=600').classes('w-48')
+            ui.label('→ kolumna „Kup za” pokazuje, jak ją rozdzielić bez sprzedaży.').classes('text-xs text-gray-500')
         with ui.grid(columns='2fr 1fr 1fr 1fr 1.3fr 1.3fr').classes('w-full items-center gap-y-1 text-sm'):
-            for h in ['Klasa aktywów', 'Obecnie', 'Cel %', 'Różnica', 'Przesunięcie do celu', 'Kup za (z dopłaty)']:
+            for h in ['Klasa aktywów', 'Obecnie', 'Cel %', 'Różnica', 'Przesunięcie do celu', 'Kup za (z planowanej wpłaty)']:
                 ui.label(h).classes('text-xs text-gray-500')
             for c in classes:
                 value = alloc.get(c, 0)
@@ -294,17 +321,12 @@ def variant_b() -> None:
                 ui.number(value=target, min=0, max=100, step=1, suffix='%', on_change=set_target)                     .props('dense outlined debounce=600').classes('w-24')
                 ui.label(f'{share - target:+.1f} pp').classes('text-red-600' if share < target else 'text-green-700')
                 ui.label(('dokup ' if shift > 0 else 'nadwyżka ') + pln(abs(shift)))
-                if deposit is None:
-                    ui.label('–')
-                else:
-                    buy = target / 100 * (total + deposit) - value
-                    ui.label(pln(buy) if buy >= -0.005 else
-                             ('wykorzystaj ' if c == 'Gotówka' else 'sprzedaj ') + pln(-buy))
+                buy = plan.get(c, 0)
+                ui.label(pln(buy) if buy > 0 else '–').classes('font-semibold' if buy > 0 else 'text-gray-400')
         if deposit is None:
             ui.label('Cele muszą sumować się do 100%, aby policzyć dopłatę.').classes('text-red-600 text-sm')
         else:
-            ui.label(f'Aby wyrównać portfel samymi dopłatami (bez sprzedaży), wpłać {pln(deposit)} '
-                     f'i kup według kolumny „Kup za”.').classes('font-medium mt-2')
+            ui.label(f'Pełne wyrównanie portfela samymi wpłatami (bez sprzedaży) wymaga wpłaty {pln(deposit)}.')                 .classes('text-sm text-gray-600 mt-2')
 
     with ui.page_sticky(position='bottom-right', x_offset=24, y_offset=80):
         ui.button(icon='add', on_click=dialog.open).props('fab color=indigo')
@@ -364,6 +386,9 @@ def variant_b() -> None:
                         ui.label(t['data']).classes('text-xs text-gray-500')
                         ui.label(pln(t['kwota'])).classes('font-semibold')
                         ui.icon('edit').classes('text-gray-400')
+        elif page == 'Strategia inwestycyjna':
+            with ui.card().classes('w-full'):
+                rebalancing()
         else:
             ui.label('Poza zakresem prototypu').classes('text-gray-400')
 
