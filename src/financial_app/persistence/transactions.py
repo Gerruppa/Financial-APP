@@ -3,12 +3,19 @@
 from collections.abc import Sequence
 from decimal import Decimal
 
-from sqlalchemy import Engine, select, tuple_
+from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session
 
 from financial_app.domain.currencies import NbpRate
 from financial_app.domain.lots import open_positions
-from financial_app.domain.transactions import PLN, Transaction, TransactionDraft, TransactionError, TransactionType
+from financial_app.domain.transactions import (
+    PLN,
+    SplitRatio,
+    Transaction,
+    TransactionDraft,
+    TransactionError,
+    TransactionType,
+)
 from financial_app.persistence.models import AccountRow, InstrumentRow, TransactionRow
 
 
@@ -77,10 +84,14 @@ def _check_references(session: Session, draft: TransactionDraft) -> None:
     held = {cash.currency for cash in account.cash_currencies}
     if draft.cash_currency != PLN and draft.cash_currency not in held:
         raise TransactionError(f"Konto {account.name} nie ma waluty rachunku {draft.cash_currency}.")
+    if draft.target_account_id is not None and session.get(AccountRow, draft.target_account_id) is None:
+        raise TransactionError("Wybrane konto docelowe nie istnieje.")
     if draft.instrument_id is not None:
         instrument = session.get(InstrumentRow, draft.instrument_id)
         if instrument is None:
             raise TransactionError("Wybrany instrument nie istnieje.")
+        if not draft.transaction_type.has_amount:
+            return  # a Split or Security Transfer moves units only, so it needs no NBP Rate
         # The Tax Amount of a foreign-currency Buy, Sell or Dividend needs the NBP Rate: never silently 0 zł (spec 9.3)
         currency = instrument.quote_currency
         if currency == "PLN" and draft.nbp_rate is not None:
@@ -94,20 +105,19 @@ def _check_references(session: Session, draft: TransactionDraft) -> None:
 
 
 def _check_coverage(session: Session, draft: TransactionDraft | None, replacing: TransactionRow | None) -> None:
-    """Replay the Positions ``draft`` and ``replacing`` touch, with ``draft`` in place of ``replacing``.
+    """Replay the Positions of the Instruments ``draft`` and ``replacing`` touch, with ``draft`` in place of
+    ``replacing``.
 
     A new ``draft`` (``replacing`` is None) comes last in entry order; ``draft`` None deletes ``replacing``.
-    Replaying the whole Position means a backdated change cannot uncover a later Sell either.
+    Replaying the whole Position means a backdated change cannot uncover a later Sell or Security Transfer, or put a
+    Split before the first Buy, either. Security Transfers link Positions of one Instrument on different Accounts, so
+    all its Accounts are replayed.
     """
-    pairs = {
-        (t.account_id, t.instrument_id) for t in (draft, replacing) if t is not None and t.instrument_id is not None
-    }
-    if not pairs:
+    instruments = {t.instrument_id for t in (draft, replacing) if t is not None and t.instrument_id is not None}
+    if not instruments:
         return
     rows = session.scalars(
-        select(TransactionRow)
-        .where(tuple_(TransactionRow.account_id, TransactionRow.instrument_id).in_(pairs))
-        .order_by(TransactionRow.id)
+        select(TransactionRow).where(TransactionRow.instrument_id.in_(instruments)).order_by(TransactionRow.id)
     )
     # The edited Transaction keeps its id, so its draft takes the row's place in entry order
     transactions = [draft if row is replacing else _to_transaction(row) for row in rows]
@@ -137,6 +147,10 @@ def _fill(row: TransactionRow, draft: TransactionDraft) -> None:
     row.fx_conversion_fee_percent = _text(draft.fx_conversion_fee_percent)
     row.gross = _text(draft.gross)
     row.withholding_tax = str(draft.withholding_tax) if draft.transaction_type.is_dividend else None
+    row.target_account_id = draft.target_account_id
+    ratio = draft.split_ratio
+    row.split_new = None if ratio is None else ratio.new
+    row.split_old = None if ratio is None else ratio.old
 
 
 def _text(value: Decimal | None) -> str | None:
@@ -166,7 +180,15 @@ def _to_transaction(row: TransactionRow) -> Transaction:
         fx_conversion_fee_percent=_decimal(row.fx_conversion_fee_percent),
         gross=_decimal(row.gross),
         withholding_tax=Decimal(row.withholding_tax or 0),
+        target_account_id=row.target_account_id,
+        split_ratio=_split_ratio(row),
     )
+
+
+def _split_ratio(row: TransactionRow) -> SplitRatio | None:
+    if row.split_new is None or row.split_old is None:
+        return None
+    return SplitRatio(row.split_new, row.split_old)
 
 
 def _nbp_rate(row: TransactionRow) -> NbpRate | None:

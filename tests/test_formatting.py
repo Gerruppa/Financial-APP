@@ -14,6 +14,7 @@ from financial_app.domain.formatting import (
     format_unit_price,
     parse_date,
     parse_number,
+    parse_ratio,
 )
 
 NBSP = " "
@@ -109,3 +110,14 @@ def test_amount_in_a_foreign_currency_carries_its_code() -> None:
 
 def test_rate_has_four_decimals_in_pln() -> None:
     assert format_rate(Decimal("3.65")) == f"3,6500{NBSP}zł"
+
+
+def test_parse_ratio_reads_whole_numbers_around_a_colon() -> None:
+    assert parse_ratio("2:1") == (2, 1)
+    assert parse_ratio(" 1 : 5 ") == (1, 5)
+
+
+@pytest.mark.parametrize("text", ["", "2", "2-1", "2:", "1,5:1", "-2:1", "2:1:1"])
+def test_parse_ratio_rejects_other_formats(text: str) -> None:
+    with pytest.raises(ValueError):
+        parse_ratio(text)

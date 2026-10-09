@@ -81,6 +81,14 @@ def parse_number(text: str) -> Decimal:
     return value
 
 
+def parse_ratio(text: str) -> tuple[int, int]:
+    """Read a ratio X:Y of whole numbers ('2:1', '1 : 5'); raises ValueError for any other format."""
+    parts = text.split(":")
+    if len(parts) != 2 or not all(part.strip().isdecimal() for part in parts):
+        raise ValueError(f"not a ratio: {text!r}")
+    return int(parts[0]), int(parts[1])
+
+
 def parse_date(text: str) -> date:
     """Read a day-first date ('07.03.2026'); raises ValueError for any other format or an impossible date."""
     return datetime.strptime(text.strip(), DATE_FORMAT).date()

@@ -32,6 +32,9 @@ class TransactionType(StrEnum):
     COST = "cost"
     CURRENCY_EXCHANGE = "currency_exchange"
     DRIP = "drip"
+    SPLIT = "split"
+    CASH_TRANSFER = "cash_transfer"
+    SECURITY_TRANSFER = "security_transfer"
 
     @property
     def label(self) -> str:
@@ -57,6 +60,16 @@ class TransactionType(StrEnum):
         """A Buy, or a DRIP buying units with its Dividend."""
         return self in (TransactionType.BUY, TransactionType.DRIP)
 
+    @property
+    def has_amount(self) -> bool:
+        """Every Transaction but a Split or a Security Transfer, which move only units, has a PLN amount."""
+        return self not in (TransactionType.SPLIT, TransactionType.SECURITY_TRANSFER)
+
+    @property
+    def is_transfer(self) -> bool:
+        """A Cash or Security Transfer, from its Account to a target Account."""
+        return self in (TransactionType.CASH_TRANSFER, TransactionType.SECURITY_TRANSFER)
+
 
 _LABELS = {
     TransactionType.DEPOSIT: "Wpłata",
@@ -67,7 +80,32 @@ _LABELS = {
     TransactionType.COST: "Koszty",
     TransactionType.CURRENCY_EXCHANGE: "Wymiana walut",
     TransactionType.DRIP: "DRIP",
+    TransactionType.SPLIT: "Split",
+    TransactionType.CASH_TRANSFER: "Transfer gotówki",
+    TransactionType.SECURITY_TRANSFER: "Transfer papierów",
 }
+
+
+@dataclass(frozen=True)
+class SplitRatio:
+    """A Split X:Y: every ``old`` units become ``new`` ones, so open Lots hold X/Y times as many units at the same
+    cost (spec 3.5)."""
+
+    new: int
+    old: int
+
+    def __post_init__(self) -> None:
+        if not (self.new > 0 and self.old > 0):
+            raise TransactionError("Obie liczby splitu X:Y muszą być większe od zera.")
+        if self.new == self.old:
+            raise TransactionError("Split X:Y musi zmieniać liczbę jednostek (X różne od Y).")
+
+    def rescale(self, quantity: Decimal) -> Decimal:
+        """``quantity`` units after the Split; multiplying first keeps it exact whenever it can be (3 at 1:3 is 1)."""
+        return quantity * self.new / self.old
+
+    def __str__(self) -> str:
+        return f"{self.new}:{self.old}"
 
 
 @dataclass(frozen=True)
@@ -92,6 +130,11 @@ class TransactionDraft:
     with ``drip``) is a Dividend whose net amount buys ``quantity`` units of its Instrument instead: it leaves cash
     alone and opens a Lot costing that amount. A Cost (build it with ``cost``) is an amount the Account paid, like a
     Withdrawal: in PLN, or ``quantity`` of a foreign ``cash_currency`` worth the Actual Amount at the NBP Rate.
+
+    A Split (build it with ``split``) rescales the open Lots of its Instrument on the Account by its ``split_ratio``.
+    A Cash Transfer (``cash_transfer``) moves ``actual_amount`` PLN, a Security Transfer (``security_transfer``)
+    ``quantity`` units of its Instrument with their Lots, to ``target_account_id``. A Split and a Security Transfer
+    move no cash, so their ``actual_amount`` is 0.
     """
 
     account_id: int
@@ -110,12 +153,22 @@ class TransactionDraft:
     fx_conversion_fee_percent: Decimal | None = field(default=None, kw_only=True)
     gross: Decimal | None = field(default=None, kw_only=True)
     withholding_tax: Decimal = field(default=Decimal(0), kw_only=True)
+    target_account_id: int | None = field(default=None, kw_only=True)
+    split_ratio: SplitRatio | None = field(default=None, kw_only=True)
 
     def __post_init__(self) -> None:
-        if not self.actual_amount > 0:
+        if not self.transaction_type.has_amount:
+            if self.actual_amount:
+                raise TransactionError(f"{self.transaction_type.label} nie ma kwoty.")
+        elif not self.actual_amount > 0:
             raise TransactionError("Kwota musi być większa od zera.")
-        if self.actual_amount != self.actual_amount.quantize(GROSZ):
+        elif self.actual_amount != self.actual_amount.quantize(GROSZ):
             raise TransactionError("Kwotę podaj z dokładnością do grosza.")
+        self._check_target()
+        if self.transaction_type is TransactionType.SPLIT and self.split_ratio is None:
+            raise TransactionError("Podaj split w postaci X:Y, np. 2:1.")
+        if self.transaction_type is not TransactionType.SPLIT and self.split_ratio is not None:
+            raise TransactionError(f"{self.transaction_type.label} nie ma splitu.")
         trade_fields = (
             self.instrument_id,
             self.quantity,
@@ -142,6 +195,8 @@ class TransactionDraft:
             _check_exchange_fields(self.cash_currency, self.quantity)
         elif self.transaction_type.is_dividend:
             self._check_dividend()
+        elif not self.transaction_type.has_amount:
+            self._check_units_only()
         elif self.transaction_type is TransactionType.COST and self.cash_currency != PLN:
             self._check_foreign_cost()
         elif any(value is not None for value in trade_fields) or self.commission:
@@ -151,6 +206,31 @@ class TransactionDraft:
         if self.to_pln and self.transaction_type is not TransactionType.CURRENCY_EXCHANGE:
             raise TransactionError("Kierunek wymiany dotyczy tylko wymiany walut.")
         object.__setattr__(self, "comment", self.comment.strip())
+
+    def _check_target(self) -> None:
+        """A Transfer goes to another Account; nothing else has a target."""
+        if not self.transaction_type.is_transfer:
+            if self.target_account_id is not None:
+                raise TransactionError(f"{self.transaction_type.label} nie ma konta docelowego.")
+            return
+        if self.target_account_id is None:
+            raise TransactionError("Wybierz konto docelowe.")
+        if self.target_account_id == self.account_id:
+            raise TransactionError("Konto docelowe musi być inne niż konto źródłowe.")
+
+    def _check_units_only(self) -> None:
+        """A Split or a Security Transfer: an Instrument and, for a Transfer, its units, with no price or rate."""
+        label = self.transaction_type.label
+        if self.instrument_id is None:
+            raise TransactionError("Wybierz instrument.")
+        rates = (self.price, self.fx_rate, self.nbp_rate, self.fx_conversion_fee_percent)
+        if any(value is not None for value in rates) or self.commission or self.cash_currency != PLN:
+            raise TransactionError(f"{label} nie ma ceny, prowizji ani kursu.")
+        if self.transaction_type is TransactionType.SPLIT:
+            if self.quantity is not None:
+                raise TransactionError("Split nie ma liczby jednostek, tylko proporcję X:Y.")
+        elif self.quantity is None or not self.quantity > 0:
+            raise TransactionError("Liczba musi być większa od zera.")
 
     def _check_dividend(self) -> None:
         label = self.transaction_type.label
@@ -246,9 +326,10 @@ class TransactionDraft:
     def cash_change(self) -> Decimal:
         """How the Transaction moves the Account's PLN Cash Balance.
 
-        A Buy or Sell paid from foreign cash takes only its commission from PLN; a DRIP never touches cash.
+        A Buy or Sell paid from foreign cash takes only its commission from PLN; a DRIP, a Split and a Security
+        Transfer never touch cash. A Cash Transfer is seen from its source Account: the target gains what it loses.
         """
-        if self.transaction_type is TransactionType.DRIP:
+        if self.transaction_type is TransactionType.DRIP or not self.transaction_type.has_amount:
             return Decimal(0)
         if self.is_paid_in_foreign_cash:
             return -self.commission
@@ -543,6 +624,38 @@ def cost(
     )
 
 
+def split(account_id: int, day: date, instrument_id: int, ratio: SplitRatio, comment: str = "") -> TransactionDraft:
+    """A Split X:Y of the Instrument on the Account: its open Lots get X/Y times the units at the same cost."""
+    return TransactionDraft(
+        account_id, day, TransactionType.SPLIT, Decimal(0), comment, instrument_id=instrument_id, split_ratio=ratio
+    )
+
+
+def cash_transfer(
+    account_id: int, day: date, target_account_id: int, amount: Decimal, comment: str = ""
+) -> TransactionDraft:
+    """``amount`` PLN moving from the Account to ``target_account_id``."""
+    return TransactionDraft(
+        account_id, day, TransactionType.CASH_TRANSFER, amount, comment, target_account_id=target_account_id
+    )
+
+
+def security_transfer(
+    account_id: int, day: date, target_account_id: int, instrument_id: int, quantity: Decimal, comment: str = ""
+) -> TransactionDraft:
+    """``quantity`` units of the Instrument moving to ``target_account_id`` with the dates and costs of their Lots."""
+    return TransactionDraft(
+        account_id,
+        day,
+        TransactionType.SECURITY_TRANSFER,
+        Decimal(0),
+        comment,
+        instrument_id=instrument_id,
+        quantity=quantity,
+        target_account_id=target_account_id,
+    )
+
+
 AUTOMATIC_EXCHANGE_COMMENT = "Wymiana automatyczna"
 
 
@@ -642,14 +755,17 @@ def cash_balances(
 ) -> dict[int, Decimal]:
     """Cash Balance in ``currency`` per Account id at the end of ``on`` (default: all Transactions).
 
-    A balance may go negative: insufficient cash only warns (spec 3.3), so history can be entered in any order.
+    A balance may go negative: insufficient cash only warns (spec 3.3), so history can be entered in any order. A
+    Cash Transfer brings its target Account what it takes from its source.
     """
     balances: dict[int, Decimal] = {}
     for transaction in transactions:
         if on is None or transaction.date <= on:
-            balances[transaction.account_id] = balances.get(transaction.account_id, Decimal(0)) + (
-                transaction.cash_change_in(currency)
-            )
+            change = transaction.cash_change_in(currency)
+            balances[transaction.account_id] = balances.get(transaction.account_id, Decimal(0)) + change
+            target = transaction.target_account_id
+            if target is not None:
+                balances[target] = balances.get(target, Decimal(0)) - change
     return balances
 
 
@@ -660,7 +776,7 @@ def lowest_cash_balance(
 
     Below zero means some Transaction lacks cash, which warns but does not block (spec 3.3).
     """
-    own = [t for t in transactions if t.account_id == account_id]
+    own = [t for t in transactions if account_id in (t.account_id, t.target_account_id)]
     days = sorted({start} | {t.date for t in own if t.date >= start})
     return min(cash_balances(own, on=day, currency=currency).get(account_id, Decimal(0)) for day in days)
 

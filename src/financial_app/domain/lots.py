@@ -12,22 +12,40 @@ from decimal import Decimal
 from financial_app.domain.formatting import format_date, format_quantity
 from financial_app.domain.transactions import TransactionDraft, TransactionError, TransactionType
 
-# Same-day order (spec 3.5) of the Transactions moving Lots: Buys before Sells, so a Sell may use shares bought
-# that day, and DRIPs after them
-_SAME_DAY_ORDER = {TransactionType.BUY: 0, TransactionType.SELL: 1, TransactionType.DRIP: 2}
+# Same-day order (spec 3.5) of the Transactions moving Lots: a Split first, then Buys before Sells, so a Sell may
+# use shares bought that day, and DRIPs after them. A Security Transfer comes between Buys and Sells, so units bought
+# that day may move and the target Account may sell them the same day.
+_SAME_DAY_ORDER = {
+    TransactionType.SPLIT: 0,
+    TransactionType.BUY: 1,
+    TransactionType.SECURITY_TRANSFER: 2,
+    TransactionType.SELL: 3,
+    TransactionType.DRIP: 4,
+}
 
 
 class InsufficientQuantityError(TransactionError):
-    """A Sell needs more units than the Account held that day; saving it is blocked (spec 3.3)."""
+    """A Sell or Security Transfer needs more units than the Account held that day; saving it is blocked (spec 3.3)."""
 
-    def __init__(self, day: date, held: Decimal, requested: Decimal) -> None:
+    def __init__(
+        self, day: date, held: Decimal, requested: Decimal, kind: TransactionType = TransactionType.SELL
+    ) -> None:
+        what = "transfer" if kind is TransactionType.SECURITY_TRANSFER else "sprzedaż"
         super().__init__(
-            f"Sprzedaż bez pokrycia: {format_date(day)} na koncie było {format_quantity(held)} szt., "
-            f"a sprzedaż wymaga {format_quantity(requested)} szt."
+            f"{what.capitalize()} bez pokrycia: {format_date(day)} na koncie było {format_quantity(held)} szt., "
+            f"a {what} wymaga {format_quantity(requested)} szt."
         )
         self.day = day
         self.held = held
         self.requested = requested
+
+
+class SplitBeforeFirstBuyError(TransactionError):
+    """A Split dated before the Account first held the Instrument; saving it is blocked (spec 3.3)."""
+
+    def __init__(self, day: date) -> None:
+        super().__init__(f"Split przed pierwszym zakupem: {format_date(day)} konto nie miało jeszcze tego instrumentu.")
+        self.day = day
 
 
 @dataclass(frozen=True)
@@ -81,25 +99,44 @@ class Position:
 
 
 def open_positions(transactions: Iterable[TransactionDraft]) -> list[Position]:
-    """The open Positions after all Buys, Sells and DRIPs, keyed by Account and Instrument.
+    """The open Positions after all Buys, Sells, DRIPs, Splits and Security Transfers, keyed by Account and Instrument.
 
-    ``transactions`` come in entry order, which settles same-day ties after the Buy-before-Sell rule.
-    Raises InsufficientQuantityError for the first Sell (by date) that is not covered.
+    A Split rescales the open Lots' units, keeping their costs; a Security Transfer moves the oldest Lots to the
+    target Account with their dates and costs, where they take their place by date. ``transactions`` come in entry
+    order, which settles same-day ties after the same-day order. Raises InsufficientQuantityError for the first Sell
+    or Security Transfer (by date) that is not covered, and SplitBeforeFirstBuyError for a Split before the Account
+    first held the Instrument.
     """
-    buys_and_sells = sorted(
+    moves = sorted(
         (t for t in transactions if t.transaction_type in _SAME_DAY_ORDER),
         key=lambda t: (t.date, _SAME_DAY_ORDER[t.transaction_type]),
     )
     positions: dict[tuple[int, int], list[Lot]] = {}
-    for t in buys_and_sells:
-        assert (
-            t.instrument_id is not None and t.quantity is not None
-        )  # guaranteed for a Buy, Sell or DRIP by TransactionDraft
-        lots = positions.setdefault((t.account_id, t.instrument_id), [])
+    ever_held: set[tuple[int, int]] = set()
+    for t in moves:
+        assert t.instrument_id is not None  # guaranteed for these types by TransactionDraft
+        key = (t.account_id, t.instrument_id)
+        lots = positions.setdefault(key, [])
+        if t.transaction_type is TransactionType.SPLIT:
+            assert t.split_ratio is not None
+            if key not in ever_held:
+                raise SplitBeforeFirstBuyError(t.date)
+            ratio = t.split_ratio
+            lots[:] = [Lot(lot.date, ratio.rescale(lot.quantity), lot.cost, lot.tax_cost) for lot in lots]
+            continue
+        assert t.quantity is not None
         if t.transaction_type.opens_lot:
             lots.append(Lot(t.date, t.quantity, t.actual_amount, t.tax_amount))
+            ever_held.add(key)
+        elif t.transaction_type is TransactionType.SECURITY_TRANSFER:
+            assert t.target_account_id is not None
+            moved = _consume(lots, t.date, t.quantity, t.transaction_type)
+            target_key = (t.target_account_id, t.instrument_id)
+            # Stable, so a moved Lot dated like one already there comes after it
+            positions[target_key] = sorted([*positions.get(target_key, []), *moved], key=lambda lot: lot.date)
+            ever_held.add(target_key)
         else:
-            _consume(lots, t.date, t.quantity)
+            _consume(lots, t.date, t.quantity, t.transaction_type)
     return [
         Position(account_id, instrument_id, tuple(lots))
         for (account_id, instrument_id), lots in positions.items()
@@ -233,18 +270,25 @@ def _split(lot: Lot, units: Decimal) -> tuple[Lot, Lot]:
     return taken, left
 
 
-def _consume(lots: list[Lot], day: date, quantity: Decimal) -> None:
-    """Take ``quantity`` units from the oldest Lots; a partly used Lot keeps both its costs pro rata."""
+def _consume(lots: list[Lot], day: date, quantity: Decimal, kind: TransactionType) -> list[Lot]:
+    """Take ``quantity`` units from the oldest Lots and return them; a partly used Lot splits both costs pro rata.
+
+    ``kind`` (a Sell or Security Transfer) names the Transaction in the error.
+    """
     held = sum((lot.quantity for lot in lots), Decimal(0))
     if quantity > held:
-        raise InsufficientQuantityError(day, held, quantity)
+        raise InsufficientQuantityError(day, held, quantity, kind)
+    taken = []
     while quantity:
         oldest = lots[0]
         if quantity >= oldest.quantity:
             quantity -= oldest.quantity
-            lots.pop(0)
+            taken.append(lots.pop(0))
         else:
             left = oldest.quantity - quantity
             share = left / oldest.quantity
-            lots[0] = Lot(oldest.date, left, oldest.cost * share, oldest.tax_cost * share)
+            rest = Lot(oldest.date, left, oldest.cost * share, oldest.tax_cost * share)
+            lots[0] = rest
+            taken.append(Lot(oldest.date, quantity, oldest.cost - rest.cost, oldest.tax_cost - rest.tax_cost))
             quantity = Decimal(0)
+    return taken

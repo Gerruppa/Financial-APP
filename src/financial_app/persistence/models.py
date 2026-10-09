@@ -96,6 +96,11 @@ class TransactionRow(Base):
     # Dividend and DRIP only: the gross amount and the withholding tax, in the Dividend's currency (issue #18)
     gross: Mapped[str | None] = mapped_column(String(30))
     withholding_tax: Mapped[str | None] = mapped_column(String(30))
+    # Cash and Security Transfer only: the Account it goes to (issue #19)
+    target_account_id: Mapped[int | None] = mapped_column(ForeignKey("accounts.id"), index=True)
+    # Split only: X:Y, every ``split_old`` units become ``split_new`` (issue #19)
+    split_new: Mapped[int | None] = mapped_column(Integer)
+    split_old: Mapped[int | None] = mapped_column(Integer)
 
 
 class AssetClassRow(Base):

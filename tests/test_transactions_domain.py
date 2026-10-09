@@ -66,6 +66,9 @@ def test_transaction_types_have_polish_labels() -> None:
         "Koszty",
         "Wymiana walut",
         "DRIP",
+        "Split",
+        "Transfer gotówki",
+        "Transfer papierów",
     ]
 
 

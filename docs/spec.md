@@ -67,7 +67,7 @@ Validation at save time (Q36):
 
 ### 3.5 FIFO and cash (Q20, Q31, Q32, ADR-0003)
 - One lot engine for Portfolio, Sell Summary and PIT-38. FIFO only.
-- Lot key: Account + Instrument. Same-day order: Split, Buy, Sell, DRIP/Deposit.
+- Lot key: Account + Instrument. Same-day order: Split, Buy, Security Transfer, Sell, DRIP/Deposit.
 - Buy fee capitalised into Lot cost; each Lot carries Actual cost and Tax cost (qty × price × NBP D-1 + fee in PLN).
 - Splits rescale open Lots (qty × X/Y, unit price × Y/X); fees are not rescaled.
 - Cash Balance per Account and Cash Currency; foreign cash held as Lots with PLN cost → FX result per Account, excludable by the Account flag. Commission paid in PLN is not counted in the foreign-cash quantity.
