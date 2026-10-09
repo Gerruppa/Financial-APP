@@ -163,7 +163,8 @@ def save_import(engine: Engine, lines: Sequence[SheetLine], rates: NbpLookup, de
         # Now the new Instruments exist, so the drafts can name them
         final = preview_import(engine, lines, rates, decisions)
         add_transactions(engine, [item.draft for item in final.lines if item.status == "ok" and item.draft is not None])
-    except TransactionError, ValueError:
+    except Exception:
+        # Any failure, a database one included, leaves no new Instrument behind
         for instrument_id in created:
             delete_instrument(engine, instrument_id)
         raise

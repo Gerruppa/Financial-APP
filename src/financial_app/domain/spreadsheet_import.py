@@ -14,7 +14,7 @@ from enum import StrEnum
 from hashlib import sha256
 
 from financial_app.domain.currencies import NbpRate
-from financial_app.domain.formatting import parse_date, parse_number
+from financial_app.domain.formatting import format_date, parse_date, parse_number
 from financial_app.domain.transactions import (
     PLN,
     Origin,
@@ -268,7 +268,7 @@ def _draft(
     fx_rate = None
     if line.currency != PLN:
         if nbp_rate is None or nbp_rate.currency != line.currency:
-            raise SheetError(f"Brak kursu NBP {line.currency} dla {line.day.isoformat()}.")
+            raise SheetError(f"Brak kursu NBP {line.currency} dla {format_date(line.day)}.")
         fx_rate = line.rate if line.rate != 1 else None
     else:
         nbp_rate = None
