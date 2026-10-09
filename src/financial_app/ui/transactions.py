@@ -59,6 +59,8 @@ from financial_app.persistence.transactions import (
 from financial_app.sources.nbp import NbpRates
 from financial_app.ui.dialogs import movable_dialog
 
+# Offered for buying a foreign currency in a Currency Exchange, so the first exchange needs no setup
+SUGGESTED_EXCHANGE_CURRENCIES = ("USD", "EUR")
 # Currency Exchange directions in the dialog: buying the foreign currency for PLN, or selling it for PLN
 _BUY, _SELL = "buy", "sell"
 TRANSACTION_TYPE_OPTIONS = {transaction_type.value: transaction_type.label for transaction_type in TransactionType}
@@ -400,8 +402,12 @@ def open_transaction_dialog(
             fx_rate.visible = (trade or kind is TransactionType.DIVIDEND) and currency != PLN and not charged.visible
             auto_exchange.visible = transaction is None and kind is TransactionType.BUY and settled_in != PLN
             foreign = [c for c in cash_currencies.get(account.value, ()) if c != PLN]
+            # Buying a currency the Account does not hold yet is the usual first exchange, so offer the common ones
+            if direction.value == _BUY:
+                foreign = [*foreign, *SUGGESTED_EXCHANGE_CURRENCIES]
             if transaction is not None and transaction.transaction_type is TransactionType.CURRENCY_EXCHANGE:
-                foreign = list(dict.fromkeys([*foreign, transaction.cash_currency]))
+                foreign = [*foreign, transaction.cash_currency]
+            foreign = [c for c in dict.fromkeys(foreign) if c != PLN]
             chosen = exchange_currency.value if exchange_currency.value in foreign else None
             if chosen is None and transaction is not None and transaction.cash_currency in foreign:
                 chosen = transaction.cash_currency
@@ -411,7 +417,16 @@ def open_transaction_dialog(
             foreign_amount.props(f'label="Kwota ({shown})"')
 
         update()
-        for field in (transaction_type, account, instrument, exchange_currency, dividend_currency, paid_from, convert):
+        for field in (
+            transaction_type,
+            account,
+            instrument,
+            direction,
+            exchange_currency,
+            dividend_currency,
+            paid_from,
+            convert,
+        ):
             field.on_value_change(update)
         for dividend_input in (gross, withholding_tax):
             dividend_input.on_value_change(show_net)

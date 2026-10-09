@@ -216,3 +216,15 @@ async def test_editing_keeps_how_a_trade_was_paid_after_the_account_gains_a_curr
         await user.should_see("bez zmian")
     [edited] = list_transactions(engine)
     assert edited.cash_currency == "PLN"
+
+
+async def test_exchange_offers_usd_and_eur_on_an_account_without_foreign_cash(engine: Engine) -> None:
+    add_account(engine, AccountDraft("XTB1", "XTB", AccountType.REGULAR, ("PLN",)))
+    async with user_simulation(lambda: _shell(engine)) as user:
+        await user.open("/transakcje")
+        user.find(marker="add-transaction").click()
+        _choose(user, "transaction-type", "Wymiana walut")
+        _choose(user, "transaction-account", "XTB1")
+        user.find(marker="transaction-currency").click()
+        await user.should_see("USD")
+        await user.should_see("EUR")
