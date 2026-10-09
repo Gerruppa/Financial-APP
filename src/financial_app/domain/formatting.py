@@ -35,7 +35,12 @@ def format_quantity(value: Decimal) -> str:
 
 def format_pln(value: float | Decimal, signed: bool = False) -> str:
     """Format an amount in PLN, e.g. 15912.3 -> '15 912,30 zł' (non-breaking spaces)."""
-    return f"{format_number(value, signed=signed)}{NBSP}zł"
+    return format_amount(value, "PLN", signed)
+
+
+def format_amount(value: float | Decimal, currency: str, signed: bool = False) -> str:
+    """Format an amount in ``currency``, e.g. '1 505,00 USD', or '12,50 zł' for PLN."""
+    return f"{format_number(value, signed=signed)}{NBSP}{currency_unit(currency)}"
 
 
 def currency_unit(currency: str) -> str:
@@ -46,6 +51,11 @@ def currency_unit(currency: str) -> str:
 def format_unit_price(value: Decimal, currency: str = "PLN") -> str:
     """Format a unit price with all its decimals (at least two), e.g. 45.123 -> '45,123 zł', or '150,50 USD'."""
     return f"{format_exact(value)}{NBSP}{currency_unit(currency)}"
+
+
+def format_rate(value: Decimal) -> str:
+    """Format an exchange rate in PLN per unit with four decimals, e.g. 3.6045 -> '3,6045 zł'."""
+    return f"{format_number(value, decimals=4)}{NBSP}zł"
 
 
 def format_percent(value: float | Decimal, decimals: int = 2, signed: bool = False) -> str:

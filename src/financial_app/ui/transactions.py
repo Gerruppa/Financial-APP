@@ -14,33 +14,39 @@ from sqlalchemy import Engine
 from financial_app.domain.currencies import MissingNbpRateError, NbpRate
 from financial_app.domain.formatting import (
     currency_unit,
+    format_amount,
     format_date,
     format_exact,
     format_pln,
     format_quantity,
+    format_rate,
     format_unit_price,
     parse_date,
     parse_number,
 )
 from financial_app.domain.transactions import (
+    PLN,
     Transaction,
     TransactionDraft,
     TransactionError,
     TransactionType,
     buy_or_sell,
+    covering_exchange,
+    currency_exchange,
     lowest_cash_balance,
 )
 from financial_app.persistence.accounts import list_accounts
 from financial_app.persistence.instruments import list_instruments
 from financial_app.persistence.transactions import (
-    add_transaction,
+    add_transactions,
     delete_transaction,
     list_transactions,
     update_transaction,
 )
 from financial_app.sources.nbp import NbpRates
 
-PLN = "PLN"
+# Currency Exchange directions in the dialog: buying the foreign currency for PLN, or selling it for PLN
+_BUY, _SELL = "buy", "sell"
 TRANSACTION_TYPE_OPTIONS = {transaction_type.value: transaction_type.label for transaction_type in TransactionType}
 COLUMNS = "grid-template-columns: 7rem minmax(8rem, 1fr) 6rem minmax(9rem, 1fr) 9rem minmax(8rem, 2fr)"
 
@@ -83,6 +89,8 @@ class TransactionsPage:
                 ui.label(account_names[transaction.account_id])
                 ui.label(transaction.transaction_type.label)
                 with ui.column().classes("gap-0"):
+                    if transaction.transaction_type is TransactionType.CURRENCY_EXCHANGE:
+                        _exchange_cell(transaction)
                     if transaction.instrument_id is not None:
                         assert transaction.quantity is not None and transaction.price is not None
                         instrument = instruments[transaction.instrument_id]
@@ -93,11 +101,27 @@ class TransactionsPage:
                             rates_text = _rates_text(transaction.fx_rate, transaction.nbp_rate)
                             ui.label(rates_text).classes("text-xs text-gray-500")
                 with ui.column().classes("gap-0 items-end"):
-                    ui.label(format_pln(transaction.cash_change, signed=True))
+                    if transaction.is_paid_in_foreign_cash:
+                        currency = transaction.cash_currency
+                        ui.label(format_amount(transaction.foreign_cash_change, currency, signed=True))
+                        actual = format_pln(transaction.actual_cash_change, signed=True)
+                        ui.label(f"rzeczywista {actual}").classes("text-xs text-gray-500")
+                    else:
+                        ui.label(format_pln(transaction.cash_change, signed=True))
                     if transaction.tax_amount != transaction.actual_amount:
                         tax = format_pln(transaction.tax_cash_change, signed=True)
                         ui.label(f"podatkowa {tax}").classes("text-xs text-gray-500")
                 ui.label(transaction.comment).classes("text-gray-600")
+
+
+def _exchange_cell(exchange: Transaction) -> None:
+    """Which way the currency went, how much and at what rate (PLN per unit)."""
+    currency = exchange.cash_currency
+    ui.label(f"{currency} → PLN" if exchange.to_pln else f"PLN → {currency}")
+    assert exchange.quantity is not None
+    rate = format_rate(exchange.actual_amount / exchange.quantity)
+    amount = format_amount(exchange.foreign_cash_change, currency, signed=True)
+    ui.label(f"{amount} po {rate}").classes("text-xs text-gray-500")
 
 
 def open_transaction_dialog(
@@ -111,13 +135,14 @@ def open_transaction_dialog(
     dialog.on("hide", dialog.delete)
     all_accounts = list_accounts(engine)
     account_names = {a.id: a.name for a in all_accounts}
-    # Only PLN cash exists so far (foreign cash: issue #16), so only Accounts holding PLN can take part;
+    # Deposits, Withdrawals and commissions are in PLN so far, so only Accounts holding PLN can take part;
     # an edited Transaction keeps offering its own Account even if that has been deactivated since
     accounts = {
         a.id: a.name
         for a in all_accounts
         if (a.active and PLN in a.cash_currencies) or (transaction is not None and a.id == transaction.account_id)
     }
+    cash_currencies = {a.id: a.cash_currencies for a in all_accounts}
     all_instruments = list_instruments(engine)
     instruments = {i.id: i.name for i in all_instruments}
     currencies = {i.id: i.quote_currency for i in all_instruments}
@@ -144,12 +169,16 @@ def open_transaction_dialog(
                 ui.date(mask="DD.MM.YYYY").bind_value(day).on_value_change(menu.close)
             icon.on("click", menu.open)
 
-        def is_buy_or_sell(value: str) -> bool:
-            return TransactionType(value).is_buy_or_sell
-
         texts = _field_texts(transaction)
+        with ui.column().classes("w-full gap-0") as exchange_fields:
+            sells = transaction is not None and transaction.to_pln
+            directions = {_BUY: "PLN → waluta", _SELL: "waluta → PLN"}
+            direction = ui.select(directions, label="Kierunek", value=_SELL if sells else _BUY).classes("w-full")
+            direction.mark("transaction-direction")
+            exchange_currency = ui.select([], label="Waluta").classes("w-full").mark("transaction-currency")
+            foreign_amount = ui.input(value=texts.foreign_amount).classes("w-full")
+            foreign_amount.mark("transaction-foreign-amount")
         amount = ui.input("Kwota (zł)", value=texts.amount).classes("w-full").mark("transaction-amount")
-        amount.bind_visibility_from(transaction_type, "value", backward=lambda value: not is_buy_or_sell(value))
         with ui.column().classes("w-full gap-0") as trade_fields:
             instrument_id = transaction.instrument_id if transaction else None
             instrument = ui.select(instruments, label="Instrument", value=instrument_id).classes("w-full")
@@ -162,17 +191,56 @@ def open_transaction_dialog(
             fx_rate.classes("w-full").mark("transaction-fx-rate")
             commission = ui.input("Prowizja (zł)", value=texts.commission).classes("w-full")
             commission.mark("transaction-commission")
+            paid_from = ui.label().classes("text-sm text-gray-600")
+            # Only a new Buy: an automatic Exchange is a Transaction of its own once saved
+            auto_exchange = ui.checkbox("Wymień walutę automatycznie").mark("transaction-auto-exchange")
 
-        def show_currency() -> None:
-            """The price is in the Instrument's currency; a foreign one also takes a rate (spec 3.3)."""
+        def settlement_currency() -> str:
+            """The Cash Currency a Buy or Sell is paid from: the Instrument's own if the Account holds it (spec 3.3).
+
+            An edited trade keeps how it was paid while its Account and currency stay, even if the Account's Cash
+            Currencies changed since.
+            """
+            currency = currencies.get(instrument.value, PLN)
+            if (
+                transaction is not None
+                and transaction.transaction_type.is_buy_or_sell
+                and transaction.account_id == account.value
+                and transaction.instrument_id is not None
+                and currencies.get(transaction.instrument_id) == currency
+            ):
+                return transaction.cash_currency
+            return currency if currency in cash_currencies.get(account.value, ()) else PLN
+
+        def update() -> None:
+            """Show the fields the chosen type needs; the price is in the Instrument's currency, a foreign one also
+            takes a rate, and an Account holding that currency pays from it (spec 3.3, 3.5)."""
+            kind = TransactionType(transaction_type.value)
+            amount.visible = not kind.is_buy_or_sell
+            trade_fields.visible = kind.is_buy_or_sell
+            exchange_fields.visible = kind is TransactionType.CURRENCY_EXCHANGE
             currency = currencies.get(instrument.value, PLN)
             price.props(f'label="Cena ({currency_unit(currency)})"')
             fx_rate.props(f'label="Kurs {currency}/PLN"')
             fx_rate.visible = currency != PLN
+            settled_in = settlement_currency()
+            paid_from.text = f"Płatne z gotówki {settled_in}; prowizja w zł." if settled_in != PLN else ""
+            paid_from.visible = settled_in != PLN
+            auto_exchange.visible = transaction is None and kind is TransactionType.BUY and settled_in != PLN
+            foreign = [c for c in cash_currencies.get(account.value, ()) if c != PLN]
+            if transaction is not None and transaction.transaction_type is TransactionType.CURRENCY_EXCHANGE:
+                foreign = list(dict.fromkeys([*foreign, transaction.cash_currency]))
+            chosen = exchange_currency.value if exchange_currency.value in foreign else None
+            if chosen is None and transaction is not None and transaction.cash_currency in foreign:
+                chosen = transaction.cash_currency
+            exchange_currency.set_options(foreign, value=chosen or (foreign[0] if foreign else None))
+            shown = exchange_currency.value or "waluta"
+            direction.set_options({_BUY: f"PLN → {shown}", _SELL: f"{shown} → PLN"}, value=direction.value)
+            foreign_amount.props(f'label="Kwota ({shown})"')
 
-        show_currency()
-        instrument.on_value_change(show_currency)
-        trade_fields.bind_visibility_from(transaction_type, "value", backward=is_buy_or_sell)
+        update()
+        for field in (transaction_type, account, instrument, exchange_currency):
+            field.on_value_change(update)
         comment = ui.input("Komentarz", value=transaction.comment if transaction else "").classes("w-full")
         comment.mark("transaction-comment")
         error = ui.label().classes("text-negative").mark("transaction-error")
@@ -191,6 +259,18 @@ def open_transaction_dialog(
         def read_draft() -> TransactionDraft:
             kind = TransactionType(transaction_type.value)
             day_value = _read(parse_date, day.value, "Data musi mieć postać DD.MM.RRRR.")
+            if kind is TransactionType.CURRENCY_EXCHANGE:
+                if exchange_currency.value is None:
+                    raise TransactionError("To konto nie ma waluty obcej. Dodaj ją w Ustawieniach, w Kontach.")
+                return currency_exchange(
+                    account.value,
+                    day_value,
+                    exchange_currency.value,
+                    _read(parse_number, foreign_amount.value, "Kwota w walucie musi być liczbą, np. 1 000,50."),
+                    _read(parse_number, amount.value, "Kwota musi być liczbą, np. 1 000,50."),
+                    to_pln=direction.value == _SELL,
+                    comment=comment.value,
+                )
             if not kind.is_buy_or_sell:
                 value = _read(parse_number, amount.value, "Kwota musi być liczbą, np. 1 000,50.")
                 return TransactionDraft(account.value, day_value, kind, value, comment.value)
@@ -212,13 +292,16 @@ def open_transaction_dialog(
                 comment.value,
                 fx_rate=_read(parse_number, own_rate, "Kurs musi być liczbą, np. 3,65.") if own_rate else None,
                 nbp_rate=nbp_rate,
+                cash_currency=settlement_currency(),
             )
 
         def save() -> None:
             try:
                 draft = read_draft()
                 if transaction is None:
-                    add_transaction(engine, draft)
+                    # The Exchange goes first, so the Buy spends the cash it brings (spec 3.3)
+                    exchange = [covering_exchange(draft)] if auto_exchange.visible and auto_exchange.value else []
+                    add_transactions(engine, [*exchange, draft])
                 else:
                     update_transaction(engine, transaction.id, draft)
             except (TransactionError, MissingNbpRateError) as exc:
@@ -267,6 +350,7 @@ def _confirm_delete(delete: Callable[[ui.dialog], None]) -> None:
 @dataclass(frozen=True)
 class _FieldTexts:
     amount: str = ""
+    foreign_amount: str = ""
     quantity: str = ""
     price: str = ""
     fx_rate: str = ""
@@ -277,6 +361,11 @@ def _field_texts(transaction: Transaction | None) -> _FieldTexts:
     """The edit-field texts for ``transaction``, exact so that re-saving never rounds a value."""
     if transaction is None:
         return _FieldTexts()
+    if transaction.transaction_type is TransactionType.CURRENCY_EXCHANGE:
+        assert transaction.quantity is not None
+        return _FieldTexts(
+            amount=format_exact(transaction.actual_amount), foreign_amount=format_exact(transaction.quantity)
+        )
     if not transaction.transaction_type.is_buy_or_sell:
         return _FieldTexts(amount=format_exact(transaction.actual_amount))
     assert transaction.quantity is not None and transaction.price is not None
@@ -297,21 +386,24 @@ def _rates_text(fx_rate: Decimal | None, nbp_rate: NbpRate) -> str:
 def _warn_if_cash_runs_out(
     engine: Engine, done: str, account_names: dict[int, str], *touched: TransactionDraft | None
 ) -> None:
-    """Warn per Account whose Cash Balance goes negative from the earliest ``touched`` date on.
+    """Warn per Account and Cash Currency whose Cash Balance goes negative from the earliest ``touched`` date on.
 
     Insufficient cash only warns (spec 3.3), so history can be entered in any order. ``done`` opens the
     message ("Zapisano", "Usunięto").
     """
-    starts: dict[int, date] = {}
+    starts: dict[tuple[int, str], date] = {}
     for t in touched:
         if t is not None:
-            starts[t.account_id] = min(t.date, starts.get(t.account_id, t.date))
+            for currency in dict.fromkeys((PLN, t.cash_currency)):
+                key = (t.account_id, currency)
+                starts[key] = min(t.date, starts.get(key, t.date))
     transactions = list_transactions(engine)
-    for account_id, start in starts.items():
-        lowest = lowest_cash_balance(transactions, account_id, start=start)
+    for (account_id, currency), start in starts.items():
+        lowest = lowest_cash_balance(transactions, account_id, start=start, currency=currency)
         if lowest < 0:
+            cash = "Saldo gotówki" if currency == PLN else f"Saldo gotówki {currency}"
             ui.notify(
-                f"{done}, ale Saldo gotówki konta {account_names[account_id]} jest ujemne: {format_pln(lowest)}.",
+                f"{done}, ale {cash} konta {account_names[account_id]} jest ujemne: {format_amount(lowest, currency)}.",
                 type="warning",
             )
 

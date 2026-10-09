@@ -4,11 +4,13 @@ from decimal import Decimal
 import pytest
 
 from financial_app.domain.formatting import (
+    format_amount,
     format_date,
     format_exact,
     format_percent,
     format_pln,
     format_quantity,
+    format_rate,
     format_unit_price,
     parse_date,
     parse_number,
@@ -98,3 +100,12 @@ def test_quantity_shows_only_the_decimals_it_has() -> None:
     assert format_quantity(Decimal("10")) == "10"
     assert format_quantity(Decimal("0.50")) == "0,5"
     assert format_quantity(Decimal("1234.5")) == f"1{NBSP}234,5"
+
+
+def test_amount_in_a_foreign_currency_carries_its_code() -> None:
+    assert format_amount(Decimal("-1505"), "USD", signed=True) == f"-1{NBSP}505,00{NBSP}USD"
+    assert format_amount(Decimal("12.5"), "PLN") == f"12,50{NBSP}zł"
+
+
+def test_rate_has_four_decimals_in_pln() -> None:
+    assert format_rate(Decimal("3.65")) == f"3,6500{NBSP}zł"

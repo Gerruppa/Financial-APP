@@ -1,5 +1,6 @@
 """Reading, saving, editing and deleting Transactions (spec 3.3)."""
 
+from collections.abc import Sequence
 from decimal import Decimal
 
 from sqlalchemy import Engine, select, tuple_
@@ -7,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from financial_app.domain.currencies import NbpRate
 from financial_app.domain.lots import open_positions
-from financial_app.domain.transactions import Transaction, TransactionDraft, TransactionError, TransactionType
+from financial_app.domain.transactions import PLN, Transaction, TransactionDraft, TransactionError, TransactionType
 from financial_app.persistence.models import AccountRow, InstrumentRow, TransactionRow
 
 
@@ -20,14 +21,23 @@ def list_transactions(engine: Engine) -> list[Transaction]:
 
 def add_transaction(engine: Engine, draft: TransactionDraft) -> Transaction:
     """Save ``draft``; a Sell not covered by the Account's Lots raises InsufficientQuantityError (spec 3.3)."""
+    [saved] = add_transactions(engine, [draft])
+    return saved
+
+
+def add_transactions(engine: Engine, drafts: Sequence[TransactionDraft]) -> list[Transaction]:
+    """Save ``drafts`` in this entry order, all or none (e.g. an automatic Currency Exchange with its Buy)."""
     with Session(engine) as session, session.begin():
-        _check_references(session, draft)
-        _check_coverage(session, draft, replacing=None)
-        row = TransactionRow()
-        _fill(row, draft)
-        session.add(row)
-        session.flush()
-        return _to_transaction(row)
+        saved = []
+        for draft in drafts:
+            _check_references(session, draft)
+            _check_coverage(session, draft, replacing=None)
+            row = TransactionRow()
+            _fill(row, draft)
+            session.add(row)
+            session.flush()
+            saved.append(_to_transaction(row))
+        return saved
 
 
 def update_transaction(engine: Engine, transaction_id: int, draft: TransactionDraft) -> Transaction:
@@ -61,8 +71,12 @@ def _get(session: Session, transaction_id: int) -> TransactionRow:
 
 def _check_references(session: Session, draft: TransactionDraft) -> None:
     # SQLite does not enforce foreign keys unless asked to, so check the references here
-    if session.get(AccountRow, draft.account_id) is None:
+    account = session.get(AccountRow, draft.account_id)
+    if account is None:
         raise TransactionError("Wybrane konto nie istnieje.")
+    held = {cash.currency for cash in account.cash_currencies}
+    if draft.cash_currency != PLN and draft.cash_currency not in held:
+        raise TransactionError(f"Konto {account.name} nie ma waluty rachunku {draft.cash_currency}.")
     if draft.instrument_id is not None:
         instrument = session.get(InstrumentRow, draft.instrument_id)
         if instrument is None:
@@ -118,6 +132,8 @@ def _fill(row: TransactionRow, draft: TransactionDraft) -> None:
     row.nbp_rate = None if nbp is None else str(nbp.rate)
     row.nbp_published_on = None if nbp is None else nbp.published_on
     row.nbp_table = None if nbp is None else nbp.table
+    row.cash_currency = draft.cash_currency
+    row.to_pln = draft.to_pln
 
 
 def _text(value: Decimal | None) -> str | None:
@@ -142,6 +158,8 @@ def _to_transaction(row: TransactionRow) -> Transaction:
         commission=Decimal(row.commission or 0),
         fx_rate=_decimal(row.fx_rate),
         nbp_rate=_nbp_rate(row),
+        cash_currency=row.cash_currency,
+        to_pln=row.to_pln,
     )
 
 

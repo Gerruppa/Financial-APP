@@ -1,6 +1,7 @@
-"""Transactions and the Cash Balance they produce (spec 3.3, 3.5).
+"""Transactions and the Cash Balances they produce (spec 3.3, 3.5).
 
-For now: PLN Deposits and Withdrawals, and Buys and Sells paid in PLN, also of foreign-currency Instruments.
+For now: PLN Deposits and Withdrawals, Buys and Sells (paid in PLN or, on an Account holding the Instrument's
+currency, from that foreign cash) and Currency Exchanges between PLN and a foreign Cash Currency.
 """
 
 from collections.abc import Iterable
@@ -9,9 +10,10 @@ from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 from enum import StrEnum
 
-from financial_app.domain.currencies import NbpRate
+from financial_app.domain.currencies import NbpRate, is_currency_code
 
 GROSZ = Decimal("0.01")
+PLN = "PLN"
 
 
 class TransactionError(ValueError):
@@ -25,6 +27,7 @@ class TransactionType(StrEnum):
     WITHDRAWAL = "withdrawal"
     BUY = "buy"
     SELL = "sell"
+    CURRENCY_EXCHANGE = "currency_exchange"
 
     @property
     def label(self) -> str:
@@ -41,6 +44,7 @@ _LABELS = {
     TransactionType.WITHDRAWAL: "Wypłata",
     TransactionType.BUY: "Zakup",
     TransactionType.SELL: "Sprzedaż",
+    TransactionType.CURRENCY_EXCHANGE: "Wymiana walut",
 }
 
 
@@ -50,7 +54,11 @@ class TransactionDraft:
 
     A Buy or Sell also carries its Instrument, quantity, unit price (in the Instrument's currency) and PLN commission;
     build it with ``buy_or_sell``. One of a foreign-currency Instrument also carries the NBP Rate (D-1) for its Tax
-    Amount and, if the user gave one, ``fx_rate``: the rate the Actual Amount was converted at.
+    Amount and, if the user gave one, ``fx_rate``: the rate the Actual Amount was converted at. ``cash_currency`` is
+    the Cash Currency it is paid from or into: PLN, or the Instrument's own currency (the commission stays in PLN).
+
+    A Currency Exchange (build it with ``currency_exchange``) swaps ``quantity`` units of the foreign
+    ``cash_currency`` for ``actual_amount`` PLN: buying them, or selling them if ``to_pln``.
     """
 
     account_id: int
@@ -64,6 +72,8 @@ class TransactionDraft:
     commission: Decimal = field(default=Decimal(0), kw_only=True)
     fx_rate: Decimal | None = field(default=None, kw_only=True)
     nbp_rate: NbpRate | None = field(default=None, kw_only=True)
+    cash_currency: str = field(default=PLN, kw_only=True)
+    to_pln: bool = field(default=False, kw_only=True)
 
     def __post_init__(self) -> None:
         if not self.actual_amount > 0:
@@ -76,8 +86,19 @@ class TransactionDraft:
                 raise TransactionError("Wybierz instrument.")
             _check_buy_or_sell_fields(self.quantity, self.price, self.commission)
             _check_rates(self.fx_rate, self.nbp_rate)
+            _check_settlement(self.cash_currency, self.nbp_rate)
+        elif self.transaction_type is TransactionType.CURRENCY_EXCHANGE:
+            if self.instrument_id is not None or self.price is not None or self.commission:
+                raise TransactionError("Wymiana walut nie dotyczy instrumentu.")
+            if self.fx_rate is not None or self.nbp_rate is not None:
+                raise TransactionError("Kurs wymiany wynika z obu kwot.")
+            _check_exchange_fields(self.cash_currency, self.quantity)
         elif any(value is not None for value in trade_fields) or self.commission:
             raise TransactionError(f"{self.transaction_type.label} nie dotyczy instrumentu.")
+        elif self.cash_currency != PLN:
+            raise TransactionError(f"{self.transaction_type.label} jest na razie możliwa tylko w PLN.")
+        if self.to_pln and self.transaction_type is not TransactionType.CURRENCY_EXCHANGE:
+            raise TransactionError("Kierunek wymiany dotyczy tylko wymiany walut.")
         object.__setattr__(self, "comment", self.comment.strip())
 
     @property
@@ -86,22 +107,60 @@ class TransactionDraft:
         if self.nbp_rate is None:
             return self.actual_amount
         assert self.quantity is not None and self.price is not None  # a Buy or Sell, checked on creation
-        return _with_commission(
-            self.transaction_type, _pln(self.quantity * self.price * self.nbp_rate.rate), self.commission
-        )
+        return _with_commission(self.transaction_type, _pln(self._settled_value * self.nbp_rate.rate), self.commission)
 
     @property
     def cash_change(self) -> Decimal:
-        """How the Transaction moves the Account's PLN Cash Balance."""
+        """How the Transaction moves the Account's PLN Cash Balance.
+
+        A Buy or Sell paid from foreign cash takes only its commission from PLN.
+        """
+        if self.is_paid_in_foreign_cash:
+            return -self.commission
+        return self.actual_cash_change
+
+    @property
+    def actual_cash_change(self) -> Decimal:
+        """The Actual Amount with the sign of the cash it moves: what a Buy cost, what a Sell brought."""
         return self.actual_amount if self._is_incoming else -self.actual_amount
 
     @property
     def tax_cash_change(self) -> Decimal:
-        """The Tax Amount with the sign of ``cash_change``."""
+        """The Tax Amount with the sign of ``actual_cash_change``."""
         return self.tax_amount if self._is_incoming else -self.tax_amount
 
     @property
+    def is_paid_in_foreign_cash(self) -> bool:
+        """A Buy or Sell paid from (or into) foreign cash rather than PLN."""
+        return self.transaction_type.is_buy_or_sell and self.cash_currency != PLN
+
+    @property
+    def foreign_cash_change(self) -> Decimal:
+        """How the Transaction moves the Account's Cash Balance in ``cash_currency``; 0 when that is PLN."""
+        if self.transaction_type is TransactionType.CURRENCY_EXCHANGE:
+            assert self.quantity is not None  # checked on creation
+            return -self.quantity if self.to_pln else self.quantity
+        if not self.is_paid_in_foreign_cash:
+            return Decimal(0)
+        return self._settled_value if self._is_incoming else -self._settled_value
+
+    def cash_change_in(self, currency: str) -> Decimal:
+        """How the Transaction moves the Account's Cash Balance in ``currency``."""
+        if currency == PLN:
+            return self.cash_change
+        return self.foreign_cash_change if currency == self.cash_currency else Decimal(0)
+
+    @property
+    def _settled_value(self) -> Decimal:
+        """Quantity × price in the Instrument's currency; to the cent when paid from foreign cash."""
+        assert self.quantity is not None and self.price is not None
+        value = self.quantity * self.price
+        return _pln(value) if self.is_paid_in_foreign_cash else value
+
+    @property
     def _is_incoming(self) -> bool:
+        if self.transaction_type is TransactionType.CURRENCY_EXCHANGE:
+            return self.to_pln
         return self.transaction_type in (TransactionType.DEPOSIT, TransactionType.SELL)
 
 
@@ -124,16 +183,20 @@ def buy_or_sell(
     *,
     fx_rate: Decimal | None = None,
     nbp_rate: NbpRate | None = None,
+    cash_currency: str = PLN,
 ) -> TransactionDraft:
-    """A Buy or Sell paid in PLN: a Buy costs quantity × price × rate plus commission, a Sell brings that minus it.
+    """A Buy or Sell: in PLN, a Buy costs quantity × price × rate plus commission, a Sell brings that minus it.
 
     The rate is 1 for a PLN Instrument; for a foreign-currency one it is ``fx_rate`` if the user gave one, otherwise
-    the NBP Rate, which ``nbp_rate`` must then carry.
+    the NBP Rate, which ``nbp_rate`` must then carry. Paid from foreign cash (``cash_currency``), quantity × price
+    moves that cash to the cent, and the PLN amount values that at the same rate.
     """
     _check_buy_or_sell_fields(quantity, price, commission)
     _check_rates(fx_rate, nbp_rate)
+    _check_settlement(cash_currency, nbp_rate)
     rate = fx_rate or (nbp_rate.rate if nbp_rate else Decimal(1))
-    value = _pln(quantity * price * rate)
+    settled_value = quantity * price if cash_currency == PLN else _pln(quantity * price)
+    value = _pln(settled_value * rate)
     if value.is_zero():
         raise TransactionError("Wartość transakcji (liczba × cena) musi wynosić co najmniej 0,01 zł.")
     if transaction_type is TransactionType.SELL and commission >= value:
@@ -151,6 +214,50 @@ def buy_or_sell(
         commission=commission,
         fx_rate=fx_rate,
         nbp_rate=nbp_rate,
+        cash_currency=cash_currency,
+    )
+
+
+def currency_exchange(
+    account_id: int,
+    day: date,
+    currency: str,
+    foreign_amount: Decimal,
+    pln_amount: Decimal,
+    *,
+    to_pln: bool = False,
+    comment: str = "",
+) -> TransactionDraft:
+    """A Currency Exchange: ``foreign_amount`` of ``currency`` bought for ``pln_amount`` PLN, or sold if ``to_pln``."""
+    return TransactionDraft(
+        account_id,
+        day,
+        TransactionType.CURRENCY_EXCHANGE,
+        pln_amount,
+        comment,
+        quantity=foreign_amount,
+        cash_currency=currency,
+        to_pln=to_pln,
+    )
+
+
+AUTOMATIC_EXCHANGE_COMMENT = "Wymiana automatyczna"
+
+
+def covering_exchange(buy: TransactionDraft) -> TransactionDraft:
+    """The Exchange from PLN that buys exactly the foreign cash ``buy`` spends, on its day and at its rate (spec 3.3).
+
+    The PLN commission is paid from PLN, so it never adds to the foreign amount (spec 3.5, sheet bug 9.8).
+    """
+    if buy.transaction_type is not TransactionType.BUY or not buy.is_paid_in_foreign_cash:
+        raise TransactionError("Automatyczna wymiana walut służy tylko do zakupu za gotówkę w walucie obcej.")
+    return currency_exchange(
+        buy.account_id,
+        buy.date,
+        buy.cash_currency,
+        -buy.foreign_cash_change,
+        buy.actual_amount - buy.commission,
+        comment=AUTOMATIC_EXCHANGE_COMMENT,
     )
 
 
@@ -170,6 +277,21 @@ def _check_rates(fx_rate: Decimal | None, nbp_rate: NbpRate | None) -> None:
         raise TransactionError("Kurs musi być większy od zera.")
 
 
+def _check_settlement(cash_currency: str, nbp_rate: NbpRate | None) -> None:
+    """Foreign cash pays only for an Instrument in that same currency."""
+    if cash_currency != PLN and (nbp_rate is None or nbp_rate.currency != cash_currency):
+        raise TransactionError(f"Gotówką {cash_currency} można płacić tylko za instrument w {cash_currency}.")
+
+
+def _check_exchange_fields(currency: str, quantity: Decimal | None) -> None:
+    if currency == PLN or not is_currency_code(currency):
+        raise TransactionError("Wybierz walutę obcą do wymiany.")
+    if quantity is None or not quantity > 0:
+        raise TransactionError("Kwota w walucie musi być większa od zera.")
+    if quantity != quantity.quantize(GROSZ):
+        raise TransactionError("Kwotę w walucie podaj z dokładnością do setnych.")
+
+
 def _check_buy_or_sell_fields(quantity: Decimal | None, price: Decimal | None, commission: Decimal) -> None:
     if quantity is None or not quantity > 0:
         raise TransactionError("Liczba musi być większa od zera.")
@@ -181,25 +303,29 @@ def _check_buy_or_sell_fields(quantity: Decimal | None, price: Decimal | None, c
         raise TransactionError("Prowizję podaj z dokładnością do grosza.")
 
 
-def cash_balances(transactions: Iterable[TransactionDraft], on: date | None = None) -> dict[int, Decimal]:
-    """PLN Cash Balance per Account id at the end of ``on`` (default: all Transactions).
+def cash_balances(
+    transactions: Iterable[TransactionDraft], on: date | None = None, currency: str = PLN
+) -> dict[int, Decimal]:
+    """Cash Balance in ``currency`` per Account id at the end of ``on`` (default: all Transactions).
 
     A balance may go negative: insufficient cash only warns (spec 3.3), so history can be entered in any order.
     """
     balances: dict[int, Decimal] = {}
     for transaction in transactions:
         if on is None or transaction.date <= on:
-            balances[transaction.account_id] = (
-                balances.get(transaction.account_id, Decimal(0)) + transaction.cash_change
+            balances[transaction.account_id] = balances.get(transaction.account_id, Decimal(0)) + (
+                transaction.cash_change_in(currency)
             )
     return balances
 
 
-def lowest_cash_balance(transactions: Iterable[TransactionDraft], account_id: int, start: date) -> Decimal:
-    """The lowest end-of-day PLN Cash Balance of the Account from ``start`` on.
+def lowest_cash_balance(
+    transactions: Iterable[TransactionDraft], account_id: int, start: date, currency: str = PLN
+) -> Decimal:
+    """The lowest end-of-day Cash Balance in ``currency`` of the Account from ``start`` on.
 
     Below zero means some Transaction lacks cash, which warns but does not block (spec 3.3).
     """
     own = [t for t in transactions if t.account_id == account_id]
     days = sorted({start} | {t.date for t in own if t.date >= start})
-    return min(cash_balances(own, on=day).get(account_id, Decimal(0)) for day in days)
+    return min(cash_balances(own, on=day, currency=currency).get(account_id, Decimal(0)) for day in days)

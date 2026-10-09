@@ -57,7 +57,7 @@ def test_balance_on_a_date_ignores_later_transactions() -> None:
 
 
 def test_transaction_types_have_polish_labels() -> None:
-    assert [t.label for t in TransactionType] == ["Wpłata", "Wypłata", "Zakup", "Sprzedaż"]
+    assert [t.label for t in TransactionType] == ["Wpłata", "Wypłata", "Zakup", "Sprzedaż", "Wymiana walut"]
 
 
 @pytest.mark.parametrize("amount", ["0", "-5"])

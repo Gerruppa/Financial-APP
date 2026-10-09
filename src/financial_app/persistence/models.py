@@ -2,7 +2,7 @@
 
 import datetime as dt
 
-from sqlalchemy import Boolean, Date, ForeignKey, Integer, MetaData, String, Text
+from sqlalchemy import Boolean, Date, ForeignKey, Integer, MetaData, String, Text, false
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 # Deterministic constraint names so SQLite batch migrations can alter them later
@@ -84,6 +84,10 @@ class TransactionRow(Base):
     nbp_rate: Mapped[str | None] = mapped_column(String(30))
     nbp_published_on: Mapped[dt.date | None] = mapped_column(Date)
     nbp_table: Mapped[str | None] = mapped_column(String(30))
+    # The Cash Currency paid from or into: PLN, or the foreign one of a Currency Exchange or of a Buy or Sell paid
+    # from foreign cash; ``to_pln`` marks an Exchange selling that currency (issue #16)
+    cash_currency: Mapped[str] = mapped_column(String(3), server_default="PLN")
+    to_pln: Mapped[bool] = mapped_column(Boolean, server_default=false())
 
 
 class AssetClassRow(Base):
