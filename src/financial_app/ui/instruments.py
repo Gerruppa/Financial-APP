@@ -12,11 +12,14 @@ from financial_app.domain.instruments import AssetClass, Instrument, InstrumentD
 from financial_app.persistence.instruments import (
     add_asset_class,
     add_instrument,
+    delete_asset_class,
+    delete_instrument,
     list_asset_classes,
     list_instruments,
     rename_asset_class,
     update_instrument,
 )
+from financial_app.ui.dialogs import movable_dialog
 
 
 @dataclass
@@ -47,7 +50,7 @@ class AssetClassesSection:
 
     def open_dialog(self, asset_class: AssetClass | None) -> None:
         """Open a form for a new Asset Class (``None``) or for renaming ``asset_class``."""
-        dialog = ui.dialog()
+        dialog = movable_dialog()
         dialog.on("hide", dialog.delete)
         with dialog, ui.card().classes("w-[400px]"):
             ui.label("Nowa klasa aktywów" if asset_class is None else "Zmień nazwę klasy").classes("text-lg font-bold")
@@ -69,9 +72,28 @@ class AssetClassesSection:
                 if asset_class is not None:
                     self.on_renamed()
 
-            with ui.row().classes("w-full justify-end"):
-                ui.button("Anuluj", on_click=dialog.close).props("flat")
-                ui.button("Zapisz", on_click=save)
+            def delete() -> None:
+                if asset_class is None:
+                    return
+                try:
+                    delete_asset_class(self.engine, asset_class.id)
+                except InstrumentError as exc:
+                    error.text = str(exc)
+                    return
+                dialog.close()
+                self.class_list.refresh()
+                self.on_renamed()
+
+            with ui.row().classes("w-full justify-between"):
+                if asset_class is not None:
+                    ui.button("Usuń", icon="delete", on_click=delete).props("flat color=negative no-caps").mark(
+                        "delete-asset-class"
+                    )
+                else:
+                    ui.space()
+                with ui.row():
+                    ui.button("Anuluj", on_click=dialog.close).props("flat")
+                    ui.button("Zapisz", on_click=save)
         dialog.open()
 
 
@@ -117,7 +139,7 @@ class InstrumentsSection:
 
     def open_dialog(self, instrument: Instrument | None) -> None:
         """Open a fresh form for a new Instrument (``None``) or for editing ``instrument``."""
-        dialog = ui.dialog()
+        dialog = movable_dialog()
         dialog.on("hide", dialog.delete)
         class_options = {c.id: c.name for c in list_asset_classes(self.engine)}
         with dialog, ui.card().classes("w-[480px]").mark("instrument-dialog"):
@@ -161,9 +183,27 @@ class InstrumentsSection:
                 dialog.close()
                 self.refresh()
 
-            with ui.row().classes("w-full justify-end"):
-                ui.button("Anuluj", on_click=dialog.close).props("flat")
-                ui.button("Zapisz", on_click=save)
+            def delete() -> None:
+                if instrument is None:
+                    return
+                try:
+                    delete_instrument(self.engine, instrument.id)
+                except InstrumentError as exc:
+                    error.text = str(exc)
+                    return
+                dialog.close()
+                self.refresh()
+
+            with ui.row().classes("w-full justify-between"):
+                if instrument is not None:
+                    ui.button("Usuń", icon="delete", on_click=delete).props("flat color=negative no-caps").mark(
+                        "delete-instrument"
+                    )
+                else:
+                    ui.space()
+                with ui.row():
+                    ui.button("Anuluj", on_click=dialog.close).props("flat")
+                    ui.button("Zapisz", on_click=save)
         dialog.open()
 
 

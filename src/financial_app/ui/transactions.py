@@ -57,6 +57,7 @@ from financial_app.persistence.transactions import (
     update_transaction,
 )
 from financial_app.sources.nbp import NbpRates
+from financial_app.ui.dialogs import movable_dialog
 
 # Currency Exchange directions in the dialog: buying the foreign currency for PLN, or selling it for PLN
 _BUY, _SELL = "buy", "sell"
@@ -174,7 +175,7 @@ def open_transaction_dialog(
 
     It is built on demand and removed when closed; ``on_saved`` runs after a save or a delete.
     """
-    dialog = ui.dialog()
+    dialog = movable_dialog()
     dialog.on("hide", dialog.delete)
     all_accounts = list_accounts(engine)
     account_names = {a.id: a.name for a in all_accounts}
