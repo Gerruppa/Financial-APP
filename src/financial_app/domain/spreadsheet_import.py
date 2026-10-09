@@ -21,6 +21,7 @@ from financial_app.domain.transactions import (
     TransactionDraft,
     TransactionError,
     TransactionType,
+    buy_or_sell,
     currency_exchange,
 )
 
@@ -42,6 +43,7 @@ COLUMNS = {
 }
 
 CASH_TICKERS = ("gotówka", "gotowka")
+SIMILAR_AMOUNT_TOLERANCE = Decimal("0.01")
 # TYP-DDMMRR: the day is not part of the Bond Series, which is TYP, month and year, e.g. EDO-040836 -> EDO0836
 _BOND = re.compile(r"([A-Z]{2,4})-(\d{2})(\d{2})(\d{2})")
 _FOREIGN_CASH = re.compile(r"Waluty_([A-Z]{3})")
@@ -252,12 +254,13 @@ def _draft(
     if line.quantity is None:
         raise SheetError(f"Brak liczby w wierszu dla „{line.ticker}”.")
     if ticker.kind is TickerKind.FOREIGN_CASH:
+        pln_amount = (line.quantity * line.rate).quantize(Decimal("0.01"))
         return currency_exchange(
             account_id,
             line.day,
             ticker.name,
             line.quantity,
-            line.total,
+            pln_amount,
             to_pln=kind is SheetKind.SELL,
             comment=line.comment,
         )
@@ -272,17 +275,32 @@ def _draft(
         fx_rate = line.rate if line.rate != 1 else None
     else:
         nbp_rate = None
+    # The Actual Amount is calculated as for any Buy or Sell, not taken from the sheet's Total PLN
     transaction_type = TransactionType.BUY if kind is SheetKind.BUY else TransactionType.SELL
-    return TransactionDraft(
+    return buy_or_sell(
         account_id,
         line.day,
         transaction_type,
-        line.total,
+        instrument_id,
+        line.quantity,
+        line.price,
+        line.commission,
         line.comment,
-        instrument_id=instrument_id,
-        quantity=line.quantity,
-        price=line.price,
-        commission=line.commission,
         fx_rate=fx_rate,
         nbp_rate=nbp_rate,
     )
+
+
+def similar(draft: TransactionDraft, manual: TransactionDraft) -> bool:
+    """Whether a sheet row and a Transaction entered by hand are probably the same one (spec 7): the same Account,
+    date, type, Instrument and quantity, with the Actual Amounts within 1%."""
+    if (draft.account_id, draft.date, draft.transaction_type, draft.instrument_id, draft.quantity) != (
+        manual.account_id,
+        manual.date,
+        manual.transaction_type,
+        manual.instrument_id,
+        manual.quantity,
+    ):
+        return False
+    larger = max(draft.actual_amount, manual.actual_amount)
+    return abs(draft.actual_amount - manual.actual_amount) <= larger * SIMILAR_AMOUNT_TOLERANCE

@@ -16,6 +16,7 @@ import openpyxl
 from sqlalchemy import Engine
 
 from financial_app.domain.currencies import MissingNbpRateError, NbpRate
+from financial_app.domain.formatting import format_date
 from financial_app.domain.instruments import Instrument, InstrumentDraft
 from financial_app.domain.spreadsheet_import import (
     SheetError,
@@ -25,8 +26,9 @@ from financial_app.domain.spreadsheet_import import (
     fingerprints,
     parse_lines,
     sheet_draft,
+    similar,
 )
-from financial_app.domain.transactions import PLN, TransactionDraft, TransactionError
+from financial_app.domain.transactions import PLN, Origin, TransactionDraft, TransactionError
 from financial_app.persistence.accounts import list_accounts
 from financial_app.persistence.instruments import (
     add_asset_class,
@@ -35,7 +37,7 @@ from financial_app.persistence.instruments import (
     list_asset_classes,
     list_instruments,
 )
-from financial_app.persistence.transactions import add_transactions, imported_external_ids
+from financial_app.persistence.transactions import add_transactions, imported_external_ids, list_transactions
 
 SHEET_NAME = "Transakcje"
 # The Instrument of a draft in a preview whose Instrument does not exist yet; never saved
@@ -55,16 +57,20 @@ class Decisions:
 
     accounts: Mapping[str, int] = field(default_factory=dict)
     instruments: Mapping[str, int | None] = field(default_factory=dict)
+    # Fingerprints of rows the user chose to import although a Transaction entered by hand looks the same
+    keep_similar: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True)
 class PreviewLine:
-    """A sheet row as it would be saved: ``ok``, skipped as already ``duplicate``, or ``error`` with the reason."""
+    """A sheet row as it would be saved: ``ok``, skipped as already ``duplicate``, held back as ``similar`` to a
+    Transaction entered by hand (unless the user keeps it), or ``error`` with the reason."""
 
     line: SheetLine
-    status: Literal["ok", "duplicate", "error"]
+    status: Literal["ok", "duplicate", "similar", "error"]
     message: str
     draft: TransactionDraft | None
+    external_id: str = ""
 
 
 @dataclass(frozen=True)
@@ -88,6 +94,10 @@ class Preview:
     def duplicates(self) -> int:
         return sum(preview_line.status == "duplicate" for preview_line in self.lines)
 
+    @property
+    def held_back(self) -> list[PreviewLine]:
+        return [preview_line for preview_line in self.lines if preview_line.status == "similar"]
+
 
 def read_sheet_lines(path: Path) -> list[SheetLine]:
     """The rows of the Transakcje tab of the workbook at ``path``; raises SheetError if it cannot be read."""
@@ -110,6 +120,7 @@ def preview_import(engine: Engine, lines: Sequence[SheetLine], rates: NbpLookup,
     accounts = {account.name.casefold(): account.id for account in list_accounts(engine)}
     instruments = {instrument.name.casefold(): instrument for instrument in list_instruments(engine)}
     saved = imported_external_ids(engine)
+    by_hand = [t for t in list_transactions(engine) if t.origin is Origin.MANUAL]
     prints = fingerprints(lines)
     nbp_cache: dict[tuple[str, date], NbpRate | MissingNbpRateError] = {}
 
@@ -125,14 +136,19 @@ def preview_import(engine: Engine, lines: Sequence[SheetLine], rates: NbpLookup,
     preview_lines = []
     for line, external_id in zip(lines, prints, strict=True):
         if external_id in saved:
-            preview_lines.append(PreviewLine(line, "duplicate", "Już zaimportowana.", None))
+            preview_lines.append(PreviewLine(line, "duplicate", "Już zaimportowana.", None, external_id))
             continue
         try:
             draft = _draft_for(line, external_id, accounts, instruments, decisions, rates, nbp_cache)
         except TransactionError as error:
-            preview_lines.append(PreviewLine(line, "error", str(error), None))
+            preview_lines.append(PreviewLine(line, "error", str(error), None, external_id))
+            continue
+        match = next((t for t in by_hand if similar(draft, t)), None)
+        if match is not None and external_id not in decisions.keep_similar:
+            message = f"Podobna do ręcznej transakcji z {format_date(match.date)} (nr {match.id})."
+            preview_lines.append(PreviewLine(line, "similar", message, draft, external_id))
         else:
-            preview_lines.append(PreviewLine(line, "ok", "", draft))
+            preview_lines.append(PreviewLine(line, "ok", "", draft, external_id))
     return Preview(preview_lines, unmatched_accounts, unmatched_instruments, new_instruments)
 
 

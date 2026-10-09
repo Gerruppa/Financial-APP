@@ -21,7 +21,12 @@ from financial_app.sources.spreadsheet import (
 )
 
 NEW_INSTRUMENT = "new"
-STATUS_LABELS = {"ok": "do zapisu", "duplicate": "już zaimportowana", "error": "błąd"}
+STATUS_LABELS = {
+    "ok": "do zapisu",
+    "duplicate": "już zaimportowana",
+    "similar": "podobna do ręcznej, wstrzymana",
+    "error": "błąd",
+}
 
 
 @dataclass
@@ -37,6 +42,7 @@ class SheetImportSection:
     lines: list[SheetLine] = field(default_factory=list)
     accounts: dict[str, int] = field(default_factory=dict)
     instruments: dict[str, int | None] = field(default_factory=dict)
+    keep_similar: set[str] = field(default_factory=set)
 
     def build(self) -> None:
         with ui.card().classes("w-full max-w-4xl"):
@@ -60,6 +66,7 @@ class SheetImportSection:
             return
         self.accounts = {}
         self.instruments = {}
+        self.keep_similar = set()
         self.render()
 
     def render(self) -> None:
@@ -67,6 +74,7 @@ class SheetImportSection:
         self.result.clear()
         with self.result:
             self._matching(preview)
+            self._similar(preview)
             self._table(preview)
             ui.label(
                 f"Do zapisu: {preview.to_save}, już zaimportowane (pominięte): {preview.duplicates}, "
@@ -82,7 +90,11 @@ class SheetImportSection:
                 save.disable()
 
     def _decisions(self) -> Decisions:
-        return Decisions(accounts=dict(self.accounts), instruments=dict(self.instruments))
+        return Decisions(
+            accounts=dict(self.accounts),
+            instruments=dict(self.instruments),
+            keep_similar=frozenset(self.keep_similar),
+        )
 
     def _matching(self, preview: Preview) -> None:
         if preview.unmatched_accounts:
@@ -106,6 +118,25 @@ class SheetImportSection:
                     on_change=lambda e, ticker=name: self._choose_instrument(ticker, e.value),
                 ).classes("w-full").mark(f"import-instrument-{name}")
 
+    def _similar(self, preview: Preview) -> None:
+        if preview.held_back:
+            ui.label(
+                "Te wiersze wyglądają jak transakcje wpisane ręcznie. Zaznacz, które mimo to zaimportować:"
+            ).classes("font-bold")
+        for item in preview.held_back:
+            ui.checkbox(
+                f"Wiersz {item.line.row}: {item.line.ticker}, {format_date(item.line.day)} — {item.message}",
+                value=item.external_id in self.keep_similar,
+                on_change=lambda e, key=item.external_id: self._keep(key, e.value),
+            ).mark(f"import-keep-{item.line.row}")
+
+    def _keep(self, external_id: str, keep: bool) -> None:
+        if keep:
+            self.keep_similar.add(external_id)
+        else:
+            self.keep_similar.discard(external_id)
+        self.render()
+
     def _table(self, preview: Preview) -> None:
         rows = [
             {
@@ -115,7 +146,7 @@ class SheetImportSection:
                 "ticker": item.line.ticker,
                 "kind": item.line.kind,
                 "quantity": format_quantity(item.line.quantity) if item.line.quantity is not None else "",
-                "total": format_pln(item.line.total),
+                "total": format_pln(item.draft.actual_amount if item.draft else item.line.total),
                 "status": STATUS_LABELS[item.status] + (f": {item.message}" if item.message else ""),
             }
             for item in preview.lines

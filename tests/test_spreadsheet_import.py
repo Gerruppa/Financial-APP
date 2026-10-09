@@ -10,6 +10,7 @@ from sqlalchemy import Engine
 
 from financial_app.domain.accounts import AccountDraft, AccountType
 from financial_app.domain.currencies import MissingNbpRateError, NbpRate
+from financial_app.domain.instruments import InstrumentDraft
 from financial_app.domain.spreadsheet_import import (
     COLUMNS,
     SheetError,
@@ -21,11 +22,11 @@ from financial_app.domain.spreadsheet_import import (
     parse_lines,
     sheet_draft,
 )
-from financial_app.domain.transactions import Origin, TransactionType
+from financial_app.domain.transactions import Origin, TransactionType, buy_or_sell
 from financial_app.persistence.accounts import add_account, list_accounts
 from financial_app.persistence.db import init_db
-from financial_app.persistence.instruments import list_asset_classes, list_instruments
-from financial_app.persistence.transactions import list_transactions
+from financial_app.persistence.instruments import add_instrument, list_asset_classes, list_instruments
+from financial_app.persistence.transactions import add_transaction, list_transactions
 from financial_app.sources.spreadsheet import Decisions, preview_import, read_sheet_lines, save_import
 
 HEADER = list(COLUMNS.values())
@@ -115,11 +116,12 @@ def test_identical_rows_get_distinct_fingerprints_and_stay_stable() -> None:
     assert fingerprints(lines_of(row(Konto="IKZE")))[0] != ids[0]
 
 
-def test_a_foreign_buy_keeps_the_sheet_total_and_rate_and_takes_the_nbp_rate(ike: int) -> None:
+def test_a_foreign_buy_takes_the_app_amount_from_the_sheet_rate_and_the_nbp_rate(ike: int) -> None:
     line = lines_of(row())[0]
     draft = sheet_draft(line, account_id=ike, instrument_id=7, nbp_rate=USD, external_id="sheet-x")
     assert draft.transaction_type is TransactionType.BUY
-    assert draft.actual_amount == Decimal("145.68")
+    # Calculated as for any Buy: 0,3479 × 114,72 × 3,6503, not the sheet's rounded Total PLN of 145,68
+    assert draft.actual_amount == Decimal("145.69")
     assert draft.fx_rate == Decimal("3.6503")
     assert draft.nbp_rate == USD
     assert draft.origin is Origin.SPREADSHEET
@@ -259,3 +261,35 @@ def test_a_workbook_without_the_transakcje_tab_is_refused(tmp_path: Path) -> Non
 def test_accounts_and_asset_classes_are_the_saved_ones(engine: Engine, ike: int) -> None:
     assert [account.name for account in list_accounts(engine)] == ["IKE"]
     assert any(asset_class.name == "Akcje zagraniczne" for asset_class in list_asset_classes(engine))
+
+
+def test_a_row_like_a_manual_transaction_is_held_back_until_the_user_keeps_it(engine: Engine, ike: int) -> None:
+    instrument = add_instrument(engine, InstrumentDraft("LON:ISAC", list_asset_classes(engine)[0].id, "USD"))
+    rates = FakeRates({"USD": USD})
+    lines = lines_of(row())
+    by_hand = buy_or_sell(
+        ike,
+        date(2026, 4, 24),
+        TransactionType.BUY,
+        instrument.id,
+        Decimal("0.3479"),
+        Decimal("114.72"),
+        fx_rate=Decimal("3.6503"),
+        nbp_rate=USD,
+    )
+    add_transaction(engine, by_hand)
+    decisions = Decisions(accounts={"IKE": ike}, instruments={"LON:ISAC": instrument.id})
+
+    held = preview_import(engine, lines, rates, decisions)
+    assert [item.status for item in held.lines] == ["similar"]
+    assert held.to_save == 0
+    assert save_import(engine, lines, rates, decisions).to_save == 0
+    assert len(list_transactions(engine)) == 1
+
+    keep = Decisions(
+        accounts={"IKE": ike},
+        instruments={"LON:ISAC": instrument.id},
+        keep_similar=frozenset({held.lines[0].external_id}),
+    )
+    assert save_import(engine, lines, rates, keep).to_save == 1
+    assert len(list_transactions(engine)) == 2
