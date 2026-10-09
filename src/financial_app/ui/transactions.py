@@ -32,6 +32,7 @@ from financial_app.domain.formatting import (
 from financial_app.domain.transactions import (
     PLN,
     BrokerConversion,
+    Origin,
     SplitRatio,
     Transaction,
     TransactionDraft,
@@ -147,7 +148,10 @@ class TransactionsPage:
                     if kind is not TransactionType.DRIP and transaction.tax_amount != transaction.actual_amount:
                         tax = format_pln(transaction.tax_cash_change, signed=True)
                         ui.label(f"podatkowa {tax}").classes("text-xs text-gray-500")
-                ui.label(transaction.comment).classes("text-gray-600")
+                with ui.column().classes("gap-0"):
+                    ui.label(transaction.comment).classes("text-gray-600")
+                    if transaction.origin is not Origin.MANUAL:
+                        ui.label(transaction.origin.label).classes("text-xs text-gray-500").mark("transaction-origin")
 
 
 def _exchange_cell(exchange: Transaction) -> None:

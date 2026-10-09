@@ -61,7 +61,7 @@ class AccountCashCurrency(Base):
 class TransactionRow(Base):
     """A Transaction (spec 3.3); ``domain.transactions.Transaction`` is its in-memory form.
 
-    The Tax Amount is not stored: it follows from the stored NBP Rate. Origin joins in a later migration (issue #20).
+    The Tax Amount is not stored: it follows from the stored NBP Rate.
     """
 
     __tablename__ = "transactions"
@@ -101,6 +101,9 @@ class TransactionRow(Base):
     # Split only: X:Y, every ``split_old`` units become ``split_new`` (issue #19)
     split_new: Mapped[int | None] = mapped_column(Integer)
     split_old: Mapped[int | None] = mapped_column(Integer)
+    # Where it came from (spec 7): "manual" or "spreadsheet"; an imported one carries its row's fingerprint (issue #20)
+    origin: Mapped[str] = mapped_column(String(20), server_default="manual")
+    external_id: Mapped[str | None] = mapped_column(String(100), unique=True)
 
 
 class AssetClassRow(Base):
