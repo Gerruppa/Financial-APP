@@ -91,7 +91,9 @@ def test_tickers_of_the_sheet_formats_are_recognised() -> None:
     assert classify_ticker("EDO-040836") == Ticker(TickerKind.BOND, "EDO0836")
     assert classify_ticker("EDO-040836").name == "EDO0836"
     assert classify_ticker("FRA:SXR8").kind is TickerKind.INSTRUMENT
-    assert classify_ticker("FRA:SXR8").name == "FRA:SXR8"
+    assert classify_ticker("FRA:SXR8").name == "SXR8"
+    assert classify_ticker("WSE:PKO") == Ticker(TickerKind.INSTRUMENT, "PKO")
+    assert classify_ticker("PKO") == Ticker(TickerKind.INSTRUMENT, "PKO")  # Biznesradar: a bare code
 
 
 def test_a_sheet_without_a_needed_column_is_refused() -> None:
@@ -156,8 +158,8 @@ def test_preview_lists_what_is_unmatched_and_saves_nothing(engine: Engine, ike: 
     )
     preview = preview_import(engine, lines, FakeRates({"USD": USD}), Decisions())
     assert preview.unmatched_accounts == ["Metale Fizyczne"]
-    assert preview.unmatched_instruments == ["COMEX:GCW00", "LON:ISAC"]
-    assert preview.new_instruments["LON:ISAC"].asset_class == "Akcje zagraniczne"
+    assert preview.unmatched_instruments == ["GCW00", "ISAC"]
+    assert preview.new_instruments["ISAC"].asset_class == "Akcje zagraniczne"
     assert [item.status for item in preview.lines] == ["ok", "error"]
     assert list_transactions(engine) == []
 
@@ -186,9 +188,9 @@ def test_save_creates_the_instruments_and_imports_every_row_once(engine: Engine,
     assert sorted(t.transaction_type for t in transactions) == [TransactionType.BUY, TransactionType.DEPOSIT]
     assert {t.origin for t in transactions} == {Origin.SPREADSHEET}
     instruments = {instrument.name: instrument for instrument in list_instruments(engine)}
-    assert instruments["LON:ISAC"].quote_currency == "USD"
+    assert instruments["ISAC"].quote_currency == "USD"
     classes = {asset_class.id: asset_class.name for asset_class in list_asset_classes(engine)}
-    assert classes[instruments["LON:ISAC"].asset_class_id] == "Akcje zagraniczne"
+    assert classes[instruments["ISAC"].asset_class_id] == "Akcje zagraniczne"
 
     again = preview_import(engine, lines, rates, decisions)
     assert [item.status for item in again.lines] == ["duplicate", "duplicate"]
@@ -226,7 +228,7 @@ def test_a_chosen_existing_instrument_is_used_instead_of_a_new_one(engine: Engin
     )
     lines = lines_of(row(Ticker="LON:ISAC"))
     preview = preview_import(
-        engine, lines, FakeRates({"USD": USD}), Decisions(accounts={"IKE": ike}, instruments={"LON:ISAC": existing.id})
+        engine, lines, FakeRates({"USD": USD}), Decisions(accounts={"IKE": ike}, instruments={"ISAC": existing.id})
     )
     assert preview.lines[0].status == "ok"
     assert preview.lines[0].draft is not None
@@ -264,7 +266,7 @@ def test_accounts_and_asset_classes_are_the_saved_ones(engine: Engine, ike: int)
 
 
 def test_a_row_like_a_manual_transaction_is_held_back_until_the_user_keeps_it(engine: Engine, ike: int) -> None:
-    instrument = add_instrument(engine, InstrumentDraft("LON:ISAC", list_asset_classes(engine)[0].id, "USD"))
+    instrument = add_instrument(engine, InstrumentDraft("ISAC", list_asset_classes(engine)[0].id, "USD"))
     rates = FakeRates({"USD": USD})
     lines = lines_of(row())
     by_hand = buy_or_sell(
@@ -278,7 +280,7 @@ def test_a_row_like_a_manual_transaction_is_held_back_until_the_user_keeps_it(en
         nbp_rate=USD,
     )
     add_transaction(engine, by_hand)
-    decisions = Decisions(accounts={"IKE": ike}, instruments={"LON:ISAC": instrument.id})
+    decisions = Decisions(accounts={"IKE": ike}, instruments={"ISAC": instrument.id})
 
     held = preview_import(engine, lines, rates, decisions)
     assert [item.status for item in held.lines] == ["similar"]
@@ -288,8 +290,32 @@ def test_a_row_like_a_manual_transaction_is_held_back_until_the_user_keeps_it(en
 
     keep = Decisions(
         accounts={"IKE": ike},
-        instruments={"LON:ISAC": instrument.id},
+        instruments={"ISAC": instrument.id},
         keep_similar=frozenset({held.lines[0].external_id}),
     )
     assert save_import(engine, lines, rates, keep).to_save == 1
     assert len(list_transactions(engine)) == 2
+
+
+def test_an_existing_bond_without_a_manual_price_gets_the_sheet_price_and_keeps_one_it_has(
+    engine: Engine, ike: int
+) -> None:
+    class_id = list_asset_classes(engine)[0].id
+    plain = add_instrument(engine, InstrumentDraft("EDO0836", class_id, "PLN"))
+    priced = add_instrument(engine, InstrumentDraft("EDO0636", class_id, "PLN", manual_price=Decimal("101.5")))
+    bond_row = dict(Konto="IKE", Ticker="EDO-040836", Waluta="PLN", Liczba=50.0, Cena=100.0, **{"Total PLN": 5000.0})
+    other_row = dict(bond_row, Ticker="EDO-170636")
+    lines = lines_of(row(**bond_row), row(**other_row))
+
+    save_import(engine, lines, FakeRates({}), Decisions(accounts={"IKE": ike}))
+
+    by_name = {instrument.name: instrument for instrument in list_instruments(engine)}
+    assert by_name["EDO0836"].manual_price == Decimal("100")
+    assert by_name["EDO0636"].manual_price == Decimal("101.5")
+    assert plain.id == by_name["EDO0836"].id and priced.id == by_name["EDO0636"].id
+
+
+def test_editing_the_total_or_comment_of_a_row_keeps_its_fingerprint() -> None:
+    original = fingerprints(lines_of(row()))
+    edited = fingerprints(lines_of(row(**{"Total PLN": 150.0, "Komentarz": "poprawiony"})))
+    assert original == edited

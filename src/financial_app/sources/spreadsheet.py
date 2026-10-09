@@ -9,6 +9,7 @@ import zipfile
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date
+from decimal import Decimal
 from pathlib import Path
 from typing import Literal, Protocol
 
@@ -36,6 +37,7 @@ from financial_app.persistence.instruments import (
     delete_instrument,
     list_asset_classes,
     list_instruments,
+    update_instrument,
 )
 from financial_app.persistence.transactions import add_transactions, imported_external_ids, list_transactions
 
@@ -184,6 +186,7 @@ def save_import(engine: Engine, lines: Sequence[SheetLine], rates: NbpLookup, de
         for instrument_id in created:
             delete_instrument(engine, instrument_id)
         raise
+    _set_missing_bond_prices(engine, final)
     return final
 
 
@@ -249,3 +252,24 @@ def _nbp(rates: NbpLookup, line: SheetLine, cache: dict[tuple[str, date], NbpRat
     if isinstance(found, MissingNbpRateError):
         raise SheetError(str(found)) from None
     return found
+
+
+def _set_missing_bond_prices(engine: Engine, preview: Preview) -> None:
+    """Stage 1: a bond Instrument saved from the sheet gets the sheet's price as its Manual Price, if it has none.
+
+    An existing Manual Price is left alone.
+    """
+    bond_prices: dict[str, Decimal] = {}
+    for item in preview.lines:
+        if item.status == "ok" and classify_ticker(item.line.ticker).kind is TickerKind.BOND and item.line.price:
+            bond_prices.setdefault(classify_ticker(item.line.ticker).name, item.line.price)
+    for instrument in list_instruments(engine):
+        price = bond_prices.get(instrument.name)
+        if price is not None and instrument.manual_price is None:
+            update_instrument(
+                engine,
+                instrument.id,
+                InstrumentDraft(
+                    instrument.name, instrument.asset_class_id, instrument.quote_currency, instrument.market, price
+                ),
+            )

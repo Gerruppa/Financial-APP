@@ -78,7 +78,7 @@ _SHEET_KIND_LABELS = {
 
 
 class TickerKind(StrEnum):
-    INSTRUMENT = "instrument"  # EXCH:SYM, or any other ticker: an Instrument of that name
+    INSTRUMENT = "instrument"  # EXCH:SYM, a bare Biznesradar code or any other ticker: named by its symbol
     BOND = "bond"  # TYP-DDMMRR: a Bond Series
     CASH = "cash"  # Gotówka: the Account's PLN cash
     FOREIGN_CASH = "foreign_cash"  # Waluty_<CUR>: a foreign Cash Currency
@@ -104,7 +104,8 @@ def classify_ticker(ticker: str) -> Ticker:
         return Ticker(TickerKind.FOREIGN_CASH, match[1])
     if match := _BOND.fullmatch(text):
         return Ticker(TickerKind.BOND, f"{match[1]}{match[3]}{match[4]}")
-    return Ticker(TickerKind.INSTRUMENT, text)
+    # EXCH:SYM and a bare Biznesradar code (e.g. PKO) both name the Instrument by its bare symbol
+    return Ticker(TickerKind.INSTRUMENT, text.rpartition(":")[2])
 
 
 @dataclass(frozen=True)
@@ -193,8 +194,9 @@ def _date(value: object) -> date:
 def fingerprints(lines: Sequence[SheetLine]) -> list[str]:
     """A stable id per row, so importing the file again recognises the rows already saved.
 
-    It depends on the row's content only, not its position, so rows added above it keep theirs. Rows identical in
-    every field get a running count, so two equal Buys on one day remain two Transactions.
+    It depends on the identity of the row only (Account, date, ticker, kind, quantity, price), so editing its Total PLN
+    or comment in the sheet does not make it a new row, and rows added above it keep theirs. Rows with the same identity
+    get a running count, so two equal Buys on one day remain two Transactions.
     """
     seen: dict[str, int] = {}
     ids = []
@@ -207,10 +209,6 @@ def fingerprints(lines: Sequence[SheetLine]) -> list[str]:
                 line.kind,
                 str(line.quantity),
                 str(line.price),
-                str(line.commission),
-                str(line.rate),
-                str(line.total),
-                line.comment,
             ]
         )
         count = seen.get(basis, 0)
