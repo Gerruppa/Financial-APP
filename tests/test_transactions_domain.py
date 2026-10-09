@@ -9,6 +9,7 @@ from financial_app.domain.transactions import (
     TransactionDraft,
     TransactionError,
     TransactionType,
+    buy_or_sell,
     cash_balances,
     lowest_cash_balance,
 )
@@ -55,7 +56,7 @@ def test_balance_on_a_date_ignores_later_transactions() -> None:
 
 
 def test_transaction_types_have_polish_labels() -> None:
-    assert [t.label for t in TransactionType] == ["Wpłata", "Wypłata"]
+    assert [t.label for t in TransactionType] == ["Wpłata", "Wypłata", "Zakup", "Sprzedaż"]
 
 
 @pytest.mark.parametrize("amount", ["0", "-5"])
@@ -91,3 +92,66 @@ def test_lowest_cash_balance_ignores_other_accounts() -> None:
     transactions = [_deposit(IKE, "100"), _withdrawal(XTB, "500")]
 
     assert lowest_cash_balance(transactions, IKE, start=date(2026, 1, 1)) == Decimal("100")
+
+
+def _trade(kind: TransactionType, quantity: str = "10", price: str = "25.5", fee: str = "3") -> TransactionDraft:
+    return buy_or_sell(IKE, date(2026, 1, 1), kind, 7, Decimal(quantity), Decimal(price), Decimal(fee))
+
+
+def test_buy_costs_its_value_plus_the_commission() -> None:
+    buy = _trade(TransactionType.BUY)
+
+    assert (buy.instrument_id, buy.quantity, buy.price, buy.commission) == (7, Decimal(10), Decimal("25.5"), Decimal(3))
+    assert buy.actual_amount == Decimal("258.00")
+    assert buy.cash_change == Decimal("-258.00")
+
+
+def test_sell_brings_its_value_minus_the_commission() -> None:
+    sell = _trade(TransactionType.SELL)
+
+    assert sell.actual_amount == Decimal("252.00")
+    assert sell.cash_change == Decimal("252.00")
+
+
+def test_trade_value_is_rounded_to_the_grosz() -> None:
+    assert _trade(TransactionType.BUY, quantity="3", price="0.333", fee="0").actual_amount == Decimal("1.00")
+
+
+def test_trades_move_the_cash_balance() -> None:
+    transactions = [_deposit(IKE, "1000"), _trade(TransactionType.BUY), _trade(TransactionType.SELL, quantity="5")]
+
+    assert cash_balances(transactions) == {IKE: Decimal("1000") - Decimal("258") + Decimal("124.50")}
+
+
+@pytest.mark.parametrize(
+    ("quantity", "price", "fee", "message"),
+    [
+        ("0", "10", "0", "Liczba musi być większa od zera"),
+        ("1", "0", "0", "Cena musi być większa od zera"),
+        ("1", "10", "-1", "Prowizja nie może być ujemna"),
+        ("1", "10", "0.001", "Prowizję podaj z dokładnością do grosza"),
+    ],
+)
+def test_trade_fields_are_validated(quantity: str, price: str, fee: str, message: str) -> None:
+    with pytest.raises(TransactionError, match=message):
+        _trade(TransactionType.BUY, quantity, price, fee)
+
+
+def test_sell_commission_cannot_exceed_its_value() -> None:
+    with pytest.raises(TransactionError, match="Prowizja nie może przekraczać"):
+        _trade(TransactionType.SELL, quantity="1", price="2", fee="2")
+
+
+def test_cash_transactions_carry_no_instrument() -> None:
+    with pytest.raises(TransactionError):
+        TransactionDraft(IKE, date(2026, 1, 1), TransactionType.DEPOSIT, Decimal(1), instrument_id=7)
+
+
+def test_trade_needs_an_instrument() -> None:
+    with pytest.raises(TransactionError, match="instrument"):
+        TransactionDraft(IKE, date(2026, 1, 1), TransactionType.BUY, Decimal(1))
+
+
+def test_trade_worth_less_than_a_grosz_is_rejected() -> None:
+    with pytest.raises(TransactionError, match="co najmniej 0,01"):
+        _trade(TransactionType.BUY, quantity="0.001", price="0.01", fee="0")

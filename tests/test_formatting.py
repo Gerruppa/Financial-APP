@@ -8,6 +8,8 @@ from financial_app.domain.formatting import (
     format_exact,
     format_percent,
     format_pln,
+    format_quantity,
+    format_unit_price,
     parse_date,
     parse_number,
 )
@@ -81,3 +83,14 @@ def test_parse_date_rejects_other_formats_and_impossible_dates(text: str) -> Non
 )
 def test_format_exact_keeps_every_decimal_so_editing_never_rounds(value: Decimal, expected: str) -> None:
     assert format_exact(value) == expected
+
+
+def test_unit_price_keeps_all_its_decimals() -> None:
+    assert format_unit_price(Decimal("45.123")) == f"45,123{NBSP}zł"
+    assert format_unit_price(Decimal("45.5")) == f"45,50{NBSP}zł"
+
+
+def test_quantity_shows_only_the_decimals_it_has() -> None:
+    assert format_quantity(Decimal("10")) == "10"
+    assert format_quantity(Decimal("0.50")) == "0,5"
+    assert format_quantity(Decimal("1234.5")) == f"1{NBSP}234,5"

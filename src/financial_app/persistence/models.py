@@ -73,6 +73,11 @@ class TransactionRow(Base):
     # PLN, as exact decimal text like the FX Conversion Fee
     actual_amount: Mapped[str] = mapped_column(String(30))
     comment: Mapped[str] = mapped_column(Text)
+    # Buy and Sell only: the Instrument, quantity, unit price and PLN commission, as exact decimal text
+    instrument_id: Mapped[int | None] = mapped_column(ForeignKey("instruments.id"), index=True)
+    quantity: Mapped[str | None] = mapped_column(String(30))
+    price: Mapped[str | None] = mapped_column(String(30))
+    commission: Mapped[str | None] = mapped_column(String(30))
 
 
 class AssetClassRow(Base):

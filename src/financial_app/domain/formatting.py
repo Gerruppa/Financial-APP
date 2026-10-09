@@ -27,9 +27,20 @@ def format_exact(value: Decimal) -> str:
     return format_number(value, decimals=max(2, -exponent if isinstance(exponent, int) else 0))
 
 
+def format_quantity(value: Decimal) -> str:
+    """Format a quantity with only the decimals it has, e.g. 10 -> '10', 0.50 -> '0,5'."""
+    exponent = value.normalize().as_tuple().exponent
+    return format_number(value, decimals=max(0, -exponent if isinstance(exponent, int) else 0))
+
+
 def format_pln(value: float | Decimal, signed: bool = False) -> str:
     """Format an amount in PLN, e.g. 15912.3 -> '15 912,30 zł' (non-breaking spaces)."""
     return f"{format_number(value, signed=signed)}{NBSP}zł"
+
+
+def format_unit_price(value: Decimal) -> str:
+    """Format a PLN unit price with all its decimals (at least two), e.g. 45.123 -> '45,123 zł'."""
+    return f"{format_exact(value)}{NBSP}zł"
 
 
 def format_percent(value: float | Decimal, decimals: int = 2, signed: bool = False) -> str:
