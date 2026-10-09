@@ -49,3 +49,21 @@ def test_xlsx_shows_dates_day_first() -> None:
     sheet = openpyxl.load_workbook(io.BytesIO(to_xlsx(HEADERS, ROWS))).active
     assert sheet is not None
     assert sheet["B2"].number_format == "DD.MM.YYYY"
+
+
+def test_csv_neutralises_text_that_a_spreadsheet_would_run_as_a_formula() -> None:
+    data = to_csv(
+        HEADERS, [(1, date(2026, 3, 7), "IKE", "=1+1", Decimal(1)), (2, date(2026, 3, 7), "IKE", "-5 zł", Decimal(-5))]
+    )
+
+    lines = data.decode("utf-8-sig").splitlines()
+    assert lines[1].split(";")[3] == "'=1+1"
+    assert lines[2].split(";")[3] == "'-5 zł"
+    assert lines[2].split(";")[4] == "-5"
+
+
+def test_xlsx_keeps_text_that_starts_like_a_formula_as_text() -> None:
+    sheet = openpyxl.load_workbook(io.BytesIO(to_xlsx(HEADERS, [(1, date(2026, 3, 7), "IKE", "=1+1", None)]))).active
+    assert sheet is not None
+    assert sheet["D2"].value == "=1+1"
+    assert sheet["D2"].data_type == "s"

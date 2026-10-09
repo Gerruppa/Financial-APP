@@ -22,6 +22,9 @@ from financial_app.persistence.transactions import list_transactions
 
 FileFormat = Literal["csv", "xlsx"]
 XLSX_DATE_FORMAT = "DD.MM.YYYY"
+# Text starting with one of these would run as a formula when a spreadsheet opens it, so it is kept as text
+FORMULA_START = ("=", "+", "-", "@", "\t", "\r")
+BYTE_ORDER_MARK = "\ufeff"
 
 
 def _csv_cell(value: object) -> str:
@@ -31,6 +34,8 @@ def _csv_cell(value: object) -> str:
         return format_date(value)
     if isinstance(value, Decimal):
         return format(value, "f").replace(".", ",")
+    if isinstance(value, str) and value.startswith(FORMULA_START):
+        return "'" + value  # the apostrophe makes Excel show it as text
     return str(value)
 
 
@@ -40,7 +45,7 @@ def to_csv(headers: Sequence[str], rows: Sequence[Sequence[object]]) -> bytes:
     writer.writerow(headers)
     for row in rows:
         writer.writerow([_csv_cell(value) for value in row])
-    return ("﻿" + text.getvalue()).encode("utf-8")
+    return (BYTE_ORDER_MARK + text.getvalue()).encode("utf-8")
 
 
 def to_xlsx(headers: Sequence[str], rows: Sequence[Sequence[object]]) -> bytes:
@@ -49,10 +54,14 @@ def to_xlsx(headers: Sequence[str], rows: Sequence[Sequence[object]]) -> bytes:
     assert sheet is not None
     sheet.title = "Transakcje"
     sheet.append(list(headers))
+    date_column = list(headers).index("Data") + 1
     for row in rows:
         sheet.append(list(row))
-    for cell in sheet["B"][1:]:
-        cell.number_format = XLSX_DATE_FORMAT
+        for cell in sheet[sheet.max_row]:
+            if isinstance(cell.value, str) and cell.value.startswith(FORMULA_START):
+                cell.data_type = "s"  # stays text, not a formula
+    for row_number in range(2, sheet.max_row + 1):
+        sheet.cell(row_number, date_column).number_format = XLSX_DATE_FORMAT
     buffer = io.BytesIO()
     workbook.save(buffer)
     return buffer.getvalue()
