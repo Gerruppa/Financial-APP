@@ -86,3 +86,16 @@ async def test_preview_saves_nothing_and_save_imports_the_rows(engine: Engine, w
     user.find(marker="import-save").click()
     assert len(list_transactions(engine)) == 1
     assert [transaction.comment for transaction in list_transactions(engine)] == ["IKE MSCI ACWI"]
+
+
+async def test_an_imported_transaction_is_marked_as_imported_in_the_list(engine: Engine, workbook: Path) -> None:
+    add_account(engine, AccountDraft("IKE", "XTB", AccountType.IKE, ("PLN", "USD")))
+    async with user_simulation(lambda: build_shell(engine, FixedNbp(engine))) as user:
+        await user.open("/ustawienia")
+        user.find(marker="import-path").type(str(workbook))
+        user.find(marker="import-preview").click()
+        user.find(marker="import-save").click()
+
+        await user.open("/transakcje")
+
+        user.find(marker="transaction-origin")
