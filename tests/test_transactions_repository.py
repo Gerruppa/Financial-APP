@@ -1,4 +1,4 @@
-"""Saving Transactions in SQLite (issue #11)."""
+"""Saving, editing and deleting Transactions in SQLite (issues #11, #13, #14)."""
 
 from datetime import date
 from decimal import Decimal
@@ -9,12 +9,17 @@ from sqlalchemy import Engine
 
 from financial_app.domain.accounts import AccountDraft, AccountType
 from financial_app.domain.instruments import InstrumentDraft
-from financial_app.domain.lots import InsufficientQuantityError
+from financial_app.domain.lots import InsufficientQuantityError, open_positions
 from financial_app.domain.transactions import TransactionDraft, TransactionError, TransactionType, buy_or_sell
 from financial_app.persistence.accounts import add_account
 from financial_app.persistence.db import init_db
 from financial_app.persistence.instruments import add_instrument, list_asset_classes
-from financial_app.persistence.transactions import add_transaction, list_transactions
+from financial_app.persistence.transactions import (
+    add_transaction,
+    delete_transaction,
+    list_transactions,
+    update_transaction,
+)
 
 
 @pytest.fixture
@@ -127,3 +132,108 @@ def test_trade_of_a_foreign_currency_instrument_is_rejected_for_now(engine: Engi
 
     with pytest.raises(TransactionError, match="w PLN"):
         add_transaction(engine, _trade(account_id, apple, TransactionType.BUY, "1"))
+
+
+def test_edited_transaction_keeps_its_id_and_takes_the_new_fields(engine: Engine, account_id: int) -> None:
+    saved = add_transaction(engine, _deposit(account_id, 5, "100.00"))
+
+    updated = update_transaction(engine, saved.id, _deposit(account_id, 7, "250.00"))
+
+    assert list_transactions(engine) == [updated]
+    assert (updated.id, updated.date.day, updated.actual_amount) == (saved.id, 7, Decimal("250.00"))
+
+
+def test_editing_a_buy_changes_the_position(engine: Engine, account_id: int, instrument_id: int) -> None:
+    buy = add_transaction(engine, _trade(account_id, instrument_id, TransactionType.BUY, "10"))
+
+    update_transaction(engine, buy.id, _trade(account_id, instrument_id, TransactionType.BUY, "4"))
+
+    [position] = open_positions(reversed(list_transactions(engine)))
+    assert position.quantity == 4
+
+
+def test_edit_keeps_the_same_day_entry_order(engine: Engine, account_id: int, instrument_id: int) -> None:
+    buy = add_transaction(engine, _trade(account_id, instrument_id, TransactionType.BUY, "10", day=1))
+    add_transaction(engine, _trade(account_id, instrument_id, TransactionType.SELL, "5", day=1))
+
+    update_transaction(engine, buy.id, _trade(account_id, instrument_id, TransactionType.BUY, "6", day=1))
+
+    [position] = open_positions(reversed(list_transactions(engine)))
+    assert position.quantity == 1
+
+
+def test_edit_that_uncovers_a_later_sell_is_blocked(engine: Engine, account_id: int, instrument_id: int) -> None:
+    buy = add_transaction(engine, _trade(account_id, instrument_id, TransactionType.BUY, "10", day=1))
+    add_transaction(engine, _trade(account_id, instrument_id, TransactionType.SELL, "8", day=2))
+
+    with pytest.raises(InsufficientQuantityError, match="bez pokrycia"):
+        update_transaction(engine, buy.id, _trade(account_id, instrument_id, TransactionType.BUY, "5", day=1))
+    assert [t.quantity for t in list_transactions(engine)] == [Decimal(8), Decimal(10)]
+
+
+def test_moving_a_buy_to_another_instrument_checks_the_old_one(
+    engine: Engine, account_id: int, instrument_id: int
+) -> None:
+    [first_class, *_] = list_asset_classes(engine)
+    other = add_instrument(engine, InstrumentDraft("KGHM", first_class.id, "PLN")).id
+    buy = add_transaction(engine, _trade(account_id, instrument_id, TransactionType.BUY, "10", day=1))
+    add_transaction(engine, _trade(account_id, instrument_id, TransactionType.SELL, "8", day=2))
+
+    with pytest.raises(InsufficientQuantityError):
+        update_transaction(engine, buy.id, _trade(account_id, other, TransactionType.BUY, "10", day=1))
+
+
+def test_moving_a_buy_to_another_account_checks_the_old_one(
+    engine: Engine, account_id: int, instrument_id: int
+) -> None:
+    other = add_account(engine, AccountDraft("XTB", "XTB", AccountType.REGULAR, ("PLN",))).id
+    buy = add_transaction(engine, _trade(account_id, instrument_id, TransactionType.BUY, "10", day=1))
+    add_transaction(engine, _trade(account_id, instrument_id, TransactionType.SELL, "8", day=2))
+
+    with pytest.raises(InsufficientQuantityError):
+        update_transaction(engine, buy.id, _trade(other, instrument_id, TransactionType.BUY, "10", day=1))
+
+
+def test_turning_a_buy_into_a_deposit_checks_the_old_position(
+    engine: Engine, account_id: int, instrument_id: int
+) -> None:
+    buy = add_transaction(engine, _trade(account_id, instrument_id, TransactionType.BUY, "10", day=1))
+    add_transaction(engine, _trade(account_id, instrument_id, TransactionType.SELL, "8", day=2))
+
+    with pytest.raises(InsufficientQuantityError):
+        update_transaction(engine, buy.id, _deposit(account_id, 1))
+
+
+def test_editing_an_unknown_transaction_is_rejected(engine: Engine, account_id: int) -> None:
+    with pytest.raises(TransactionError, match="nie istnieje"):
+        update_transaction(engine, 999, _deposit(account_id, 1))
+
+
+def test_deleted_transaction_is_gone(engine: Engine, account_id: int) -> None:
+    kept = add_transaction(engine, _deposit(account_id, 1))
+    gone = add_transaction(engine, _deposit(account_id, 2))
+
+    delete_transaction(engine, gone.id)
+
+    assert list_transactions(engine) == [kept]
+
+
+def test_deleting_a_buy_that_covers_a_later_sell_is_blocked(
+    engine: Engine, account_id: int, instrument_id: int
+) -> None:
+    buy = add_transaction(engine, _trade(account_id, instrument_id, TransactionType.BUY, "10", day=1))
+    add_transaction(engine, _trade(account_id, instrument_id, TransactionType.SELL, "8", day=2))
+
+    with pytest.raises(InsufficientQuantityError, match="bez pokrycia"):
+        delete_transaction(engine, buy.id)
+    assert len(list_transactions(engine)) == 2
+
+
+def test_deleting_a_sell_is_allowed(engine: Engine, account_id: int, instrument_id: int) -> None:
+    add_transaction(engine, _trade(account_id, instrument_id, TransactionType.BUY, "10", day=1))
+    sell = add_transaction(engine, _trade(account_id, instrument_id, TransactionType.SELL, "8", day=2))
+
+    delete_transaction(engine, sell.id)
+
+    [position] = open_positions(reversed(list_transactions(engine)))
+    assert position.quantity == 10

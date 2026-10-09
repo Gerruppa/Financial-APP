@@ -1,4 +1,7 @@
-"""The Transakcje tab and the "+" transaction dialog (spec 3.3). For now: PLN Deposits, Withdrawals, Buys and Sells."""
+"""The Transakcje tab and the transaction dialog for adding, editing and deleting (spec 3.3).
+
+For now: PLN Deposits, Withdrawals, Buys and Sells.
+"""
 
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -10,6 +13,7 @@ from sqlalchemy import Engine
 
 from financial_app.domain.formatting import (
     format_date,
+    format_exact,
     format_pln,
     format_quantity,
     format_unit_price,
@@ -17,6 +21,7 @@ from financial_app.domain.formatting import (
     parse_number,
 )
 from financial_app.domain.transactions import (
+    Transaction,
     TransactionDraft,
     TransactionError,
     TransactionType,
@@ -25,7 +30,12 @@ from financial_app.domain.transactions import (
 )
 from financial_app.persistence.accounts import list_accounts
 from financial_app.persistence.instruments import list_instruments
-from financial_app.persistence.transactions import add_transaction, list_transactions
+from financial_app.persistence.transactions import (
+    add_transaction,
+    delete_transaction,
+    list_transactions,
+    update_transaction,
+)
 
 PLN = "PLN"
 TRANSACTION_TYPE_OPTIONS = {transaction_type.value: transaction_type.label for transaction_type in TransactionType}
@@ -34,7 +44,7 @@ COLUMNS = "grid-template-columns: 7rem minmax(8rem, 1fr) 6rem minmax(9rem, 1fr) 
 
 @dataclass
 class TransactionsPage:
-    """The Transakcje tab."""
+    """The Transakcje tab; clicking a Transaction opens it for editing or deleting."""
 
     engine: Engine
 
@@ -60,7 +70,11 @@ class TransactionsPage:
             for header in ("Data", "Konto", "Typ", "Instrument", "Kwota", "Komentarz"):
                 ui.label(header)
         for transaction in transactions:
-            with ui.element("div").classes("grid w-full gap-x-4 border-b py-1").style(COLUMNS):
+            row = ui.element("div").classes("grid w-full gap-x-4 border-b py-1 cursor-pointer hover:bg-gray-100")
+            row.style(COLUMNS).mark("transaction-row")
+            # Only this tab is on screen, so it is the only one to redraw after an edit
+            row.on("click", lambda t=transaction: open_transaction_dialog(self.engine, self.refresh, t))
+            with row:
                 ui.label(format_date(transaction.date))
                 ui.label(account_names[transaction.account_id])
                 ui.label(transaction.transaction_type.label)
@@ -74,15 +88,27 @@ class TransactionsPage:
                 ui.label(transaction.comment).classes("text-gray-600")
 
 
-def open_transaction_dialog(engine: Engine, on_saved: Callable[[], None]) -> None:
-    """Open a fresh "Nowa transakcja" dialog; it is built on demand and removed when closed."""
+def open_transaction_dialog(
+    engine: Engine, on_saved: Callable[[], None], transaction: Transaction | None = None
+) -> None:
+    """Open a fresh dialog for a new Transaction (``None``) or for editing or deleting ``transaction``.
+
+    It is built on demand and removed when closed; ``on_saved`` runs after a save or a delete.
+    """
     dialog = ui.dialog()
     dialog.on("hide", dialog.delete)
-    # Only PLN Transactions exist so far, so only Accounts holding PLN and PLN-quoted Instruments can take part
-    accounts = {a.id: a.name for a in list_accounts(engine) if a.active and PLN in a.cash_currencies}
+    all_accounts = list_accounts(engine)
+    account_names = {a.id: a.name for a in all_accounts}
+    # Only PLN Transactions exist so far, so only Accounts holding PLN and PLN-quoted Instruments can take part;
+    # an edited Transaction keeps offering its own Account even if that has been deactivated since
+    accounts = {
+        a.id: a.name
+        for a in all_accounts
+        if (a.active and PLN in a.cash_currencies) or (transaction is not None and a.id == transaction.account_id)
+    }
     instruments = {i.id: i.name for i in list_instruments(engine) if i.quote_currency == PLN}
     with dialog, ui.card().classes("w-[460px]"):
-        ui.label("Nowa transakcja").classes("text-lg font-bold")
+        ui.label("Nowa transakcja" if transaction is None else "Edytuj transakcję").classes("text-lg font-bold")
         if not accounts:
             ui.label("Najpierw dodaj konto z walutą PLN w zakładce Ustawienia.").classes("text-gray-500")
             with ui.row().classes("w-full justify-end"):
@@ -90,11 +116,14 @@ def open_transaction_dialog(engine: Engine, on_saved: Callable[[], None]) -> Non
             dialog.open()
             return
 
-        transaction_type = ui.select(TRANSACTION_TYPE_OPTIONS, label="Typ", value=TransactionType.DEPOSIT.value)
+        kind = transaction.transaction_type if transaction else TransactionType.DEPOSIT
+        transaction_type = ui.select(TRANSACTION_TYPE_OPTIONS, label="Typ", value=kind.value)
         transaction_type.classes("w-full").mark("transaction-type")
-        account = ui.select(accounts, label="Konto", value=next(iter(accounts))).classes("w-full")
+        account_id = transaction.account_id if transaction else next(iter(accounts))
+        account = ui.select(accounts, label="Konto", value=account_id).classes("w-full")
         account.mark("transaction-account")
-        day = ui.input("Data", value=format_date(date.today())).classes("w-full").mark("transaction-date")
+        day_text = format_date(transaction.date if transaction else date.today())
+        day = ui.input("Data", value=day_text).classes("w-full").mark("transaction-date")
         with day.add_slot("append"):
             icon = ui.icon("event").classes("cursor-pointer")
             with ui.menu() as menu:
@@ -104,17 +133,22 @@ def open_transaction_dialog(engine: Engine, on_saved: Callable[[], None]) -> Non
         def is_buy_or_sell(value: str) -> bool:
             return TransactionType(value).is_buy_or_sell
 
-        amount = ui.input("Kwota (zł)").classes("w-full").mark("transaction-amount")
+        texts = _field_texts(transaction)
+        amount = ui.input("Kwota (zł)", value=texts.amount).classes("w-full").mark("transaction-amount")
         amount.bind_visibility_from(transaction_type, "value", backward=lambda value: not is_buy_or_sell(value))
         with ui.column().classes("w-full gap-0") as trade_fields:
-            instrument = ui.select(instruments, label="Instrument").classes("w-full").mark("transaction-instrument")
+            instrument_id = transaction.instrument_id if transaction else None
+            instrument = ui.select(instruments, label="Instrument", value=instrument_id).classes("w-full")
+            instrument.mark("transaction-instrument")
             if not instruments:
                 ui.label("Najpierw dodaj instrument w PLN w zakładce Ustawienia.").classes("text-gray-500")
-            quantity = ui.input("Liczba").classes("w-full").mark("transaction-quantity")
-            price = ui.input("Cena (zł)").classes("w-full").mark("transaction-price")
-            commission = ui.input("Prowizja (zł)").classes("w-full").mark("transaction-commission")
+            quantity = ui.input("Liczba", value=texts.quantity).classes("w-full").mark("transaction-quantity")
+            price = ui.input("Cena (zł)", value=texts.price).classes("w-full").mark("transaction-price")
+            commission = ui.input("Prowizja (zł)", value=texts.commission).classes("w-full")
+            commission.mark("transaction-commission")
         trade_fields.bind_visibility_from(transaction_type, "value", backward=is_buy_or_sell)
-        comment = ui.input("Komentarz").classes("w-full").mark("transaction-comment")
+        comment = ui.input("Komentarz", value=transaction.comment if transaction else "").classes("w-full")
+        comment.mark("transaction-comment")
         error = ui.label().classes("text-negative").mark("transaction-error")
 
         def read_draft() -> TransactionDraft:
@@ -141,28 +175,95 @@ def open_transaction_dialog(engine: Engine, on_saved: Callable[[], None]) -> Non
         def save() -> None:
             try:
                 draft = read_draft()
-                add_transaction(engine, draft)
+                if transaction is None:
+                    add_transaction(engine, draft)
+                else:
+                    update_transaction(engine, transaction.id, draft)
             except TransactionError as exc:
                 error.text = str(exc)
                 return
             dialog.close()
-            _warn_if_cash_runs_out(engine, draft, accounts[draft.account_id])
+            # An edit may move the Transaction to another day or Account, so also check where it was
+            _warn_if_cash_runs_out(engine, "Zapisano", account_names, draft, transaction)
             on_saved()
 
-        with ui.row().classes("w-full justify-end"):
+        def delete(confirmation: ui.dialog) -> None:
+            assert transaction is not None
+            confirmation.close()
+            try:
+                delete_transaction(engine, transaction.id)
+            except TransactionError as exc:
+                error.text = f"Nie można usunąć tej transakcji. {exc}"
+                return
+            dialog.close()
+            _warn_if_cash_runs_out(engine, "Usunięto", account_names, transaction)
+            on_saved()
+
+        with ui.row().classes("w-full items-center"):
+            if transaction is not None:
+                delete_button = ui.button("Usuń", on_click=lambda: _confirm_delete(delete))
+                delete_button.props("flat color=negative").mark("delete-transaction")
+            ui.space()
             ui.button("Anuluj", on_click=dialog.close).props("flat")
-            ui.button("Zapisz", on_click=save)
+            ui.button("Zapisz" if transaction is None else "Zapisz zmiany", on_click=save)
     dialog.open()
 
 
-def _warn_if_cash_runs_out(engine: Engine, draft: TransactionDraft, account_name: str) -> None:
-    """Insufficient cash only warns (spec 3.3), so history can be entered in any order."""
-    lowest = lowest_cash_balance(list_transactions(engine), draft.account_id, start=draft.date)
-    if lowest < 0:
-        ui.notify(
-            f"Zapisano, ale Saldo gotówki konta {account_name} jest ujemne: {format_pln(lowest)}.",
-            type="warning",
-        )
+def _confirm_delete(delete: Callable[[ui.dialog], None]) -> None:
+    """Ask before deleting; ``delete`` gets the confirmation dialog so that it can close it."""
+    confirmation = ui.dialog()
+    confirmation.on("hide", confirmation.delete)
+    with confirmation, ui.card():
+        ui.label("Usunąć tę transakcję?").classes("text-lg font-bold")
+        ui.label("Partie i salda zostaną przeliczone bez niej.").classes("text-gray-600")
+        with ui.row().classes("w-full justify-end"):
+            ui.button("Anuluj", on_click=confirmation.close).props("flat").mark("cancel-delete")
+            ui.button("Usuń", on_click=lambda: delete(confirmation)).props("color=negative").mark("confirm-delete")
+    confirmation.open()
+
+
+@dataclass(frozen=True)
+class _FieldTexts:
+    amount: str = ""
+    quantity: str = ""
+    price: str = ""
+    commission: str = ""
+
+
+def _field_texts(transaction: Transaction | None) -> _FieldTexts:
+    """The edit-field texts for ``transaction``, exact so that re-saving never rounds a value."""
+    if transaction is None:
+        return _FieldTexts()
+    if not transaction.transaction_type.is_buy_or_sell:
+        return _FieldTexts(amount=format_exact(transaction.actual_amount))
+    assert transaction.quantity is not None and transaction.price is not None
+    return _FieldTexts(
+        quantity=format_quantity(transaction.quantity),
+        price=format_exact(transaction.price),
+        commission=format_exact(transaction.commission),
+    )
+
+
+def _warn_if_cash_runs_out(
+    engine: Engine, done: str, account_names: dict[int, str], *touched: TransactionDraft | None
+) -> None:
+    """Warn per Account whose Cash Balance goes negative from the earliest ``touched`` date on.
+
+    Insufficient cash only warns (spec 3.3), so history can be entered in any order. ``done`` opens the
+    message ("Zapisano", "Usunięto").
+    """
+    starts: dict[int, date] = {}
+    for t in touched:
+        if t is not None:
+            starts[t.account_id] = min(t.date, starts.get(t.account_id, t.date))
+    transactions = list_transactions(engine)
+    for account_id, start in starts.items():
+        lowest = lowest_cash_balance(transactions, account_id, start=start)
+        if lowest < 0:
+            ui.notify(
+                f"{done}, ale Saldo gotówki konta {account_names[account_id]} jest ujemne: {format_pln(lowest)}.",
+                type="warning",
+            )
 
 
 def _read[T](parse: Callable[[str], T], text: str, message: str) -> T:
