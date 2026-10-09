@@ -86,6 +86,17 @@ _LABELS = {
 }
 
 
+class Origin(StrEnum):
+    """Where a Transaction came from (spec 7). Values are stored in the database, so never rename them."""
+
+    MANUAL = "manual"
+    SPREADSHEET = "spreadsheet"
+
+    @property
+    def label(self) -> str:
+        return "import z arkusza" if self is Origin.SPREADSHEET else "ręczna"
+
+
 @dataclass(frozen=True)
 class SplitRatio:
     """A Split X:Y: every ``old`` units become ``new`` ones, so open Lots hold X/Y times as many units at the same
@@ -155,6 +166,9 @@ class TransactionDraft:
     withholding_tax: Decimal = field(default=Decimal(0), kw_only=True)
     target_account_id: int | None = field(default=None, kw_only=True)
     split_ratio: SplitRatio | None = field(default=None, kw_only=True)
+    origin: Origin = field(default=Origin.MANUAL, kw_only=True)
+    # Imported Transactions only: the fingerprint of their spreadsheet row, so importing the file again skips them
+    external_id: str | None = field(default=None, kw_only=True)
 
     def __post_init__(self) -> None:
         if not self.transaction_type.has_amount:

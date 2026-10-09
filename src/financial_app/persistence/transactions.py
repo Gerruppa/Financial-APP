@@ -1,6 +1,7 @@
 """Reading, saving, editing and deleting Transactions (spec 3.3)."""
 
 from collections.abc import Sequence
+from dataclasses import replace
 from decimal import Decimal
 
 from sqlalchemy import Engine, select
@@ -10,6 +11,7 @@ from financial_app.domain.currencies import NbpRate
 from financial_app.domain.lots import open_positions
 from financial_app.domain.transactions import (
     PLN,
+    Origin,
     SplitRatio,
     Transaction,
     TransactionDraft,
@@ -17,6 +19,12 @@ from financial_app.domain.transactions import (
     TransactionType,
 )
 from financial_app.persistence.models import AccountRow, InstrumentRow, TransactionRow
+
+
+def imported_external_ids(engine: Engine) -> set[str]:
+    """The fingerprints of the imported Transactions already saved, so that an import skips them."""
+    with Session(engine) as session:
+        return set(session.scalars(select(TransactionRow.external_id).where(TransactionRow.external_id.is_not(None))))
 
 
 def list_transactions(engine: Engine) -> list[Transaction]:
@@ -51,9 +59,11 @@ def update_transaction(engine: Engine, transaction_id: int, draft: TransactionDr
     """Replace the Transaction's fields with ``draft``; it keeps its id and so its place in the same-day order.
 
     Blocked with InsufficientQuantityError if a Sell, this one or a later one, would lose its cover.
+    An imported Transaction keeps its Origin and fingerprint, so that importing its file again still skips it.
     """
     with Session(engine) as session, session.begin():
         row = _get(session, transaction_id)
+        draft = replace(draft, origin=Origin(row.origin), external_id=row.external_id)
         _check_references(session, draft)
         _check_coverage(session, draft, replacing=row)
         _fill(row, draft)
@@ -151,6 +161,8 @@ def _fill(row: TransactionRow, draft: TransactionDraft) -> None:
     ratio = draft.split_ratio
     row.split_new = None if ratio is None else ratio.new
     row.split_old = None if ratio is None else ratio.old
+    row.origin = draft.origin.value
+    row.external_id = draft.external_id
 
 
 def _text(value: Decimal | None) -> str | None:
@@ -182,6 +194,8 @@ def _to_transaction(row: TransactionRow) -> Transaction:
         withholding_tax=Decimal(row.withholding_tax or 0),
         target_account_id=row.target_account_id,
         split_ratio=_split_ratio(row),
+        origin=Origin(row.origin),
+        external_id=row.external_id,
     )
 
 

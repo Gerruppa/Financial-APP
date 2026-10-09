@@ -71,7 +71,7 @@ def build_shell(engine: Engine, rates: NbpRates | None = None) -> None:
     pages: dict[str, Callable[[], None]] = {tab.path: _placeholder_page(tab.label) for tab in TABS}
     pages["/transakcje"] = transactions_page.build
     pages["/portfolio"] = portfolio_page.build
-    pages["/ustawienia"] = lambda: build_settings_page(engine)
+    pages["/ustawienia"] = lambda: build_settings_page(engine, rates)
     ui.sub_pages(pages).classes("w-full").mark("page-content")
 
 
