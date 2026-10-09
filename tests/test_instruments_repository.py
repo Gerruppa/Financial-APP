@@ -16,6 +16,8 @@ from financial_app.persistence.db import init_db
 from financial_app.persistence.instruments import (
     add_asset_class,
     add_instrument,
+    delete_asset_class,
+    delete_instrument,
     list_asset_classes,
     list_instruments,
     rename_asset_class,
@@ -79,6 +81,31 @@ def test_renaming_an_asset_class_keeps_its_place(engine: Engine) -> None:
     names = [c.name for c in list_asset_classes(engine)]
     assert names[10] == "Pozostałe"
     assert "Inne" not in names
+
+
+def test_asset_class_without_instruments_can_be_deleted(engine: Engine) -> None:
+    added = add_asset_class(engine, "Nieruchomości")
+
+    delete_asset_class(engine, added.id)
+
+    assert "Nieruchomości" not in [c.name for c in list_asset_classes(engine)]
+
+
+def test_asset_class_with_instruments_cannot_be_deleted(engine: Engine) -> None:
+    polish_stocks = _class_named(engine, "Akcje polskie")
+    add_instrument(engine, InstrumentDraft("PZU", polish_stocks.id, "PLN", "GPW"))
+
+    with pytest.raises(InstrumentError, match="instrumenty"):
+        delete_asset_class(engine, polish_stocks.id)
+    assert "Akcje polskie" in [c.name for c in list_asset_classes(engine)]
+
+
+def test_instrument_without_transactions_can_be_deleted(engine: Engine) -> None:
+    added = add_instrument(engine, InstrumentDraft("PZU", _class_named(engine, "Akcje polskie").id, "PLN", "GPW"))
+
+    delete_instrument(engine, added.id)
+
+    assert list_instruments(engine) == []
 
 
 def test_renamed_asset_class_shows_at_every_instrument_of_that_class(engine: Engine) -> None:

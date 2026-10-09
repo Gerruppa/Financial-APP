@@ -7,6 +7,7 @@ from nicegui import ui
 from sqlalchemy import Engine
 
 from financial_app.sources.nbp import NbpRates
+from financial_app.ui.dialogs import install_movable_dialogs
 from financial_app.ui.portfolio import PortfolioPage
 from financial_app.ui.settings import build_settings_page
 from financial_app.ui.transactions import TransactionsPage, open_transaction_dialog
@@ -42,6 +43,7 @@ def build_shell(engine: Engine, rates: NbpRates | None = None) -> None:
     ``rates`` gives NBP Rates (by default from the NBP API through the cache in that database).
     """
     rates = rates or NbpRates(engine)
+    install_movable_dialogs()
     transactions_page = TransactionsPage(engine, rates)
     portfolio_page = PortfolioPage(engine, rates)
 

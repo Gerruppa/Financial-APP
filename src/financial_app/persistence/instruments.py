@@ -45,6 +45,15 @@ def rename_asset_class(engine: Engine, class_id: int, name: str) -> AssetClass:
         return AssetClass(id=row.id, name=row.name)
 
 
+def delete_asset_class(engine: Engine, class_id: int) -> None:
+    """Remove an Asset Class that no Instrument uses; one that still has Instruments is kept."""
+    with Session(engine) as session, session.begin():
+        row = session.get_one(AssetClassRow, class_id)
+        if session.scalar(select(InstrumentRow.id).where(InstrumentRow.asset_class_id == class_id).limit(1)):
+            raise InstrumentError(f"Nie można usunąć klasy „{row.name}”, bo są do niej przypisane instrumenty.")
+        session.delete(row)
+
+
 def list_instruments(engine: Engine) -> list[Instrument]:
     """All Instruments sorted by name."""
     with Session(engine) as session:
@@ -75,6 +84,15 @@ def update_instrument(engine: Engine, instrument_id: int, draft: InstrumentDraft
         _fill(session, row, draft)
         _flush(session, f"Instrument o nazwie „{draft.name}” już istnieje.")
         return _to_instrument(row)
+
+
+def delete_instrument(engine: Engine, instrument_id: int) -> None:
+    """Remove an Instrument that no Transaction uses; one with Transactions is kept."""
+    with Session(engine) as session, session.begin():
+        row = session.get_one(InstrumentRow, instrument_id)
+        if session.scalar(select(TransactionRow.id).where(TransactionRow.instrument_id == instrument_id).limit(1)):
+            raise InstrumentError(f"Nie można usunąć instrumentu „{row.name}”, bo ma transakcje.")
+        session.delete(row)
 
 
 def _flush(session: Session, duplicate_message: str) -> None:

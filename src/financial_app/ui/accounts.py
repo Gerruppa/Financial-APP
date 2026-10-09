@@ -9,6 +9,7 @@ from sqlalchemy import Engine
 from financial_app.domain.accounts import Account, AccountDraft, AccountError, AccountType, tax_regime_for
 from financial_app.domain.formatting import format_exact, format_percent, parse_number
 from financial_app.persistence.accounts import add_account, list_accounts, update_account
+from financial_app.ui.dialogs import movable_dialog
 
 ACCOUNT_TYPE_OPTIONS = {account_type.value: account_type.label for account_type in AccountType}
 
@@ -57,7 +58,7 @@ class AccountsSection:
 
     def open_dialog(self, account: Account | None) -> None:
         """Open a fresh form for a new Account (``None``) or for editing ``account``."""
-        dialog = ui.dialog()
+        dialog = movable_dialog()
         dialog.on("hide", dialog.delete)
         with dialog, ui.card().classes("w-[480px]"):
             ui.label("Nowe konto" if account is None else "Edytuj konto").classes("text-lg font-bold")
