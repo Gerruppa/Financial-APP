@@ -1,13 +1,17 @@
 """Saving Asset Classes and Instruments in SQLite (issue #12)."""
 
 from dataclasses import replace
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
 import pytest
 from sqlalchemy import Engine
 
+from financial_app.domain.accounts import AccountDraft, AccountType
 from financial_app.domain.instruments import AssetClass, InstrumentDraft, InstrumentError
+from financial_app.domain.transactions import TransactionType, buy_or_sell
+from financial_app.persistence.accounts import add_account
 from financial_app.persistence.db import init_db
 from financial_app.persistence.instruments import (
     add_asset_class,
@@ -17,6 +21,7 @@ from financial_app.persistence.instruments import (
     rename_asset_class,
     update_instrument,
 )
+from financial_app.persistence.transactions import add_transaction
 
 SHEET_ASSET_CLASSES = [
     "Gotówka",
@@ -147,3 +152,17 @@ def test_instrument_names_are_unique_ignoring_case(engine: Engine) -> None:
 def test_instrument_with_an_unknown_asset_class_is_rejected(engine: Engine) -> None:
     with pytest.raises(InstrumentError, match="klasa aktywów nie istnieje"):
         add_instrument(engine, InstrumentDraft("PZU", 999, "PLN"))
+
+
+def test_currency_of_an_instrument_with_transactions_cannot_change(engine: Engine) -> None:
+    [first_class, *_] = list_asset_classes(engine)
+    pzu = add_instrument(engine, InstrumentDraft("PZU", first_class.id, "PLN"))
+    account = add_account(engine, AccountDraft("mBank", "mBank", AccountType.REGULAR, ("PLN",)))
+    add_transaction(
+        engine,
+        buy_or_sell(account.id, date(2026, 1, 2), TransactionType.BUY, pzu.id, Decimal(1), Decimal(10)),
+    )
+
+    with pytest.raises(InstrumentError, match="waluty"):
+        update_instrument(engine, pzu.id, replace(pzu, quote_currency="USD"))
+    assert update_instrument(engine, pzu.id, replace(pzu, market="GPW")).market == "GPW"

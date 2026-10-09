@@ -1,10 +1,15 @@
-"""Transactions and the Cash Balance they produce (spec 3.3, 3.5). For now: PLN Deposits, Withdrawals, Buys, Sells."""
+"""Transactions and the Cash Balance they produce (spec 3.3, 3.5).
+
+For now: PLN Deposits and Withdrawals, and Buys and Sells paid in PLN, also of foreign-currency Instruments.
+"""
 
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 from enum import StrEnum
+
+from financial_app.domain.currencies import NbpRate
 
 GROSZ = Decimal("0.01")
 
@@ -43,7 +48,9 @@ _LABELS = {
 class TransactionDraft:
     """The user-entered fields of a Transaction, validated on creation. ``actual_amount`` is positive PLN.
 
-    A Buy or Sell also carries its Instrument, quantity, unit price and PLN commission; build it with ``buy_or_sell``.
+    A Buy or Sell also carries its Instrument, quantity, unit price (in the Instrument's currency) and PLN commission;
+    build it with ``buy_or_sell``. One of a foreign-currency Instrument also carries the NBP Rate (D-1) for its Tax
+    Amount and, if the user gave one, ``fx_rate``: the rate the Actual Amount was converted at.
     """
 
     account_id: int
@@ -55,26 +62,47 @@ class TransactionDraft:
     quantity: Decimal | None = field(default=None, kw_only=True)
     price: Decimal | None = field(default=None, kw_only=True)
     commission: Decimal = field(default=Decimal(0), kw_only=True)
+    fx_rate: Decimal | None = field(default=None, kw_only=True)
+    nbp_rate: NbpRate | None = field(default=None, kw_only=True)
 
     def __post_init__(self) -> None:
         if not self.actual_amount > 0:
             raise TransactionError("Kwota musi być większa od zera.")
         if self.actual_amount != self.actual_amount.quantize(GROSZ):
             raise TransactionError("Kwotę podaj z dokładnością do grosza.")
-        trade_fields = (self.instrument_id, self.quantity, self.price)
+        trade_fields = (self.instrument_id, self.quantity, self.price, self.fx_rate, self.nbp_rate)
         if self.transaction_type.is_buy_or_sell:
             if self.instrument_id is None:
                 raise TransactionError("Wybierz instrument.")
             _check_buy_or_sell_fields(self.quantity, self.price, self.commission)
+            _check_rates(self.fx_rate, self.nbp_rate)
         elif any(value is not None for value in trade_fields) or self.commission:
             raise TransactionError(f"{self.transaction_type.label} nie dotyczy instrumentu.")
         object.__setattr__(self, "comment", self.comment.strip())
 
     @property
+    def tax_amount(self) -> Decimal:
+        """The PLN amount at the NBP Rate, for tax reports; equal to the Actual Amount for PLN Transactions."""
+        if self.nbp_rate is None:
+            return self.actual_amount
+        assert self.quantity is not None and self.price is not None  # a Buy or Sell, checked on creation
+        return _with_commission(
+            self.transaction_type, _pln(self.quantity * self.price * self.nbp_rate.rate), self.commission
+        )
+
+    @property
     def cash_change(self) -> Decimal:
         """How the Transaction moves the Account's PLN Cash Balance."""
-        incoming = self.transaction_type in (TransactionType.DEPOSIT, TransactionType.SELL)
-        return self.actual_amount if incoming else -self.actual_amount
+        return self.actual_amount if self._is_incoming else -self.actual_amount
+
+    @property
+    def tax_cash_change(self) -> Decimal:
+        """The Tax Amount with the sign of ``cash_change``."""
+        return self.tax_amount if self._is_incoming else -self.tax_amount
+
+    @property
+    def _is_incoming(self) -> bool:
+        return self.transaction_type in (TransactionType.DEPOSIT, TransactionType.SELL)
 
 
 @dataclass(frozen=True)
@@ -93,15 +121,24 @@ def buy_or_sell(
     price: Decimal,
     commission: Decimal = Decimal(0),
     comment: str = "",
+    *,
+    fx_rate: Decimal | None = None,
+    nbp_rate: NbpRate | None = None,
 ) -> TransactionDraft:
-    """A PLN Buy or Sell: a Buy costs quantity × price plus commission, a Sell brings it minus commission."""
+    """A Buy or Sell paid in PLN: a Buy costs quantity × price × rate plus commission, a Sell brings that minus it.
+
+    The rate is 1 for a PLN Instrument; for a foreign-currency one it is ``fx_rate`` if the user gave one, otherwise
+    the NBP Rate, which ``nbp_rate`` must then carry.
+    """
     _check_buy_or_sell_fields(quantity, price, commission)
-    value = (quantity * price).quantize(GROSZ, rounding=ROUND_HALF_UP)
+    _check_rates(fx_rate, nbp_rate)
+    rate = fx_rate or (nbp_rate.rate if nbp_rate else Decimal(1))
+    value = _pln(quantity * price * rate)
     if value.is_zero():
         raise TransactionError("Wartość transakcji (liczba × cena) musi wynosić co najmniej 0,01 zł.")
     if transaction_type is TransactionType.SELL and commission >= value:
         raise TransactionError("Prowizja nie może przekraczać wartości sprzedaży.")
-    actual_amount = value + commission if transaction_type is TransactionType.BUY else value - commission
+    actual_amount = _with_commission(transaction_type, value, commission)
     return TransactionDraft(
         account_id,
         day,
@@ -112,7 +149,25 @@ def buy_or_sell(
         quantity=quantity,
         price=price,
         commission=commission,
+        fx_rate=fx_rate,
+        nbp_rate=nbp_rate,
     )
+
+
+def _pln(value: Decimal) -> Decimal:
+    return value.quantize(GROSZ, rounding=ROUND_HALF_UP)
+
+
+def _with_commission(transaction_type: TransactionType, value: Decimal, commission: Decimal) -> Decimal:
+    """A Buy costs its value plus commission; a Sell brings its value minus commission."""
+    return value + commission if transaction_type is TransactionType.BUY else value - commission
+
+
+def _check_rates(fx_rate: Decimal | None, nbp_rate: NbpRate | None) -> None:
+    if fx_rate is not None and nbp_rate is None:
+        raise TransactionError("Kurs podaje się tylko dla instrumentu w walucie obcej.")
+    if fx_rate is not None and not fx_rate > 0:
+        raise TransactionError("Kurs musi być większy od zera.")
 
 
 def _check_buy_or_sell_fields(quantity: Decimal | None, price: Decimal | None, commission: Decimal) -> None:

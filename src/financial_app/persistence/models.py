@@ -61,7 +61,7 @@ class AccountCashCurrency(Base):
 class TransactionRow(Base):
     """A Transaction (spec 3.3); ``domain.transactions.Transaction`` is its in-memory form.
 
-    Tax Amount and Origin join in later migrations (issues #15, #20).
+    The Tax Amount is not stored: it follows from the stored NBP Rate. Origin joins in a later migration (issue #20).
     """
 
     __tablename__ = "transactions"
@@ -78,6 +78,12 @@ class TransactionRow(Base):
     quantity: Mapped[str | None] = mapped_column(String(30))
     price: Mapped[str | None] = mapped_column(String(30))
     commission: Mapped[str | None] = mapped_column(String(30))
+    # Foreign-currency Buy and Sell only: the user's own rate (None means the NBP Rate) and the NBP Rate (D-1)
+    fx_rate: Mapped[str | None] = mapped_column(String(30))
+    nbp_currency: Mapped[str | None] = mapped_column(String(3))
+    nbp_rate: Mapped[str | None] = mapped_column(String(30))
+    nbp_published_on: Mapped[dt.date | None] = mapped_column(Date)
+    nbp_table: Mapped[str | None] = mapped_column(String(30))
 
 
 class AssetClassRow(Base):
@@ -104,3 +110,18 @@ class InstrumentRow(Base):
     manual_price: Mapped[str | None] = mapped_column(String(30))
 
     asset_class: Mapped[AssetClassRow] = relationship()
+
+
+class NbpRateRow(Base):
+    """The cached NBP Rate (D-1) for Transactions in ``currency`` dated ``day`` (issue #15).
+
+    Only final rates are cached: a published table never changes.
+    """
+
+    __tablename__ = "nbp_rates"
+
+    currency: Mapped[str] = mapped_column(String(3), primary_key=True)
+    day: Mapped[dt.date] = mapped_column(Date, primary_key=True)
+    rate: Mapped[str] = mapped_column(String(30))
+    published_on: Mapped[dt.date] = mapped_column(Date)
+    table: Mapped[str] = mapped_column(String(30))

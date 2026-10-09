@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from nicegui import ui
 from sqlalchemy import Engine
 
+from financial_app.sources.nbp import NbpRates
 from financial_app.ui.portfolio import PortfolioPage
 from financial_app.ui.settings import build_settings_page
 from financial_app.ui.transactions import TransactionsPage, open_transaction_dialog
@@ -35,10 +36,14 @@ TABS = [
 VIEW_SCOPES = ["Total"]
 
 
-def build_shell(engine: Engine) -> None:
-    """Build the whole window; tabs are client-side sub-pages backed by the database at ``engine``."""
-    transactions_page = TransactionsPage(engine)
-    portfolio_page = PortfolioPage(engine)
+def build_shell(engine: Engine, rates: NbpRates | None = None) -> None:
+    """Build the whole window; tabs are client-side sub-pages backed by the database at ``engine``.
+
+    ``rates`` gives NBP Rates (by default from the NBP API through the cache in that database).
+    """
+    rates = rates or NbpRates(engine)
+    transactions_page = TransactionsPage(engine, rates)
+    portfolio_page = PortfolioPage(engine, rates)
 
     def transactions_changed() -> None:
         # Only the tab on screen has something to redraw; the others rebuild from the database when opened
@@ -57,7 +62,7 @@ def build_shell(engine: Engine) -> None:
             ).classes("w-full")
 
     with ui.page_sticky(position="bottom-right", x_offset=24, y_offset=24):
-        ui.button(icon="add", on_click=lambda: open_transaction_dialog(engine, transactions_changed)).props(
+        ui.button(icon="add", on_click=lambda: open_transaction_dialog(engine, rates, transactions_changed)).props(
             'fab color=indigo aria-label="Dodaj transakcję"'
         ).mark("add-transaction")
 

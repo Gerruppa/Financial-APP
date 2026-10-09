@@ -5,6 +5,7 @@ from decimal import Decimal
 from sqlalchemy import Engine, select, tuple_
 from sqlalchemy.orm import Session
 
+from financial_app.domain.currencies import NbpRate
 from financial_app.domain.lots import open_positions
 from financial_app.domain.transactions import Transaction, TransactionDraft, TransactionError, TransactionType
 from financial_app.persistence.models import AccountRow, InstrumentRow, TransactionRow
@@ -66,9 +67,16 @@ def _check_references(session: Session, draft: TransactionDraft) -> None:
         instrument = session.get(InstrumentRow, draft.instrument_id)
         if instrument is None:
             raise TransactionError("Wybrany instrument nie istnieje.")
-        # Foreign-currency Buys and Sells need NBP rates (issue #15)
-        if instrument.quote_currency != "PLN":
-            raise TransactionError("Na razie można kupować i sprzedawać tylko instrumenty notowane w PLN.")
+        # The Tax Amount of a foreign-currency Buy or Sell needs the NBP Rate: never silently 0 zł (spec 3.3, 9.3)
+        currency = instrument.quote_currency
+        if currency == "PLN" and draft.nbp_rate is not None:
+            raise TransactionError("Instrument w PLN nie potrzebuje kursu NBP.")
+        if currency != "PLN" and draft.nbp_rate is None:
+            raise TransactionError(f"Brak kursu NBP {currency}. Zapis zablokowany.")
+        if draft.nbp_rate is not None and draft.nbp_rate.currency != currency:
+            raise TransactionError(f"Kurs NBP musi być kursem waluty instrumentu ({currency}).")
+        if draft.nbp_rate is not None and draft.nbp_rate.published_on >= draft.date:
+            raise TransactionError("Kurs NBP musi pochodzić z dnia roboczego przed datą transakcji.")
 
 
 def _check_coverage(session: Session, draft: TransactionDraft | None, replacing: TransactionRow | None) -> None:
@@ -104,6 +112,12 @@ def _fill(row: TransactionRow, draft: TransactionDraft) -> None:
     row.quantity = _text(draft.quantity)
     row.price = _text(draft.price)
     row.commission = str(draft.commission) if draft.transaction_type.is_buy_or_sell else None
+    row.fx_rate = _text(draft.fx_rate)
+    nbp = draft.nbp_rate
+    row.nbp_currency = None if nbp is None else nbp.currency
+    row.nbp_rate = None if nbp is None else str(nbp.rate)
+    row.nbp_published_on = None if nbp is None else nbp.published_on
+    row.nbp_table = None if nbp is None else nbp.table
 
 
 def _text(value: Decimal | None) -> str | None:
@@ -126,4 +140,13 @@ def _to_transaction(row: TransactionRow) -> Transaction:
         quantity=_decimal(row.quantity),
         price=_decimal(row.price),
         commission=Decimal(row.commission or 0),
+        fx_rate=_decimal(row.fx_rate),
+        nbp_rate=_nbp_rate(row),
     )
+
+
+def _nbp_rate(row: TransactionRow) -> NbpRate | None:
+    if row.nbp_rate is None:
+        return None
+    assert row.nbp_currency is not None and row.nbp_published_on is not None and row.nbp_table is not None
+    return NbpRate(row.nbp_currency, Decimal(row.nbp_rate), row.nbp_published_on, row.nbp_table)

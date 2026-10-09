@@ -5,6 +5,7 @@ from decimal import Decimal
 
 import pytest
 
+from financial_app.domain.currencies import NbpRate
 from financial_app.domain.lots import InsufficientQuantityError, open_positions
 from financial_app.domain.transactions import TransactionDraft, TransactionType, buy_or_sell
 
@@ -137,3 +138,31 @@ def test_value_and_result_come_from_a_price() -> None:
     assert position.value(Decimal(60)) == Decimal(600)
     assert position.result(Decimal(60)) == Decimal(95)
     assert position.result_percent(Decimal(60)).quantize(Decimal("0.01")) == Decimal("18.81")
+
+
+def test_lot_carries_the_tax_cost_at_the_nbp_rate_next_to_the_actual_cost() -> None:
+    usd = NbpRate("USD", Decimal(4), date(2026, 1, 1), "001/A/NBP/2026")
+    buy = buy_or_sell(
+        IKE,
+        date(2026, 1, 2),
+        TransactionType.BUY,
+        PZU,
+        Decimal(10),
+        Decimal(10),
+        Decimal(2),
+        fx_rate=Decimal("4.1"),
+        nbp_rate=usd,
+    )
+
+    [position] = open_positions([buy])
+
+    [lot] = position.lots
+    assert (lot.cost, lot.tax_cost) == (Decimal(412), Decimal(402))
+    assert (position.cost, position.tax_cost) == (Decimal(412), Decimal(402))
+
+
+def test_partial_sell_keeps_both_costs_pro_rata() -> None:
+    [position] = open_positions([_buy("10", "50", fee="5"), _sell("4", "60", day=2)])
+
+    [lot] = position.lots
+    assert lot.cost == lot.tax_cost == Decimal(303)

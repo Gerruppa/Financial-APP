@@ -149,7 +149,7 @@ async def test_trade_needs_an_instrument(engine: Engine, ike: int, pzu: int) -> 
     assert list_transactions(engine) == []
 
 
-async def test_dialog_offers_only_pln_instruments(engine: Engine, ike: int, pzu: int) -> None:
+async def test_dialog_offers_foreign_currency_instruments_too(engine: Engine, ike: int, pzu: int) -> None:
     add_instrument(engine, InstrumentDraft("Apple", list_asset_classes(engine)[2].id, "USD"))
 
     async with user_simulation(lambda: build_shell(engine)) as user:
@@ -160,7 +160,7 @@ async def test_dialog_offers_only_pln_instruments(engine: Engine, ike: int, pzu:
         user.find(marker="transaction-instrument").click()
 
         await user.should_see("PZU")
-        await user.should_not_see("Apple")
+        await user.should_see("Apple")
 
 
 async def test_portfolio_card_shows_positions_valued_at_the_manual_price(engine: Engine, ike: int, pzu: int) -> None:

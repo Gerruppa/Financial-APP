@@ -1,6 +1,6 @@
 """The single FIFO Lot engine (spec 3.5, ADR-0003): Buys open Lots, Sells consume them oldest-first.
 
-For now Lots carry only the Actual cost; the Tax cost joins with NBP rates (issue #15).
+Each Lot carries an Actual cost (what really left the Account) and a Tax cost (at the NBP Rate).
 """
 
 from collections.abc import Iterable
@@ -30,11 +30,15 @@ class InsufficientQuantityError(TransactionError):
 
 @dataclass(frozen=True)
 class Lot:
-    """The still-open part of one Buy; ``cost`` is its Actual cost in PLN, commission included."""
+    """The still-open part of one Buy; ``cost`` is its Actual cost and ``tax_cost`` its Tax cost, in PLN.
+
+    Both include the commission.
+    """
 
     date: date
     quantity: Decimal
     cost: Decimal
+    tax_cost: Decimal
 
 
 @dataclass(frozen=True)
@@ -52,6 +56,10 @@ class Position:
     @property
     def cost(self) -> Decimal:
         return sum((lot.cost for lot in self.lots), Decimal(0))
+
+    @property
+    def tax_cost(self) -> Decimal:
+        return sum((lot.tax_cost for lot in self.lots), Decimal(0))
 
     @property
     def average_price(self) -> Decimal:
@@ -86,7 +94,7 @@ def open_positions(transactions: Iterable[TransactionDraft]) -> list[Position]:
         )  # guaranteed for a Buy or Sell by TransactionDraft
         lots = positions.setdefault((t.account_id, t.instrument_id), [])
         if t.transaction_type is TransactionType.BUY:
-            lots.append(Lot(t.date, t.quantity, t.actual_amount))
+            lots.append(Lot(t.date, t.quantity, t.actual_amount, t.tax_amount))
         else:
             _consume(lots, t.date, t.quantity)
     return [
@@ -97,7 +105,7 @@ def open_positions(transactions: Iterable[TransactionDraft]) -> list[Position]:
 
 
 def _consume(lots: list[Lot], day: date, quantity: Decimal) -> None:
-    """Take ``quantity`` units from the oldest Lots; a partly used Lot keeps its cost pro rata."""
+    """Take ``quantity`` units from the oldest Lots; a partly used Lot keeps both its costs pro rata."""
     held = sum((lot.quantity for lot in lots), Decimal(0))
     if quantity > held:
         raise InsufficientQuantityError(day, held, quantity)
@@ -108,5 +116,6 @@ def _consume(lots: list[Lot], day: date, quantity: Decimal) -> None:
             lots.pop(0)
         else:
             left = oldest.quantity - quantity
-            lots[0] = Lot(oldest.date, left, oldest.cost * left / oldest.quantity)
+            share = left / oldest.quantity
+            lots[0] = Lot(oldest.date, left, oldest.cost * share, oldest.tax_cost * share)
             quantity = Decimal(0)

@@ -38,9 +38,14 @@ def format_pln(value: float | Decimal, signed: bool = False) -> str:
     return f"{format_number(value, signed=signed)}{NBSP}zł"
 
 
-def format_unit_price(value: Decimal) -> str:
-    """Format a PLN unit price with all its decimals (at least two), e.g. 45.123 -> '45,123 zł'."""
-    return f"{format_exact(value)}{NBSP}zł"
+def currency_unit(currency: str) -> str:
+    """How an amount's currency is written: 'zł' for PLN, otherwise its code."""
+    return "zł" if currency == "PLN" else currency
+
+
+def format_unit_price(value: Decimal, currency: str = "PLN") -> str:
+    """Format a unit price with all its decimals (at least two), e.g. 45.123 -> '45,123 zł', or '150,50 USD'."""
+    return f"{format_exact(value)}{NBSP}{currency_unit(currency)}"
 
 
 def format_percent(value: float | Decimal, decimals: int = 2, signed: bool = False) -> str:

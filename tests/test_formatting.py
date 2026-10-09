@@ -90,6 +90,10 @@ def test_unit_price_keeps_all_its_decimals() -> None:
     assert format_unit_price(Decimal("45.5")) == f"45,50{NBSP}zł"
 
 
+def test_unit_price_in_another_currency_shows_its_code() -> None:
+    assert format_unit_price(Decimal("150.5"), "USD") == f"150,50{NBSP}USD"
+
+
 def test_quantity_shows_only_the_decimals_it_has() -> None:
     assert format_quantity(Decimal("10")) == "10"
     assert format_quantity(Decimal("0.50")) == "0,5"

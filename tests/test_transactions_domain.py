@@ -5,6 +5,7 @@ from decimal import Decimal
 
 import pytest
 
+from financial_app.domain.currencies import NbpRate
 from financial_app.domain.transactions import (
     TransactionDraft,
     TransactionError,
@@ -155,3 +156,66 @@ def test_trade_needs_an_instrument() -> None:
 def test_trade_worth_less_than_a_grosz_is_rejected() -> None:
     with pytest.raises(TransactionError, match="co najmniej 0,01"):
         _trade(TransactionType.BUY, quantity="0.001", price="0.01", fee="0")
+
+
+# Foreign-currency Buys and Sells on a PLN Account (issue #15, spec 3.3)
+APPLE = 7
+USD_RATE = NbpRate("USD", Decimal("3.6045"), date(2026, 1, 5), "002/A/NBP/2026")
+
+
+def _foreign(kind: TransactionType, fx_rate: str | None = None, fee: str = "5") -> TransactionDraft:
+    return buy_or_sell(
+        IKE,
+        date(2026, 1, 7),
+        kind,
+        APPLE,
+        Decimal(10),
+        Decimal("150.5"),
+        Decimal(fee),
+        fx_rate=None if fx_rate is None else Decimal(fx_rate),
+        nbp_rate=USD_RATE,
+    )
+
+
+def test_foreign_buy_without_a_rate_of_its_own_costs_the_nbp_rate() -> None:
+    buy = _foreign(TransactionType.BUY)
+
+    # 10 × 150,50 USD × 3,6045 = 5424,77 zł, plus 5 zł commission
+    assert buy.actual_amount == Decimal("5429.77")
+    assert buy.tax_amount == Decimal("5429.77")
+
+
+def test_foreign_buy_at_the_users_rate_keeps_the_tax_amount_at_the_nbp_rate() -> None:
+    buy = _foreign(TransactionType.BUY, fx_rate="3.65")
+
+    assert buy.actual_amount == Decimal("5498.25")  # 5493,25 + 5
+    assert buy.tax_amount == Decimal("5429.77")
+
+
+def test_foreign_sell_brings_its_value_minus_the_commission_at_both_rates() -> None:
+    sell = _foreign(TransactionType.SELL, fx_rate="3.55")
+
+    assert sell.actual_amount == Decimal("5337.75")  # 5342,75 - 5
+    assert sell.tax_amount == Decimal("5419.77")
+
+
+def test_pln_transactions_have_a_tax_amount_equal_to_the_actual_amount() -> None:
+    assert _deposit(IKE, "100").tax_amount == Decimal(100)
+    pln_buy = buy_or_sell(IKE, date(2026, 1, 1), TransactionType.BUY, APPLE, Decimal(2), Decimal(10), Decimal(1))
+    assert pln_buy.tax_amount == pln_buy.actual_amount == Decimal(21)
+
+
+def test_own_rate_needs_an_nbp_rate_too() -> None:
+    with pytest.raises(TransactionError, match="walucie obcej"):
+        buy_or_sell(IKE, date(2026, 1, 1), TransactionType.BUY, APPLE, Decimal(1), Decimal(1), fx_rate=Decimal("3.6"))
+
+
+@pytest.mark.parametrize("fx_rate", ["0", "-1"])
+def test_own_rate_must_be_positive(fx_rate: str) -> None:
+    with pytest.raises(TransactionError, match="Kurs musi być większy od zera"):
+        _foreign(TransactionType.BUY, fx_rate=fx_rate)
+
+
+def test_cash_transactions_carry_no_nbp_rate() -> None:
+    with pytest.raises(TransactionError, match="nie dotyczy instrumentu"):
+        TransactionDraft(IKE, date(2026, 1, 1), TransactionType.DEPOSIT, Decimal(1), nbp_rate=USD_RATE)

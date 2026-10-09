@@ -8,6 +8,7 @@ import pytest
 from sqlalchemy import Engine
 
 from financial_app.domain.accounts import AccountDraft, AccountType
+from financial_app.domain.currencies import NbpRate
 from financial_app.domain.instruments import InstrumentDraft
 from financial_app.domain.lots import InsufficientQuantityError, open_positions
 from financial_app.domain.transactions import TransactionDraft, TransactionError, TransactionType, buy_or_sell
@@ -126,12 +127,47 @@ def test_trade_of_an_unknown_instrument_is_rejected(engine: Engine, account_id: 
         add_transaction(engine, _trade(account_id, 999, TransactionType.BUY, "1"))
 
 
-def test_trade_of_a_foreign_currency_instrument_is_rejected_for_now(engine: Engine, account_id: int) -> None:
+@pytest.fixture
+def apple(engine: Engine) -> int:
     [first_class, *_] = list_asset_classes(engine)
-    apple = add_instrument(engine, InstrumentDraft("Apple", first_class.id, "USD")).id
+    return add_instrument(engine, InstrumentDraft("Apple", first_class.id, "USD")).id
 
-    with pytest.raises(TransactionError, match="w PLN"):
-        add_transaction(engine, _trade(account_id, apple, TransactionType.BUY, "1"))
+
+USD_RATE = NbpRate("USD", Decimal("3.6045"), date(2026, 1, 5), "002/A/NBP/2026")
+
+
+def _foreign_buy(account_id: int, instrument_id: int, nbp_rate: NbpRate | None = USD_RATE) -> TransactionDraft:
+    return buy_or_sell(
+        account_id,
+        date(2026, 1, 7),
+        TransactionType.BUY,
+        instrument_id,
+        Decimal(10),
+        Decimal("150.5"),
+        Decimal(5),
+        fx_rate=Decimal("3.65") if nbp_rate else None,
+        nbp_rate=nbp_rate,
+    )
+
+
+def test_foreign_buy_keeps_its_rates(engine: Engine, account_id: int, apple: int) -> None:
+    saved = add_transaction(engine, _foreign_buy(account_id, apple))
+
+    [listed] = list_transactions(engine)
+    assert listed == saved
+    assert (listed.fx_rate, listed.nbp_rate) == (Decimal("3.65"), USD_RATE)
+    assert (listed.actual_amount, listed.tax_amount) == (Decimal("5498.25"), Decimal("5429.77"))
+
+
+def test_foreign_trade_without_an_nbp_rate_is_blocked(engine: Engine, account_id: int, apple: int) -> None:
+    with pytest.raises(TransactionError, match="Brak kursu NBP USD"):
+        add_transaction(engine, _foreign_buy(account_id, apple, nbp_rate=None))
+    assert list_transactions(engine) == []
+
+
+def test_nbp_rate_must_be_in_the_instruments_currency(engine: Engine, account_id: int, instrument_id: int) -> None:
+    with pytest.raises(TransactionError, match="PLN"):
+        add_transaction(engine, _foreign_buy(account_id, instrument_id))
 
 
 def test_edited_transaction_keeps_its_id_and_takes_the_new_fields(engine: Engine, account_id: int) -> None:
@@ -237,3 +273,10 @@ def test_deleting_a_sell_is_allowed(engine: Engine, account_id: int, instrument_
 
     [position] = open_positions(reversed(list_transactions(engine)))
     assert position.quantity == 10
+
+
+def test_nbp_rate_must_come_from_before_the_transaction_date(engine: Engine, account_id: int, apple: int) -> None:
+    same_day = NbpRate("USD", Decimal("3.6"), date(2026, 1, 7), "003/A/NBP/2026")
+
+    with pytest.raises(TransactionError, match="przed datą transakcji"):
+        add_transaction(engine, _foreign_buy(account_id, apple, nbp_rate=same_day))

@@ -13,7 +13,7 @@ from financial_app.domain.instruments import (
     InstrumentError,
     validate_asset_class_name,
 )
-from financial_app.persistence.models import AssetClassRow, InstrumentRow
+from financial_app.persistence.models import AssetClassRow, InstrumentRow, TransactionRow
 
 
 def list_asset_classes(engine: Engine) -> list[AssetClass]:
@@ -67,6 +67,11 @@ def update_instrument(engine: Engine, instrument_id: int, draft: InstrumentDraft
     with Session(engine) as session, session.begin():
         row = session.get_one(InstrumentRow, instrument_id)
         _check_instrument_name_is_free(session, draft.name, instrument_id)
+        # Its Transactions' prices and NBP Rates are in the old currency
+        if draft.quote_currency != row.quote_currency and session.scalar(
+            select(TransactionRow.id).where(TransactionRow.instrument_id == instrument_id).limit(1)
+        ):
+            raise InstrumentError("Nie można zmienić waluty instrumentu, który ma już transakcje.")
         _fill(session, row, draft)
         _flush(session, f"Instrument o nazwie „{draft.name}” już istnieje.")
         return _to_instrument(row)
