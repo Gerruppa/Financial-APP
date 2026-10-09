@@ -3,7 +3,8 @@
 Positions are valued at the Manual Price, converted from a foreign currency at the NBP Rate from the last business
 day before today; one without a price or a rate counts at cost and adds nothing to the result. Clicking a Position
 shows its Lots with both costs. Foreign cash is valued at the same NBP Rate; its FX result (realised and unrealised)
-counts in the Account's result unless the Account excludes it (spec 3.1, 3.5).
+counts in the Account's result unless the Account excludes it (spec 3.1, 3.5). Each card also sums the Account's
+net Dividends and interest and its commissions and costs.
 """
 
 from dataclasses import dataclass
@@ -25,7 +26,7 @@ from financial_app.domain.formatting import (
 )
 from financial_app.domain.instruments import Instrument
 from financial_app.domain.lots import ForeignCash, Position, foreign_cash, fx_result, open_positions
-from financial_app.domain.transactions import PLN, cash_balances
+from financial_app.domain.transactions import PLN, cash_balances, costs_by_account, dividends_by_account
 from financial_app.persistence.accounts import list_accounts
 from financial_app.persistence.instruments import list_instruments
 from financial_app.persistence.transactions import list_transactions
@@ -45,6 +46,14 @@ class _Quote:
     currency: str
     pln: Decimal | None
     missing: str = ""
+
+
+@dataclass(frozen=True)
+class _Totals:
+    """Net Dividends and interest, and commissions and costs, in PLN per Account id."""
+
+    dividends: dict[int, Decimal]
+    costs: dict[int, Decimal]
 
 
 @dataclass
@@ -71,6 +80,7 @@ class PortfolioPage:
         positions = open_positions(reversed(transactions))
         cash = foreign_cash(reversed(transactions))
         balances = cash_balances(transactions)
+        totals = _Totals(dividends_by_account(transactions), costs_by_account(transactions))
         held = {position.account_id for position in positions} | {c.account_id for c in cash if c.lots}
         # Inactive Accounts stay hidden unless they still hold cash or Positions
         accounts = [a for a in list_accounts(self.engine) if a.active or balances.get(a.id, Decimal(0)) or a.id in held]
@@ -89,7 +99,7 @@ class PortfolioPage:
                 key=lambda p: names[p.instrument_id].casefold(),
             )
             own_cash = sorted((c for c in cash if c.account_id == account.id), key=lambda c: c.currency)
-            _account_card(account, balances.get(account.id, Decimal(0)), own, own_cash, quotes, rates, names)
+            _account_card(account, balances.get(account.id, Decimal(0)), own, own_cash, quotes, rates, names, totals)
 
     def _rate(self, currency: str, rates: dict[str, Decimal | None]) -> Decimal | None:
         """The NBP Rate from the last business day before today, fetched once per currency into ``rates``."""
@@ -124,6 +134,7 @@ def _account_card(
     quotes: dict[int, _Quote],
     rates: dict[str, Decimal | None],
     names: dict[int, str],
+    totals: _Totals,
 ) -> None:
     known_rates = {currency: rate for currency, rate in rates.items() if rate is not None}
     value = (
@@ -147,6 +158,14 @@ def _account_card(
         with ui.row().classes("w-full items-center"):
             ui.label("Saldo gotówki").classes("text-gray-500")
             ui.label(format_pln(cash)).classes("font-medium")
+        for title, amounts, marker in (
+            ("Dywidendy i odsetki", totals.dividends, "account-dividends"),
+            ("Prowizje i koszty", totals.costs, "account-costs"),
+        ):
+            if account.id in amounts:
+                with ui.row().classes("w-full items-center").mark(marker):
+                    ui.label(title).classes("text-gray-500")
+                    ui.label(format_pln(amounts[account.id])).classes("font-medium")
         if foreign:
             _foreign_cash_table(foreign, known_rates)
             with ui.row().classes("w-full items-center"):

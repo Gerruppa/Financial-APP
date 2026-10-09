@@ -1,7 +1,8 @@
 """The Transakcje tab and the transaction dialog for adding, editing and deleting (spec 3.3).
 
-For now: PLN Deposits and Withdrawals, Currency Exchanges, and Buys and Sells: foreign-currency ones paid from foreign
-cash or in PLN, converted at the user's rate, the NBP Rate (D-1) or by the broker for its FX Conversion Fee.
+For now: PLN Deposits, Withdrawals and Costs, Currency Exchanges, Buys and Sells (foreign-currency ones paid from
+foreign cash or in PLN, converted at the user's rate, the NBP Rate (D-1) or by the broker for its FX Conversion Fee),
+Dividends and interest (paid into PLN or foreign cash the same way, without the broker's conversion) and DRIPs.
 """
 
 from collections.abc import Callable
@@ -36,6 +37,8 @@ from financial_app.domain.transactions import (
     buy_or_sell,
     covering_exchange,
     currency_exchange,
+    dividend,
+    drip,
     lowest_cash_balance,
 )
 from financial_app.persistence.accounts import list_accounts
@@ -92,25 +95,35 @@ class TransactionsPage:
                 ui.label(account_names[transaction.account_id])
                 ui.label(transaction.transaction_type.label)
                 with ui.column().classes("gap-0"):
-                    if transaction.transaction_type is TransactionType.CURRENCY_EXCHANGE:
+                    kind = transaction.transaction_type
+                    if kind is TransactionType.CURRENCY_EXCHANGE:
                         _exchange_cell(transaction)
                     if transaction.instrument_id is not None:
-                        assert transaction.quantity is not None and transaction.price is not None
                         instrument = instruments[transaction.instrument_id]
                         ui.label(instrument.name)
-                        price = format_unit_price(transaction.price, instrument.quote_currency)
-                        ui.label(f"{format_quantity(transaction.quantity)} × {price}").classes("text-xs text-gray-500")
-                        if transaction.nbp_rate is not None:
-                            ui.label(_rates_text(transaction)).classes("text-xs text-gray-500")
+                        if kind.is_buy_or_sell:
+                            assert transaction.quantity is not None and transaction.price is not None
+                            price = format_unit_price(transaction.price, instrument.quote_currency)
+                            quantity = format_quantity(transaction.quantity)
+                            ui.label(f"{quantity} × {price}").classes("text-xs text-gray-500")
+                    if kind.is_dividend:
+                        _dividend_cell(transaction)
+                    if transaction.nbp_rate is not None:
+                        ui.label(_rates_text(transaction)).classes("text-xs text-gray-500")
                 with ui.column().classes("gap-0 items-end"):
-                    if transaction.is_paid_in_foreign_cash:
+                    if kind is TransactionType.DRIP:
+                        ui.label(f"reinwestowano {format_pln(transaction.actual_amount)}")
+                        if transaction.tax_amount != transaction.actual_amount:
+                            tax = format_pln(transaction.tax_amount)
+                            ui.label(f"podatkowa {tax}").classes("text-xs text-gray-500")
+                    elif transaction.is_paid_in_foreign_cash:
                         currency = transaction.cash_currency
                         ui.label(format_amount(transaction.foreign_cash_change, currency, signed=True))
                         actual = format_pln(transaction.actual_cash_change, signed=True)
                         ui.label(f"rzeczywista {actual}").classes("text-xs text-gray-500")
                     else:
                         ui.label(format_pln(transaction.cash_change, signed=True))
-                    if transaction.tax_amount != transaction.actual_amount:
+                    if kind is not TransactionType.DRIP and transaction.tax_amount != transaction.actual_amount:
                         tax = format_pln(transaction.tax_cash_change, signed=True)
                         ui.label(f"podatkowa {tax}").classes("text-xs text-gray-500")
                 ui.label(transaction.comment).classes("text-gray-600")
@@ -124,6 +137,16 @@ def _exchange_cell(exchange: Transaction) -> None:
     rate = format_rate(exchange.actual_amount / exchange.quantity)
     amount = format_amount(exchange.foreign_cash_change, currency, signed=True)
     ui.label(f"{amount} po {rate}").classes("text-xs text-gray-500")
+
+
+def _dividend_cell(payout: Transaction) -> None:
+    """A Dividend's gross amount and withholding tax; a DRIP's units bought with it."""
+    currency = payout.dividend_currency
+    if payout.quantity is not None:
+        ui.label(f"+{format_quantity(payout.quantity)} szt.").classes("text-xs text-gray-500")
+    assert payout.gross is not None
+    gross, tax = format_amount(payout.gross, currency), format_amount(payout.withholding_tax, currency)
+    ui.label(f"brutto {gross} · podatek {tax}").classes("text-xs text-gray-500")
 
 
 def open_transaction_dialog(
@@ -182,14 +205,27 @@ def open_transaction_dialog(
             foreign_amount = ui.input(value=texts.foreign_amount).classes("w-full")
             foreign_amount.mark("transaction-foreign-amount")
         amount = ui.input("Kwota (zł)", value=texts.amount).classes("w-full").mark("transaction-amount")
-        with ui.column().classes("w-full gap-0") as trade_fields:
+        with ui.column().classes("w-full gap-0") as instrument_fields:
             instrument_id = transaction.instrument_id if transaction else None
-            instrument = ui.select(instruments, label="Instrument", value=instrument_id).classes("w-full")
-            instrument.mark("transaction-instrument")
+            # A Dividend without an Instrument is interest, e.g. on the Account's cash
+            instrument = ui.select(instruments, label="Instrument", value=instrument_id, clearable=True)
+            instrument.classes("w-full").mark("transaction-instrument")
             if not instruments:
                 ui.label("Najpierw dodaj instrument w zakładce Ustawienia.").classes("text-gray-500")
+            own_dividend_currency = (
+                transaction.dividend_currency if transaction and transaction.transaction_type.is_dividend else None
+            )
+            dividend_currency = ui.select(
+                [own_dividend_currency] if own_dividend_currency else [], label="Waluta", value=own_dividend_currency
+            )
+            dividend_currency.classes("w-full")
+            dividend_currency.mark("transaction-dividend-currency")
             quantity = ui.input("Liczba", value=texts.quantity).classes("w-full").mark("transaction-quantity")
             price = ui.input("Cena (zł)", value=texts.price).classes("w-full").mark("transaction-price")
+            gross = ui.input(value=texts.gross).classes("w-full").mark("transaction-gross")
+            withholding_tax = ui.input(value=texts.withholding_tax).classes("w-full")
+            withholding_tax.mark("transaction-withholding-tax")
+            net = ui.label().classes("text-sm text-gray-600").mark("transaction-net")
             paid_from = ui.select({}, label="Płatność").classes("w-full").mark("transaction-paid-from")
             fx_rate = ui.input(value=texts.fx_rate).props('hint="Puste = kurs NBP z dnia roboczego przed datą"')
             fx_rate.classes("w-full").mark("transaction-fx-rate")
@@ -210,7 +246,7 @@ def open_transaction_dialog(
             """
             if (
                 transaction is not None
-                and transaction.transaction_type.is_buy_or_sell
+                and transaction.transaction_type.settles_in_cash_currency
                 and transaction.account_id == account.value
                 and transaction.instrument_id is not None
                 and currencies.get(transaction.instrument_id) == currency
@@ -219,8 +255,29 @@ def open_transaction_dialog(
             return currency if currency in cash_currencies.get(account.value, ()) else PLN
 
         def settlement_currency() -> str:
-            """The Cash Currency a Buy or Sell is paid from: the user's choice where the Account offers one."""
+            """The Cash Currency a Buy or Sell is paid from, or a Dividend into: the user's choice where the Account
+            offers one; interest goes into the cash of its own currency."""
+            if TransactionType(transaction_type.value) is TransactionType.DIVIDEND and instrument.value is None:
+                return trade_currency()
             return paid_from.value if paid_from.visible and paid_from.value else PLN
+
+        def trade_currency() -> str:
+            """The Instrument's currency; interest without one is in the currency the user chose."""
+            if instrument.value is not None:
+                return currencies[instrument.value]
+            if TransactionType(transaction_type.value) is TransactionType.DIVIDEND and dividend_currency.value:
+                return str(dividend_currency.value)
+            return PLN
+
+        def show_net() -> None:
+            """A Dividend's gross amount less its withholding tax, once both read as numbers."""
+            try:
+                tax_text = withholding_tax.value.strip()
+                value = parse_number(gross.value) - (parse_number(tax_text) if tax_text else Decimal(0))
+            except ValueError:
+                net.text = ""
+                return
+            net.text = f"Netto: {format_amount(value, trade_currency())}"
 
         def fee_percent() -> Decimal | None:
             """The Account's FX Conversion Fee; an edited converted trade keeps its own while its Account stays."""
@@ -237,28 +294,49 @@ def open_transaction_dialog(
             """Show the fields the chosen type needs; the price is in the Instrument's currency, a foreign one also
             takes a rate, and an Account holding that currency pays from it (spec 3.3, 3.5)."""
             kind = TransactionType(transaction_type.value)
-            amount.visible = not kind.is_buy_or_sell
-            trade_fields.visible = kind.is_buy_or_sell
+            trade, dividend_type = kind.is_buy_or_sell, kind.is_dividend
+            amount.visible = not trade and not dividend_type
+            instrument_fields.visible = trade or dividend_type
             exchange_fields.visible = kind is TransactionType.CURRENCY_EXCHANGE
-            currency = currencies.get(instrument.value, PLN)
+            interest = kind is TransactionType.DIVIDEND and instrument.value is None
+            dividend_currency.visible = interest
+            if interest:
+                own = [own_dividend_currency] if own_dividend_currency else []
+                options = list(dict.fromkeys([*cash_currencies.get(account.value, ()), *own]))
+                chosen_currency = dividend_currency.value if dividend_currency.value in options else PLN
+                dividend_currency.set_options(options, value=chosen_currency)
+            currency = trade_currency()
+            quantity.visible = trade or kind is TransactionType.DRIP
+            for trade_field in (price, commission):
+                trade_field.visible = trade
+            for dividend_field in (gross, withholding_tax, net):
+                dividend_field.visible = dividend_type
+            gross.props(f'label="Kwota brutto ({currency_unit(currency)})"')
+            withholding_tax.props(f'label="Podatek u źródła ({currency_unit(currency)})"')
+            show_net()
             price.props(f'label="Cena ({currency_unit(currency)})"')
             fx_rate.props(f'label="Kurs {currency}/PLN"')
-            # An Account holding the Instrument's currency pays from that cash or from PLN, as the user chooses
+            # An Account holding the Instrument's currency pays from that cash or from PLN, as the user chooses; a
+            # Dividend goes into either the same way
             sources = {currency: f"gotówka {currency}", PLN: "PLN z przewalutowaniem"}
             held = currency in cash_currencies.get(account.value, ())
-            paid_from.visible = currency != PLN and (held or default_settlement(currency) != PLN)
+            settles = kind.settles_in_cash_currency and not interest
+            paid_from.visible = settles and currency != PLN and (held or default_settlement(currency) != PLN)
+            paid_from.props(f'label="{"Płatność" if trade else "Wpływ"}"')
             if paid_from.visible:
                 chosen_source = paid_from.value if paid_from.value in sources else default_settlement(currency)
                 paid_from.set_options(sources, value=chosen_source)
             settled_in = settlement_currency()
             fee = fee_percent()
-            convert.visible = currency != PLN and settled_in == PLN and fee is not None
+            convert.visible = trade and currency != PLN and settled_in == PLN and fee is not None
             if fee is not None:
                 chosen_account = accounts_by_id[account.value]
                 broker = chosen_account.broker or chosen_account.name
                 convert.text = f"Prowizja {broker} (przewalutowanie {format_percent(fee)})"
             charged.visible = converted_by_broker()
-            fx_rate.visible = currency != PLN and not charged.visible
+            # Interest paid into foreign cash takes a rate too: it values that cash in PLN, like a Buy paid from it;
+            # a DRIP converts nothing, so it counts at the NBP Rate
+            fx_rate.visible = currency != PLN and not charged.visible and kind is not TransactionType.DRIP
             auto_exchange.visible = transaction is None and kind is TransactionType.BUY and settled_in != PLN
             foreign = [c for c in cash_currencies.get(account.value, ()) if c != PLN]
             if transaction is not None and transaction.transaction_type is TransactionType.CURRENCY_EXCHANGE:
@@ -272,8 +350,10 @@ def open_transaction_dialog(
             foreign_amount.props(f'label="Kwota ({shown})"')
 
         update()
-        for field in (transaction_type, account, instrument, exchange_currency, paid_from, convert):
+        for field in (transaction_type, account, instrument, exchange_currency, dividend_currency, paid_from, convert):
             field.on_value_change(update)
+        for dividend_input in (gross, withholding_tax):
+            dividend_input.on_value_change(show_net)
         comment = ui.input("Komentarz", value=transaction.comment if transaction else "").classes("w-full")
         comment.mark("transaction-comment")
         error = ui.label().classes("text-negative").mark("transaction-error")
@@ -304,6 +384,8 @@ def open_transaction_dialog(
                     to_pln=direction.value == _SELL,
                     comment=comment.value,
                 )
+            if kind.is_dividend:
+                return read_dividend(kind, day_value)
             if not kind.is_buy_or_sell:
                 value = _read(parse_number, amount.value, "Kwota musi być liczbą, np. 1 000,50.")
                 return TransactionDraft(account.value, day_value, kind, value, comment.value)
@@ -336,6 +418,34 @@ def open_transaction_dialog(
                 cash_currency=settlement_currency(),
                 conversion=conversion,
             )
+
+        def read_dividend(kind: TransactionType, day_value: date) -> TransactionDraft:
+            """A Dividend, interest or DRIP; a foreign-currency one takes the NBP Rate and maybe the user's rate."""
+            gross_value = _read(parse_number, gross.value, "Kwota brutto musi być liczbą, np. 100,50.")
+            tax_text = withholding_tax.value.strip()
+            tax = _read(parse_number, tax_text, "Podatek musi być liczbą, np. 15,00.") if tax_text else Decimal(0)
+            currency = trade_currency()
+            nbp_rate = None if currency == PLN else stored_nbp_rate(currency, day_value)
+            own_rate = fx_rate.value.strip() if nbp_rate else ""
+            rate = _read(parse_number, own_rate, "Kurs musi być liczbą, np. 3,65.") if own_rate else None
+            if kind is TransactionType.DIVIDEND:
+                return dividend(
+                    account.value,
+                    day_value,
+                    gross_value,
+                    tax,
+                    comment.value,
+                    instrument_id=instrument.value,
+                    fx_rate=rate,
+                    nbp_rate=nbp_rate,
+                    cash_currency=settlement_currency(),
+                )
+            if instrument.value is None:
+                raise TransactionError("Wybierz instrument.")
+            units = _read(parse_number, quantity.value, "Liczba musi być liczbą, np. 10 lub 0,5.")
+            return drip(
+                account.value, day_value, instrument.value, units, gross_value, tax, comment.value, nbp_rate=nbp_rate
+            )  # fmt: skip
 
         def save() -> None:
             try:
@@ -398,6 +508,8 @@ class _FieldTexts:
     fx_rate: str = ""
     commission: str = ""
     charged: str = ""
+    gross: str = ""
+    withholding_tax: str = ""
 
 
 def _field_texts(transaction: Transaction | None) -> _FieldTexts:
@@ -408,6 +520,14 @@ def _field_texts(transaction: Transaction | None) -> _FieldTexts:
         assert transaction.quantity is not None
         return _FieldTexts(
             amount=format_exact(transaction.actual_amount), foreign_amount=format_exact(transaction.quantity)
+        )
+    if transaction.transaction_type.is_dividend:
+        assert transaction.gross is not None
+        return _FieldTexts(
+            quantity="" if transaction.quantity is None else format_quantity(transaction.quantity),
+            fx_rate="" if transaction.fx_rate is None else format_exact(transaction.fx_rate),
+            gross=format_exact(transaction.gross),
+            withholding_tax=format_exact(transaction.withholding_tax),
         )
     if not transaction.transaction_type.is_buy_or_sell:
         return _FieldTexts(amount=format_exact(transaction.actual_amount))

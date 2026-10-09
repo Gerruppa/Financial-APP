@@ -81,7 +81,7 @@ def _check_references(session: Session, draft: TransactionDraft) -> None:
         instrument = session.get(InstrumentRow, draft.instrument_id)
         if instrument is None:
             raise TransactionError("Wybrany instrument nie istnieje.")
-        # The Tax Amount of a foreign-currency Buy or Sell needs the NBP Rate: never silently 0 zł (spec 3.3, 9.3)
+        # The Tax Amount of a foreign-currency Buy, Sell or Dividend needs the NBP Rate: never silently 0 zł (spec 9.3)
         currency = instrument.quote_currency
         if currency == "PLN" and draft.nbp_rate is not None:
             raise TransactionError("Instrument w PLN nie potrzebuje kursu NBP.")
@@ -89,8 +89,8 @@ def _check_references(session: Session, draft: TransactionDraft) -> None:
             raise TransactionError(f"Brak kursu NBP {currency}. Zapis zablokowany.")
         if draft.nbp_rate is not None and draft.nbp_rate.currency != currency:
             raise TransactionError(f"Kurs NBP musi być kursem waluty instrumentu ({currency}).")
-        if draft.nbp_rate is not None and draft.nbp_rate.published_on >= draft.date:
-            raise TransactionError("Kurs NBP musi pochodzić z dnia roboczego przed datą transakcji.")
+    if draft.nbp_rate is not None and draft.nbp_rate.published_on >= draft.date:
+        raise TransactionError("Kurs NBP musi pochodzić z dnia roboczego przed datą transakcji.")
 
 
 def _check_coverage(session: Session, draft: TransactionDraft | None, replacing: TransactionRow | None) -> None:
@@ -135,6 +135,8 @@ def _fill(row: TransactionRow, draft: TransactionDraft) -> None:
     row.cash_currency = draft.cash_currency
     row.to_pln = draft.to_pln
     row.fx_conversion_fee_percent = _text(draft.fx_conversion_fee_percent)
+    row.gross = _text(draft.gross)
+    row.withholding_tax = str(draft.withholding_tax) if draft.transaction_type.is_dividend else None
 
 
 def _text(value: Decimal | None) -> str | None:
@@ -162,6 +164,8 @@ def _to_transaction(row: TransactionRow) -> Transaction:
         cash_currency=row.cash_currency,
         to_pln=row.to_pln,
         fx_conversion_fee_percent=_decimal(row.fx_conversion_fee_percent),
+        gross=_decimal(row.gross),
+        withholding_tax=Decimal(row.withholding_tax or 0),
     )
 
 

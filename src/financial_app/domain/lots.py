@@ -12,8 +12,9 @@ from decimal import Decimal
 from financial_app.domain.formatting import format_date, format_quantity
 from financial_app.domain.transactions import TransactionDraft, TransactionError, TransactionType
 
-# Same-day order (spec 3.5): Buys before Sells, so a Sell may use shares bought that day
-_SAME_DAY_ORDER = {TransactionType.BUY: 0, TransactionType.SELL: 1}
+# Same-day order (spec 3.5) of the Transactions moving Lots: Buys before Sells, so a Sell may use shares bought
+# that day, and DRIPs after them
+_SAME_DAY_ORDER = {TransactionType.BUY: 0, TransactionType.SELL: 1, TransactionType.DRIP: 2}
 
 
 class InsufficientQuantityError(TransactionError):
@@ -31,8 +32,8 @@ class InsufficientQuantityError(TransactionError):
 
 @dataclass(frozen=True)
 class Lot:
-    """The still-open part of one Buy (or of foreign cash coming in); ``cost`` is its Actual cost and ``tax_cost`` its
-    Tax cost, in PLN.
+    """The still-open part of one Buy or DRIP (or of foreign cash coming in); ``cost`` is its Actual cost and
+    ``tax_cost`` its Tax cost, in PLN.
 
     Both include the commission.
     """
@@ -80,22 +81,22 @@ class Position:
 
 
 def open_positions(transactions: Iterable[TransactionDraft]) -> list[Position]:
-    """The open Positions after all Buys and Sells, keyed by Account and Instrument.
+    """The open Positions after all Buys, Sells and DRIPs, keyed by Account and Instrument.
 
     ``transactions`` come in entry order, which settles same-day ties after the Buy-before-Sell rule.
     Raises InsufficientQuantityError for the first Sell (by date) that is not covered.
     """
     buys_and_sells = sorted(
-        (t for t in transactions if t.transaction_type.is_buy_or_sell),
+        (t for t in transactions if t.transaction_type in _SAME_DAY_ORDER),
         key=lambda t: (t.date, _SAME_DAY_ORDER[t.transaction_type]),
     )
     positions: dict[tuple[int, int], list[Lot]] = {}
     for t in buys_and_sells:
         assert (
             t.instrument_id is not None and t.quantity is not None
-        )  # guaranteed for a Buy or Sell by TransactionDraft
+        )  # guaranteed for a Buy, Sell or DRIP by TransactionDraft
         lots = positions.setdefault((t.account_id, t.instrument_id), [])
-        if t.transaction_type is TransactionType.BUY:
+        if t.transaction_type.opens_lot:
             lots.append(Lot(t.date, t.quantity, t.actual_amount, t.tax_amount))
         else:
             _consume(lots, t.date, t.quantity)

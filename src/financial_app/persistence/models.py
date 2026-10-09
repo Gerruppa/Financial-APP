@@ -73,24 +73,29 @@ class TransactionRow(Base):
     # PLN, as exact decimal text like the FX Conversion Fee
     actual_amount: Mapped[str] = mapped_column(String(30))
     comment: Mapped[str] = mapped_column(Text)
-    # Buy and Sell only: the Instrument, quantity, unit price and PLN commission, as exact decimal text
+    # Buy and Sell: the Instrument, quantity, unit price and PLN commission, as exact decimal text; a Dividend may
+    # have the Instrument, a DRIP has it and the quantity
     instrument_id: Mapped[int | None] = mapped_column(ForeignKey("instruments.id"), index=True)
     quantity: Mapped[str | None] = mapped_column(String(30))
     price: Mapped[str | None] = mapped_column(String(30))
     commission: Mapped[str | None] = mapped_column(String(30))
-    # Foreign-currency Buy and Sell only: the user's own rate (None means the NBP Rate) and the NBP Rate (D-1)
+    # Foreign-currency Buy, Sell, Dividend and DRIP only: the user's own rate (None means the NBP Rate) and the NBP
+    # Rate (D-1)
     fx_rate: Mapped[str | None] = mapped_column(String(30))
     nbp_currency: Mapped[str | None] = mapped_column(String(3))
     nbp_rate: Mapped[str | None] = mapped_column(String(30))
     nbp_published_on: Mapped[dt.date | None] = mapped_column(Date)
     nbp_table: Mapped[str | None] = mapped_column(String(30))
     # The Cash Currency paid from or into: PLN, or the foreign one of a Currency Exchange or of a Buy or Sell paid
-    # from foreign cash; ``to_pln`` marks an Exchange selling that currency (issue #16)
+    # from foreign cash, or of a Dividend paid into it; ``to_pln`` marks an Exchange selling that currency (issue #16)
     cash_currency: Mapped[str] = mapped_column(String(3), server_default="PLN")
     to_pln: Mapped[bool] = mapped_column(Boolean, server_default=false())
     # Foreign-currency Buy and Sell paid in PLN only: the FX Conversion Fee % when the broker converted it; the fee in
     # PLN follows from it like the Tax Amount follows from the NBP Rate (issue #17)
     fx_conversion_fee_percent: Mapped[str | None] = mapped_column(String(20))
+    # Dividend and DRIP only: the gross amount and the withholding tax, in the Dividend's currency (issue #18)
+    gross: Mapped[str | None] = mapped_column(String(30))
+    withholding_tax: Mapped[str | None] = mapped_column(String(30))
 
 
 class AssetClassRow(Base):

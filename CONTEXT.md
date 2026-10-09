@@ -70,6 +70,18 @@ _Avoid_: discount, haircut
 One user-recorded event on an Account: Deposit, Withdrawal, Buy, Sell, Dividend, Cost, Split, Currency Exchange, Cash Transfer, Security Transfer or DRIP.
 _Avoid_: operation, trade, entry
 
+**Dividend** (Dywidenda / odsetki):
+A payout of an Instrument, or interest (with or without an Instrument), recorded with its gross amount and the withholding tax taken at source, both in its own currency. The net amount goes into PLN cash (converted) or foreign cash of the same currency.
+_Avoid_: coupon, income
+
+**DRIP** (DRIP):
+A Dividend reinvested into more units of its Instrument: it opens a Lot costing the net amount and moves no cash.
+_Avoid_: reinvestment, scrip
+
+**Cost** (Koszty):
+A PLN amount the Account paid outside a trade, e.g. for keeping the Account. Together with commissions and FX Conversion Fees it makes up the Account's commissions and costs.
+_Avoid_: fee, charge
+
 **Actual Amount** (Kwota rzeczywista):
 The PLN amount that really moved on the Account for a Transaction, including fees and FX spread. Drives balances, valuation and returns.
 _Avoid_: Total PLN, real value
