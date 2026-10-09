@@ -247,3 +247,53 @@ async def test_interest_in_a_foreign_cash_currency_goes_into_that_cash(engine: E
             await user.should_see(f"+2,00{NBSP}USD")
     [saved] = list_transactions(engine)
     assert (saved.instrument_id, saved.cash_currency, saved.nbp_rate) == (None, "USD", USD_RATE)
+
+
+async def test_dividend_converted_by_the_broker_takes_the_credited_amount(engine: Engine, apple: int) -> None:
+    fee = Decimal("0.5")
+    add_account(engine, AccountDraft("XTB", "XTB", AccountType.REGULAR, ("PLN",), fx_conversion_fee_percent=fee))
+
+    async with user_simulation(lambda: _shell(engine)) as user:
+        await user.open("/transakcje")
+        _start(user, "Dywidenda / odsetki", "XTB")
+        _choose(user, "transaction-instrument", "Apple")
+        user.find(marker="transaction-gross").type("10")
+        user.find(marker="transaction-withholding-tax").type("1,5")
+        user.find(marker="transaction-conversion").click()
+        await user.should_see(marker="transaction-charged")
+        await user.should_not_see(marker="transaction-fx-rate")
+        user.find(marker="transaction-charged").type("30,49")
+        user.find("Zapisz").click()
+
+        with user.scope(marker="transactions"):
+            await user.should_see(f"+30,49{NBSP}zł")
+            await user.should_see(f"przewalutowanie 0,15{NBSP}zł")
+
+        user.find(marker="transaction-row").click()
+        await user.should_see(marker="transaction-charged")
+    [saved] = list_transactions(engine)
+    assert (saved.actual_amount, saved.fx_conversion_fee_percent) == (Decimal("30.49"), fee)
+
+
+async def test_cost_paid_from_foreign_cash_counts_at_the_nbp_rate(engine: Engine, ibkr: int) -> None:
+    async with user_simulation(lambda: _shell(engine)) as user:
+        await user.open("/transakcje")
+        _start(user, "Koszty", "IBKR")
+        _choose(user, "transaction-cost-currency", "USD")
+        user.find(marker="transaction-amount").type("10")
+        user.find("Zapisz").click()
+
+        with user.scope(marker="transactions"):
+            await user.should_see(f"-10,00{NBSP}USD")
+            await user.should_see(f"rzeczywista -36,05{NBSP}zł")
+
+        user.find(marker="transaction-row").click()
+        user.find(marker="transaction-comment").type("Opłata")
+        user.find("Zapisz zmiany").click()
+        await user.should_see("Opłata")
+
+        await user.open("/portfolio")
+        with user.scope(marker="account-costs"):
+            await user.should_see(f"36,05{NBSP}zł")
+    [saved] = list_transactions(engine)
+    assert (saved.cash_currency, saved.quantity, saved.actual_amount) == ("USD", Decimal(10), Decimal("36.05"))

@@ -16,6 +16,7 @@ from financial_app.domain.transactions import (
     TransactionError,
     TransactionType,
     buy_or_sell,
+    cost,
     dividend,
     drip,
 )
@@ -121,3 +122,12 @@ def test_drip_lot_covers_a_later_sell_and_cannot_then_be_deleted(engine: Engine,
         delete_transaction(engine, reinvested.id)
     with pytest.raises(InsufficientQuantityError):
         update_transaction(engine, reinvested.id, drip(ike, DAY, pzu, Decimal("0.4"), Decimal(25)))
+
+
+def test_foreign_cost_needs_an_account_holding_the_currency(engine: Engine, ike: int, ibkr: int) -> None:
+    add_transaction(engine, cost(ibkr, DAY, Decimal(10), cash_currency="USD", nbp_rate=USD_RATE))
+
+    with pytest.raises(TransactionError, match="USD"):
+        add_transaction(engine, cost(ike, DAY, Decimal(10), cash_currency="USD", nbp_rate=USD_RATE))
+    [saved] = list_transactions(engine)
+    assert (saved.quantity, saved.cash_currency, saved.nbp_rate) == (Decimal(10), "USD", USD_RATE)

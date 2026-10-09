@@ -79,7 +79,7 @@ A Dividend reinvested into more units of its Instrument: it opens a Lot costing 
 _Avoid_: reinvestment, scrip
 
 **Cost** (Koszty):
-A PLN amount the Account paid outside a trade, e.g. for keeping the Account. Together with commissions and FX Conversion Fees it makes up the Account's commissions and costs.
+An amount the Account paid outside a trade, e.g. for keeping the Account: in PLN, or from foreign cash at the NBP Rate. Together with commissions and FX Conversion Fees it makes up the Account's commissions and costs.
 _Avoid_: fee, charge
 
 **Actual Amount** (Kwota rzeczywista):

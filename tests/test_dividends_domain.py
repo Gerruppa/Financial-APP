@@ -14,6 +14,7 @@ from financial_app.domain.transactions import (
     TransactionType,
     buy_or_sell,
     cash_balances,
+    cost,
     costs_by_account,
     dividend,
     dividends_by_account,
@@ -182,3 +183,50 @@ def test_dividends_sum_and_reinvested_dividends_per_account() -> None:
     interest = dividend(IBKR, DAY, Decimal(5))
 
     assert dividends_by_account([payout, reinvested, interest]) == {IKE: Decimal(101), IBKR: Decimal(5)}
+
+
+def _converted_dividend(**kwargs: object) -> TransactionDraft:
+    """8,50 USD net (10 gross, 1,50 tax) credited by the broker as 30,49 zł after its 0,5% FX Conversion Fee."""
+    return dividend(
+        IKE, DAY, Decimal(10), Decimal("1.50"), instrument_id=APPLE, nbp_rate=USD_RATE,
+        conversion=BrokerConversion(Decimal("30.49"), Decimal("0.5")), **kwargs,  # type: ignore[arg-type]
+    )  # fmt: skip
+
+
+def test_broker_converted_dividend_credits_the_amount_and_records_the_fee_as_a_cost() -> None:
+    payout = _converted_dividend()
+
+    # Credited 0,5% below the market rate: 30,49 / 0,995 = 30,64 zł at market, so the fee is 0,15 zł
+    assert payout.actual_amount == Decimal("30.49")
+    assert payout.fx_conversion_fee == Decimal("0.15")
+    assert payout.effective_fx_rate.quantize(Decimal("0.0001")) == Decimal("3.5871")  # 30,49 / 8,50 USD
+    assert payout.tax_amount == Decimal("30.64")
+    assert cash_balances([payout]) == {IKE: Decimal("30.49")}
+    assert costs_by_account([payout]) == {IKE: Decimal("0.15")}
+
+
+def test_broker_conversion_needs_a_dividend_paid_into_pln() -> None:
+    with pytest.raises(TransactionError, match="płatnej w PLN"):
+        _converted_dividend(cash_currency="USD")
+
+
+def test_foreign_cost_takes_foreign_cash_and_counts_at_the_nbp_rate() -> None:
+    fee = cost(IBKR, DAY, Decimal(10), "Opłata", cash_currency="USD", nbp_rate=USD_RATE)
+
+    assert fee.actual_amount == Decimal("36.05")  # 10 USD × 3,6045
+    assert cash_balances([fee]) == {IBKR: Decimal(0)}
+    assert cash_balances([fee], currency="USD") == {IBKR: Decimal(-10)}
+    assert costs_by_account([fee]) == {IBKR: Decimal("36.05")}
+    [usd] = foreign_cash([fee])
+    assert (usd.quantity, usd.cost) == (Decimal(-10), Decimal("-36.05"))
+
+
+def test_pln_cost_is_its_amount() -> None:
+    assert cost(IKE, DAY, Decimal(50)) == TransactionDraft(IKE, DAY, TransactionType.COST, Decimal(50))
+
+
+def test_foreign_cost_needs_the_nbp_rate_of_its_currency() -> None:
+    with pytest.raises(TransactionError, match="kursu NBP"):
+        cost(IBKR, DAY, Decimal(10), cash_currency="USD")
+    with pytest.raises(TransactionError, match="kursu NBP"):
+        cost(IBKR, DAY, Decimal(10), cash_currency="EUR", nbp_rate=USD_RATE)

@@ -1,8 +1,8 @@
 """The Transakcje tab and the transaction dialog for adding, editing and deleting (spec 3.3).
 
-For now: PLN Deposits, Withdrawals and Costs, Currency Exchanges, Buys and Sells (foreign-currency ones paid from
-foreign cash or in PLN, converted at the user's rate, the NBP Rate (D-1) or by the broker for its FX Conversion Fee),
-Dividends and interest (paid into PLN or foreign cash the same way, without the broker's conversion) and DRIPs.
+For now: PLN Deposits and Withdrawals, Costs (in PLN or foreign cash), Currency Exchanges, Buys and Sells
+(foreign-currency ones paid from foreign cash or in PLN, converted at the user's rate, the NBP Rate (D-1) or by the
+broker for its FX Conversion Fee), Dividends and interest (paid into PLN or foreign cash the same way) and DRIPs.
 """
 
 from collections.abc import Callable
@@ -35,6 +35,7 @@ from financial_app.domain.transactions import (
     TransactionError,
     TransactionType,
     buy_or_sell,
+    cost,
     covering_exchange,
     currency_exchange,
     dividend,
@@ -204,6 +205,12 @@ def open_transaction_dialog(
             exchange_currency = ui.select([], label="Waluta").classes("w-full").mark("transaction-currency")
             foreign_amount = ui.input(value=texts.foreign_amount).classes("w-full")
             foreign_amount.mark("transaction-foreign-amount")
+        # A Cost on an Account holding a foreign currency may be paid from that cash
+        own_cost_currency = (
+            transaction.cash_currency if transaction and transaction.transaction_type is TransactionType.COST else PLN
+        )
+        cost_currency = ui.select([own_cost_currency], label="Waluta", value=own_cost_currency).classes("w-full")
+        cost_currency.mark("transaction-cost-currency")
         amount = ui.input("Kwota (zł)", value=texts.amount).classes("w-full").mark("transaction-amount")
         with ui.column().classes("w-full gap-0") as instrument_fields:
             instrument_id = transaction.instrument_id if transaction else None
@@ -290,6 +297,22 @@ def open_transaction_dialog(
         def converted_by_broker() -> bool:
             return convert.visible and bool(convert.value)
 
+        def cost_paid_in() -> str:
+            """The Cash Currency a Cost is paid from: PLN unless the user chose a foreign one."""
+            return str(cost_currency.value) if cost_currency.visible and cost_currency.value else PLN
+
+        def broker_conversion(kind: TransactionType) -> BrokerConversion | None:
+            """What the broker charged (or, for a Dividend, credited) when the user marked its conversion (spec 3.3)."""
+            if not converted_by_broker():
+                return None
+            if not charged.value.strip():
+                done = "pobraną" if kind.is_buy_or_sell else "wypłaconą"
+                raise TransactionError(f"Podaj kwotę {done} przez brokera.")
+            fee = fee_percent()
+            assert fee is not None  # the checkbox shows only with a fee
+            charged_amount = _read(parse_number, charged.value, "Kwota od brokera musi być liczbą, np. 5 451,90.")
+            return BrokerConversion(charged_amount, fee)
+
         def update() -> None:
             """Show the fields the chosen type needs; the price is in the Instrument's currency, a foreign one also
             takes a rate, and an Account holding that currency pays from it (spec 3.3, 3.5)."""
@@ -328,12 +351,21 @@ def open_transaction_dialog(
                 paid_from.set_options(sources, value=chosen_source)
             settled_in = settlement_currency()
             fee = fee_percent()
-            convert.visible = trade and currency != PLN and settled_in == PLN and fee is not None
+            convert.visible = settles and currency != PLN and settled_in == PLN and fee is not None
             if fee is not None:
                 chosen_account = accounts_by_id[account.value]
                 broker = chosen_account.broker or chosen_account.name
                 convert.text = f"Prowizja {broker} (przewalutowanie {format_percent(fee)})"
             charged.visible = converted_by_broker()
+            if trade:
+                charged.props('label="Kwota pobrana przez brokera (zł)" hint="Za liczbę × cenę, bez prowizji"')
+            else:
+                charged.props('label="Kwota wypłacona przez brokera (zł)" hint="Za kwotę netto"')
+            cost_options = list(dict.fromkeys([*cash_currencies.get(account.value, ()), own_cost_currency]))
+            cost_currency.visible = kind is TransactionType.COST and cost_options != [PLN]
+            chosen_cost = cost_currency.value if cost_currency.value in cost_options else PLN
+            cost_currency.set_options(cost_options, value=chosen_cost)
+            amount.props(f'label="Kwota ({currency_unit(cost_paid_in())})"')
             # Interest paid into foreign cash takes a rate too: it values that cash in PLN, like a Buy paid from it;
             # a DRIP converts nothing, so it counts at the NBP Rate
             fx_rate.visible = currency != PLN and not charged.visible and kind is not TransactionType.DRIP
@@ -388,19 +420,16 @@ def open_transaction_dialog(
                 return read_dividend(kind, day_value)
             if not kind.is_buy_or_sell:
                 value = _read(parse_number, amount.value, "Kwota musi być liczbą, np. 1 000,50.")
+                paid_in = cost_paid_in()
+                if kind is TransactionType.COST and paid_in != PLN:
+                    nbp = stored_nbp_rate(paid_in, day_value)
+                    return cost(account.value, day_value, value, comment.value, cash_currency=paid_in, nbp_rate=nbp)
                 return TransactionDraft(account.value, day_value, kind, value, comment.value)
             if instrument.value is None:
                 raise TransactionError("Wybierz instrument.")
             currency = currencies[instrument.value]
             nbp_rate = None if currency == PLN else stored_nbp_rate(currency, day_value)
-            conversion = None
-            if converted_by_broker():
-                if not charged.value.strip():
-                    raise TransactionError("Podaj kwotę pobraną przez brokera.")
-                fee = fee_percent()
-                assert fee is not None  # the checkbox shows only with a fee
-                charged_amount = _read(parse_number, charged.value, "Kwota pobrana musi być liczbą, np. 5 451,90.")
-                conversion = BrokerConversion(charged_amount, fee)
+            conversion = broker_conversion(kind)
             own_rate = fx_rate.value.strip() if nbp_rate and conversion is None else ""
             return buy_or_sell(
                 account.value,
@@ -420,13 +449,15 @@ def open_transaction_dialog(
             )
 
         def read_dividend(kind: TransactionType, day_value: date) -> TransactionDraft:
-            """A Dividend, interest or DRIP; a foreign-currency one takes the NBP Rate and maybe the user's rate."""
+            """A Dividend, interest or DRIP; a foreign-currency one takes the NBP Rate and maybe the user's rate or,
+            for a Dividend, the amount the broker credited."""
             gross_value = _read(parse_number, gross.value, "Kwota brutto musi być liczbą, np. 100,50.")
             tax_text = withholding_tax.value.strip()
             tax = _read(parse_number, tax_text, "Podatek musi być liczbą, np. 15,00.") if tax_text else Decimal(0)
             currency = trade_currency()
             nbp_rate = None if currency == PLN else stored_nbp_rate(currency, day_value)
-            own_rate = fx_rate.value.strip() if nbp_rate else ""
+            conversion = broker_conversion(kind)
+            own_rate = fx_rate.value.strip() if nbp_rate and conversion is None else ""
             rate = _read(parse_number, own_rate, "Kurs musi być liczbą, np. 3,65.") if own_rate else None
             if kind is TransactionType.DIVIDEND:
                 return dividend(
@@ -439,6 +470,7 @@ def open_transaction_dialog(
                     fx_rate=rate,
                     nbp_rate=nbp_rate,
                     cash_currency=settlement_currency(),
+                    conversion=conversion,
                 )
             if instrument.value is None:
                 raise TransactionError("Wybierz instrument.")
@@ -528,7 +560,11 @@ def _field_texts(transaction: Transaction | None) -> _FieldTexts:
             fx_rate="" if transaction.fx_rate is None else format_exact(transaction.fx_rate),
             gross=format_exact(transaction.gross),
             withholding_tax=format_exact(transaction.withholding_tax),
+            # What the broker credited for the net amount
+            charged="" if transaction.fx_conversion_fee_percent is None else format_exact(transaction.actual_amount),
         )
+    if transaction.transaction_type is TransactionType.COST and transaction.quantity is not None:
+        return _FieldTexts(amount=format_exact(transaction.quantity))  # paid from foreign cash
     if not transaction.transaction_type.is_buy_or_sell:
         return _FieldTexts(amount=format_exact(transaction.actual_amount))
     assert transaction.quantity is not None and transaction.price is not None
