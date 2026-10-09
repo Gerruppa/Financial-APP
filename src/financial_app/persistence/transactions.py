@@ -134,6 +134,7 @@ def _fill(row: TransactionRow, draft: TransactionDraft) -> None:
     row.nbp_table = None if nbp is None else nbp.table
     row.cash_currency = draft.cash_currency
     row.to_pln = draft.to_pln
+    row.fx_conversion_fee_percent = _text(draft.fx_conversion_fee_percent)
 
 
 def _text(value: Decimal | None) -> str | None:
@@ -160,6 +161,7 @@ def _to_transaction(row: TransactionRow) -> Transaction:
         nbp_rate=_nbp_rate(row),
         cash_currency=row.cash_currency,
         to_pln=row.to_pln,
+        fx_conversion_fee_percent=_decimal(row.fx_conversion_fee_percent),
     )
 
 

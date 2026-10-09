@@ -1,6 +1,7 @@
 """The Transakcje tab and the transaction dialog for adding, editing and deleting (spec 3.3).
 
-For now: PLN Deposits and Withdrawals, and Buys and Sells paid in PLN, foreign-currency ones at the NBP Rate (D-1).
+For now: PLN Deposits and Withdrawals, Currency Exchanges, and Buys and Sells: foreign-currency ones paid from foreign
+cash or in PLN, converted at the user's rate, the NBP Rate (D-1) or by the broker for its FX Conversion Fee.
 """
 
 from collections.abc import Callable
@@ -17,6 +18,7 @@ from financial_app.domain.formatting import (
     format_amount,
     format_date,
     format_exact,
+    format_percent,
     format_pln,
     format_quantity,
     format_rate,
@@ -26,6 +28,7 @@ from financial_app.domain.formatting import (
 )
 from financial_app.domain.transactions import (
     PLN,
+    BrokerConversion,
     Transaction,
     TransactionDraft,
     TransactionError,
@@ -98,8 +101,7 @@ class TransactionsPage:
                         price = format_unit_price(transaction.price, instrument.quote_currency)
                         ui.label(f"{format_quantity(transaction.quantity)} × {price}").classes("text-xs text-gray-500")
                         if transaction.nbp_rate is not None:
-                            rates_text = _rates_text(transaction.fx_rate, transaction.nbp_rate)
-                            ui.label(rates_text).classes("text-xs text-gray-500")
+                            ui.label(_rates_text(transaction)).classes("text-xs text-gray-500")
                 with ui.column().classes("gap-0 items-end"):
                     if transaction.is_paid_in_foreign_cash:
                         currency = transaction.cash_currency
@@ -143,6 +145,7 @@ def open_transaction_dialog(
         if (a.active and PLN in a.cash_currencies) or (transaction is not None and a.id == transaction.account_id)
     }
     cash_currencies = {a.id: a.cash_currencies for a in all_accounts}
+    accounts_by_id = {a.id: a for a in all_accounts}
     all_instruments = list_instruments(engine)
     instruments = {i.id: i.name for i in all_instruments}
     currencies = {i.id: i.quote_currency for i in all_instruments}
@@ -187,21 +190,24 @@ def open_transaction_dialog(
                 ui.label("Najpierw dodaj instrument w zakładce Ustawienia.").classes("text-gray-500")
             quantity = ui.input("Liczba", value=texts.quantity).classes("w-full").mark("transaction-quantity")
             price = ui.input("Cena (zł)", value=texts.price).classes("w-full").mark("transaction-price")
+            paid_from = ui.select({}, label="Płatność").classes("w-full").mark("transaction-paid-from")
             fx_rate = ui.input(value=texts.fx_rate).props('hint="Puste = kurs NBP z dnia roboczego przed datą"')
             fx_rate.classes("w-full").mark("transaction-fx-rate")
             commission = ui.input("Prowizja (zł)", value=texts.commission).classes("w-full")
             commission.mark("transaction-commission")
-            paid_from = ui.label().classes("text-sm text-gray-600")
+            # Only on an Account with an FX Conversion Fee, unchecked unless the edited trade was converted (spec 3.3)
+            convert = ui.checkbox(value=texts.charged != "").mark("transaction-conversion")
+            charged = ui.input("Kwota pobrana przez brokera (zł)", value=texts.charged).classes("w-full")
+            charged.props('hint="Za liczbę × cenę, bez prowizji"').mark("transaction-charged")
             # Only a new Buy: an automatic Exchange is a Transaction of its own once saved
             auto_exchange = ui.checkbox("Wymień walutę automatycznie").mark("transaction-auto-exchange")
 
-        def settlement_currency() -> str:
-            """The Cash Currency a Buy or Sell is paid from: the Instrument's own if the Account holds it (spec 3.3).
+        def default_settlement(currency: str) -> str:
+            """The Instrument's own currency if the Account holds it, else PLN (spec 3.3).
 
             An edited trade keeps how it was paid while its Account and currency stay, even if the Account's Cash
             Currencies changed since.
             """
-            currency = currencies.get(instrument.value, PLN)
             if (
                 transaction is not None
                 and transaction.transaction_type.is_buy_or_sell
@@ -211,6 +217,21 @@ def open_transaction_dialog(
             ):
                 return transaction.cash_currency
             return currency if currency in cash_currencies.get(account.value, ()) else PLN
+
+        def settlement_currency() -> str:
+            """The Cash Currency a Buy or Sell is paid from: the user's choice where the Account offers one."""
+            return paid_from.value if paid_from.visible and paid_from.value else PLN
+
+        def fee_percent() -> Decimal | None:
+            """The Account's FX Conversion Fee; an edited converted trade keeps its own while its Account stays."""
+            if transaction is not None and transaction.account_id == account.value:
+                own = transaction.fx_conversion_fee_percent
+                if own is not None:
+                    return own
+            return accounts_by_id[account.value].fx_conversion_fee_percent
+
+        def converted_by_broker() -> bool:
+            return convert.visible and bool(convert.value)
 
         def update() -> None:
             """Show the fields the chosen type needs; the price is in the Instrument's currency, a foreign one also
@@ -222,10 +243,22 @@ def open_transaction_dialog(
             currency = currencies.get(instrument.value, PLN)
             price.props(f'label="Cena ({currency_unit(currency)})"')
             fx_rate.props(f'label="Kurs {currency}/PLN"')
-            fx_rate.visible = currency != PLN
+            # An Account holding the Instrument's currency pays from that cash or from PLN, as the user chooses
+            sources = {currency: f"gotówka {currency}", PLN: "PLN z przewalutowaniem"}
+            held = currency in cash_currencies.get(account.value, ())
+            paid_from.visible = currency != PLN and (held or default_settlement(currency) != PLN)
+            if paid_from.visible:
+                chosen_source = paid_from.value if paid_from.value in sources else default_settlement(currency)
+                paid_from.set_options(sources, value=chosen_source)
             settled_in = settlement_currency()
-            paid_from.text = f"Płatne z gotówki {settled_in}; prowizja w zł." if settled_in != PLN else ""
-            paid_from.visible = settled_in != PLN
+            fee = fee_percent()
+            convert.visible = currency != PLN and settled_in == PLN and fee is not None
+            if fee is not None:
+                chosen_account = accounts_by_id[account.value]
+                broker = chosen_account.broker or chosen_account.name
+                convert.text = f"Prowizja {broker} (przewalutowanie {format_percent(fee)})"
+            charged.visible = converted_by_broker()
+            fx_rate.visible = currency != PLN and not charged.visible
             auto_exchange.visible = transaction is None and kind is TransactionType.BUY and settled_in != PLN
             foreign = [c for c in cash_currencies.get(account.value, ()) if c != PLN]
             if transaction is not None and transaction.transaction_type is TransactionType.CURRENCY_EXCHANGE:
@@ -239,7 +272,7 @@ def open_transaction_dialog(
             foreign_amount.props(f'label="Kwota ({shown})"')
 
         update()
-        for field in (transaction_type, account, instrument, exchange_currency):
+        for field in (transaction_type, account, instrument, exchange_currency, paid_from, convert):
             field.on_value_change(update)
         comment = ui.input("Komentarz", value=transaction.comment if transaction else "").classes("w-full")
         comment.mark("transaction-comment")
@@ -278,7 +311,15 @@ def open_transaction_dialog(
                 raise TransactionError("Wybierz instrument.")
             currency = currencies[instrument.value]
             nbp_rate = None if currency == PLN else stored_nbp_rate(currency, day_value)
-            own_rate = fx_rate.value.strip() if nbp_rate else ""
+            conversion = None
+            if converted_by_broker():
+                if not charged.value.strip():
+                    raise TransactionError("Podaj kwotę pobraną przez brokera.")
+                fee = fee_percent()
+                assert fee is not None  # the checkbox shows only with a fee
+                charged_amount = _read(parse_number, charged.value, "Kwota pobrana musi być liczbą, np. 5 451,90.")
+                conversion = BrokerConversion(charged_amount, fee)
+            own_rate = fx_rate.value.strip() if nbp_rate and conversion is None else ""
             return buy_or_sell(
                 account.value,
                 day_value,
@@ -293,6 +334,7 @@ def open_transaction_dialog(
                 fx_rate=_read(parse_number, own_rate, "Kurs musi być liczbą, np. 3,65.") if own_rate else None,
                 nbp_rate=nbp_rate,
                 cash_currency=settlement_currency(),
+                conversion=conversion,
             )
 
         def save() -> None:
@@ -355,6 +397,7 @@ class _FieldTexts:
     price: str = ""
     fx_rate: str = ""
     commission: str = ""
+    charged: str = ""
 
 
 def _field_texts(transaction: Transaction | None) -> _FieldTexts:
@@ -369,18 +412,29 @@ def _field_texts(transaction: Transaction | None) -> _FieldTexts:
     if not transaction.transaction_type.is_buy_or_sell:
         return _FieldTexts(amount=format_exact(transaction.actual_amount))
     assert transaction.quantity is not None and transaction.price is not None
+    converted = transaction.fx_conversion_fee_percent is not None
     return _FieldTexts(
         quantity=format_quantity(transaction.quantity),
         price=format_exact(transaction.price),
         fx_rate="" if transaction.fx_rate is None else format_exact(transaction.fx_rate),
         commission=format_exact(transaction.commission),
+        # What the broker charged for quantity × price, the commission aside
+        charged=format_exact(transaction.converted_amount) if converted else "",
     )
 
 
-def _rates_text(fx_rate: Decimal | None, nbp_rate: NbpRate) -> str:
-    """The user's own rate, if any, then the NBP Rate with its table and publication day."""
+def _rates_text(trade: Transaction) -> str:
+    """The rate the trade was converted at, if not the NBP Rate, then the NBP Rate with its table and publication day.
+
+    A broker-converted trade shows its effective rate and FX Conversion Fee.
+    """
+    nbp_rate = trade.nbp_rate
+    assert nbp_rate is not None
     nbp = f"NBP {format_exact(nbp_rate.rate)} ({nbp_rate.table} z {format_date(nbp_rate.published_on)})"
-    return nbp if fx_rate is None else f"kurs {format_exact(fx_rate)} · {nbp}"
+    fee = trade.fx_conversion_fee
+    if fee is not None:
+        return f"kurs {format_rate(trade.effective_fx_rate)} · przewalutowanie {format_pln(fee)} · {nbp}"
+    return nbp if trade.fx_rate is None else f"kurs {format_exact(trade.fx_rate)} · {nbp}"
 
 
 def _warn_if_cash_runs_out(

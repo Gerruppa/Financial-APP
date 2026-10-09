@@ -88,6 +88,9 @@ class TransactionRow(Base):
     # from foreign cash; ``to_pln`` marks an Exchange selling that currency (issue #16)
     cash_currency: Mapped[str] = mapped_column(String(3), server_default="PLN")
     to_pln: Mapped[bool] = mapped_column(Boolean, server_default=false())
+    # Foreign-currency Buy and Sell paid in PLN only: the FX Conversion Fee % when the broker converted it; the fee in
+    # PLN follows from it like the Tax Amount follows from the NBP Rate (issue #17)
+    fx_conversion_fee_percent: Mapped[str | None] = mapped_column(String(20))
 
 
 class AssetClassRow(Base):

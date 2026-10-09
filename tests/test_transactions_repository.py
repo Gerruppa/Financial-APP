@@ -11,7 +11,13 @@ from financial_app.domain.accounts import AccountDraft, AccountType
 from financial_app.domain.currencies import NbpRate
 from financial_app.domain.instruments import InstrumentDraft
 from financial_app.domain.lots import InsufficientQuantityError, open_positions
-from financial_app.domain.transactions import TransactionDraft, TransactionError, TransactionType, buy_or_sell
+from financial_app.domain.transactions import (
+    BrokerConversion,
+    TransactionDraft,
+    TransactionError,
+    TransactionType,
+    buy_or_sell,
+)
 from financial_app.persistence.accounts import add_account
 from financial_app.persistence.db import init_db
 from financial_app.persistence.instruments import add_instrument, list_asset_classes
@@ -157,6 +163,30 @@ def test_foreign_buy_keeps_its_rates(engine: Engine, account_id: int, apple: int
     assert listed == saved
     assert (listed.fx_rate, listed.nbp_rate) == (Decimal("3.65"), USD_RATE)
     assert (listed.actual_amount, listed.tax_amount) == (Decimal("5498.25"), Decimal("5429.77"))
+
+
+def test_converted_buy_keeps_its_fx_conversion_fee(engine: Engine, account_id: int, apple: int) -> None:
+    conversion = BrokerConversion(Decimal("5451.90"), Decimal("0.5"))
+    buy = buy_or_sell(
+        account_id,
+        date(2026, 1, 7),
+        TransactionType.BUY,
+        apple,
+        Decimal(10),
+        Decimal("150.5"),
+        Decimal(5),
+        nbp_rate=USD_RATE,
+        conversion=conversion,
+    )
+    saved = add_transaction(engine, buy)
+
+    [listed] = list_transactions(engine)
+    assert listed == saved
+    assert (listed.fx_conversion_fee, listed.actual_amount, listed.tax_amount) == (
+        Decimal("27.12"),
+        Decimal("5456.90"),
+        Decimal("5456.89"),
+    )
 
 
 def test_foreign_trade_without_an_nbp_rate_is_blocked(engine: Engine, account_id: int, apple: int) -> None:

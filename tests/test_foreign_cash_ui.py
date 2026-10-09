@@ -111,7 +111,7 @@ async def test_buy_on_an_account_holding_usd_is_paid_from_usd_cash(engine: Engin
     async with user_simulation(lambda: _shell(engine)) as user:
         await user.open("/transakcje")
         _start_buy(user)
-        await user.should_see("Płatne z gotówki USD")
+        await user.should_see("gotówka USD")
         user.find("Zapisz").click()
 
         with user.scope(marker="transactions"):
@@ -145,7 +145,7 @@ async def test_automatic_exchange_is_offered_only_for_a_buy_paid_in_foreign_cash
         await user.open("/")
         _start_buy(user, account="mBank IKE")
         await user.should_not_see(marker="transaction-auto-exchange")
-        await user.should_not_see("Płatne z gotówki USD")
+        await user.should_not_see("gotówka USD")
 
         _choose(user, "transaction-account", "IBKR")
         await user.should_see(marker="transaction-auto-exchange")
@@ -210,7 +210,7 @@ async def test_editing_keeps_how_a_trade_was_paid_after_the_account_gains_a_curr
     async with user_simulation(lambda: _shell(engine)) as user:
         await user.open("/transakcje")
         user.find(marker="transaction-row").click()
-        await user.should_not_see("Płatne z gotówki USD")
+        await user.should_not_see("gotówka USD")
         user.find(marker="transaction-comment").type("bez zmian")
         user.find("Zapisz zmiany").click()
         await user.should_see("bez zmian")
