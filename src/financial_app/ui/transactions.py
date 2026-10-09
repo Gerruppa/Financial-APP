@@ -57,6 +57,7 @@ from financial_app.persistence.transactions import (
     list_transactions,
     update_transaction,
 )
+from financial_app.sources.export import FileFormat, export_transactions
 from financial_app.sources.nbp import NbpRates
 from financial_app.ui.dialogs import movable_dialog
 
@@ -81,9 +82,17 @@ class TransactionsPage:
 
     def build(self) -> None:
         ui.label("Transakcje").classes("text-2xl font-bold")
+        with ui.row().classes("gap-2"):
+            ui.button("Eksportuj CSV", on_click=lambda: self.export("csv")).props("outline")
+            ui.button("Eksportuj XLSX", on_click=lambda: self.export("xlsx")).props("outline")
         # The marker sits outside the refreshable list so it survives a refresh
         with ui.column().classes("w-full max-w-6xl gap-0").mark("transactions"):
             self.rows()
+
+    def export(self, file_format: FileFormat) -> None:
+        """Hands every saved Transaction to the browser as a file, in the list's order."""
+        name, data = export_transactions(self.engine, file_format)
+        ui.download(data, name)
 
     @ui.refreshable_method
     def rows(self) -> None:
