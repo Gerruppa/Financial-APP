@@ -1,9 +1,10 @@
 """Source Symbols in the Instrument dialog, Portfolio valuation from Quotes (issue #30) and the refresh status with
-the price badges (issue #37), without a browser."""
+the price badges (issue #37) and Bossa (issue #31), without a browser."""
 
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
+from urllib.error import URLError
 
 import pytest
 from nicegui.testing import user_simulation
@@ -11,13 +12,15 @@ from sqlalchemy import Engine
 
 from financial_app.domain.accounts import AccountDraft, AccountType
 from financial_app.domain.instruments import InstrumentDraft
-from financial_app.domain.prices import YAHOO, PriceSourceError, Quote
+from financial_app.domain.prices import BOSSA, YAHOO, PriceSourceError, Quote
 from financial_app.domain.transactions import TransactionDraft, TransactionType, buy_or_sell
 from financial_app.persistence.accounts import add_account
 from financial_app.persistence.db import init_db
 from financial_app.persistence.instruments import add_instrument, list_instruments
 from financial_app.persistence.quotes import save_quote
 from financial_app.persistence.transactions import add_transaction
+from financial_app.sources.bossa import BossaSource
+from financial_app.sources.prices import PriceSource
 from financial_app.ui.shell import build_shell
 
 NBSP = "\N{NO-BREAK SPACE}"
@@ -32,6 +35,9 @@ class FakeYahoo:
 
     def __init__(self, prices: dict[str, str]) -> None:
         self.prices = prices
+
+    def new_refresh(self) -> None:
+        pass
 
     def quote(self, symbol: str, currency: str) -> Quote:
         if symbol not in self.prices:
@@ -176,3 +182,52 @@ async def test_a_manual_price_and_an_instrument_without_a_source_have_their_badg
         with user.scope(marker="portfolio"):
             await user.should_see("ręczna")
             await user.should_see("bez źródła")
+
+
+def _saved_bossa(url: str) -> str:
+    category = url.rsplit("/", 1)[1]
+    return (Path(__file__).parent / "fixtures" / "bossa" / f"{category}.json").read_text(encoding="utf-8")
+
+
+async def test_the_bossa_symbol_is_saved_with_the_instrument_and_shown_in_the_list(engine: Engine) -> None:
+    add_instrument(engine, InstrumentDraft("PZU", AKCJE_POLSKIE, "PLN", "GPW"))
+
+    async with user_simulation(lambda: build_shell(engine, sources={YAHOO: FakeYahoo({})})) as user:
+        await user.open("/ustawienia")
+        user.find(marker="edit-instrument").click()
+        user.find(marker="instrument-symbol-bossa").clear().type("PZU")
+        user.find("Zapisz").click()
+        await user.should_not_see(marker="instrument-dialog")
+
+        assert list_instruments(engine)[0].source_symbols == {BOSSA: "PZU"}
+        await user.should_see("Bossa PZU")
+
+
+async def test_a_polish_share_is_valued_from_bossa_before_yahoo(engine: Engine) -> None:
+    _held(engine, InstrumentDraft("PZU", AKCJE_POLSKIE, "PLN", "GPW", source_symbols={BOSSA: "PZU", YAHOO: "PZU.WA"}))
+    sources: dict[str, PriceSource] = {BOSSA: BossaSource(_saved_bossa), YAHOO: FakeYahoo({"PZU.WA": "45.12"})}
+
+    async with user_simulation(lambda: build_shell(engine, sources=sources)) as user:
+        await user.open("/portfolio")
+        user.find(marker="refresh-prices").click()
+
+        with user.scope(marker="portfolio"):
+            await user.should_see(f"698,20{NBSP}zł")  # 10 × 69,82 from Bossa
+            await user.should_see("02.10.2026")
+
+
+async def test_when_bossa_fails_a_polish_share_is_valued_from_yahoo(engine: Engine) -> None:
+    _held(engine, InstrumentDraft("PZU", AKCJE_POLSKIE, "PLN", "GPW", source_symbols={BOSSA: "PZU", YAHOO: "PZU.WA"}))
+
+    def offline(url: str) -> str:
+        raise URLError("offline")
+
+    sources: dict[str, PriceSource] = {BOSSA: BossaSource(offline), YAHOO: FakeYahoo({"PZU.WA": "45.12"})}
+
+    async with user_simulation(lambda: build_shell(engine, sources=sources)) as user:
+        await user.open("/portfolio")
+        user.find(marker="refresh-prices").click()
+
+        with user.scope(marker="portfolio"):
+            await user.should_see(f"451,20{NBSP}zł")
+        await user.should_not_see("błąd")

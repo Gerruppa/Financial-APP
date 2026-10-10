@@ -19,6 +19,10 @@ class PriceSource(Protocol):
 
     name: str
 
+    def new_refresh(self) -> None:
+        """A refresh starts: forget anything kept from an earlier one, so that Quotes are fetched anew."""
+        ...
+
     def quote(self, symbol: str, currency: str) -> Quote:
         """The newest Quote of ``symbol`` in ``currency``; raises ``PriceSourceError`` when it has none."""
         ...
@@ -59,6 +63,8 @@ def refresh_prices(
     ``last_refresh``.
     """
     # list_transactions is newest first; the FIFO engine wants entry order
+    for price_source in sources.values():
+        price_source.new_refresh()
     held = {position.instrument_id for position in open_positions(reversed(list_transactions(engine)))}
     refreshed, failures = 0, []
     for instrument in list_instruments(engine):
