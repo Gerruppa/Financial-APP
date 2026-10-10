@@ -20,30 +20,31 @@ from financial_app.persistence.models import NbpHistoryRow, NbpRateHistoryRow, Q
 def quote_history_cover(engine: Engine, instrument_id: int) -> Cover | None:
     """The days whose Quotes of the Instrument were fetched from Stooq, if any."""
     with Session(engine) as session:
-        row = session.get(QuoteHistoryRow, instrument_id)
-        return None if row is None else Cover(row.first_day, row.last_day)
+        return _cover(session.get(QuoteHistoryRow, instrument_id))
 
 
 def save_quote_history(
-    engine: Engine, instrument_id: int, quotes: Iterable[Quote], fetched: Cover, fetched_at: datetime
+    engine: Engine, instrument_id: int, quotes: Iterable[Quote], fetched: Cover | None, fetched_at: datetime
 ) -> None:
-    """Save the Quotes fetched for the days ``fetched``, replacing other Quotes of those days, and add the days to
-    the Instrument's cover, all or nothing."""
+    """Save the fetched Quotes for days without a Quote yet (the price refresh's stay, spec 4.1) and add the days
+    ``fetched``, if any, to the Instrument's cover, all or nothing."""
     with Session(engine) as session, session.begin():
-        for quote in quotes:
-            session.merge(
-                QuoteRow(
-                    instrument_id=instrument_id,
-                    day=quote.day,
-                    price=str(quote.price),
-                    currency=quote.currency,
-                    source=quote.source,
-                    fetched_at=fetched_at,
-                )
+        days = set(session.scalars(select(QuoteRow.day).where(QuoteRow.instrument_id == instrument_id)))
+        session.add_all(
+            QuoteRow(
+                instrument_id=instrument_id,
+                day=quote.day,
+                price=str(quote.price),
+                currency=quote.currency,
+                source=quote.source,
+                fetched_at=fetched_at,
             )
-        row = session.get(QuoteHistoryRow, instrument_id)
-        cover = Cover.of(None if row is None else Cover(row.first_day, row.last_day), fetched.first, fetched.last)
-        session.merge(QuoteHistoryRow(instrument_id=instrument_id, first_day=cover.first, last_day=cover.last))
+            for quote in quotes
+            if quote.day not in days
+        )
+        if fetched is not None:
+            cover = fetched.joined(_cover(session.get(QuoteHistoryRow, instrument_id)))
+            session.merge(QuoteHistoryRow(instrument_id=instrument_id, first_day=cover.first, last_day=cover.last))
 
 
 def forget_quote_history(session: Session, instrument_id: int) -> None:
@@ -66,8 +67,7 @@ def quotes_between(engine: Engine, instrument_id: int, first: date, last: date) 
 def nbp_history_cover(engine: Engine, currency: str) -> Cover | None:
     """The days whose NBP Rates of ``currency`` were fetched, if any."""
     with Session(engine) as session:
-        row = session.get(NbpHistoryRow, currency)
-        return None if row is None else Cover(row.first_day, row.last_day)
+        return _cover(session.get(NbpHistoryRow, currency))
 
 
 def save_nbp_history(engine: Engine, currency: str, rates: Iterable[NbpRate], fetched: Cover) -> None:
@@ -77,8 +77,7 @@ def save_nbp_history(engine: Engine, currency: str, rates: Iterable[NbpRate], fe
             session.merge(
                 NbpRateHistoryRow(currency=currency, day=rate.published_on, rate=str(rate.rate), table=rate.table)
             )
-        row = session.get(NbpHistoryRow, currency)
-        cover = Cover.of(None if row is None else Cover(row.first_day, row.last_day), fetched.first, fetched.last)
+        cover = fetched.joined(_cover(session.get(NbpHistoryRow, currency)))
         session.merge(NbpHistoryRow(currency=currency, first_day=cover.first, last_day=cover.last))
 
 
@@ -91,3 +90,7 @@ def nbp_rates_between(engine: Engine, currency: str, first: date, last: date) ->
             .order_by(NbpRateHistoryRow.day)
         )
         return [NbpRate(row.currency, Decimal(row.rate), row.day, row.table) for row in rows]
+
+
+def _cover(row: QuoteHistoryRow | NbpHistoryRow | None) -> Cover | None:
+    return None if row is None else Cover(row.first_day, row.last_day)

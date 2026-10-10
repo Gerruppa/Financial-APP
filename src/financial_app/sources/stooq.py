@@ -22,6 +22,8 @@ from financial_app.domain.prices import STOOQ, PriceSourceError, Quote
 SITE = "https://stooq.com"
 API = SITE + "/q/d/l/?s={symbol}&d1={first:%Y%m%d}&d2={last:%Y%m%d}&i=d&apikey={key}"
 _CHALLENGE = re.compile(r'const c="([^"]+)",d=(\d+)')
+# The check asks for 4 hex zeros (about 65 000 hashes); a much harder one is not answered
+MAX_ZEROS = 6
 
 _opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
 _opener.addheaders = [("User-Agent", "Mozilla/5.0")]
@@ -31,7 +33,7 @@ def answer_challenge(page: str) -> tuple[str, int] | None:
     """The answer to Stooq's browser check on ``page``: its challenge and the first number whose SHA-256 together
     with it starts with the asked number of hex zeros; ``None`` when ``page`` is no check."""
     found = _CHALLENGE.search(page)
-    if found is None:
+    if found is None or int(found.group(2)) > MAX_ZEROS:
         return None
     challenge, zeros = found.group(1), "0" * int(found.group(2))
     nonce = 0
@@ -60,8 +62,6 @@ def _get(url: str) -> str:
 class StooqSource:
     """Stooq with the user's API key; ``fetch`` is injectable so tests run on saved responses."""
 
-    name = STOOQ
-
     def __init__(self, api_key: str, fetch: Callable[[str], str] = fetch_from_stooq) -> None:
         self.api_key = api_key.strip()
         self.fetch = fetch
@@ -69,9 +69,11 @@ class StooqSource:
     def history(self, symbol: str, currency: str, first: date, last: date) -> list[Quote]:
         """The daily closes of ``symbol`` (e.g. wig, cdr) from ``first`` to ``last``, oldest first.
 
-        Stooq's CSV names no currency, so the closes are taken as in ``currency``, the Instrument's quote currency
-        (an index's points as PLN). A range without trading has no Quotes.
+        Stooq's CSV names no currency, so only PLN Instruments (GPW and its indices, an index's points as PLN) are
+        asked for, never converted silently (spec 4.1). A range without trading has no Quotes.
         """
+        if currency != "PLN":
+            raise PriceSourceError(f"Historia ze Stooq jest tylko w PLN, a instrument jest notowany w {currency}.")
         if not self.api_key:
             raise PriceSourceError("Brak klucza API Stooq. Wpisz go w Ustawieniach.")
         key = symbol.strip().lower()

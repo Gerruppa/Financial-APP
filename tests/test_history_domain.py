@@ -2,7 +2,7 @@
 
 from datetime import date
 
-from financial_app.domain.history import Cover, days_to_fetch
+from financial_app.domain.history import Cover, days_to_fetch, settled
 
 COVER = Cover(date(2026, 3, 1), date(2026, 3, 31))
 
@@ -35,8 +35,26 @@ def test_an_empty_range_needs_nothing() -> None:
 
 
 def test_the_cover_grows_by_what_was_fetched() -> None:
-    assert COVER.extended_to(date(2026, 2, 1), date(2026, 3, 10)) == Cover(date(2026, 2, 1), date(2026, 3, 31))
-    assert Cover.of(None, date(2026, 2, 1), date(2026, 2, 5)) == Cover(date(2026, 2, 1), date(2026, 2, 5))
+    assert Cover(date(2026, 2, 1), date(2026, 2, 28)).joined(COVER) == Cover(date(2026, 2, 1), date(2026, 3, 31))
+    assert COVER.joined(None) == COVER
+
+
+MONDAY = date(2026, 1, 12)
+
+
+def test_days_well_before_today_are_settled_even_without_quotes() -> None:
+    fetched = Cover(date(2026, 1, 1), date(2026, 1, 8))
+
+    assert settled(fetched, None, MONDAY) == fetched
+
+
+def test_the_last_days_are_settled_only_up_to_the_newest_quote() -> None:
+    fetched = Cover(date(2026, 1, 2), date(2026, 1, 11))
+
+    assert settled(fetched, date(2026, 1, 9), MONDAY) == Cover(date(2026, 1, 2), date(2026, 1, 9))
+    assert settled(fetched, date(2026, 1, 11), MONDAY) == fetched
+    assert settled(fetched, None, MONDAY) == Cover(date(2026, 1, 2), date(2026, 1, 8))
+    assert settled(Cover(date(2026, 1, 10), date(2026, 1, 11)), None, MONDAY) is None
 
 
 def test_ranges_are_split_into_pieces_of_at_most_a_given_length() -> None:

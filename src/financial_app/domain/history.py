@@ -7,9 +7,11 @@ are fetched. Days without a Quote (weekends, holidays) are covered too, so they 
 
 from dataclasses import dataclass
 from datetime import date, timedelta
-from typing import Self
 
 ONE_DAY = timedelta(days=1)
+# A source may publish a day's prices late, and a weekend or a holiday has none: the last days without a Quote are
+# not taken as fetched yet
+UNSETTLED_DAYS = 3
 
 
 @dataclass(frozen=True)
@@ -19,13 +21,9 @@ class Cover:
     first: date
     last: date
 
-    @classmethod
-    def of(cls, cover: Cover | None, first: date, last: date) -> Cover:
-        """``cover`` grown by ``first`` to ``last``, or just those days when nothing was covered."""
-        return cls(first, last) if cover is None else cover.extended_to(first, last)
-
-    def extended_to(self, first: date, last: date) -> Self:
-        return type(self)(min(self.first, first), max(self.last, last))
+    def joined(self, cover: Cover | None) -> Cover:
+        """These days together with ``cover`` (adjacent or overlapping), or just these when nothing was covered."""
+        return self if cover is None else Cover(min(self.first, cover.first), max(self.last, cover.last))
 
     def split(self, days: int) -> list[Cover]:
         """The same days in consecutive pieces of at most ``days`` days, for sources limiting a request's range."""
@@ -52,3 +50,16 @@ def days_to_fetch(cover: Cover | None, first: date, last: date) -> list[Cover]:
     if last > cover.last:
         missing.append(Cover(cover.last + ONE_DAY, last))
     return missing
+
+
+def settled(fetched: Cover, newest: date | None, today: date) -> Cover | None:
+    """The part of the days ``fetched`` (whose newest Quote is from ``newest``) that need not be asked for again.
+
+    Of the last ``UNSETTLED_DAYS`` days before ``today`` only those up to the newest Quote are; ``None`` when no day
+    is.
+    """
+    recent = today - timedelta(days=UNSETTLED_DAYS)
+    if fetched.last < recent:
+        return fetched
+    last = min(fetched.last, max(newest or date.min, recent - ONE_DAY))
+    return Cover(fetched.first, last) if last >= fetched.first else None

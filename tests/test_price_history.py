@@ -107,13 +107,46 @@ def test_history_is_fetched_up_to_yesterday_and_today_is_left_to_the_price_refre
     assert latest_quotes(engine)[wig] == quotes[-1]
 
 
-def test_a_fetched_close_replaces_an_earlier_quote_of_that_day(engine: Engine) -> None:
+def test_history_fills_only_days_without_a_quote(engine: Engine) -> None:
     wig = _index(engine)
     save_quote(engine, wig, Quote(Decimal("118000"), "PLN", JAN_2, BOSSA), NOW)
 
-    quotes = _history(engine, SavedStooq()).between(wig, JAN_2, JAN_2)
+    quotes = _history(engine, SavedStooq()).between(wig, JAN_2, date(2026, 1, 5))
 
-    assert quotes == [Quote(Decimal("118702.33"), "PLN", JAN_2, STOOQ)]
+    assert quotes == [
+        Quote(Decimal("118000"), "PLN", JAN_2, BOSSA),
+        Quote(Decimal("119380.17"), "PLN", date(2026, 1, 5), STOOQ),
+    ]
+
+
+def test_stooq_history_never_becomes_the_current_price(engine: Engine) -> None:
+    wig = _index(engine)
+    save_quote(engine, wig, Quote(Decimal("117000"), "PLN", date(2025, 12, 30), BOSSA), NOW)
+
+    _history(engine, SavedStooq()).between(wig, JAN_2, JAN_9)
+
+    assert latest_quotes(engine)[wig] == Quote(Decimal("117000"), "PLN", date(2025, 12, 30), BOSSA)
+
+
+def test_days_stooq_may_not_have_published_yet_are_asked_again(engine: Engine) -> None:
+    wig = _index(engine)
+    stooq = SavedStooq()
+    # On Monday the 12th Stooq has nothing after Friday the 9th yet; the weekend may still be quiet, so the last
+    # three days are not taken as fetched until Stooq has a Quote on or after them
+    _history(engine, stooq, date(2026, 1, 12)).between(wig, JAN_2, date(2026, 1, 11))
+    _history(engine, stooq, date(2026, 1, 12)).between(wig, JAN_2, date(2026, 1, 11))
+    _history(engine, stooq, date(2026, 1, 12)).between(wig, JAN_2, JAN_9)
+
+    assert stooq.ranges() == ["20260102&d2=20260111", "20260110&d2=20260111"]
+
+
+def test_stooq_history_is_only_for_instruments_quoted_in_pln(engine: Engine) -> None:
+    acwi = add_instrument(engine, InstrumentDraft("ACWI", 3, "USD", "LSE", source_symbols={STOOQ: "acwi.uk"})).id
+    stooq = SavedStooq()
+
+    with pytest.raises(PriceSourceError, match="tylko w PLN"):
+        _history(engine, stooq).between(acwi, JAN_2, JAN_9)
+    assert stooq.requests == []
 
 
 def test_an_instrument_without_a_stooq_symbol_has_only_its_saved_quotes(engine: Engine) -> None:
@@ -146,6 +179,18 @@ def test_a_new_stooq_symbol_drops_the_old_history(engine: Engine) -> None:
     update_instrument(engine, wig, InstrumentDraft("WIG", indices, "PLN", "GPW", source_symbols={STOOQ: "wig"}))
 
     assert len(_history(engine, stooq).between(wig, JAN_2, JAN_9)) == 5
+
+
+def test_a_stooq_symbol_changed_only_in_case_keeps_the_history(engine: Engine) -> None:
+    wig = _index(engine)
+    stooq = SavedStooq()
+    _history(engine, stooq).between(wig, JAN_2, JAN_9)
+    indices = list_instruments(engine)[0].asset_class_id
+
+    update_instrument(engine, wig, InstrumentDraft("WIG", indices, "PLN", "GPW", source_symbols={STOOQ: "WIG"}))
+
+    assert len(_history(engine, stooq).between(wig, JAN_2, JAN_9)) == 5
+    assert len(stooq.requests) == 1
 
 
 def test_a_deleted_instrument_takes_its_history_along(engine: Engine) -> None:

@@ -5,10 +5,10 @@ from datetime import date, datetime
 
 from sqlalchemy import Engine
 
-from financial_app.domain.history import ONE_DAY, days_to_fetch
+from financial_app.domain.history import ONE_DAY, days_to_fetch, settled
 from financial_app.domain.prices import STOOQ, Quote
 from financial_app.persistence.history import quote_history_cover, quotes_between, save_quote_history
-from financial_app.persistence.instruments import list_instruments
+from financial_app.persistence.instruments import get_instrument
 from financial_app.persistence.settings import STOOQ_API_KEY, load_setting
 from financial_app.sources.stooq import StooqSource, fetch_from_stooq
 
@@ -33,18 +33,25 @@ class QuoteHistory:
         """The Instrument's Quotes from ``first`` to ``last``, oldest first.
 
         Days not fetched yet are fetched from Stooq once, when the Instrument has a Stooq Source Symbol, and only up
-        to yesterday: today's price is the price refresh's. Without the symbol only the saved Quotes are given. A
-        failed fetch raises ``PriceSourceError`` and is tried again next time.
+        to yesterday: today's price is the price refresh's. They fill only days without a Quote. The last few days
+        are asked for again until Stooq has a Quote on or after them (``domain.history.settled``). Without the symbol
+        only the saved Quotes are given. A failed fetch raises ``PriceSourceError`` and is tried again next time.
         """
-        instrument = next(i for i in list_instruments(self.engine) if i.id == instrument_id)
+        instrument = get_instrument(self.engine, instrument_id)
         if (symbol := instrument.source_symbols.get(STOOQ)) is not None:
-            missing = days_to_fetch(
-                quote_history_cover(self.engine, instrument_id), first, min(last, self.today() - ONE_DAY)
-            )
-            if missing:
-                stooq = StooqSource(load_setting(self.engine, STOOQ_API_KEY) or "", self.fetch)
-                for days in missing:
-                    quotes = stooq.history(symbol, instrument.quote_currency, days.first, days.last)
-                    fetched = [quote for quote in quotes if days.first <= quote.day <= days.last]
-                    save_quote_history(self.engine, instrument_id, fetched, days, self.now())
+            today = self.today()
+            cover = quote_history_cover(self.engine, instrument_id)
+            missing = days_to_fetch(cover, first, min(last, today - ONE_DAY))
+            stooq = StooqSource(load_setting(self.engine, STOOQ_API_KEY) or "", self.fetch)
+            for days in missing:
+                quotes = [
+                    quote
+                    for quote in stooq.history(symbol, instrument.quote_currency, days.first, days.last)
+                    if days.first <= quote.day <= days.last
+                ]
+                # Days before the cached ones are followed by Quotes, so they are all settled
+                before_cover = cover is not None and days.last < cover.first
+                newest = max((quote.day for quote in quotes), default=None)
+                covered = days if before_cover else settled(days, newest, today)
+                save_quote_history(self.engine, instrument_id, quotes, covered, self.now())
         return quotes_between(self.engine, instrument_id, first, last)

@@ -12,14 +12,13 @@ from sqlalchemy import Engine
 
 from financial_app.domain.currencies import MissingNbpRateError, NbpRate
 from financial_app.domain.formatting import format_date
-from financial_app.domain.history import Cover, days_to_fetch
+from financial_app.domain.history import ONE_DAY, Cover, days_to_fetch
 from financial_app.persistence.history import nbp_history_cover, nbp_rates_between, save_nbp_history
 from financial_app.persistence.nbp_rates import cache_rate, cached_rate
 
 API = "https://api.nbp.pl/api/exchangerates/rates/a/{currency}/{start:%Y-%m-%d}/{end:%Y-%m-%d}/?format=json"
 # The longest run of days without a table (Christmas plus a weekend) is far shorter
 LOOKBACK = timedelta(days=14)
-ONE_DAY = timedelta(days=1)
 RETRY_AFTER = 300  # seconds
 # The NBP API answers at most this many days of rates at once, and has table A from this day on
 MAX_DAYS = 93
