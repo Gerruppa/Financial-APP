@@ -36,6 +36,9 @@ class FakeYahoo:
     def __init__(self, prices: dict[str, str]) -> None:
         self.prices = prices
 
+    def new_refresh(self) -> None:
+        pass
+
     def quote(self, symbol: str, currency: str) -> Quote:
         if symbol not in self.prices:
             raise PriceSourceError(f"Yahoo nie zna symbolu „{symbol}”.")

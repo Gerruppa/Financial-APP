@@ -1,5 +1,6 @@
 """Quotes from the Bossa JSON API, one request per category (issue #31, spec 4.1), on saved responses."""
 
+import json
 from datetime import date
 from decimal import Decimal
 from email.message import Message
@@ -28,14 +29,6 @@ class SavedBossa:
         if category in self.failing:
             raise self.failing[category]
         return (FIXTURES / f"{category}.json").read_text(encoding="utf-8")
-
-
-class Clock:
-    def __init__(self) -> None:
-        self.now = 0.0
-
-    def __call__(self) -> float:
-        return self.now
 
 
 def test_a_gpw_share_is_quoted_by_its_short_symbol_with_its_session_day() -> None:
@@ -79,12 +72,12 @@ def test_only_the_categories_needed_are_requested() -> None:
     assert fetch.asked == ["_cat_shares"]
 
 
-def test_a_later_refresh_requests_the_categories_again() -> None:
-    fetch, clock = SavedBossa(), Clock()
-    source = BossaSource(fetch, clock)
+def test_a_new_refresh_requests_the_categories_again() -> None:
+    fetch = SavedBossa()
+    source = BossaSource(fetch)
     source.quote("PZU", "PLN")
 
-    clock.now += 10 * 60
+    source.new_refresh()
     source.quote("PZU", "PLN")
 
     assert fetch.asked == ["_cat_shares", "_cat_shares"]
@@ -107,14 +100,25 @@ def test_without_a_connection_the_error_says_so() -> None:
         BossaSource(fetch).quote("PZU", "PLN")
 
 
-def test_a_category_that_failed_is_requested_again_on_the_next_quote() -> None:
+def test_a_category_that_failed_is_not_requested_again_in_the_same_refresh() -> None:
     error = HTTPError("url", 503, "Service Unavailable", Message(), None)
     fetch = SavedBossa({"_cat_shares": error})
     source = BossaSource(fetch)
-    with pytest.raises(PriceSourceError, match="HTTP 503"):
+    for symbol in ("PZU", "CDR"):
+        with pytest.raises(PriceSourceError, match="HTTP 503"):
+            source.quote(symbol, "PLN")
+
+    assert fetch.asked.count("_cat_shares") == 1
+
+
+def test_a_category_that_failed_is_requested_again_in_the_next_refresh() -> None:
+    fetch = SavedBossa({"_cat_shares": URLError("offline")})
+    source = BossaSource(fetch)
+    with pytest.raises(PriceSourceError):
         source.quote("PZU", "PLN")
 
     fetch.failing.clear()
+    source.new_refresh()
 
     assert source.quote("PZU", "PLN").price == Decimal("69.8200")
 
@@ -128,3 +132,43 @@ def test_a_symbol_found_in_a_later_category_is_quoted_even_when_an_earlier_one_f
 def test_a_malformed_response_is_an_error() -> None:
     with pytest.raises(PriceSourceError, match="Nieprawidłowa odpowiedź Bossa"):
         BossaSource(lambda url: "<html>").quote("PZU", "PLN")
+
+
+def test_a_listing_without_a_usable_price_or_day_is_skipped_and_the_others_still_quoted() -> None:
+    body = json.dumps(
+        {
+            "_d": [
+                {
+                    "_t": [
+                        {
+                            "_symbol": "ZERO",
+                            "_symbol_short": "ZER",
+                            "_quote": "0.0000",
+                            "_quote_ref": None,
+                            "_quote_date": "2026.10.02",
+                        },
+                        {
+                            "_symbol": "NODAY",
+                            "_symbol_short": "NDY",
+                            "_quote": "5.0000",
+                            "_quote_ref": None,
+                            "_quote_date": None,
+                        },
+                        {
+                            "_symbol": "PZU",
+                            "_symbol_short": "PZU",
+                            "_quote": "69.8200",
+                            "_quote_ref": "70.1400",
+                            "_quote_date": "2026.10.02",
+                        },
+                    ]
+                }
+            ]
+        }
+    )
+    source = BossaSource(lambda url: body)
+
+    assert source.quote("PZU", "PLN").price == Decimal("69.8200")
+    for symbol in ("ZER", "NDY"):
+        with pytest.raises(PriceSourceError, match="nie zna symbolu"):
+            source.quote(symbol, "PLN")

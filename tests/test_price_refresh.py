@@ -37,6 +37,10 @@ class FakeSource:
         self.name = name
         self.prices = prices
         self.asked: list[str] = []
+        self.refreshes = 0
+
+    def new_refresh(self) -> None:
+        self.refreshes += 1
 
     def quote(self, symbol: str, currency: str) -> Quote:
         self.asked.append(symbol)
@@ -161,6 +165,9 @@ class BrokenSource:
 
     name = BOSSA
 
+    def new_refresh(self) -> None:
+        pass
+
     def quote(self, symbol: str, currency: str) -> Quote:
         raise ValueError("bad payload")
 
@@ -174,3 +181,12 @@ def test_an_unexpected_error_in_a_source_is_a_failure_and_the_next_source_is_tri
 
     assert list(latest_quotes(engine)) == [pzu.id]
     assert result.failures == [RefreshFailure(aaa.id, "AAA", {BOSSA: "Nieoczekiwany błąd źródła: bad payload"})]
+
+
+def test_each_refresh_tells_the_sources_it_starts_so_they_fetch_anew(engine: Engine) -> None:
+    yahoo = FakeSource(YAHOO, {})
+
+    refresh_prices(engine, {YAHOO: yahoo}, lambda: NOW)
+    refresh_prices(engine, {YAHOO: yahoo}, lambda: NOW)
+
+    assert yahoo.refreshes == 2

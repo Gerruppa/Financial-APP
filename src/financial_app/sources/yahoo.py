@@ -37,6 +37,9 @@ class YahooSource:
     def __init__(self, fetch: Callable[[str], str | None] = fetch_from_yahoo) -> None:
         self.fetch = fetch
 
+    def new_refresh(self) -> None:
+        """Yahoo is asked per symbol, so nothing is kept between refreshes."""
+
     def quote(self, symbol: str, currency: str) -> Quote:
         """The newest Quote of ``symbol`` in ``currency``, the Instrument's quote currency.
 
