@@ -1,0 +1,105 @@
+"""Refreshing the Quotes of held Instruments from the Price Sources (issue #30, spec 4.1), with fake sources."""
+
+from datetime import date, datetime
+from decimal import Decimal
+from pathlib import Path
+
+import pytest
+from sqlalchemy import Engine
+
+from financial_app.domain.accounts import AccountDraft, AccountType
+from financial_app.domain.instruments import Instrument, InstrumentDraft
+from financial_app.domain.prices import BOSSA, YAHOO, PriceSourceError, Quote
+from financial_app.domain.transactions import TransactionDraft, TransactionType, buy_or_sell
+from financial_app.persistence.accounts import add_account
+from financial_app.persistence.db import init_db
+from financial_app.persistence.instruments import add_instrument
+from financial_app.persistence.quotes import latest_quotes
+from financial_app.persistence.transactions import add_transaction
+from financial_app.sources.prices import RefreshFailure, RefreshResult, refresh_prices
+
+NOW = datetime(2026, 10, 9, 18, 5)
+FRIDAY = date(2026, 10, 9)
+AKCJE_POLSKIE = 2
+
+
+class FakeSource:
+    """A Price Source answering from ``prices`` by symbol; any other symbol fails."""
+
+    def __init__(self, name: str, prices: dict[str, str]) -> None:
+        self.name = name
+        self.prices = prices
+        self.asked: list[str] = []
+
+    def quote(self, symbol: str, currency: str) -> Quote:
+        self.asked.append(symbol)
+        if symbol not in self.prices:
+            raise PriceSourceError(f"{self.name} nie zna symbolu „{symbol}”.")
+        return Quote(Decimal(self.prices[symbol]), currency, FRIDAY, self.name)
+
+
+@pytest.fixture
+def engine(tmp_path: Path) -> Engine:
+    return init_db(tmp_path / "app.sqlite3")
+
+
+def _held(engine: Engine, name: str, symbols: dict[str, str]) -> Instrument:
+    """An Instrument bought on an Account, so that it has an open Position."""
+    account = add_account(engine, AccountDraft(f"Konto {name}", "XTB", AccountType.REGULAR, ("PLN",)))
+    instrument = add_instrument(engine, InstrumentDraft(name, AKCJE_POLSKIE, "PLN", source_symbols=symbols))
+    add_transaction(engine, TransactionDraft(account.id, date(2026, 1, 2), TransactionType.DEPOSIT, Decimal(1000)))
+    add_transaction(
+        engine, buy_or_sell(account.id, date(2026, 1, 5), TransactionType.BUY, instrument.id, Decimal(10), Decimal(40))
+    )
+    return instrument
+
+
+def test_a_held_instrument_gets_its_newest_quote(engine: Engine) -> None:
+    pzu = _held(engine, "PZU", {YAHOO: "PZU.WA"})
+
+    refresh_prices(engine, {YAHOO: FakeSource(YAHOO, {"PZU.WA": "45.12"})}, lambda: NOW)
+
+    assert latest_quotes(engine) == {pzu.id: Quote(Decimal("45.12"), "PLN", FRIDAY, YAHOO)}
+
+
+def test_an_instrument_without_an_open_position_is_not_fetched(engine: Engine) -> None:
+    add_instrument(engine, InstrumentDraft("CDR", AKCJE_POLSKIE, "PLN", source_symbols={YAHOO: "CDR.WA"}))
+    yahoo = FakeSource(YAHOO, {"CDR.WA": "250"})
+
+    refresh_prices(engine, {YAHOO: yahoo}, lambda: NOW)
+
+    assert yahoo.asked == []
+    assert latest_quotes(engine) == {}
+
+
+def test_when_the_first_source_fails_the_next_one_in_the_order_is_tried(engine: Engine) -> None:
+    # Akcje polskie: Bossa, then Yahoo
+    pzu = _held(engine, "PZU", {BOSSA: "PZU", YAHOO: "PZU.WA"})
+    sources = {BOSSA: FakeSource(BOSSA, {}), YAHOO: FakeSource(YAHOO, {"PZU.WA": "45.12"})}
+
+    result = refresh_prices(engine, sources, lambda: NOW)
+
+    assert latest_quotes(engine) == {pzu.id: Quote(Decimal("45.12"), "PLN", FRIDAY, YAHOO)}
+    assert result == RefreshResult(refreshed=1, failures=[])
+
+
+def test_an_instrument_failing_in_every_source_is_reported_and_the_others_still_refresh(engine: Engine) -> None:
+    _held(engine, "AAA", {BOSSA: "AAA", YAHOO: "AAA.WA"})
+    pzu = _held(engine, "PZU", {YAHOO: "PZU.WA"})
+    sources = {BOSSA: FakeSource(BOSSA, {}), YAHOO: FakeSource(YAHOO, {"PZU.WA": "45.12"})}
+
+    result = refresh_prices(engine, sources, lambda: NOW)
+
+    assert list(latest_quotes(engine)) == [pzu.id]
+    assert result == RefreshResult(
+        refreshed=1,
+        failures=[RefreshFailure("AAA", ["bossa nie zna symbolu „AAA”.", "yahoo nie zna symbolu „AAA.WA”."])],
+    )
+
+
+def test_a_symbol_in_a_source_the_app_does_not_have_yet_is_skipped(engine: Engine) -> None:
+    _held(engine, "PZU", {BOSSA: "PZU"})
+
+    result = refresh_prices(engine, {YAHOO: FakeSource(YAHOO, {})}, lambda: NOW)
+
+    assert result == RefreshResult(refreshed=0, failures=[])

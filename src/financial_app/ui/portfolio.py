@@ -1,10 +1,10 @@
 """The Portfolio tab: a read-only, expandable card per Account (spec section 5) with its Cash Balances and Positions.
 
-Positions are valued at their price from ``domain.valuation`` (for now the Manual Price), converted from a foreign
-currency at the NBP Rate from the last business day before today; one without a price or a rate counts at cost and
-adds nothing to the result. Clicking a Position shows its Lots with both costs. Foreign cash is valued at the same NBP
-Rate; its FX result (realised and unrealised) counts in the Account's result unless the Account excludes it (spec
-3.1, 3.5). Each card also sums the Account's net Dividends and interest and its commissions and costs.
+Positions are valued at their price from ``domain.valuation`` (the Manual Price or the newest Quote), converted
+from a foreign currency at the NBP Rate from the last business day before today; one without a price or a rate counts
+at cost and adds nothing to the result. Clicking a Position shows its Lots with both costs. Foreign cash is valued at
+the same NBP Rate; its FX result (realised and unrealised) counts in the Account's result unless the Account excludes
+it (spec 3.1, 3.5). Each card also sums the Account's net Dividends and interest and its commissions and costs.
 """
 
 from dataclasses import dataclass
@@ -25,10 +25,12 @@ from financial_app.domain.formatting import (
     format_unit_price,
 )
 from financial_app.domain.lots import ForeignCash, Position, foreign_cash, fx_result, open_positions
+from financial_app.domain.prices import SOURCE_NAMES
 from financial_app.domain.transactions import PLN, cash_balances, costs_by_account, dividends_by_account
 from financial_app.domain.valuation import InstrumentPrice, PriceStatus, instrument_price
 from financial_app.persistence.accounts import list_accounts
 from financial_app.persistence.instruments import list_instruments
+from financial_app.persistence.quotes import latest_quotes
 from financial_app.persistence.transactions import list_transactions
 from financial_app.sources.nbp import NbpRates
 
@@ -82,8 +84,9 @@ class PortfolioPage:
         names = {i.id: i.name for i in instruments}
         held_instruments = {p.instrument_id for p in positions}
         rates: dict[str, Decimal | None] = {PLN: Decimal(1)}
+        quotes = latest_quotes(self.engine)
         prices = {
-            i.id: instrument_price(i, lambda currency: self._rate(currency, rates))
+            i.id: instrument_price(i, quotes.get(i.id), lambda currency: self._rate(currency, rates))
             for i in instruments
             if i.id in held_instruments
         }
@@ -206,7 +209,7 @@ def _valuation_cells(position: Position, current: InstrumentPrice) -> None:
     if current.price is None:
         ui.label(missing).classes("text-right text-gray-500")
     else:
-        ui.label(format_unit_price(current.price, current.currency)).classes("text-right")
+        _price_cell(current.price, current)
     price = current.pln
     if price is None:
         cells = ["—"] * 3 if current.price is None else [missing, "—", "—"]
@@ -217,6 +220,21 @@ def _valuation_cells(position: Position, current: InstrumentPrice) -> None:
     ui.label(format_pln(position.value(price))).classes("text-right")
     ui.label(format_pln(result, signed=True)).classes(f"text-right {_result_color(result)}")
     ui.label(format_percent(position.result_percent(price), signed=True)).classes(f"text-right {_result_color(result)}")
+
+
+def _price_cell(price: Decimal, current: InstrumentPrice) -> None:
+    """The price with the day of its Quote; beside a Manual Price, the newest Quote it overrides."""
+    with ui.column().classes("gap-0 items-end"):
+        ui.label(format_unit_price(price, current.currency))
+        quote = current.quote
+        if quote is None:
+            return
+        if current.status is PriceStatus.MANUAL:
+            source = SOURCE_NAMES.get(quote.source, quote.source)
+            caption = f"{source}: {format_unit_price(quote.price, quote.currency)} ({format_date(quote.day)})"
+        else:
+            caption = format_date(quote.day)
+        ui.label(caption).classes("text-xs text-gray-500")
 
 
 def _lots_table(position: Position) -> ui.element:

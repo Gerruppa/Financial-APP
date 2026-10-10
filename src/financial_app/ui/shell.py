@@ -1,12 +1,15 @@
 """App shell (UI prototype variant B, issue #1): left menu, header with View Scope, "+" button."""
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 
-from nicegui import ui
+from nicegui import run, ui
 from sqlalchemy import Engine
 
+from financial_app.domain.prices import YAHOO
 from financial_app.sources.nbp import NbpRates
+from financial_app.sources.prices import PriceSource, RefreshResult, refresh_prices
+from financial_app.sources.yahoo import YahooSource
 from financial_app.ui.dialogs import install_movable_dialogs
 from financial_app.ui.portfolio import PortfolioPage
 from financial_app.ui.settings import build_settings_page
@@ -37,12 +40,16 @@ TABS = [
 VIEW_SCOPES = ["Total"]
 
 
-def build_shell(engine: Engine, rates: NbpRates | None = None) -> None:
+def build_shell(
+    engine: Engine, rates: NbpRates | None = None, sources: Mapping[str, PriceSource] | None = None
+) -> None:
     """Build the whole window; tabs are client-side sub-pages backed by the database at ``engine``.
 
-    ``rates`` gives NBP Rates (by default from the NBP API through the cache in that database).
+    ``rates`` gives NBP Rates (by default from the NBP API through the cache in that database) and ``sources`` the
+    Price Sources by their key (by default the real ones).
     """
     rates = rates or NbpRates(engine)
+    sources = sources if sources is not None else {YAHOO: YahooSource()}
     install_movable_dialogs()
     transactions_page = TransactionsPage(engine, rates)
     portfolio_page = PortfolioPage(engine, rates)
@@ -52,9 +59,25 @@ def build_shell(engine: Engine, rates: NbpRates | None = None) -> None:
         transactions_page.refresh()
         portfolio_page.refresh()
 
+    async def refresh_now() -> None:
+        # The sources answer over the network, so the window keeps working meanwhile
+        refresh_button.props("loading")
+        try:
+            result = await run.io_bound(refresh_prices, engine, sources)
+        finally:
+            refresh_button.props(remove="loading")
+        if result is None:  # the app is shutting down
+            return
+        portfolio_page.refresh()
+        ui.notify(_refresh_message(result), type="warning" if result.failures else "positive")
+
     with ui.header().classes("bg-indigo-900 items-center").mark("header"):
         ui.label(APP_TITLE).classes("text-lg font-bold")
         ui.space()
+        refresh_button = ui.button(icon="refresh", on_click=refresh_now).props(
+            'flat round color=white aria-label="Odśwież wyceny"'
+        )
+        refresh_button.tooltip("Odśwież wyceny").mark("refresh-prices")
         ui.select(VIEW_SCOPES, value=VIEW_SCOPES[0], label="Widok").props("dense dark standout").classes("w-48")
 
     with ui.left_drawer(value=True).classes("bg-indigo-950").props("width=260").mark("nav-menu"):
@@ -73,6 +96,15 @@ def build_shell(engine: Engine, rates: NbpRates | None = None) -> None:
     pages["/portfolio"] = portfolio_page.build
     pages["/ustawienia"] = lambda: build_settings_page(engine, rates)
     ui.sub_pages(pages).classes("w-full").mark("page-content")
+
+
+def _refresh_message(result: RefreshResult) -> str:
+    """A short summary of a refresh; the per-Instrument status comes with issue #37."""
+    message = f"Odświeżono wyceny: {result.refreshed}."
+    if result.failures:
+        names = ", ".join(failure.instrument for failure in result.failures)
+        message += f" Bez notowania: {names}."
+    return message
 
 
 def _placeholder_page(title: str) -> Callable[[], None]:
