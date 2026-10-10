@@ -18,7 +18,7 @@ from financial_app.domain.transactions import TransactionDraft, TransactionType,
 from financial_app.persistence.accounts import add_account
 from financial_app.persistence.db import init_db
 from financial_app.persistence.instruments import add_instrument, list_instruments
-from financial_app.persistence.quotes import save_quote
+from financial_app.persistence.quotes import latest_quotes, save_quote
 from financial_app.persistence.transactions import add_transaction
 from financial_app.sources.analizy import AnalizySource
 from financial_app.sources.bankier import BankierSource
@@ -299,3 +299,4 @@ async def test_when_analizy_fails_a_fund_is_valued_from_bankier(engine: Engine) 
         with user.scope(marker="portfolio"):
             await user.should_see(f"2{NBSP}038,30{NBSP}zł")  # 10 × 203,83 from bankier.pl
         await user.should_not_see("błąd")
+    assert [quote.source for quote in latest_quotes(engine).values()] == [BANKIER]

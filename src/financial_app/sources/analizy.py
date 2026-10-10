@@ -21,6 +21,7 @@ API = "https://www.analizy.pl/api/quotation/fio/{symbol}"
 def fetch_from_analizy(url: str) -> str | None:
     """The response body, or None when analizy.pl does not know the fund (HTTP 404); network failures raise
     OSError."""
+    # Like Yahoo, analizy.pl may refuse requests without a browser-like User-Agent
     request = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
     try:
         with urllib.request.urlopen(request, timeout=15) as response:
@@ -57,11 +58,13 @@ class AnalizySource:
         try:
             data = json.loads(body, parse_float=Decimal)
             # The first series is the fund's own valuation; the second, when filled, adds back paid dividends
-            prices = data["series"][0]["price"]
-            source_currency = str(data["currency"])
-            if not prices:
+            series = data["series"][0]
+            source_currency = str(series["currency"])
+            valuations = [(date.fromisoformat(p["date"]), Decimal(p["value"])) for p in series["price"]]
+            # The newest valuation, whatever order they come in; a fund without a positive one has no Quote
+            day, price = max(valuations, default=(date.min, Decimal(0)))
+            if price <= 0:
                 raise PriceSourceError(f"analizy.pl nie ma wyceny funduszu „{key}”.")
-            price, day = Decimal(prices[-1]["value"]), date.fromisoformat(prices[-1]["date"])
         except ValueError, KeyError, IndexError, TypeError:
             raise PriceSourceError("Nieprawidłowa odpowiedź analizy.pl.") from None
         if source_currency != currency:

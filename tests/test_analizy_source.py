@@ -52,8 +52,9 @@ def test_an_unknown_id_is_an_error_naming_it() -> None:
         AnalizySource(_saved).quote("NOSUCH99", "PLN")
 
 
-def test_a_fund_without_valuations_is_an_error() -> None:
-    body = '{"id": "NEW1", "currency": "PLN", "series": [{"id": "fund_NEW1", "price": []}]}'
+@pytest.mark.parametrize("prices", ["[]", '[{"date": "2026-10-08", "value": 0}]'])
+def test_a_fund_without_a_positive_valuation_is_an_error(prices: str) -> None:
+    body = f'{{"id": "NEW1", "currency": "PLN", "series": [{{"currency": "PLN", "price": {prices}}}]}}'
 
     with pytest.raises(PriceSourceError, match="analizy.pl nie ma wyceny funduszu „NEW1”"):
         AnalizySource(lambda url: body).quote("NEW1", "PLN")

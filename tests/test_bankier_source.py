@@ -94,3 +94,14 @@ def test_an_http_error_names_its_code() -> None:
 
     with pytest.raises(PriceSourceError, match="HTTP 503"):
         BankierSource(unavailable).quote("QRS32", "PLN")
+
+
+def test_a_failing_fund_page_still_lets_the_ppk_page_quote_the_fund() -> None:
+    saved = SavedBankier()
+
+    def fund_pages_down(url: str) -> str | None:
+        if "/fundusze/" in url:
+            raise HTTPError(url, 503, "Service Unavailable", Message(), None)
+        return saved(url)
+
+    assert BankierSource(fund_pages_down).quote("PZU60", "PLN").price == Decimal("118.49")
