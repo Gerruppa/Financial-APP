@@ -5,6 +5,22 @@ from decimal import Decimal
 
 from financial_app.domain.currencies import is_currency_code
 
+# The sheet's Asset Classes in its order (spec 3.2): migration 0004 seeds them and clearing the portfolio restores them
+DEFAULT_ASSET_CLASSES = [
+    "Gotówka",
+    "Akcje polskie",
+    "Akcje zagraniczne",
+    "Obligacje skarbowe polskie",
+    "Obligacje skarbowe zagraniczne",
+    "Obligacje korporacyjne polskie",
+    "Obligacje korporacyjne zagraniczne",
+    "Metale i surowce",
+    "Kryptowaluty",
+    "Waluty",
+    "Inne",
+    "Multi-asset",
+]
+
 
 class InstrumentError(ValueError):
     """An Instrument or Asset Class field the user must correct; the message is shown in the UI (Polish)."""
