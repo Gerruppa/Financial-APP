@@ -1,0 +1,44 @@
+{
+ "id": "FTI068_AH_EUR",
+ "label": "Franklin Gold and Precious Metals Fund A (Acc) (EUR) (hedged)",
+ "currency": "EUR",
+ "isRegular": true,
+ "isDividend": false,
+ "periods": [
+  {
+   "period": "1M",
+   "label": "1M",
+   "start": "2026-09-09",
+   "end": "2026-10-09"
+  }
+ ],
+ "events": [],
+ "dividends": [],
+ "series": [
+  {
+   "id": "fund_FTI068_AH_EUR",
+   "label": "Fundusz",
+   "currency": "EUR",
+   "price": [
+    {
+     "date": "2026-10-07",
+     "value": 13.3
+    },
+    {
+     "date": "2026-10-08",
+     "value": 13.38
+    },
+    {
+     "date": "2026-10-09",
+     "value": 13.65
+    }
+   ]
+  },
+  {
+   "id": "fund_with_dividend_FTI068_AH_EUR",
+   "label": "Fundusz z dywidendą",
+   "currency": "EUR",
+   "price": []
+  }
+ ]
+}

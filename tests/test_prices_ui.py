@@ -1,6 +1,7 @@
 """Source Symbols in the Instrument dialog, Portfolio valuation from Quotes (issue #30) and the refresh status with
-the price badges (issue #37) and Bossa (issue #31), without a browser."""
+the price badges (issue #37), Bossa (issue #31) and the fund sources (issue #32), without a browser."""
 
+from collections.abc import Callable
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -12,13 +13,15 @@ from sqlalchemy import Engine
 
 from financial_app.domain.accounts import AccountDraft, AccountType
 from financial_app.domain.instruments import InstrumentDraft
-from financial_app.domain.prices import BOSSA, YAHOO, PriceSourceError, Quote
+from financial_app.domain.prices import ANALIZY, BANKIER, BOSSA, YAHOO, PriceSourceError, Quote
 from financial_app.domain.transactions import TransactionDraft, TransactionType, buy_or_sell
 from financial_app.persistence.accounts import add_account
 from financial_app.persistence.db import init_db
 from financial_app.persistence.instruments import add_instrument, list_instruments
-from financial_app.persistence.quotes import save_quote
+from financial_app.persistence.quotes import latest_quotes, save_quote
 from financial_app.persistence.transactions import add_transaction
+from financial_app.sources.analizy import AnalizySource
+from financial_app.sources.bankier import BankierSource
 from financial_app.sources.bossa import BossaSource
 from financial_app.sources.prices import PriceSource
 from financial_app.ui.shell import build_shell
@@ -231,3 +234,69 @@ async def test_when_bossa_fails_a_polish_share_is_valued_from_yahoo(engine: Engi
         with user.scope(marker="portfolio"):
             await user.should_see(f"451,20{NBSP}zł")
         await user.should_not_see("błąd")
+
+
+FIXTURES = Path(__file__).parent / "fixtures"
+
+
+def _saved_analizy(url: str) -> str | None:
+    path = FIXTURES / "analizy" / f"{url.rsplit('/', 1)[1]}.json"
+    return path.read_text(encoding="utf-8") if path.is_file() else None
+
+
+def _saved_bankier(url: str) -> str | None:
+    kind, symbol = url.removeprefix("https://www.bankier.pl/").split("/notowania/")
+    path = FIXTURES / "bankier" / f"{kind}_{symbol}.html"
+    return path.read_text(encoding="utf-8") if path.is_file() else None
+
+
+def _fund_sources(analizy: Callable[[str], str | None] = _saved_analizy) -> dict[str, PriceSource]:
+    return {
+        ANALIZY: AnalizySource(analizy),
+        BANKIER: BankierSource(_saved_bankier),
+        YAHOO: FakeYahoo({}),
+        BOSSA: BossaSource(_saved_bossa),
+    }
+
+
+async def test_the_analizy_and_bankier_symbols_are_saved_with_the_instrument(engine: Engine) -> None:
+    add_instrument(engine, InstrumentDraft("PPK inPZU 2060", INNE, "PLN"))
+
+    async with user_simulation(lambda: build_shell(engine, sources=_fund_sources())) as user:
+        await user.open("/ustawienia")
+        user.find(marker="edit-instrument").click()
+        user.find(marker="instrument-symbol-analizy").clear().type("PZU60")
+        user.find(marker="instrument-symbol-bankier").clear().type("PZU60")
+        user.find("Zapisz").click()
+        await user.should_not_see(marker="instrument-dialog")
+
+        assert list_instruments(engine)[0].source_symbols == {ANALIZY: "PZU60", BANKIER: "PZU60"}
+        await user.should_see("analizy.pl PZU60")
+
+
+async def test_a_fund_is_valued_from_analizy_at_its_newest_valuation_day(engine: Engine) -> None:
+    _held(engine, InstrumentDraft("PPK inPZU 2060", INNE, "PLN", source_symbols={ANALIZY: "PZU60", BANKIER: "PZU60"}))
+
+    async with user_simulation(lambda: build_shell(engine, sources=_fund_sources())) as user:
+        await user.open("/portfolio")
+        user.find(marker="refresh-prices").click()
+
+        with user.scope(marker="portfolio"):
+            await user.should_see(f"1{NBSP}184,90{NBSP}zł")  # 10 × 118,49
+            await user.should_see("08.10.2026")
+
+
+async def test_when_analizy_fails_a_fund_is_valued_from_bankier(engine: Engine) -> None:
+    _held(engine, InstrumentDraft("QUERCUS Silver", INNE, "PLN", source_symbols={ANALIZY: "QRS32", BANKIER: "QRS32"}))
+
+    def offline(url: str) -> str | None:
+        raise URLError("offline")
+
+    async with user_simulation(lambda: build_shell(engine, sources=_fund_sources(offline))) as user:
+        await user.open("/portfolio")
+        user.find(marker="refresh-prices").click()
+
+        with user.scope(marker="portfolio"):
+            await user.should_see(f"2{NBSP}038,30{NBSP}zł")  # 10 × 203,83 from bankier.pl
+        await user.should_not_see("błąd")
+    assert [quote.source for quote in latest_quotes(engine).values()] == [BANKIER]
