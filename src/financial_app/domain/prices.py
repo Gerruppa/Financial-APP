@@ -30,6 +30,8 @@ DEFAULT_FALLBACK_ORDERS: dict[str, tuple[str, ...]] = {
     OTHER: (ANALIZY, BANKIER, YAHOO, BOSSA),
     "Multi-asset": (ANALIZY, BANKIER, YAHOO, BOSSA),
 }
+# Asset Classes of the Bond Series, which keep their Manual Price until Stage 3 values them from the MF data
+STAGE_3_CLASSES = frozenset({"Obligacje skarbowe polskie"})
 
 
 def sources_to_try(asset_class: str, symbols: Mapping[str, str]) -> list[tuple[str, str]]:

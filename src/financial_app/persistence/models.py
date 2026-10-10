@@ -157,6 +157,21 @@ class QuoteRow(Base):
     fetched_at: Mapped[dt.datetime] = mapped_column(DateTime)
 
 
+class PriceFailureRow(Base):
+    """Why a Price Source gave no Quote for an Instrument in the last refresh that failed in every source (#37).
+
+    Each refresh replaces all rows; an Instrument with rows has a Stale Price. ``position`` keeps the order the
+    sources were tried in.
+    """
+
+    __tablename__ = "price_failures"
+
+    instrument_id: Mapped[int] = mapped_column(ForeignKey("instruments.id"), primary_key=True)
+    source: Mapped[str] = mapped_column(String(20), primary_key=True)
+    position: Mapped[int] = mapped_column(Integer)
+    reason: Mapped[str] = mapped_column(Text)
+
+
 class NbpRateRow(Base):
     """The cached NBP Rate (D-1) for Transactions in ``currency`` dated ``day`` (issue #15).
 

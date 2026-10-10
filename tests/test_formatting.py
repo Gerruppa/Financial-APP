@@ -1,11 +1,13 @@
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 
 import pytest
 
 from financial_app.domain.formatting import (
     format_amount,
+    format_count,
     format_date,
+    format_datetime,
     format_exact,
     format_percent,
     format_pln,
@@ -121,3 +123,15 @@ def test_parse_ratio_reads_whole_numbers_around_a_colon() -> None:
 def test_parse_ratio_rejects_other_formats(text: str) -> None:
     with pytest.raises(ValueError):
         parse_ratio(text)
+
+
+def test_a_time_is_shown_day_first_to_the_minute() -> None:
+    assert format_datetime(datetime(2026, 10, 9, 8, 5, 59)) == "09.10.2026 08:05"
+
+
+@pytest.mark.parametrize(
+    ("count", "expected"),
+    [(1, "1 błąd"), (2, "2 błędy"), (4, "4 błędy"), (5, "5 błędów"), (12, "12 błędów"), (22, "22 błędy")],
+)
+def test_a_count_takes_the_polish_plural(count: int, expected: str) -> None:
+    assert format_count(count, "błąd", "błędy", "błędów") == expected

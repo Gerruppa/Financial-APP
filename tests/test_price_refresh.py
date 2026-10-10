@@ -13,10 +13,17 @@ from financial_app.domain.prices import BOSSA, YAHOO, PriceSourceError, Quote
 from financial_app.domain.transactions import TransactionDraft, TransactionType, buy_or_sell
 from financial_app.persistence.accounts import add_account
 from financial_app.persistence.db import init_db
-from financial_app.persistence.instruments import add_instrument
+from financial_app.persistence.instruments import add_instrument, delete_instrument
 from financial_app.persistence.quotes import latest_quotes
-from financial_app.persistence.transactions import add_transaction
-from financial_app.sources.prices import RefreshFailure, RefreshResult, refresh_prices
+from financial_app.persistence.transactions import add_transaction, delete_transaction
+from financial_app.sources.prices import (
+    PriceSource,
+    RefreshFailure,
+    RefreshResult,
+    RefreshStatus,
+    last_refresh,
+    refresh_prices,
+)
 
 NOW = datetime(2026, 10, 9, 18, 5)
 FRIDAY = date(2026, 10, 9)
@@ -84,7 +91,7 @@ def test_when_the_first_source_fails_the_next_one_in_the_order_is_tried(engine: 
 
 
 def test_an_instrument_failing_in_every_source_is_reported_and_the_others_still_refresh(engine: Engine) -> None:
-    _held(engine, "AAA", {BOSSA: "AAA", YAHOO: "AAA.WA"})
+    aaa = _held(engine, "AAA", {BOSSA: "AAA", YAHOO: "AAA.WA"})
     pzu = _held(engine, "PZU", {YAHOO: "PZU.WA"})
     sources = {BOSSA: FakeSource(BOSSA, {}), YAHOO: FakeSource(YAHOO, {"PZU.WA": "45.12"})}
 
@@ -93,7 +100,11 @@ def test_an_instrument_failing_in_every_source_is_reported_and_the_others_still_
     assert list(latest_quotes(engine)) == [pzu.id]
     assert result == RefreshResult(
         refreshed=1,
-        failures=[RefreshFailure("AAA", ["bossa nie zna symbolu „AAA”.", "yahoo nie zna symbolu „AAA.WA”."])],
+        failures=[
+            RefreshFailure(
+                aaa.id, "AAA", {BOSSA: "bossa nie zna symbolu „AAA”.", YAHOO: "yahoo nie zna symbolu „AAA.WA”."}
+            )
+        ],
     )
 
 
@@ -103,3 +114,63 @@ def test_a_symbol_in_a_source_the_app_does_not_have_yet_is_skipped(engine: Engin
     result = refresh_prices(engine, {YAHOO: FakeSource(YAHOO, {})}, lambda: NOW)
 
     assert result == RefreshResult(refreshed=0, failures=[])
+
+
+def test_before_any_refresh_there_is_no_status(engine: Engine) -> None:
+    assert last_refresh(engine) is None
+
+
+def test_the_last_refresh_is_kept_with_its_time_and_the_instruments_that_failed(engine: Engine) -> None:
+    aaa = _held(engine, "AAA", {YAHOO: "AAA.WA"})
+    _held(engine, "PZU", {YAHOO: "PZU.WA"})
+
+    refresh_prices(engine, {YAHOO: FakeSource(YAHOO, {"PZU.WA": "45.12"})}, lambda: NOW)
+
+    assert last_refresh(engine) == RefreshStatus(
+        NOW, [RefreshFailure(aaa.id, "AAA", {YAHOO: "yahoo nie zna symbolu „AAA.WA”."})]
+    )
+
+
+def test_a_successful_attempt_after_a_failure_clears_it(engine: Engine) -> None:
+    _held(engine, "PZU", {YAHOO: "PZU.WA"})
+    refresh_prices(engine, {YAHOO: FakeSource(YAHOO, {})}, lambda: NOW)
+
+    later = datetime(2026, 10, 10, 9, 0)
+    refresh_prices(engine, {YAHOO: FakeSource(YAHOO, {"PZU.WA": "45.12"})}, lambda: later)
+
+    assert last_refresh(engine) == RefreshStatus(later, [])
+
+
+def test_deleting_an_instrument_removes_its_failure(engine: Engine) -> None:
+    cdr = add_instrument(engine, InstrumentDraft("CDR", AKCJE_POLSKIE, "PLN", source_symbols={YAHOO: "CDR.WA"}))
+    account = add_account(engine, AccountDraft("Konto", "XTB", AccountType.REGULAR, ("PLN",)))
+    add_transaction(engine, TransactionDraft(account.id, date(2026, 1, 2), TransactionType.DEPOSIT, Decimal(1000)))
+    buy = add_transaction(
+        engine, buy_or_sell(account.id, date(2026, 1, 5), TransactionType.BUY, cdr.id, Decimal(1), Decimal(250))
+    )
+    refresh_prices(engine, {YAHOO: FakeSource(YAHOO, {})}, lambda: NOW)
+
+    delete_transaction(engine, buy.id)
+    delete_instrument(engine, cdr.id)
+
+    assert last_refresh(engine) == RefreshStatus(NOW, [])
+
+
+class BrokenSource:
+    """A Price Source failing in a way it does not wrap in ``PriceSourceError``."""
+
+    name = BOSSA
+
+    def quote(self, symbol: str, currency: str) -> Quote:
+        raise ValueError("bad payload")
+
+
+def test_an_unexpected_error_in_a_source_is_a_failure_and_the_next_source_is_tried(engine: Engine) -> None:
+    aaa = _held(engine, "AAA", {BOSSA: "AAA"})
+    pzu = _held(engine, "PZU", {BOSSA: "PZU", YAHOO: "PZU.WA"})
+    sources: dict[str, PriceSource] = {BOSSA: BrokenSource(), YAHOO: FakeSource(YAHOO, {"PZU.WA": "45.12"})}
+
+    result = refresh_prices(engine, sources, lambda: NOW)
+
+    assert list(latest_quotes(engine)) == [pzu.id]
+    assert result.failures == [RefreshFailure(aaa.id, "AAA", {BOSSA: "Nieoczekiwany błąd źródła: bad payload"})]
