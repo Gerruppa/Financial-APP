@@ -153,3 +153,77 @@ def test_latest_rate_does_not_retry_a_failed_fetch_at_once(engine: Engine) -> No
             rates.latest("USD")
 
     assert len(offline.requests) == 1
+
+
+# NBP Rate history for History (issue #33): rates by the day they were published, fetched once into the cache
+
+
+def test_rate_history_is_the_rates_published_in_the_range(engine: Engine) -> None:
+    nbp = SavedNbp()
+
+    rates = _rates(engine, nbp).history("usd", date(2025, 12, 24), date(2026, 1, 6))
+
+    assert [rate.published_on for rate in rates] == [
+        date(2025, 12, 29),
+        date(2025, 12, 30),
+        date(2025, 12, 31),
+        date(2026, 1, 2),
+        date(2026, 1, 5),
+    ]
+    assert rates[-1] == NbpRate("USD", Decimal("3.6045"), date(2026, 1, 5), "002/A/NBP/2026")
+    assert nbp.requests == [URL.format("usd/2025-12-24/2026-01-06")]
+
+
+def test_rate_history_fetched_once_comes_from_the_cache(engine: Engine) -> None:
+    nbp = SavedNbp()
+    first = _rates(engine, nbp).history("USD", date(2025, 12, 24), date(2026, 1, 6))
+
+    again = _rates(engine, nbp).history("USD", date(2025, 12, 29), date(2026, 1, 2))
+
+    assert again == first[:4]
+    assert len(nbp.requests) == 1
+
+
+def test_only_the_missing_days_of_the_rate_history_are_fetched(engine: Engine) -> None:
+    nbp = SavedNbp()
+    _rates(engine, nbp).history("USD", date(2025, 12, 24), date(2026, 1, 6))
+
+    _rates(engine, nbp).history("USD", date(2025, 12, 20), date(2026, 1, 10))
+
+    assert nbp.requests[1:] == [URL.format("usd/2025-12-20/2025-12-23"), URL.format("usd/2026-01-07/2026-01-10")]
+
+
+def test_a_long_rate_history_is_asked_for_in_pieces_the_nbp_accepts(engine: Engine) -> None:
+    nbp = SavedNbp()
+
+    # The NBP API gives at most 93 days per request; ranges without a table answer 404, which means no rates
+    assert _rates(engine, nbp).history("USD", date(2025, 1, 1), date(2025, 6, 30)) == []
+
+    assert nbp.requests == [URL.format("usd/2025-01-01/2025-04-03"), URL.format("usd/2025-04-04/2025-06-30")]
+
+
+def test_rate_history_is_fetched_up_to_yesterday(engine: Engine) -> None:
+    nbp = SavedNbp()
+    rates = _rates(engine, nbp, today=date(2026, 1, 5))
+
+    rates.history("USD", date(2025, 12, 24), date(2026, 1, 6))
+    rates.history("USD", date(2025, 12, 24), date(2026, 1, 4))
+
+    assert nbp.requests == [URL.format("usd/2025-12-24/2026-01-04")]
+
+
+def test_rate_history_starts_with_the_first_nbp_table(engine: Engine) -> None:
+    nbp = SavedNbp()
+
+    _rates(engine, nbp).history("USD", date(2001, 12, 1), date(2002, 1, 10))
+
+    assert nbp.requests == [URL.format("usd/2002-01-02/2002-01-10")]
+
+
+def test_a_failed_rate_history_fetch_is_reported_and_not_cached(engine: Engine) -> None:
+    with pytest.raises(MissingNbpRateError, match="Nie udało się pobrać kursów NBP USD"):
+        _rates(engine, SavedNbp(error=OSError("offline"))).history("USD", date(2025, 12, 24), date(2026, 1, 6))
+
+    nbp = SavedNbp()
+    assert len(_rates(engine, nbp).history("USD", date(2025, 12, 24), date(2026, 1, 6))) == 5
+    assert len(nbp.requests) == 1

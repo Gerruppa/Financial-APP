@@ -15,6 +15,7 @@ from financial_app.persistence.models import (
     AssetClassRow,
     InstrumentRow,
     PriceFailureRow,
+    QuoteHistoryRow,
     QuoteRow,
     SourceSymbolRow,
     TransactionRow,
@@ -47,9 +48,9 @@ def portfolio_counts(engine: Engine) -> PortfolioCounts:
 
 
 def clear_portfolio(engine: Engine) -> Path:
-    """Back the database up, then remove every Account, Instrument (with its Source Symbols, Quotes and refresh
-    failures) and Transaction and restore the default Asset Classes, all or nothing. The NBP Rate cache and the app
-    settings stay. Returns the backup's path.
+    """Back the database up, then remove every Account, Instrument (with its Source Symbols, Quotes, price history
+    and refresh failures) and Transaction and restore the default Asset Classes, all or nothing. The NBP Rate caches
+    and the app settings stay. Returns the backup's path.
 
     The backup goes to the ``backups`` folder next to the database file, where the start-up backups are. Without a
     backup nothing is cleared: ``BackupError``.
@@ -69,6 +70,7 @@ def clear_portfolio(engine: Engine) -> Path:
             AccountCashCurrency,
             AccountRow,
             QuoteRow,
+            QuoteHistoryRow,
             PriceFailureRow,
             SourceSymbolRow,
             InstrumentRow,

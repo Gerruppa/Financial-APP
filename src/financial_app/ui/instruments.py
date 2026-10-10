@@ -9,7 +9,7 @@ from sqlalchemy import Engine
 
 from financial_app.domain.formatting import format_exact, parse_number
 from financial_app.domain.instruments import AssetClass, Instrument, InstrumentDraft, InstrumentError
-from financial_app.domain.prices import ANALIZY, BANKIER, BOSSA, SOURCE_NAMES, YAHOO
+from financial_app.domain.prices import ANALIZY, BANKIER, BOSSA, SOURCE_NAMES, STOOQ, YAHOO
 from financial_app.persistence.instruments import (
     add_asset_class,
     add_instrument,
@@ -173,6 +173,9 @@ class InstrumentsSection:
             bankier = ui.input("Symbol bankier.pl", value=symbols.get(BANKIER, ""))
             bankier.props('hint="Zapasowe źródło funduszy i PPK; zwykle to samo id co w analizy.pl"')
             bankier.classes("w-full").mark("instrument-symbol-bankier")
+            stooq = ui.input("Symbol Stooq", value=symbols.get(STOOQ, ""))
+            stooq.props('hint="Tylko historia notowań (wykresy, benchmarki), np. wig, swig80tr, cdr; nie wycenia"')
+            stooq.classes("w-full").mark("instrument-symbol-stooq")
             price = instrument.manual_price if instrument else None
             price_input = ui.input("Cena ręczna", value="" if price is None else format_exact(price))
             price_input.props('hint="W walucie notowania; zostaw puste, jeśli cena ma pochodzić ze źródeł wycen"')
@@ -197,6 +200,7 @@ class InstrumentsSection:
                             BOSSA: bossa.value,
                             ANALIZY: analizy.value,
                             BANKIER: bankier.value,
+                            STOOQ: stooq.value,
                         },
                     )
                     if instrument is None:
