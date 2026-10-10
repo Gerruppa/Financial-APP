@@ -1,5 +1,6 @@
 """Clearing the portfolio (Ustawienia > Wyczyść dane): a fresh start for testing or a new portfolio."""
 
+import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -16,6 +17,12 @@ from financial_app.persistence.models import (
     TransactionRow,
 )
 from financial_app.persistence.paths import BACKUPS_DIR
+
+NO_DATABASE_FILE = "Nie znaleziono pliku bazy, więc nie można zrobić kopii zapasowej."
+
+
+class BackupError(Exception):
+    """The database could not be backed up, so nothing was cleared; the message is in Polish."""
 
 
 @dataclass(frozen=True)
@@ -36,14 +43,21 @@ def portfolio_counts(engine: Engine) -> PortfolioCounts:
         return PortfolioCounts(count(AccountRow), count(InstrumentRow), count(TransactionRow))
 
 
-def clear_portfolio(engine: Engine) -> Path | None:
+def clear_portfolio(engine: Engine) -> Path:
     """Back the database up, then remove every Account, Instrument and Transaction and restore the default Asset
     Classes, all or nothing. The NBP Rate cache and the app settings stay. Returns the backup's path.
 
-    The backup goes to the ``backups`` folder next to the database file, where the start-up backups are.
+    The backup goes to the ``backups`` folder next to the database file, where the start-up backups are. Without a
+    backup nothing is cleared: ``BackupError``.
     """
-    db_path = Path(engine.url.database or "")
-    backup = backup_database(db_path, db_path.parent / BACKUPS_DIR)
+    if not engine.url.database or not (db_path := Path(engine.url.database)).is_file():
+        raise BackupError(NO_DATABASE_FILE)
+    try:
+        backup = backup_database(db_path, db_path.parent / BACKUPS_DIR)
+    except (OSError, sqlite3.Error) as error:
+        raise BackupError(f"Nie udało się zrobić kopii zapasowej bazy ({error}).") from error
+    if backup is None:
+        raise BackupError(NO_DATABASE_FILE)
     with Session(engine) as session, session.begin():
         # Children first, so the foreign keys never point at a removed row
         for model in (TransactionRow, AccountCashCurrency, AccountRow, InstrumentRow, AssetClassRow):

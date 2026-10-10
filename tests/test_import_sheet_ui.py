@@ -7,6 +7,7 @@ from pathlib import Path
 
 import openpyxl
 import pytest
+from nicegui import ui
 from nicegui.testing import User, user_simulation
 from sqlalchemy import Engine
 
@@ -17,6 +18,7 @@ from financial_app.persistence.accounts import add_account
 from financial_app.persistence.db import init_db
 from financial_app.persistence.transactions import list_transactions
 from financial_app.sources.nbp import NbpRates
+from financial_app.ui.reset import CONFIRMATION_PHRASE
 from financial_app.ui.shell import build_shell
 
 USD = NbpRate("USD", Decimal("3.6500"), date(2026, 4, 23), "086/A/NBP/2026")
@@ -99,3 +101,23 @@ async def test_an_imported_transaction_is_marked_as_imported_in_the_list(engine:
         await user.open("/transakcje")
 
         user.find(marker="transaction-origin")
+
+
+async def test_clearing_the_data_drops_an_open_preview(engine: Engine, workbook: Path, user: User) -> None:
+    """The preview's choices name Accounts and Instruments that clearing removes, so it must not stay savable."""
+    add_account(engine, AccountDraft("IKE", "XTB", AccountType.IKE, ("PLN", "USD")))
+    user.find(marker="import-path").type(str(workbook))
+    user.find(marker="import-preview").click()
+    await user.should_see(marker="import-save")
+
+    user.find(marker="clear-data").click()
+    user.find(marker="clear-data-next").click()
+    # The browser deletes the hidden warning; the simulation does not, so do it here
+    for dialog in user.find(ui.dialog).elements:
+        if isinstance(dialog, ui.dialog) and not dialog.value:
+            dialog.delete()
+    user.find(marker="clear-data-phrase").type(CONFIRMATION_PHRASE)
+    user.find(marker="clear-data-confirm").click()
+
+    await user.should_see("Wyczyszczono dane")
+    await user.should_not_see(marker="import-save")

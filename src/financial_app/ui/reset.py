@@ -7,7 +7,8 @@ from nicegui import ui
 from sqlalchemy import Engine
 from sqlalchemy.exc import SQLAlchemyError
 
-from financial_app.persistence.reset import clear_portfolio, portfolio_counts
+from financial_app.domain.instruments import DEFAULT_ASSET_CLASSES
+from financial_app.persistence.reset import BackupError, clear_portfolio, portfolio_counts
 
 CONFIRMATION_PHRASE = "USUŃ WSZYSTKO"
 
@@ -48,7 +49,9 @@ class ClearDataSection:
                 ui.label(f"Konta: {counts.accounts}")
                 ui.label(f"Instrumenty: {counts.instruments}")
                 ui.label(f"Transakcje: {counts.transactions}")
-            ui.label("Klasy aktywów wrócą do 12 domyślnych. Kursy NBP zostają.").classes("text-sm")
+            ui.label(f"Klasy aktywów wrócą do {len(DEFAULT_ASSET_CLASSES)} domyślnych. Kursy NBP zostają.").classes(
+                "text-sm"
+            )
             ui.label("Przed usunięciem kopia bazy trafi do folderu kopii zapasowych.").classes("text-sm text-gray-600")
             with ui.row().classes("w-full justify-end"):
                 ui.button("Anuluj", on_click=dialog.close).props("flat").mark("clear-data-cancel")
@@ -63,11 +66,13 @@ class ClearDataSection:
             dialog.close()
             try:
                 backup = clear_portfolio(self.engine)
-            except (OSError, SQLAlchemyError) as exc:
-                ui.notify(f"Nie udało się wyczyścić danych: {exc}", type="negative")
+            except BackupError as error:
+                ui.notify(f"Nie wyczyszczono danych. {error}", type="negative")
                 return
-            where = f" Kopia bazy: {backup.name}." if backup is not None else ""
-            ui.notify(f"Wyczyszczono dane.{where}", type="positive", timeout=10000)
+            except SQLAlchemyError as error:
+                ui.notify(f"Nie udało się wyczyścić danych: {error}", type="negative")
+                return
+            ui.notify(f"Wyczyszczono dane. Kopia bazy: {backup.name}.", type="positive", timeout=10000)
             self.on_cleared()
 
         with dialog, ui.card():

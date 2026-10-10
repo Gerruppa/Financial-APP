@@ -1,16 +1,18 @@
 """Clearing the portfolio: everything the user entered goes, the Asset Classes return to their defaults."""
 
+import sqlite3
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
 import pytest
-from sqlalchemy import Engine
+from sqlalchemy import Engine, create_engine
 
 from financial_app.domain.accounts import AccountDraft, AccountType
 from financial_app.domain.currencies import NbpRate
 from financial_app.domain.instruments import DEFAULT_ASSET_CLASSES, InstrumentDraft
 from financial_app.domain.transactions import TransactionDraft, TransactionType, buy_or_sell
+from financial_app.persistence import reset
 from financial_app.persistence.accounts import add_account, list_accounts
 from financial_app.persistence.db import init_db
 from financial_app.persistence.instruments import (
@@ -21,7 +23,7 @@ from financial_app.persistence.instruments import (
     rename_asset_class,
 )
 from financial_app.persistence.nbp_rates import cache_rate, cached_rate
-from financial_app.persistence.reset import PortfolioCounts, clear_portfolio, portfolio_counts
+from financial_app.persistence.reset import BackupError, PortfolioCounts, clear_portfolio, portfolio_counts
 from financial_app.persistence.transactions import add_transaction, list_transactions
 
 
@@ -108,3 +110,23 @@ def test_a_cleared_portfolio_accepts_new_data(engine: Engine) -> None:
     _fill(engine)
 
     assert portfolio_counts(engine) == PortfolioCounts(accounts=1, instruments=1, transactions=2)
+
+
+def test_a_failed_backup_clears_nothing(engine: Engine, monkeypatch: pytest.MonkeyPatch) -> None:
+    _fill(engine)
+
+    def locked(db_path: Path, backups_dir: Path) -> Path:
+        raise sqlite3.OperationalError("database is locked")
+
+    monkeypatch.setattr(reset, "backup_database", locked)
+
+    with pytest.raises(BackupError, match="kopii zapasowej"):
+        clear_portfolio(engine)
+    assert portfolio_counts(engine) == PortfolioCounts(accounts=1, instruments=1, transactions=2)
+
+
+def test_a_database_without_a_file_is_not_cleared() -> None:
+    engine = create_engine("sqlite://")
+
+    with pytest.raises(BackupError, match="Nie znaleziono pliku bazy"):
+        clear_portfolio(engine)

@@ -69,6 +69,14 @@ class SheetImportSection:
         self.keep_similar = set()
         self.render()
 
+    def reset(self) -> None:
+        """Forget the read sheet and the user's choices, e.g. after the data was cleared: they name removed ids."""
+        self.lines = []
+        self.accounts = {}
+        self.instruments = {}
+        self.keep_similar = set()
+        self.result.clear()
+
     def render(self) -> None:
         preview = preview_import(self.engine, self.lines, self.rates, self._decisions())
         self.result.clear()

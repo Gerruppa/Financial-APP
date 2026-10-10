@@ -19,11 +19,13 @@ def build_settings_page(engine: Engine, rates: NbpRates) -> None:
     asset_classes = AssetClassesSection(engine, on_renamed=instruments.refresh)
     asset_classes.build()
     instruments.build()
-    SheetImportSection(engine, rates).build()
+    sheet_import = SheetImportSection(engine, rates)
+    sheet_import.build()
 
     def redraw() -> None:
         accounts.account_list.refresh()
         asset_classes.class_list.refresh()
         instruments.refresh()
+        sheet_import.reset()
 
     ClearDataSection(engine, on_cleared=redraw).build()
