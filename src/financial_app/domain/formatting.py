@@ -68,6 +68,22 @@ def format_date(value: date) -> str:
     return value.strftime(DATE_FORMAT)
 
 
+def format_datetime(value: datetime) -> str:
+    """Format a time day-first to the minute, e.g. '09.10.2026 18:05'."""
+    return f"{format_date(value)} {value:%H:%M}"
+
+
+def format_count(count: int, one: str, few: str, many: str) -> str:
+    """``count`` with the Polish plural of a noun, e.g. 1 błąd, 2 błędy, 5 błędów, 22 błędy."""
+    if count == 1:
+        noun = one
+    elif count % 10 in (2, 3, 4) and count % 100 not in (12, 13, 14):
+        noun = few
+    else:
+        noun = many
+    return f"{count} {noun}"
+
+
 def parse_number(text: str) -> Decimal:
     """Read a number typed the Polish way ('1 000,50', '0,5 %', '12 zł'); raises ValueError if it is not one."""
     cleaned = text.strip().removesuffix("zł").removesuffix("%")

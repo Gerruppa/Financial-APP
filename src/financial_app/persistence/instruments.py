@@ -13,7 +13,14 @@ from financial_app.domain.instruments import (
     InstrumentError,
     validate_asset_class_name,
 )
-from financial_app.persistence.models import AssetClassRow, InstrumentRow, QuoteRow, SourceSymbolRow, TransactionRow
+from financial_app.persistence.models import (
+    AssetClassRow,
+    InstrumentRow,
+    PriceFailureRow,
+    QuoteRow,
+    SourceSymbolRow,
+    TransactionRow,
+)
 
 
 def list_asset_classes(engine: Engine) -> list[AssetClass]:
@@ -98,6 +105,7 @@ def delete_instrument(engine: Engine, instrument_id: int) -> None:
         if session.scalar(select(TransactionRow.id).where(TransactionRow.instrument_id == instrument_id).limit(1)):
             raise InstrumentError(f"Nie można usunąć instrumentu „{row.name}”, bo ma transakcje.")
         session.execute(delete(QuoteRow).where(QuoteRow.instrument_id == instrument_id))
+        session.execute(delete(PriceFailureRow).where(PriceFailureRow.instrument_id == instrument_id))
         session.delete(row)
 
 

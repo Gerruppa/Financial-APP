@@ -1,6 +1,7 @@
 """The Portfolio tab: a read-only, expandable card per Account (spec section 5) with its Cash Balances and Positions.
 
-Positions are valued at their price from ``domain.valuation`` (the Manual Price or the newest Quote), converted
+Positions are valued at their price from ``domain.valuation`` (the Manual Price or the newest Quote, with a badge when
+it is manual, stale, has no source or waits for Stage 3), converted
 from a foreign currency at the NBP Rate from the last business day before today; one without a price or a rate counts
 at cost and adds nothing to the result. Clicking a Position shows its Lots with both costs. Foreign cash is valued at
 the same NBP Rate; its FX result (realised and unrealised) counts in the Account's result unless the Account excludes
@@ -27,10 +28,10 @@ from financial_app.domain.formatting import (
 from financial_app.domain.lots import ForeignCash, Position, foreign_cash, fx_result, open_positions
 from financial_app.domain.prices import SOURCE_NAMES
 from financial_app.domain.transactions import PLN, cash_balances, costs_by_account, dividends_by_account
-from financial_app.domain.valuation import InstrumentPrice, PriceStatus, instrument_price
+from financial_app.domain.valuation import Badge, InstrumentPrice, PriceStatus, instrument_price
 from financial_app.persistence.accounts import list_accounts
 from financial_app.persistence.instruments import list_instruments
-from financial_app.persistence.quotes import latest_quotes
+from financial_app.persistence.quotes import latest_quotes, load_refresh
 from financial_app.persistence.transactions import list_transactions
 from financial_app.sources.nbp import NbpRates
 
@@ -85,8 +86,10 @@ class PortfolioPage:
         held_instruments = {p.instrument_id for p in positions}
         rates: dict[str, Decimal | None] = {PLN: Decimal(1)}
         quotes = latest_quotes(self.engine)
+        refresh = load_refresh(self.engine)
+        stale = refresh[1].keys() if refresh else set()
         prices = {
-            i.id: instrument_price(i, quotes.get(i.id), lambda currency: self._rate(currency, rates))
+            i.id: instrument_price(i, quotes.get(i.id), lambda currency: self._rate(currency, rates), i.id in stale)
             for i in instruments
             if i.id in held_instruments
         }
@@ -194,11 +197,16 @@ def _positions_table(positions: list[Position], prices: dict[int, InstrumentPric
     for position in positions:
         row = ui.element("div").classes("grid w-full gap-x-4 border-b py-1 cursor-pointer hover:bg-gray-100")
         with row.style(COLUMNS).mark("position-row"):
-            ui.label(names[position.instrument_id])
+            current = prices[position.instrument_id]
+            with ui.row().classes("items-center gap-2"):
+                ui.label(names[position.instrument_id])
+                if current.badge is not None:
+                    color = "orange" if current.badge is Badge.STALE else "grey"
+                    ui.badge(current.badge.value, color=color).props("outline").mark("price-badge")
             ui.label(format_quantity(position.quantity)).classes("text-right")
             ui.label(format_pln(position.average_price)).classes("text-right")
             ui.label(format_pln(position.cost)).classes("text-right")
-            _valuation_cells(position, prices[position.instrument_id])
+            _valuation_cells(position, current)
         details = _lots_table(position)
         row.on("click", lambda details=details: details.set_visibility(not details.visible))
 
