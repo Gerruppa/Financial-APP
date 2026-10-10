@@ -1,5 +1,6 @@
 """Instruments and the Asset Classes they belong to (spec 3.2)."""
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from decimal import Decimal
 
@@ -46,7 +47,8 @@ def validate_asset_class_name(name: str) -> str:
 class InstrumentDraft:
     """The user-editable fields of an Instrument, validated and normalised on creation.
 
-    ``manual_price`` is in ``quote_currency``; Source Symbols join with the Price Sources (Stage 2).
+    ``manual_price`` is in ``quote_currency``; ``source_symbols`` maps a Price Source (``domain.prices``) to the
+    Instrument's Source Symbol in it.
     """
 
     name: str
@@ -54,6 +56,7 @@ class InstrumentDraft:
     quote_currency: str
     market: str = ""
     manual_price: Decimal | None = None
+    source_symbols: Mapping[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         name = self.name.strip()
@@ -69,6 +72,9 @@ class InstrumentDraft:
         object.__setattr__(self, "name", name)
         object.__setattr__(self, "quote_currency", currency)
         object.__setattr__(self, "market", self.market.strip())
+        # A blank symbol means none in that source
+        symbols = {source: symbol.strip() for source, symbol in self.source_symbols.items() if symbol.strip()}
+        object.__setattr__(self, "source_symbols", symbols)
 
 
 @dataclass(frozen=True)

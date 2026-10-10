@@ -1,7 +1,7 @@
 """Clearing the portfolio: everything the user entered goes, the Asset Classes return to their defaults."""
 
 import sqlite3
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 
@@ -11,6 +11,7 @@ from sqlalchemy import Engine, create_engine
 from financial_app.domain.accounts import AccountDraft, AccountType
 from financial_app.domain.currencies import NbpRate
 from financial_app.domain.instruments import DEFAULT_ASSET_CLASSES, InstrumentDraft
+from financial_app.domain.prices import YAHOO, Quote
 from financial_app.domain.transactions import TransactionDraft, TransactionType, buy_or_sell
 from financial_app.persistence import reset
 from financial_app.persistence.accounts import add_account, list_accounts
@@ -23,6 +24,7 @@ from financial_app.persistence.instruments import (
     rename_asset_class,
 )
 from financial_app.persistence.nbp_rates import cache_rate, cached_rate
+from financial_app.persistence.quotes import latest_quotes, save_quote
 from financial_app.persistence.reset import BackupError, PortfolioCounts, clear_portfolio, portfolio_counts
 from financial_app.persistence.transactions import add_transaction, list_transactions
 
@@ -68,6 +70,18 @@ def test_clearing_removes_accounts_instruments_and_transactions(engine: Engine) 
     assert list_instruments(engine) == []
     assert list_transactions(engine) == []
     assert portfolio_counts(engine) == PortfolioCounts(accounts=0, instruments=0, transactions=0)
+
+
+def test_clearing_removes_the_instruments_source_symbols_and_quotes(engine: Engine) -> None:
+    pzu = add_instrument(engine, InstrumentDraft("PZU", 2, "PLN", source_symbols={YAHOO: "PZU.WA"}))
+    save_quote(engine, pzu.id, Quote(Decimal("45.12"), "PLN", date(2026, 10, 9), YAHOO), datetime(2026, 10, 9, 18))
+
+    clear_portfolio(engine)
+    # SQLite gives the next Instrument the freed id again
+    again = add_instrument(engine, InstrumentDraft("PZU", 2, "PLN"))
+
+    assert again.source_symbols == {}
+    assert latest_quotes(engine) == {}
 
 
 def test_clearing_restores_the_default_asset_classes_in_order(engine: Engine) -> None:

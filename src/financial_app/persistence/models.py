@@ -2,7 +2,7 @@
 
 import datetime as dt
 
-from sqlalchemy import Boolean, Date, ForeignKey, Integer, MetaData, String, Text, false
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, MetaData, String, Text, false
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 # Deterministic constraint names so SQLite batch migrations can alter them later
@@ -130,6 +130,31 @@ class InstrumentRow(Base):
     manual_price: Mapped[str | None] = mapped_column(String(30))
 
     asset_class: Mapped[AssetClassRow] = relationship()
+    source_symbols: Mapped[list[SourceSymbolRow]] = relationship(cascade="all, delete-orphan")
+
+
+class SourceSymbolRow(Base):
+    """An Instrument's Source Symbol in one Price Source (issue #30); ``source`` is a ``domain.prices`` key."""
+
+    __tablename__ = "source_symbols"
+
+    instrument_id: Mapped[int] = mapped_column(ForeignKey("instruments.id"), primary_key=True)
+    source: Mapped[str] = mapped_column(String(20), primary_key=True)
+    symbol: Mapped[str] = mapped_column(String(100))
+
+
+class QuoteRow(Base):
+    """An Instrument's Quote for ``day`` (issue #30); a later fetch on the same day replaces it."""
+
+    __tablename__ = "quotes"
+
+    instrument_id: Mapped[int] = mapped_column(ForeignKey("instruments.id"), primary_key=True)
+    day: Mapped[dt.date] = mapped_column(Date, primary_key=True)
+    # In ``currency``, the Instrument's quote currency, as exact decimal text
+    price: Mapped[str] = mapped_column(String(30))
+    currency: Mapped[str] = mapped_column(String(3))
+    source: Mapped[str] = mapped_column(String(20))
+    fetched_at: Mapped[dt.datetime] = mapped_column(DateTime)
 
 
 class NbpRateRow(Base):

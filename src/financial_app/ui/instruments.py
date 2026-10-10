@@ -9,6 +9,7 @@ from sqlalchemy import Engine
 
 from financial_app.domain.formatting import format_exact, parse_number
 from financial_app.domain.instruments import AssetClass, Instrument, InstrumentDraft, InstrumentError
+from financial_app.domain.prices import YAHOO
 from financial_app.persistence.instruments import (
     add_asset_class,
     add_instrument,
@@ -132,6 +133,8 @@ class InstrumentsSection:
                 details = [instrument.quote_currency, instrument.market]
                 if instrument.manual_price is not None:
                     details.append(f"cena ręczna {format_exact(instrument.manual_price)} {instrument.quote_currency}")
+                if YAHOO in instrument.source_symbols:
+                    details.append(f"Yahoo {instrument.source_symbols[YAHOO]}")
                 ui.label(" · ".join(d for d in details if d)).classes("text-sm text-gray-500")
             ui.button(icon="edit", on_click=lambda: self.open_dialog(instrument)).props(
                 f'flat round aria-label="Edytuj {instrument.name}"'
@@ -155,6 +158,10 @@ class InstrumentsSection:
             market = ui.input("Rynek", value=instrument.market if instrument else "")
             market.props('hint="Np. GPW, NYSE, XETRA; może zostać puste"').classes("w-full")
             market.mark("instrument-market")
+            symbols = dict(instrument.source_symbols) if instrument else {}
+            yahoo = ui.input("Symbol Yahoo", value=symbols.get(YAHOO, ""))
+            yahoo.props('hint="Np. ISAC.L, AAPL, BTC-USD; zostaw puste, jeśli Yahoo nie notuje instrumentu"')
+            yahoo.classes("w-full").mark("instrument-symbol-yahoo")
             price = instrument.manual_price if instrument else None
             price_input = ui.input("Cena ręczna", value="" if price is None else format_exact(price))
             price_input.props('hint="W walucie notowania; zostaw puste, jeśli cena ma pochodzić ze źródeł wycen"')
@@ -172,6 +179,8 @@ class InstrumentsSection:
                         quote_currency=currency.value,
                         market=market.value,
                         manual_price=manual_price,
+                        # Symbols in sources without a field here are kept
+                        source_symbols={**symbols, YAHOO: yahoo.value},
                     )
                     if instrument is None:
                         add_instrument(self.engine, draft)

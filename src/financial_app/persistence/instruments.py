@@ -2,7 +2,7 @@
 
 from decimal import Decimal
 
-from sqlalchemy import Engine, func, select
+from sqlalchemy import Engine, delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
@@ -13,7 +13,7 @@ from financial_app.domain.instruments import (
     InstrumentError,
     validate_asset_class_name,
 )
-from financial_app.persistence.models import AssetClassRow, InstrumentRow, TransactionRow
+from financial_app.persistence.models import AssetClassRow, InstrumentRow, QuoteRow, SourceSymbolRow, TransactionRow
 
 
 def list_asset_classes(engine: Engine) -> list[AssetClass]:
@@ -57,7 +57,11 @@ def delete_asset_class(engine: Engine, class_id: int) -> None:
 def list_instruments(engine: Engine) -> list[Instrument]:
     """All Instruments sorted by name."""
     with Session(engine) as session:
-        rows = session.scalars(select(InstrumentRow).options(selectinload(InstrumentRow.asset_class)))
+        rows = session.scalars(
+            select(InstrumentRow).options(
+                selectinload(InstrumentRow.asset_class), selectinload(InstrumentRow.source_symbols)
+            )
+        )
         return sorted((_to_instrument(row) for row in rows), key=lambda instrument: instrument.name.casefold())
 
 
@@ -72,7 +76,8 @@ def add_instrument(engine: Engine, draft: InstrumentDraft) -> Instrument:
 
 
 def update_instrument(engine: Engine, instrument_id: int, draft: InstrumentDraft) -> Instrument:
-    """Replace every field of the Instrument; ``manual_price=None`` clears the Manual Price."""
+    """Replace every field of the Instrument; ``manual_price=None`` clears the Manual Price, and Source Symbols not in
+    the draft are removed."""
     with Session(engine) as session, session.begin():
         row = session.get_one(InstrumentRow, instrument_id)
         _check_instrument_name_is_free(session, draft.name, instrument_id)
@@ -92,6 +97,7 @@ def delete_instrument(engine: Engine, instrument_id: int) -> None:
         row = session.get_one(InstrumentRow, instrument_id)
         if session.scalar(select(TransactionRow.id).where(TransactionRow.instrument_id == instrument_id).limit(1)):
             raise InstrumentError(f"Nie można usunąć instrumentu „{row.name}”, bo ma transakcje.")
+        session.execute(delete(QuoteRow).where(QuoteRow.instrument_id == instrument_id))
         session.delete(row)
 
 
@@ -126,6 +132,9 @@ def _fill(session: Session, row: InstrumentRow, draft: InstrumentDraft) -> None:
     row.market = draft.market
     price = draft.manual_price
     row.manual_price = None if price is None else str(price)
+    row.source_symbols = [
+        SourceSymbolRow(source=source, symbol=symbol) for source, symbol in draft.source_symbols.items()
+    ]
 
 
 def _to_instrument(row: InstrumentRow) -> Instrument:
@@ -138,4 +147,5 @@ def _to_instrument(row: InstrumentRow) -> Instrument:
         quote_currency=row.quote_currency,
         market=row.market,
         manual_price=None if price is None else Decimal(price),
+        source_symbols={s.source: s.symbol for s in row.source_symbols},
     )

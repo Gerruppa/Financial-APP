@@ -14,6 +14,8 @@ from financial_app.persistence.models import (
     AccountRow,
     AssetClassRow,
     InstrumentRow,
+    QuoteRow,
+    SourceSymbolRow,
     TransactionRow,
 )
 from financial_app.persistence.paths import BACKUPS_DIR
@@ -44,8 +46,9 @@ def portfolio_counts(engine: Engine) -> PortfolioCounts:
 
 
 def clear_portfolio(engine: Engine) -> Path:
-    """Back the database up, then remove every Account, Instrument and Transaction and restore the default Asset
-    Classes, all or nothing. The NBP Rate cache and the app settings stay. Returns the backup's path.
+    """Back the database up, then remove every Account, Instrument (with its Source Symbols and Quotes) and
+    Transaction and restore the default Asset Classes, all or nothing. The NBP Rate cache and the app settings stay.
+    Returns the backup's path.
 
     The backup goes to the ``backups`` folder next to the database file, where the start-up backups are. Without a
     backup nothing is cleared: ``BackupError``.
@@ -60,7 +63,15 @@ def clear_portfolio(engine: Engine) -> Path:
         raise BackupError(NO_DATABASE_FILE)
     with Session(engine) as session, session.begin():
         # Children first, so the foreign keys never point at a removed row
-        for model in (TransactionRow, AccountCashCurrency, AccountRow, InstrumentRow, AssetClassRow):
+        for model in (
+            TransactionRow,
+            AccountCashCurrency,
+            AccountRow,
+            QuoteRow,
+            SourceSymbolRow,
+            InstrumentRow,
+            AssetClassRow,
+        ):
             session.execute(delete(model))
         session.execute(
             insert(AssetClassRow), [{"name": name, "position": i} for i, name in enumerate(DEFAULT_ASSET_CLASSES)]
