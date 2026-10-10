@@ -1,7 +1,7 @@
 """Ustawienia > Wyczyść dane: removes the whole portfolio after a warning and a typed confirmation."""
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from nicegui import ui
 from sqlalchemy import Engine
@@ -18,9 +18,11 @@ class ClearDataSection:
 
     engine: Engine
     on_cleared: Callable[[], None]
+    card: ui.card = field(init=False)
 
     def build(self) -> None:
-        with ui.card().classes("w-full max-w-4xl border border-red-300"):
+        self.card = ui.card().classes("w-full max-w-4xl border border-red-300")
+        with self.card:
             ui.label("Wyczyść dane").classes("text-xl font-bold text-negative")
             ui.label(
                 "Usuwa wszystkie Konta, Instrumenty i Transakcje, a Klasy aktywów przywraca do domyślnych. "
@@ -33,8 +35,7 @@ class ClearDataSection:
     def warn(self) -> None:
         """First step: say what will be removed."""
         counts = portfolio_counts(self.engine)
-        dialog = ui.dialog()
-        dialog.on("hide", dialog.delete)
+        dialog = self._dialog()
 
         def next_step() -> None:
             dialog.close()
@@ -56,8 +57,7 @@ class ClearDataSection:
 
     def ask_for_phrase(self) -> None:
         """Second step: the user types the phrase before the data goes."""
-        dialog = ui.dialog()
-        dialog.on("hide", dialog.delete)
+        dialog = self._dialog()
 
         def clear() -> None:
             dialog.close()
@@ -82,3 +82,11 @@ class ClearDataSection:
             confirm.disable()
             phrase.on_value_change(lambda e: confirm.set_enabled((e.value or "").strip() == CONFIRMATION_PHRASE))
         dialog.open()
+
+    def _dialog(self) -> ui.dialog:
+        """A dialog deleted once hidden. It is made in the card, not in the clicked button: the warning's Dalej sits
+        inside the warning, so a phrase dialog made there would be deleted along with the warning."""
+        with self.card:
+            dialog = ui.dialog()
+        dialog.on("hide", dialog.delete)
+        return dialog

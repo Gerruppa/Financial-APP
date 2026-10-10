@@ -41,6 +41,16 @@ async def user(engine: Engine) -> AsyncIterator[User]:
         yield user
 
 
+def _go_to_phrase(user: User) -> None:
+    """Open the warning and click Dalej. The browser then reports the warning hidden, which deletes it; the
+    simulation sends no such event, so delete the closed dialogs here the same way."""
+    user.find(marker="clear-data").click()
+    user.find(marker="clear-data-next").click()
+    for dialog in user.find(ui.dialog).elements:
+        if isinstance(dialog, ui.dialog) and not dialog.value:
+            dialog.delete()
+
+
 def _confirm_button(user: User) -> ui.button:
     [button] = user.find(marker="clear-data-confirm").elements
     assert isinstance(button, ui.button)
@@ -66,8 +76,7 @@ async def test_cancelling_the_warning_keeps_the_data(user: User, engine: Engine)
 
 
 async def test_the_final_button_stays_disabled_until_the_phrase_is_typed_exactly(user: User, engine: Engine) -> None:
-    user.find(marker="clear-data").click()
-    user.find(marker="clear-data-next").click()
+    _go_to_phrase(user)
 
     await user.should_see(CONFIRMATION_PHRASE)
     assert not _confirm_button(user).enabled
@@ -79,8 +88,7 @@ async def test_the_final_button_stays_disabled_until_the_phrase_is_typed_exactly
 
 
 async def test_cancelling_the_phrase_keeps_the_data(user: User, engine: Engine) -> None:
-    user.find(marker="clear-data").click()
-    user.find(marker="clear-data-next").click()
+    _go_to_phrase(user)
     user.find(marker="clear-data-phrase").type(CONFIRMATION_PHRASE)
     user.find(marker="clear-data-phrase-cancel").click()
 
@@ -91,8 +99,7 @@ async def test_typing_the_phrase_and_confirming_clears_the_data(user: User, engi
     with user.scope(marker="accounts"):
         await user.should_see("Moje XTB")
 
-    user.find(marker="clear-data").click()
-    user.find(marker="clear-data-next").click()
+    _go_to_phrase(user)
     user.find(marker="clear-data-phrase").type(CONFIRMATION_PHRASE)
     user.find(marker="clear-data-confirm").click()
 
