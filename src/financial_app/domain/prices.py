@@ -10,8 +10,10 @@ YAHOO = "yahoo"
 BOSSA = "bossa"
 ANALIZY = "analizy"
 BANKIER = "bankier"
+# Stooq serves price history and indices only (issue #33), so it is in no Fallback Order
+STOOQ = "stooq"
 # How each Price Source is named in the UI
-SOURCE_NAMES = {YAHOO: "Yahoo", BOSSA: "Bossa", ANALIZY: "analizy.pl", BANKIER: "bankier.pl"}
+SOURCE_NAMES = {YAHOO: "Yahoo", BOSSA: "Bossa", ANALIZY: "analizy.pl", BANKIER: "bankier.pl", STOOQ: "Stooq"}
 
 # Spec 4.1 defaults for the seeded Asset Classes; until they become editable (issue #41) they follow the class name
 OTHER = "Inne"

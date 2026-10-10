@@ -13,6 +13,8 @@ from financial_app.domain.instruments import (
     InstrumentError,
     validate_asset_class_name,
 )
+from financial_app.domain.prices import STOOQ
+from financial_app.persistence.history import forget_quote_history
 from financial_app.persistence.models import (
     AssetClassRow,
     InstrumentRow,
@@ -72,6 +74,11 @@ def list_instruments(engine: Engine) -> list[Instrument]:
         return sorted((_to_instrument(row) for row in rows), key=lambda instrument: instrument.name.casefold())
 
 
+def get_instrument(engine: Engine, instrument_id: int) -> Instrument:
+    with Session(engine) as session:
+        return _to_instrument(session.get_one(InstrumentRow, instrument_id))
+
+
 def add_instrument(engine: Engine, draft: InstrumentDraft) -> Instrument:
     with Session(engine) as session, session.begin():
         _check_instrument_name_is_free(session, draft.name, instrument_id=None)
@@ -88,6 +95,11 @@ def update_instrument(engine: Engine, instrument_id: int, draft: InstrumentDraft
     with Session(engine) as session, session.begin():
         row = session.get_one(InstrumentRow, instrument_id)
         _check_instrument_name_is_free(session, draft.name, instrument_id)
+        # History fetched for another Stooq symbol is not this one's; Stooq ignores the case
+        if (draft.source_symbols.get(STOOQ) or "").lower() != (
+            _to_instrument(row).source_symbols.get(STOOQ) or ""
+        ).lower():
+            forget_quote_history(session, instrument_id)
         # Its Transactions' prices and NBP Rates are in the old currency
         if draft.quote_currency != row.quote_currency and session.scalar(
             select(TransactionRow.id).where(TransactionRow.instrument_id == instrument_id).limit(1)
@@ -104,6 +116,7 @@ def delete_instrument(engine: Engine, instrument_id: int) -> None:
         row = session.get_one(InstrumentRow, instrument_id)
         if session.scalar(select(TransactionRow.id).where(TransactionRow.instrument_id == instrument_id).limit(1)):
             raise InstrumentError(f"Nie można usunąć instrumentu „{row.name}”, bo ma transakcje.")
+        forget_quote_history(session, instrument_id)
         session.execute(delete(QuoteRow).where(QuoteRow.instrument_id == instrument_id))
         session.execute(delete(PriceFailureRow).where(PriceFailureRow.instrument_id == instrument_id))
         session.delete(row)

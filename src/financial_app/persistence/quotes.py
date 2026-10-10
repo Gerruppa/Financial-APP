@@ -11,7 +11,7 @@ from decimal import Decimal
 from sqlalchemy import Engine, delete, func, select
 from sqlalchemy.orm import Session
 
-from financial_app.domain.prices import Quote
+from financial_app.domain.prices import STOOQ, Quote
 from financial_app.persistence.models import AppSetting, PriceFailureRow, QuoteRow
 
 # The app setting holding the time of the last refresh
@@ -33,10 +33,11 @@ def save_quote(engine: Engine, instrument_id: int, quote: Quote, fetched_at: dat
 
 
 def latest_quotes(engine: Engine) -> dict[int, Quote]:
-    """Each Instrument's newest Quote, by Instrument id."""
+    """Each Instrument's newest Quote, by Instrument id; Stooq's price history never is one (spec 4.1)."""
     with Session(engine) as session:
         newest = (
             select(QuoteRow.instrument_id, func.max(QuoteRow.day).label("day"))
+            .where(QuoteRow.source != STOOQ)
             .group_by(QuoteRow.instrument_id)
             .subquery()
         )

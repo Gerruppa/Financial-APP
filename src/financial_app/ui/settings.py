@@ -1,5 +1,5 @@
-"""The Ustawienia tab: Accounts, Asset Classes, Instruments, the sheet import (spec section 5, issue #20) and clearing
-the data."""
+"""The Ustawienia tab: Accounts, Asset Classes, Instruments, the price sources' settings, the sheet import (spec
+section 5, issue #20) and clearing the data."""
 
 from nicegui import ui
 from sqlalchemy import Engine
@@ -8,6 +8,7 @@ from financial_app.sources.nbp import NbpRates
 from financial_app.ui.accounts import AccountsSection
 from financial_app.ui.import_sheet import SheetImportSection
 from financial_app.ui.instruments import AssetClassesSection, InstrumentsSection
+from financial_app.ui.price_sources import PriceSourcesSection
 from financial_app.ui.reset import ClearDataSection
 
 
@@ -19,6 +20,7 @@ def build_settings_page(engine: Engine, rates: NbpRates) -> None:
     asset_classes = AssetClassesSection(engine, on_renamed=instruments.refresh)
     asset_classes.build()
     instruments.build()
+    PriceSourcesSection(engine).build()
     sheet_import = SheetImportSection(engine, rates)
     sheet_import.build()
 

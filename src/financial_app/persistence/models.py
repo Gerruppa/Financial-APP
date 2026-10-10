@@ -185,3 +185,37 @@ class NbpRateRow(Base):
     rate: Mapped[str] = mapped_column(String(30))
     published_on: Mapped[dt.date] = mapped_column(Date)
     table: Mapped[str] = mapped_column(String(30))
+
+
+class QuoteHistoryRow(Base):
+    """The days ``first_day`` to ``last_day`` whose Quotes of an Instrument were fetched from Stooq (issue #33).
+
+    Days without trading are covered too, so they are not asked for again.
+    """
+
+    __tablename__ = "quote_history"
+
+    instrument_id: Mapped[int] = mapped_column(ForeignKey("instruments.id"), primary_key=True)
+    first_day: Mapped[dt.date] = mapped_column(Date)
+    last_day: Mapped[dt.date] = mapped_column(Date)
+
+
+class NbpRateHistoryRow(Base):
+    """The NBP table A mid rate of ``currency`` published on ``day`` (issue #33), for History (Stage 4)."""
+
+    __tablename__ = "nbp_rate_history"
+
+    currency: Mapped[str] = mapped_column(String(3), primary_key=True)
+    day: Mapped[dt.date] = mapped_column(Date, primary_key=True)
+    rate: Mapped[str] = mapped_column(String(30))
+    table: Mapped[str] = mapped_column(String(30))
+
+
+class NbpHistoryRow(Base):
+    """The days ``first_day`` to ``last_day`` whose NBP Rates of ``currency`` were fetched (issue #33)."""
+
+    __tablename__ = "nbp_history"
+
+    currency: Mapped[str] = mapped_column(String(3), primary_key=True)
+    first_day: Mapped[dt.date] = mapped_column(Date)
+    last_day: Mapped[dt.date] = mapped_column(Date)

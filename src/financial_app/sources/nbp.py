@@ -12,13 +12,17 @@ from sqlalchemy import Engine
 
 from financial_app.domain.currencies import MissingNbpRateError, NbpRate
 from financial_app.domain.formatting import format_date
+from financial_app.domain.history import ONE_DAY, Cover, days_to_fetch
+from financial_app.persistence.history import nbp_history_cover, nbp_rates_between, save_nbp_history
 from financial_app.persistence.nbp_rates import cache_rate, cached_rate
 
 API = "https://api.nbp.pl/api/exchangerates/rates/a/{currency}/{start:%Y-%m-%d}/{end:%Y-%m-%d}/?format=json"
 # The longest run of days without a table (Christmas plus a weekend) is far shorter
 LOOKBACK = timedelta(days=14)
-ONE_DAY = timedelta(days=1)
 RETRY_AFTER = 300  # seconds
+# The NBP API answers at most this many days of rates at once, and has table A from this day on
+MAX_DAYS = 93
+FIRST_TABLE = date(2002, 1, 2)
 
 
 def fetch_from_nbp(url: str) -> str | None:
@@ -80,6 +84,39 @@ class NbpRates:
             self._failed_at[currency] = self.clock()
             raise
 
+    def history(self, currency: str, first: date, last: date) -> list[NbpRate]:
+        """The NBP Rates of ``currency`` published from ``first`` to ``last``, oldest first, for History (#33).
+
+        Days not fetched yet are fetched once, up to yesterday (today's table may not be out yet), then read from
+        the cache. A failed fetch raises ``MissingNbpRateError`` and is tried again next time.
+        """
+        currency = currency.upper()
+        missing = days_to_fetch(
+            nbp_history_cover(self.engine, currency), max(first, FIRST_TABLE), min(last, self.today() - ONE_DAY)
+        )
+        for days in missing:
+            rates = [rate for piece in days.split(MAX_DAYS) for rate in self._fetch_range(currency, piece)]
+            save_nbp_history(self.engine, currency, rates, days)
+        return nbp_rates_between(self.engine, currency, first, last)
+
+    def _fetch_range(self, currency: str, days: Cover) -> list[NbpRate]:
+        """The rates the NBP published in ``days``; none when it published no table then (HTTP 404)."""
+        period = f"{currency} z okresu {format_date(days.first)}–{format_date(days.last)}"
+        try:
+            body = self.fetch(API.format(currency=currency.lower(), start=days.first, end=days.last))
+        except HTTPError:
+            raise MissingNbpRateError(f"Serwis NBP zwrócił błąd przy pobieraniu kursów {period}.") from None
+        except OSError:
+            raise MissingNbpRateError(
+                f"Nie udało się pobrać kursów NBP {period}. Sprawdź połączenie z internetem."
+            ) from None
+        if body is None:
+            return []
+        try:
+            return _parse_rates(body, currency)
+        except ValueError, KeyError, TypeError:
+            raise MissingNbpRateError(f"Nieprawidłowa odpowiedź NBP dla kursów {period}.") from None
+
     def _fetch_latest(self, currency: str, start: date, end: date, day: date) -> NbpRate:
         """The last rate the NBP published between ``start`` and ``end``; ``day`` is only for the messages."""
         before = f"{currency} sprzed {format_date(day)}"
@@ -96,10 +133,17 @@ class NbpRates:
         if body is None:
             raise MissingNbpRateError(f"Brak kursu NBP {before}. Zapis zablokowany.")
         try:
-            published = json.loads(body, parse_float=Decimal)["rates"][-1]
-            return NbpRate(currency, published["mid"], date.fromisoformat(published["effectiveDate"]), published["no"])
+            return _parse_rates(body, currency)[-1]
         except ValueError, KeyError, IndexError, TypeError:
             raise MissingNbpRateError(f"Nieprawidłowa odpowiedź NBP dla kursu {before}. Zapis zablokowany.") from None
+
+
+def _parse_rates(body: str, currency: str) -> list[NbpRate]:
+    """The rates in an NBP API answer, in the order given (oldest first)."""
+    return [
+        NbpRate(currency, published["mid"], date.fromisoformat(published["effectiveDate"]), published["no"])
+        for published in json.loads(body, parse_float=Decimal)["rates"]
+    ]
 
 
 def _not_published_yet(currency: str, day: date) -> MissingNbpRateError:
