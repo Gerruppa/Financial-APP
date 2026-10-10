@@ -7,7 +7,8 @@ from nicegui import run, ui
 from sqlalchemy import Engine
 
 from financial_app.domain.formatting import format_count, format_datetime
-from financial_app.domain.prices import SOURCE_NAMES, YAHOO
+from financial_app.domain.prices import BOSSA, SOURCE_NAMES, YAHOO
+from financial_app.sources.bossa import BossaSource
 from financial_app.sources.nbp import NbpRates
 from financial_app.sources.prices import PriceSource, RefreshResult, last_refresh, refresh_prices
 from financial_app.sources.yahoo import YahooSource
@@ -50,7 +51,7 @@ def build_shell(
     Price Sources by their key (by default the real ones).
     """
     rates = rates or NbpRates(engine)
-    sources = sources if sources is not None else {YAHOO: YahooSource()}
+    sources = sources if sources is not None else {YAHOO: YahooSource(), BOSSA: BossaSource()}
     install_movable_dialogs()
     transactions_page = TransactionsPage(engine, rates)
     portfolio_page = PortfolioPage(engine, rates)
