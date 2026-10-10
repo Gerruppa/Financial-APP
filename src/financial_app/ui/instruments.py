@@ -9,7 +9,7 @@ from sqlalchemy import Engine
 
 from financial_app.domain.formatting import format_exact, parse_number
 from financial_app.domain.instruments import AssetClass, Instrument, InstrumentDraft, InstrumentError
-from financial_app.domain.prices import BOSSA, SOURCE_NAMES, YAHOO
+from financial_app.domain.prices import ANALIZY, BANKIER, BOSSA, SOURCE_NAMES, YAHOO
 from financial_app.persistence.instruments import (
     add_asset_class,
     add_instrument,
@@ -165,6 +165,14 @@ class InstrumentsSection:
             bossa = ui.input("Symbol Bossa", value=symbols.get(BOSSA, ""))
             bossa.props('hint="Np. PZU, CDR, ETFBDIVPL; zostaw puste, jeśli instrumentu nie ma na GPW"')
             bossa.classes("w-full").mark("instrument-symbol-bossa")
+            analizy = ui.input("Symbol analizy.pl", value=symbols.get(ANALIZY, ""))
+            analizy.props(
+                'hint="Fundusze i PPK: id z adresu strony funduszu, np. PZU60 z analizy.pl/fundusze/ppk/PZU60"'
+            )
+            analizy.classes("w-full").mark("instrument-symbol-analizy")
+            bankier = ui.input("Symbol bankier.pl", value=symbols.get(BANKIER, ""))
+            bankier.props('hint="Zapasowe źródło funduszy i PPK; zwykle to samo id co w analizy.pl"')
+            bankier.classes("w-full").mark("instrument-symbol-bankier")
             price = instrument.manual_price if instrument else None
             price_input = ui.input("Cena ręczna", value="" if price is None else format_exact(price))
             price_input.props('hint="W walucie notowania; zostaw puste, jeśli cena ma pochodzić ze źródeł wycen"')
@@ -183,7 +191,13 @@ class InstrumentsSection:
                         market=market.value,
                         manual_price=manual_price,
                         # Symbols in sources without a field here are kept
-                        source_symbols={**symbols, YAHOO: yahoo.value, BOSSA: bossa.value},
+                        source_symbols={
+                            **symbols,
+                            YAHOO: yahoo.value,
+                            BOSSA: bossa.value,
+                            ANALIZY: analizy.value,
+                            BANKIER: bankier.value,
+                        },
                     )
                     if instrument is None:
                         add_instrument(self.engine, draft)

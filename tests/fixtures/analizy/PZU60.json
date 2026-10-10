@@ -1,0 +1,44 @@
+{
+ "id": "PZU60",
+ "label": "PPK inPZU 2060",
+ "currency": "PLN",
+ "isRegular": true,
+ "isDividend": false,
+ "periods": [
+  {
+   "period": "1M",
+   "label": "1M",
+   "start": "2026-09-08",
+   "end": "2026-10-08"
+  }
+ ],
+ "events": [],
+ "dividends": [],
+ "series": [
+  {
+   "id": "fund_PZU60",
+   "label": "Fundusz",
+   "currency": "PLN",
+   "price": [
+    {
+     "date": "2026-10-06",
+     "value": 120.39
+    },
+    {
+     "date": "2026-10-07",
+     "value": 119.11
+    },
+    {
+     "date": "2026-10-08",
+     "value": 118.49
+    }
+   ]
+  },
+  {
+   "id": "fund_with_dividend_PZU60",
+   "label": "Fundusz z dywidendą",
+   "currency": "PLN",
+   "price": []
+  }
+ ]
+}
