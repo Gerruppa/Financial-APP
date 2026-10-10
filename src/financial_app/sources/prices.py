@@ -78,6 +78,9 @@ def refresh_prices(
             except PriceSourceError as error:
                 reasons[source] = str(error)
                 continue
+            except Exception as error:  # noqa: BLE001 - a broken source must not stop the other Instruments
+                reasons[source] = f"Nieoczekiwany błąd źródła: {error}"
+                continue
             save_quote(engine, instrument.id, quote, now())
             refreshed += 1
             break

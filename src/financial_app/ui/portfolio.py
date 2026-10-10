@@ -31,9 +31,10 @@ from financial_app.domain.transactions import PLN, cash_balances, costs_by_accou
 from financial_app.domain.valuation import Badge, InstrumentPrice, PriceStatus, instrument_price
 from financial_app.persistence.accounts import list_accounts
 from financial_app.persistence.instruments import list_instruments
-from financial_app.persistence.quotes import latest_quotes, load_refresh
+from financial_app.persistence.quotes import latest_quotes
 from financial_app.persistence.transactions import list_transactions
 from financial_app.sources.nbp import NbpRates
+from financial_app.sources.prices import last_refresh
 
 COLUMNS = "grid-template-columns: minmax(8rem, 2fr) repeat(7, minmax(6rem, 1fr))"
 HEADERS = ("Instrument", "Liczba", "Śr. cena", "Koszt", "Cena", "Wartość", "Zysk/strata", "Zysk/strata %")
@@ -86,8 +87,8 @@ class PortfolioPage:
         held_instruments = {p.instrument_id for p in positions}
         rates: dict[str, Decimal | None] = {PLN: Decimal(1)}
         quotes = latest_quotes(self.engine)
-        refresh = load_refresh(self.engine)
-        stale = refresh[1].keys() if refresh else set()
+        refresh = last_refresh(self.engine)
+        stale = {failure.instrument_id for failure in refresh.failures} if refresh else set()
         prices = {
             i.id: instrument_price(i, quotes.get(i.id), lambda currency: self._rate(currency, rates), i.id in stale)
             for i in instruments

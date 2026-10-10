@@ -16,7 +16,14 @@ from financial_app.persistence.db import init_db
 from financial_app.persistence.instruments import add_instrument, delete_instrument
 from financial_app.persistence.quotes import latest_quotes
 from financial_app.persistence.transactions import add_transaction, delete_transaction
-from financial_app.sources.prices import RefreshFailure, RefreshResult, RefreshStatus, last_refresh, refresh_prices
+from financial_app.sources.prices import (
+    PriceSource,
+    RefreshFailure,
+    RefreshResult,
+    RefreshStatus,
+    last_refresh,
+    refresh_prices,
+)
 
 NOW = datetime(2026, 10, 9, 18, 5)
 FRIDAY = date(2026, 10, 9)
@@ -147,3 +154,23 @@ def test_deleting_an_instrument_removes_its_failure(engine: Engine) -> None:
     delete_instrument(engine, cdr.id)
 
     assert last_refresh(engine) == RefreshStatus(NOW, [])
+
+
+class BrokenSource:
+    """A Price Source failing in a way it does not wrap in ``PriceSourceError``."""
+
+    name = BOSSA
+
+    def quote(self, symbol: str, currency: str) -> Quote:
+        raise ValueError("bad payload")
+
+
+def test_an_unexpected_error_in_a_source_is_a_failure_and_the_next_source_is_tried(engine: Engine) -> None:
+    aaa = _held(engine, "AAA", {BOSSA: "AAA"})
+    pzu = _held(engine, "PZU", {BOSSA: "PZU", YAHOO: "PZU.WA"})
+    sources: dict[str, PriceSource] = {BOSSA: BrokenSource(), YAHOO: FakeSource(YAHOO, {"PZU.WA": "45.12"})}
+
+    result = refresh_prices(engine, sources, lambda: NOW)
+
+    assert list(latest_quotes(engine)) == [pzu.id]
+    assert result.failures == [RefreshFailure(aaa.id, "AAA", {BOSSA: "Nieoczekiwany błąd źródła: bad payload"})]
