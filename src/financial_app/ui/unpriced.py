@@ -3,21 +3,22 @@ issue #40). Clicking one opens its Instrument dialog, so the user can go through
 their Source Symbols; an Instrument leaves the list once a refresh gives it a Quote."""
 
 from collections.abc import Callable
+from dataclasses import dataclass
 
 from nicegui import ui
 from sqlalchemy import Engine
 
 from financial_app.domain.instruments import Instrument
-from financial_app.domain.prices import SOURCE_NAMES
+from financial_app.domain.prices import source_reason
 from financial_app.domain.valuation import Unpriced
 from financial_app.sources.prices import unpriced_instruments
 
 
+@dataclass
 class UnpricedSection:
     """The Instrumenty bez wyceny card; ``refresh`` redraws it after an Instrument save or a price refresh."""
 
-    def __init__(self, engine: Engine) -> None:
-        self.engine = engine
+    engine: Engine
 
     def refresh(self) -> None:
         self.unpriced_list.refresh()
@@ -50,8 +51,6 @@ def _unpriced_row(unpriced: Unpriced, open_instrument: Callable[[Instrument], No
         with ui.row().classes("items-center gap-2"):
             ui.label(instrument.name).classes("font-medium")
             ui.badge(instrument.asset_class_name).props("outline")
-        if unpriced.failures:
-            for source, reason in unpriced.failures.items():
-                ui.item_label(f"{SOURCE_NAMES.get(source, source)}: {reason}").props("caption")
-        else:
-            ui.item_label(unpriced.reason).props("caption")
+        ui.item_label(unpriced.reason).props("caption")
+        for source, reason in unpriced.failures.items():
+            ui.item_label(source_reason(source, reason)).props("caption").classes("pl-4")
