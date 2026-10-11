@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from enum import StrEnum
 
-from financial_app.domain.instruments import GRAMS_PER_TROY_OUNCE, Instrument
+from financial_app.domain.instruments import Instrument
 from financial_app.domain.prices import STAGE_3_CLASSES, Quote, sources_to_try
 
 
@@ -35,8 +35,8 @@ class InstrumentPrice:
     """``price`` is one unit's price in ``currency``, the Instrument's quote currency; ``pln`` is that price in PLN.
 
     ``quote`` is the newest Quote, also when the Manual Price wins, so that it can be shown beside it. For a physical
-    metal, ``spot`` is the spot of a troy ounce (in ``currency``) that ``price`` comes from and ``spot_pln`` one unit
-    at the spot without the Buyback Spread, in PLN; both are ``None`` for any other Instrument.
+    metal, ``spot`` is the spot of a troy ounce (in ``currency``) that ``price`` comes from and ``unit_spot_pln`` one
+    unit at the spot without the Buyback Spread, in PLN; both are ``None`` for any other Instrument.
     """
 
     price: Decimal | None
@@ -46,7 +46,7 @@ class InstrumentPrice:
     quote: Quote | None = None
     badge: Badge | None = None
     spot: Decimal | None = None
-    spot_pln: Decimal | None = None
+    unit_spot_pln: Decimal | None = None
 
 
 def instrument_price(
@@ -66,12 +66,13 @@ def instrument_price(
     else:
         return InstrumentPrice(None, currency, None, PriceStatus.NO_PRICE, badge=badge)
     unit = instrument.unit_price(price)
-    spot = None if instrument.metal_grams is None else price
+    metal = instrument.metal_grams is not None
+    spot = price if metal else None
     rate = rate_for(currency)
     if rate is None:
         return InstrumentPrice(unit, currency, None, PriceStatus.NO_RATE, quote, badge, spot)
-    spot_pln = None if instrument.metal_grams is None else price * instrument.metal_grams / GRAMS_PER_TROY_OUNCE * rate
-    return InstrumentPrice(unit, currency, unit * rate, status, quote, badge, spot, spot_pln)
+    unit_spot_pln = instrument.unit_spot(price) * rate if metal else None
+    return InstrumentPrice(unit, currency, unit * rate, status, quote, badge, spot, unit_spot_pln)
 
 
 def _badge(instrument: Instrument, quote: Quote | None, stale: bool) -> Badge | None:

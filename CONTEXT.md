@@ -61,7 +61,7 @@ An amount the user intends to invest, split across Asset Classes and Instruments
 _Avoid_: contribution, top-up
 
 **Buyback Spread** (Spread odkupu):
-The percentage below spot price at which a dealer buys back a physical metal Instrument. Its value is spot × the unit's metal weight (entered in grams) × (1 − Buyback Spread).
+The percentage below spot price at which a dealer buys back a physical metal Instrument. Its value is spot × the unit's metal weight (entered in grams) × (1 − Buyback Spread). Once the metal weight is set, the Instrument's prices (Quotes and Manual Price) are the spot of a troy ounce.
 _Avoid_: discount, haircut
 
 ## Transactions and holdings

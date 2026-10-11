@@ -229,8 +229,8 @@ def _valuation_cells(position: Position, current: InstrumentPrice) -> None:
     result = position.result(price)
     with ui.column().classes("gap-0 items-end"):
         ui.label(format_pln(position.value(price)))
-        if current.spot_pln is not None:
-            ui.label(f"spot {format_pln(position.value(current.spot_pln))}").classes("text-xs text-gray-500")
+        if current.unit_spot_pln is not None:
+            ui.label(f"spot {format_pln(position.value(current.unit_spot_pln))}").classes("text-xs text-gray-500")
     ui.label(format_pln(result, signed=True)).classes(f"text-right {_result_color(result)}")
     ui.label(format_percent(position.result_percent(price), signed=True)).classes(f"text-right {_result_color(result)}")
 
@@ -244,7 +244,9 @@ def _price_cell(price: Decimal, current: InstrumentPrice) -> None:
             ui.label(format_unit_price(price, current.currency))
         else:
             ui.label(format_amount(price, current.currency))
-            ui.label(f"spot {format_unit_price(current.spot, current.currency)}/oz").classes("text-xs text-gray-500")
+            ui.label(f"spot {format_unit_price(current.spot, current.currency)}{ounce}").classes(
+                "text-xs text-gray-500"
+            )
         quote = current.quote
         if quote is None:
             return

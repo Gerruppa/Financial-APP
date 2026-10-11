@@ -96,10 +96,15 @@ class InstrumentDraft:
     def unit_price(self, price: Decimal) -> Decimal:
         """The value of one unit at ``price``: for a physical metal, ``price`` is the spot of a troy ounce, scaled to
         the unit's weight and less the Buyback Spread; otherwise it already is the unit price."""
+        spread = self.buyback_spread_percent or Decimal(0)
+        return self.unit_spot(price) * (1 - spread / 100)
+
+    def unit_spot(self, price: Decimal) -> Decimal:
+        """One unit at ``price`` without the Buyback Spread: the spot of a troy ounce scaled to the unit's metal
+        weight, or ``price`` itself for any other Instrument."""
         if self.metal_grams is None:
             return price
-        spread = self.buyback_spread_percent or Decimal(0)
-        return price * self.metal_grams / GRAMS_PER_TROY_OUNCE * (1 - spread / 100)
+        return price * self.metal_grams / GRAMS_PER_TROY_OUNCE
 
 
 @dataclass(frozen=True)

@@ -124,7 +124,7 @@ def test_a_one_ounce_coin_with_a_5_percent_spread_is_valued_at_95_percent_of_spo
     price = instrument_price(_metal("31.1034768", "5"), quote, {"USD": Decimal(4)}.get)
 
     assert (price.price, price.pln) == (Decimal(2280), Decimal(9120))
-    assert (price.spot, price.spot_pln) == (Decimal(2400), Decimal(9600))
+    assert (price.spot, price.unit_spot_pln) == (Decimal(2400), Decimal(9600))
     assert price.status is PriceStatus.QUOTE
 
 
@@ -148,7 +148,7 @@ def test_a_metal_without_a_rate_has_its_unit_price_but_no_pln_value() -> None:
 
     price = instrument_price(_metal("31.1034768", None), quote, lambda currency: None)
 
-    assert (price.price, price.pln, price.spot, price.spot_pln) == (Decimal(2400), None, Decimal(2400), None)
+    assert (price.price, price.pln, price.spot, price.unit_spot_pln) == (Decimal(2400), None, Decimal(2400), None)
 
 
 def test_an_instrument_without_a_metal_weight_has_no_spot() -> None:
@@ -156,4 +156,4 @@ def test_an_instrument_without_a_metal_weight_has_no_spot() -> None:
 
     price = instrument_price(_automatic(), quote, lambda currency: Decimal(1))
 
-    assert (price.spot, price.spot_pln) == (None, None)
+    assert (price.spot, price.unit_spot_pln) == (None, None)
