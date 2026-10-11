@@ -1,5 +1,6 @@
 """The fund and PPK search through analizy.pl (issue #60, spec #56), on saved, trimmed responses without the network."""
 
+import json
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, urlparse
@@ -34,11 +35,21 @@ def test_a_name_finds_open_funds_without_insurance_funds_and_their_markup() -> N
     # UPZU31 and UALL121 are UFK; the former name ("d. ...") is left out
     assert results == [
         SearchResult(
-            name="PZU Akcji KRAKOWIAK", symbol="PZU01", market="", currency="PLN", source_symbols={ANALIZY: "PZU01"}
+            name="PZU Akcji KRAKOWIAK",
+            symbol="PZU01",
+            market="",
+            currency="PLN",
+            source_symbols={ANALIZY: "PZU01"},
+            fund=True,
         ),
         # Its quotation is not saved, as when the request fails
         SearchResult(
-            name="PZU Akcji KRAKOWIAK E", symbol="PZE01", market="", currency="", source_symbols={ANALIZY: "PZE01"}
+            name="PZU Akcji KRAKOWIAK E",
+            symbol="PZE01",
+            market="",
+            currency="",
+            source_symbols={ANALIZY: "PZE01"},
+            fund=True,
         ),
     ]
 
@@ -60,6 +71,7 @@ def test_a_ppk_fund_belongs_to_multi_asset() -> None:
         currency="PLN",
         source_symbols={ANALIZY: "PZU60"},
         asset_class="Multi-asset",
+        fund=True,
     )
 
 
@@ -73,6 +85,7 @@ def test_an_isin_finds_a_foreign_fund_and_carries_it() -> None:
         currency="USD",
         source_symbols={ANALIZY: "FTI022_A_USD"},
         isin="LU0109392836",
+        fund=True,
     )
 
 
@@ -101,3 +114,20 @@ def test_an_http_error_is_a_polish_error() -> None:
 def test_a_changed_response_is_a_polish_error(body: str | None) -> None:
     with pytest.raises(InstrumentSearchError, match="Nieprawidłowa odpowiedź wyszukiwarki analizy.pl"):
         AnalizySearch(lambda url: body).search("Quercus")
+
+
+def test_every_result_is_a_fund() -> None:
+    assert {r.fund for r in AnalizySearch(_saved).search("Quercus")} == {True}
+
+
+def test_a_products_own_isin_is_taken_when_given() -> None:
+    # The search has given none so far, so this response is made up in its layout
+    product = {"kod": "FTI022_A_USD", "nazwa": "Franklin Technology", "kodRodzaju": "FZG", "isin": "LU0109392836"}
+    body = json.dumps({"products": [product]})
+
+    def fetch(url: str) -> str | None:
+        return body if "/search/" in url else None
+
+    [result] = AnalizySearch(fetch).search("Franklin Technology")
+
+    assert result.isin == "LU0109392836"

@@ -402,15 +402,19 @@ class InstrumentsSection:
                 untouched_default = instrument is None and currency.value == "PLN"
                 filled = fill_empty(
                     FormFields(
-                        isin=isin.value,
-                        quote_currency="" if untouched_default else currency.value,
-                        market=market.value,
+                        name=name.value or "",
+                        isin=isin.value or "",
+                        quote_currency="" if untouched_default else currency.value or "",
+                        market=market.value or "",
                         source_symbols=typed_symbols(),
                         asset_class=class_options.get(asset_class.value, ""),
+                        domicile=domicile.value or "",
+                        distribution_policy=policy.value,
                     ),
                     result,
                 )
-                isin.value, market.value = filled.isin, filled.market
+                name.value, isin.value, market.value = filled.name, filled.isin, filled.market
+                domicile.value, policy.value = filled.domicile, filled.distribution_policy
                 currency.value = filled.quote_currency or currency.value
                 for source, field in symbol_inputs.items():
                     field.value = filled.source_symbols[source]

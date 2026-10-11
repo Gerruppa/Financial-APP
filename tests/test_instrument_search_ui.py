@@ -11,7 +11,7 @@ from nicegui.testing import User, user_simulation
 from sqlalchemy import Engine
 
 from financial_app.domain.instrument_search import CombinedSearch, InstrumentSearchError, SearchResult
-from financial_app.domain.instruments import InstrumentDraft
+from financial_app.domain.instruments import DistributionPolicy, InstrumentDraft
 from financial_app.domain.prices import ANALIZY, BOSSA, YAHOO
 from financial_app.persistence.db import init_db
 from financial_app.persistence.instruments import (
@@ -76,10 +76,9 @@ async def test_an_isin_shows_its_listings_and_a_choice_fills_the_empty_fields(us
     assert _value(user, "instrument-market") == "XETRA"
     assert _value(user, "instrument-symbol-yahoo") == "IUSQ.DE"
     assert _value(user, "instrument-symbol-bossa") == ""
-    # The name is never filled in
-    assert _value(user, "instrument-name") == ""
+    # An empty name is filled with the listing's
+    assert _value(user, "instrument-name") == "iShares MSCI All Country World UCITS ETF USD Acc"
 
-    user.find(marker="instrument-name").type("IUSQ")
     with user.scope(marker="instrument-dialog"):
         user.find(marker="instrument-class").click()
         user.find("Akcje zagraniczne").click()
@@ -88,6 +87,8 @@ async def test_an_isin_shows_its_listings_and_a_choice_fills_the_empty_fields(us
     [saved] = list_instruments(engine)
     assert (saved.isin, saved.quote_currency, saved.market) == ("IE00B6R52259", "EUR", "XETRA")
     assert saved.source_symbols == {YAHOO: "IUSQ.DE"}
+    # An ETF's domicile comes from its ISIN and its distribution policy from its name
+    assert (saved.domicile, saved.distribution_policy) == ("Irlandia", DistributionPolicy.ACCUMULATING)
 
 
 async def test_a_warsaw_result_fills_the_yahoo_and_bossa_symbols(user: User) -> None:
@@ -274,3 +275,32 @@ async def test_a_search_that_does_not_answer_is_noted_when_the_other_finds_nothi
 
         await user.should_see("Nic nie znaleziono.")
         await user.should_see("analizy.pl nie odpowiada")
+
+
+async def test_an_entered_name_domicile_and_policy_are_kept(engine: Engine) -> None:
+    add_instrument(
+        engine,
+        InstrumentDraft(
+            "Mój ACWI",
+            _class_id(engine, "Akcje zagraniczne"),
+            "USD",
+            domicile="Luksemburg",
+            distribution_policy=DistributionPolicy.DISTRIBUTING,
+        ),
+    )
+
+    async with user_simulation(lambda: build_shell(engine, search=YahooSearch(_saved))) as user:
+        await user.open("/ustawienia")
+        user.find(marker="edit-instrument").click()
+        await _search(user, "IE00B6R52259")
+        await user.should_see(marker="search-result-ISAC.L")
+        user.find(marker="search-result-ISAC.L").click()
+        user.find("Zapisz").click()
+        await user.should_not_see(marker="instrument-dialog")
+
+    [saved] = list_instruments(engine)
+    assert (saved.name, saved.domicile, saved.distribution_policy) == (
+        "Mój ACWI",
+        "Luksemburg",
+        DistributionPolicy.DISTRIBUTING,
+    )

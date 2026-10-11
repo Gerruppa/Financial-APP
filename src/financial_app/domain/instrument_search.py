@@ -1,11 +1,12 @@
 """Instrument search by ISIN, name or symbol (issue #25, spec 4.1): its results and what a chosen one fills in."""
 
+import re
 from collections.abc import Iterable, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field, replace
 from typing import Protocol
 
-from financial_app.domain.instruments import ISIN_PATTERN
+from financial_app.domain.instruments import ISIN_PATTERN, DistributionPolicy
 
 
 class InstrumentSearchError(Exception):
@@ -16,8 +17,9 @@ class InstrumentSearchError(Exception):
 class SearchResult:
     """One listing found: ``symbol`` is the ticker the search service shows, ``source_symbols`` the Source Symbols
     it gives (Price Source key to symbol, ``domain.prices``), ``currency`` its quote currency ("" when unknown),
-    ``isin`` the ISIN searched for ("" after a search by name or symbol, as Yahoo returns no ISINs) and
+    ``isin`` its ISIN ("" when unknown, as Yahoo returns none: only an ISIN searched for fills it) and
     ``asset_class`` the name of the Asset Class it belongs to ("" when its kind does not tell, e.g. an ETF).
+    ``fund`` says it is a fund or an ETF, whose ISIN tells its domicile and name its distribution policy.
     ``source`` names the search service that found it, when several are searched together."""
 
     name: str
@@ -27,6 +29,7 @@ class SearchResult:
     source_symbols: Mapping[str, str] = field(default_factory=dict)
     isin: str = ""
     asset_class: str = ""
+    fund: bool = False
     source: str = ""
 
 
@@ -75,16 +78,52 @@ class FormFields:
     """The Instrument form's fields a search result can fill; ``source_symbols`` as in ``InstrumentDraft`` and
     ``asset_class`` the chosen Asset Class's name."""
 
+    name: str = ""
     isin: str = ""
     quote_currency: str = ""
     market: str = ""
     source_symbols: Mapping[str, str] = field(default_factory=dict)
     asset_class: str = ""
+    domicile: str = ""
+    distribution_policy: DistributionPolicy | None = None
+
+
+# A fund's domicile by its ISIN's country code, for the usual fund domiciles; any other leaves it to the user
+DOMICILES = {
+    "IE": "Irlandia",
+    "LU": "Luksemburg",
+    "PL": "Polska",
+    "DE": "Niemcy",
+    "FR": "Francja",
+    "NL": "Holandia",
+    "GB": "Wielka Brytania",
+    "US": "Stany Zjednoczone",
+    "CH": "Szwajcaria",
+    "AT": "Austria",
+    "BE": "Belgia",
+    "LI": "Liechtenstein",
+    "JE": "Jersey",
+    "GG": "Guernsey",
+    "SE": "Szwecja",
+    "FI": "Finlandia",
+    "DK": "Dania",
+    "NO": "Norwegia",
+    "ES": "Hiszpania",
+    "IT": "Włochy",
+}
+# The words of a fund's name naming its share class's distribution policy
+_POLICY_WORDS = (
+    (re.compile(r"\b(acc|accumulating|accumulation)\b", re.IGNORECASE), DistributionPolicy.ACCUMULATING),
+    (
+        re.compile(r"\b(dist|distributing|distribution|dis|inc|income)\b", re.IGNORECASE),
+        DistributionPolicy.DISTRIBUTING,
+    ),
+)
 
 
 def fill_empty(fields: FormFields, result: SearchResult) -> FormFields:
-    """``fields`` with the empty ones taken from ``result``; values already entered (and the name) are never
-    overwritten."""
+    """``fields`` with the empty ones taken from ``result``; values already entered are never overwritten. A fund's
+    domicile comes from the country of the form's ISIN and its distribution policy from the words of its name."""
 
     def pick(current: str, found: str) -> str:
         return current if current.strip() else found
@@ -92,13 +131,26 @@ def fill_empty(fields: FormFields, result: SearchResult) -> FormFields:
     symbols = dict(fields.source_symbols)
     for source, symbol in result.source_symbols.items():
         symbols[source] = pick(symbols.get(source, ""), symbol)
+    isin = pick(fields.isin, result.isin)
+    domicile = DOMICILES.get(isin.strip().upper()[:2], "") if result.fund else ""
+    policy = _policy_named(result.name) if result.fund else None
     return FormFields(
-        isin=pick(fields.isin, result.isin),
+        name=pick(fields.name, result.name),
+        isin=isin,
         quote_currency=pick(fields.quote_currency, result.currency),
         market=pick(fields.market, result.market),
         source_symbols=symbols,
         asset_class=pick(fields.asset_class, result.asset_class),
+        domicile=pick(fields.domicile, domicile),
+        distribution_policy=fields.distribution_policy or policy,
     )
+
+
+def _policy_named(name: str) -> DistributionPolicy | None:
+    for words, policy in _POLICY_WORDS:
+        if words.search(name):
+            return policy
+    return None
 
 
 def looks_like_isin(query: str) -> bool:

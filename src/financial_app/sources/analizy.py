@@ -85,11 +85,11 @@ class AnalizySearch:
         query = query.strip()
         if not query:
             return []
-        funds = [(code, name, kind) for code, name, kind in self._products(query) if kind in FUND_KINDS]
+        funds = [product for product in self._products(query) if product[2] in FUND_KINDS]
         # One quotation request per fund, side by side so a dozen of them do not keep the user waiting
         with ThreadPoolExecutor(max_workers=8) as pool:
-            currencies = list(pool.map(self._currency, [code for code, _, _ in funds]))
-        isin = query.upper() if looks_like_isin(query) else ""
+            currencies = list(pool.map(self._currency, [code for code, _, _, _ in funds]))
+        searched = query.upper() if looks_like_isin(query) else ""
         return [
             SearchResult(
                 name=name,
@@ -97,14 +97,16 @@ class AnalizySearch:
                 market="",
                 currency=currency,
                 source_symbols={ANALIZY: code},
-                isin=isin,
+                isin=searched or isin,
                 asset_class=PPK_CLASS if kind == "PPK" else "",
+                fund=True,
             )
-            for (code, name, kind), currency in zip(funds, currencies, strict=True)
+            for (code, name, kind, isin), currency in zip(funds, currencies, strict=True)
         ]
 
-    def _products(self, query: str) -> list[tuple[str, str, str]]:
-        """Each product found: its Fund Code, its plain name and its kind (FIO, PPK, UFK, ...)."""
+    def _products(self, query: str) -> list[tuple[str, str, str, str]]:
+        """Each product found: its Fund Code, its plain name, its kind (FIO, PPK, UFK, ...) and its ISIN ("" when
+        the search gives none, as it has so far)."""
         try:
             body = self.fetch(SEARCH_API.format(query=url_quote(query, safe="")))
         except HTTPError as exc:
@@ -115,7 +117,10 @@ class AnalizySearch:
             ) from None
         try:
             products = json.loads(body or "")["products"]
-            return [(str(p["kod"]), _plain(str(p["nazwa"])), str(p["kodRodzaju"])) for p in products]
+            return [
+                (str(p["kod"]), _plain(str(p["nazwa"])), str(p["kodRodzaju"]), str(p.get("isin") or "").upper())
+                for p in products
+            ]
         except ValueError, KeyError, TypeError:
             raise InstrumentSearchError("Nieprawidłowa odpowiedź wyszukiwarki analizy.pl.") from None
 
