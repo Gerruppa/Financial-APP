@@ -157,7 +157,7 @@ def _fill(session: Session, row: InstrumentRow, draft: InstrumentDraft) -> None:
     row.metal_grams = _text(draft.metal_grams)
     row.buyback_spread_percent = _text(draft.buyback_spread_percent)
     row.ter_percent = _text(draft.ter_percent)
-    row.distribution_policy = draft.distribution_policy
+    row.distribution_policy = None if draft.distribution_policy is None else draft.distribution_policy.value
     row.domicile = draft.domicile
     row.source_symbols = [
         SourceSymbolRow(source=source, symbol=symbol) for source, symbol in draft.source_symbols.items()

@@ -135,3 +135,7 @@ def test_ter_is_at_least_zero_and_below_100(ter: Decimal) -> None:
 
 def test_distribution_policies_have_polish_labels() -> None:
     assert [policy.label for policy in DistributionPolicy] == ["Akumulacja", "Dystrybucja"]
+
+
+def test_a_stored_distribution_policy_value_becomes_the_policy() -> None:
+    assert _draft(distribution_policy="distributing").distribution_policy is DistributionPolicy.DISTRIBUTING

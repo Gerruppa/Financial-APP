@@ -86,7 +86,7 @@ class PortfolioPage:
         if not accounts:
             ui.label("Brak kont. Dodaj konto w zakładce Ustawienia.").classes("text-gray-500")
         instruments = list_instruments(self.engine)
-        catalog = {i.id: i for i in instruments}
+        instruments_by_id = {i.id: i for i in instruments}
         held_instruments = {p.instrument_id for p in positions}
         rates: dict[str, Decimal | None] = {PLN: Decimal(1)}
         quotes = latest_quotes(self.engine)
@@ -102,10 +102,12 @@ class PortfolioPage:
         for account in accounts:
             own = sorted(
                 (p for p in positions if p.account_id == account.id),
-                key=lambda p: catalog[p.instrument_id].name.casefold(),
+                key=lambda p: instruments_by_id[p.instrument_id].name.casefold(),
             )
             own_cash = sorted((c for c in cash if c.account_id == account.id), key=lambda c: c.currency)
-            _account_card(account, balances.get(account.id, Decimal(0)), own, own_cash, prices, rates, catalog, totals)
+            _account_card(
+                account, balances.get(account.id, Decimal(0)), own, own_cash, prices, rates, instruments_by_id, totals
+            )
 
     def _rate(self, currency: str, rates: dict[str, Decimal | None]) -> Decimal | None:
         """The NBP Rate from the last business day before today, fetched once per currency into ``rates``."""
@@ -124,7 +126,7 @@ def _account_card(
     foreign: list[ForeignCash],
     prices: dict[int, InstrumentPrice],
     rates: dict[str, Decimal | None],
-    catalog: dict[int, Instrument],
+    instruments_by_id: dict[int, Instrument],
     totals: _Totals,
 ) -> None:
     known_rates = {currency: rate for currency, rate in rates.items() if rate is not None}
@@ -165,7 +167,7 @@ def _account_card(
                 fx_label = ui.label(f"{format_pln(fx, signed=True)}{excluded}").classes(_result_color(fx))
                 fx_label.mark("fx-result")
         if positions:
-            _positions_table(positions, prices, catalog)
+            _positions_table(positions, prices, instruments_by_id)
 
 
 def _foreign_cash_table(foreign: list[ForeignCash], rates: dict[str, Decimal]) -> None:
@@ -195,7 +197,7 @@ def _cash_value(balance: ForeignCash, rate: Decimal | None) -> Decimal:
 
 
 def _positions_table(
-    positions: list[Position], prices: dict[int, InstrumentPrice], catalog: dict[int, Instrument]
+    positions: list[Position], prices: dict[int, InstrumentPrice], instruments_by_id: dict[int, Instrument]
 ) -> None:
     with ui.element("div").classes("grid w-full gap-x-4 border-b py-1 font-medium").style(COLUMNS):
         for header in HEADERS:
@@ -205,7 +207,7 @@ def _positions_table(
         with row.style(COLUMNS).mark("position-row"):
             current = prices[position.instrument_id]
             with ui.row().classes("items-center gap-2"):
-                ui.label(catalog[position.instrument_id].name)
+                ui.label(instruments_by_id[position.instrument_id].name)
                 if current.badge is not None:
                     color = "orange" if current.badge is Badge.STALE else "grey"
                     ui.badge(current.badge.value, color=color).props("outline").mark("price-badge")
@@ -213,7 +215,7 @@ def _positions_table(
             ui.label(format_pln(position.average_price)).classes("text-right")
             ui.label(format_pln(position.cost)).classes("text-right")
             _valuation_cells(position, current)
-        details = _lots_table(position, catalog[position.instrument_id])
+        details = _lots_table(position, instruments_by_id[position.instrument_id])
         row.on("click", lambda details=details: details.set_visibility(not details.visible))
 
 

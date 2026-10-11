@@ -39,7 +39,10 @@ class DistributionPolicy(StrEnum):
 
     @property
     def label(self) -> str:
-        return "Akumulacja" if self is DistributionPolicy.ACCUMULATING else "Dystrybucja"
+        return _POLICY_LABELS[self]
+
+
+_POLICY_LABELS = {DistributionPolicy.ACCUMULATING: "Akumulacja", DistributionPolicy.DISTRIBUTING: "Dystrybucja"}
 
 
 class InstrumentError(ValueError):
@@ -119,6 +122,8 @@ class InstrumentDraft:
         object.__setattr__(self, "quote_currency", currency)
         object.__setattr__(self, "market", self.market.strip())
         object.__setattr__(self, "domicile", self.domicile.strip())
+        if self.distribution_policy is not None:
+            object.__setattr__(self, "distribution_policy", DistributionPolicy(self.distribution_policy))
         # A blank symbol means none in that source
         symbols = {source: symbol.strip() for source, symbol in self.source_symbols.items() if symbol.strip()}
         object.__setattr__(self, "source_symbols", symbols)
