@@ -22,6 +22,7 @@ from financial_app.ui.dialogs import install_movable_dialogs
 from financial_app.ui.portfolio import PortfolioPage
 from financial_app.ui.settings import build_settings_page
 from financial_app.ui.transactions import TransactionsPage, open_transaction_dialog
+from financial_app.ui.unpriced import UnpricedSection
 
 APP_TITLE = "Moje inwestycje"
 
@@ -74,11 +75,13 @@ def build_shell(
     install_movable_dialogs()
     transactions_page = TransactionsPage(engine, rates)
     portfolio_page = PortfolioPage(engine, rates)
+    unpriced = UnpricedSection(engine)
 
     def transactions_changed() -> None:
         # Only the tab on screen has something to redraw; the others rebuild from the database when opened
         transactions_page.refresh()
         portfolio_page.refresh()
+        unpriced.refresh()
 
     async def refresh_now() -> None:
         running = _running_refreshes.get(engine)
@@ -101,6 +104,7 @@ def build_shell(
         if result is None:  # the app is shutting down
             return
         portfolio_page.refresh()
+        unpriced.refresh()
         ui.notify(_refresh_message(result), type="warning" if result.failures else "positive")
 
     with ui.header().classes("bg-indigo-900 items-center").mark("header"):
@@ -128,7 +132,7 @@ def build_shell(
     pages: dict[str, Callable[[], None]] = {tab.path: _placeholder_page(tab.label) for tab in TABS}
     pages["/transakcje"] = transactions_page.build
     pages["/portfolio"] = portfolio_page.build
-    pages["/ustawienia"] = lambda: build_settings_page(engine, rates, search)
+    pages["/ustawienia"] = lambda: build_settings_page(engine, rates, search, unpriced)
     ui.sub_pages(pages).classes("w-full").mark("page-content")
 
     if engine in _running_refreshes or (refresh_at_start and refresh_due(last_successful_refresh(engine), now())):

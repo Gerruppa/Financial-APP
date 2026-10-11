@@ -107,14 +107,17 @@ class AssetClassesSection:
 
 @dataclass
 class InstrumentsSection:
-    """The Instrumenty card; ``refresh`` redraws the catalog after a save or an Asset Class rename. ``search`` fills
-    the Instrument dialog from a listing found by ISIN, name or symbol (spec 4.1)."""
+    """The Instrumenty card; ``refresh`` redraws the catalog after a save or an Asset Class rename, and calls
+    ``on_changed`` so that other sections redraw too. ``search`` fills the Instrument dialog from a listing found by
+    ISIN, name or symbol (spec 4.1)."""
 
     engine: Engine
     search: InstrumentSearch
+    on_changed: Callable[[], None]
 
     def refresh(self) -> None:
         self.instrument_list.refresh()
+        self.on_changed()
 
     def build(self) -> None:
         with ui.card().classes("w-full max-w-4xl"):

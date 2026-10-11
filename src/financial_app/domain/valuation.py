@@ -3,10 +3,11 @@
 The Manual Price wins while it is set; otherwise the Instrument's newest Quote from the Price Sources is its price.
 A badge beside the Position says where the price comes from when it is not a fresh Quote. A physical metal's price is
 the spot of a troy ounce, so its unit is valued at its weight less the Buyback Spread, with the spot kept beside it.
+The "Instrumenty bez wyceny" list leads the user through the held Instruments without an automatic price.
 """
 
-from collections.abc import Callable
-from dataclasses import dataclass
+from collections.abc import Callable, Collection, Iterable, Mapping
+from dataclasses import dataclass, field
 from decimal import Decimal
 from enum import StrEnum
 
@@ -85,3 +86,44 @@ def _badge(instrument: Instrument, quote: Quote | None, stale: bool) -> Badge | 
     if quote is not None and stale:
         return Badge.STALE
     return None
+
+
+class UnpricedReason(StrEnum):
+    """Why a held Instrument has no automatic price, in Polish (issue #40)."""
+
+    NO_SOURCE = "bez źródła"  # no Source Symbol for any source of its Fallback Order
+    FAILED = "błąd we wszystkich źródłach"  # the latest refresh failed in every source it has a Source Symbol for
+    NOT_REFRESHED = "czeka na odświeżenie wycen"  # it has a Source Symbol but no Quote yet
+
+
+@dataclass(frozen=True)
+class Unpriced:
+    """A row of the "Instrumenty bez wyceny" list; ``failures`` are each source's reason when the refresh failed."""
+
+    instrument: Instrument
+    reason: UnpricedReason
+    failures: dict[str, str] = field(default_factory=dict)
+
+
+def instruments_without_price(
+    instruments: Iterable[Instrument],
+    held: Collection[int],
+    quoted: Collection[int],
+    failures: Mapping[int, Mapping[str, str]],
+) -> list[Unpriced]:
+    """The ``held`` Instruments (ids with an open Position) without an automatic price, in the order given.
+
+    ``quoted`` are the ids of the Instruments with a Quote and ``failures`` the latest refresh's reasons by Instrument
+    id. A Bond Series waits for Stage 3, so it is never listed.
+    """
+    listed = []
+    for instrument in instruments:
+        if instrument.id not in held or instrument.asset_class_name in STAGE_3_CLASSES:
+            continue
+        if not sources_to_try(instrument.asset_class_name, instrument.source_symbols):
+            listed.append(Unpriced(instrument, UnpricedReason.NO_SOURCE))
+        elif instrument.id in failures:
+            listed.append(Unpriced(instrument, UnpricedReason.FAILED, dict(failures[instrument.id])))
+        elif instrument.id not in quoted:
+            listed.append(Unpriced(instrument, UnpricedReason.NOT_REFRESHED))
+    return listed

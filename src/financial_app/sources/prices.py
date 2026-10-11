@@ -9,8 +9,9 @@ from sqlalchemy import Engine
 
 from financial_app.domain.lots import open_positions
 from financial_app.domain.prices import PriceSourceError, Quote, sources_to_try
+from financial_app.domain.valuation import Unpriced, instruments_without_price
 from financial_app.persistence.instruments import list_instruments
-from financial_app.persistence.quotes import load_refresh, save_quote, save_refresh
+from financial_app.persistence.quotes import latest_quotes, load_refresh, save_quote, save_refresh
 from financial_app.persistence.transactions import list_transactions
 
 
@@ -67,10 +68,9 @@ def refresh_prices(
     A failing source or Instrument never stops the others. The refresh's time and failures are saved for
     ``last_refresh``, and as the last successful one when the result ``succeeded``.
     """
-    # list_transactions is newest first; the FIFO engine wants entry order
     for price_source in sources.values():
         price_source.new_refresh()
-    held = {position.instrument_id for position in open_positions(reversed(list_transactions(engine)))}
+    held = _held(engine)
     refreshed, failures = 0, []
     for instrument in list_instruments(engine):
         if instrument.id not in held:
@@ -110,3 +110,17 @@ def last_refresh(engine: Engine) -> RefreshStatus | None:
     refreshed_at, reasons = saved
     failures = [RefreshFailure(i.id, i.name, reasons[i.id]) for i in list_instruments(engine) if i.id in reasons]
     return RefreshStatus(refreshed_at, failures)
+
+
+def unpriced_instruments(engine: Engine) -> list[Unpriced]:
+    """The "Instrumenty bez wyceny" list (issue #40): held Instruments without an automatic price after the last
+    refresh, in the Instrument list's order."""
+    saved = load_refresh(engine)
+    failures = saved[1] if saved else {}
+    return instruments_without_price(list_instruments(engine), _held(engine), latest_quotes(engine).keys(), failures)
+
+
+def _held(engine: Engine) -> set[int]:
+    """The ids of the Instruments with an open Position."""
+    # list_transactions is newest first; the FIFO engine wants entry order
+    return {position.instrument_id for position in open_positions(reversed(list_transactions(engine)))}
