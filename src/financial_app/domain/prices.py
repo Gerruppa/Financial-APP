@@ -85,3 +85,13 @@ class Quote:
     currency: str
     day: date
     source: str
+
+
+class CurrencyMismatchError(PriceSourceError):
+    """The source quotes the symbol in another currency than the Instrument's, which is never converted silently
+    (spec 4.1); ``quote`` is the source's own, in the source's currency rather than the Instrument's quote currency, for
+    the "Sprawdź" check to show and never to be saved."""
+
+    def __init__(self, message: str, quote: Quote) -> None:
+        super().__init__(message)
+        self.quote = quote

@@ -1,5 +1,6 @@
 """Refreshing the Quotes of held Instruments from the Price Sources, in each Fallback Order (spec 4.1)."""
 
+import copy
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
@@ -8,7 +9,7 @@ from typing import Protocol
 from sqlalchemy import Engine
 
 from financial_app.domain.lots import open_positions
-from financial_app.domain.prices import PriceSourceError, Quote, sources_to_try
+from financial_app.domain.prices import CurrencyMismatchError, PriceSourceError, Quote, sources_to_try
 from financial_app.domain.valuation import Unpriced, instruments_without_price
 from financial_app.persistence.instruments import list_instruments
 from financial_app.persistence.quotes import latest_quotes, load_refresh, save_quote, save_refresh
@@ -90,7 +91,7 @@ def refresh_prices(
                 reasons[source] = str(error)
                 continue
             except Exception as error:  # noqa: BLE001 - a broken source must not stop the other Instruments
-                reasons[source] = f"Nieoczekiwany błąd źródła: {error}"
+                reasons[source] = _unexpected(error)
                 continue
             save_quote(engine, instrument.id, quote, now())
             refreshed += 1
@@ -100,6 +101,41 @@ def refresh_prices(
     result = RefreshResult(refreshed, failures)
     save_refresh(engine, now(), {failure.instrument_id: failure.reasons for failure in failures}, result.succeeded)
     return result
+
+
+@dataclass(frozen=True)
+class SymbolCheck:
+    """What the "Sprawdź" button found for one Source Symbol: the source's Quote, with a ``warning`` when it is in
+    another currency than the Instrument's, or an ``error`` (Polish) when there is none."""
+
+    quote: Quote | None = None
+    warning: str = ""
+    error: str = ""
+
+
+def check_symbol(source: PriceSource, symbol: str, currency: str) -> SymbolCheck:
+    """Fetch one Quote of ``symbol`` for an Instrument quoted in ``currency`` (spec 4.1), anew rather than from what
+    the source kept from a refresh. Nothing is saved, so a failed check never stops the Instrument's save."""
+    symbol, currency = symbol.strip(), currency.strip().upper()
+    if not symbol:
+        return SymbolCheck(error="Wpisz symbol, aby go sprawdzić.")
+    if not currency:
+        return SymbolCheck(error="Wpisz walutę notowania, aby sprawdzić symbol.")
+    # A copy forgets what it keeps without touching the source a running refresh may be using (in another thread)
+    source = copy.copy(source)
+    source.new_refresh()
+    try:
+        return SymbolCheck(quote=source.quote(symbol, currency))
+    except CurrencyMismatchError as mismatch:
+        return SymbolCheck(quote=mismatch.quote, warning=str(mismatch))
+    except PriceSourceError as error:
+        return SymbolCheck(error=str(error))
+    except Exception as error:  # noqa: BLE001 - a broken source is shown like any other failure
+        return SymbolCheck(error=_unexpected(error))
+
+
+def _unexpected(error: Exception) -> str:
+    return f"Nieoczekiwany błąd źródła: {error}"
 
 
 def last_refresh(engine: Engine) -> RefreshStatus | None:

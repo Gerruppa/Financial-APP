@@ -132,7 +132,7 @@ def build_shell(
     pages: dict[str, Callable[[], None]] = {tab.path: _placeholder_page(tab.label) for tab in TABS}
     pages["/transakcje"] = transactions_page.build
     pages["/portfolio"] = portfolio_page.build
-    pages["/ustawienia"] = lambda: build_settings_page(engine, rates, search, unpriced)
+    pages["/ustawienia"] = lambda: build_settings_page(engine, rates, search, sources, unpriced)
     ui.sub_pages(pages).classes("w-full").mark("page-content")
 
     if engine in _running_refreshes or (refresh_at_start and refresh_due(last_successful_refresh(engine), now())):

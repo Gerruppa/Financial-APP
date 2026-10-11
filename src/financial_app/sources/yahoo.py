@@ -11,7 +11,7 @@ from urllib.error import HTTPError
 from urllib.parse import quote as url_quote
 
 from financial_app.domain.instrument_search import InstrumentSearchError, SearchResult, looks_like_isin
-from financial_app.domain.prices import BOSSA, YAHOO, PriceSourceError, Quote
+from financial_app.domain.prices import BOSSA, YAHOO, CurrencyMismatchError, PriceSourceError, Quote
 
 API = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?range=5d&interval=1d"
 SEARCH_API = "https://query1.finance.yahoo.com/v1/finance/search?q={query}&quotesCount=10&newsCount=0&listsCount=0"
@@ -59,8 +59,9 @@ class YahooSource:
             rate, _, _, _ = _latest(self.fetch, f"{source_currency}{currency}=X")
             price, source_currency = price * rate, currency
         if source_currency != currency:
-            raise PriceSourceError(
-                f"Yahoo podaje cenę {symbol} w {source_currency}, a instrument jest notowany w {currency}."
+            raise CurrencyMismatchError(
+                f"Yahoo podaje cenę {symbol} w {source_currency}, a instrument jest notowany w {currency}.",
+                Quote(price, source_currency, day, YAHOO),
             )
         return Quote(price, currency, day, YAHOO)
 
