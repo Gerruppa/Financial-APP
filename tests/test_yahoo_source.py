@@ -75,3 +75,30 @@ def _too_many_requests(url: str) -> str | None:
 def test_a_failed_fetch_is_an_error_saying_why(fetch: Callable[[str], str | None], message: str) -> None:
     with pytest.raises(PriceSourceError, match=message):
         YahooSource(fetch).quote("AAPL", "USD")
+
+
+def _saved_history(url: str) -> str | None:
+    symbol = unquote(url.split("/chart/")[1].split("?")[0])
+    path = FIXTURES / "history" / f"{symbol}.json"
+    return path.read_text(encoding="utf-8") if path.is_file() else None
+
+
+def test_history_gives_each_days_close_not_the_adjusted_one_in_pounds() -> None:
+    requests: list[str] = []
+
+    def fetch(url: str) -> str | None:
+        requests.append(url)
+        return _saved_history(url)
+
+    quotes = YahooSource(fetch).history("BP.L", "GBP", date(2026, 1, 2), date(2026, 1, 6))
+
+    assert quotes == [
+        Quote(Decimal("5.805"), "GBP", date(2026, 1, 2), "yahoo_history"),
+        Quote(Decimal("5.9"), "GBP", date(2026, 1, 6), "yahoo_history"),
+    ]
+    assert "period1=" in requests[0] and "interval=1d" in requests[0]
+
+
+def test_history_in_another_currency_than_the_instruments_is_an_error() -> None:
+    with pytest.raises(PriceSourceError, match="GBP"):
+        YahooSource(_saved_history).history("BP.L", "USD", date(2026, 1, 2), date(2026, 1, 6))

@@ -12,6 +12,12 @@ ANALIZY = "analizy"
 BANKIER = "bankier"
 # Stooq serves price history and indices only (issue #33), so it is in no Fallback Order
 STOOQ = "stooq"
+# Yahoo's daily closes for History (ADR-0006), saved apart from its current prices: they are split-adjusted
+YAHOO_HISTORY = "yahoo_history"
+# The sources of History's daily prices, tried in this order (spec 6.1)
+HISTORY_SOURCES = (YAHOO, STOOQ)
+# The sources of saved Quotes that only History uses, never valuing a Position
+HISTORY_ONLY_SOURCES = (STOOQ, YAHOO_HISTORY)
 # How each Price Source is named in the UI
 SOURCE_NAMES = {YAHOO: "Yahoo", BOSSA: "Bossa", ANALIZY: "analizy.pl", BANKIER: "bankier.pl", STOOQ: "Stooq"}
 
