@@ -4,7 +4,7 @@ from datetime import date
 from decimal import Decimal
 
 from financial_app.domain.instruments import Instrument
-from financial_app.domain.metrics import MaxDrawdown, drawdowns, max_drawdown, twr, volatility, xirr
+from financial_app.domain.metrics import MaxDrawdown, daily_change, drawdowns, max_drawdown, twr, volatility, xirr
 from financial_app.domain.portfolio_history import DayValue, HistoryPrice, daily_history
 from financial_app.domain.transactions import TransactionDraft, TransactionType, buy_or_sell, cash_transfer
 
@@ -159,3 +159,34 @@ def test_xirr_has_no_rate_when_everything_is_paid_in_on_the_last_day_and_none_wh
     flat = xirr(history, _day(1), _day(2))
 
     assert flat == 0 and flat is not None and not flat.is_signed()
+
+
+def test_daily_change_is_todays_value_less_yesterdays_and_todays_flows() -> None:
+    # Day 3: 1000 deposited and the rest gained 110
+    history = _history(("1000", "1000"), ("1100", "1000"), ("2210", "2000"))
+
+    assert daily_change(history) == Decimal(110)
+    assert daily_change(history, IKE) == Decimal(110)
+
+
+def test_on_the_first_day_the_daily_change_is_the_value_less_the_deposits() -> None:
+    assert daily_change(_history(("1010", "1000"))) == Decimal(10)
+    assert daily_change([]) is None
+
+
+def test_an_account_moving_cash_out_has_no_daily_change_from_the_transfer() -> None:
+    history = [
+        DayValue(_day(1), {IKE: Decimal(1000)}, {}, Decimal(1000), {IKE: Decimal(1000)}, frozenset()),
+        DayValue(
+            _day(2),
+            {IKE: Decimal(450), XTB: Decimal(550)},
+            {},
+            Decimal(1000),
+            {IKE: Decimal(450), XTB: Decimal(550)},
+            frozenset(),
+        ),
+    ]
+
+    assert daily_change(history) == 0
+    assert daily_change(history, IKE) == 0
+    assert daily_change(history, XTB) == 0

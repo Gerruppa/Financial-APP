@@ -5,7 +5,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 
-from nicegui import run, ui
+from nicegui import background_tasks, run, ui
 from sqlalchemy import Engine
 
 from financial_app.domain.formatting import format_count, format_datetime
@@ -15,14 +15,19 @@ from financial_app.persistence.quotes import last_successful_refresh
 from financial_app.sources.analizy import AnalizySearch, AnalizySource
 from financial_app.sources.bankier import BankierSource
 from financial_app.sources.bossa import BossaSource
+from financial_app.sources.history import QuoteHistory
 from financial_app.sources.nbp import NbpRates
+from financial_app.sources.portfolio_history import PortfolioHistory
 from financial_app.sources.prices import PriceSource, RefreshResult, last_refresh, refresh_prices
 from financial_app.sources.yahoo import YahooSearch, YahooSource
 from financial_app.ui.dialogs import install_movable_dialogs
+from financial_app.ui.history import history_status, shared_history
+from financial_app.ui.periods import PeriodChoice, period_selector
 from financial_app.ui.portfolio import PortfolioPage
 from financial_app.ui.settings import build_settings_page
 from financial_app.ui.transactions import TransactionsPage, open_transaction_dialog
 from financial_app.ui.unpriced import UnpricedSection
+from financial_app.ui.view_scope import ScopeSwitcher, ViewScope, breadcrumbs
 
 APP_TITLE = "Moje inwestycje"
 
@@ -49,8 +54,8 @@ TABS = [
 # another; ``None`` from it means the app is shutting down
 _running_refreshes: dict[Engine, asyncio.Future[RefreshResult | None]] = {}
 
-# Only Total for now; Accounts join the switcher in Stage 4 (spec section 5, View Scope)
-VIEW_SCOPES = ["Total"]
+# The tabs showing the period selector until their charts and results arrive (spec section 5)
+PERIOD_TABS = {"/", "/wyniki"}
 
 
 def build_shell(
@@ -60,28 +65,67 @@ def build_shell(
     refresh_at_start: bool = False,
     now: Callable[[], datetime] = datetime.now,
     search: InstrumentSearch | None = None,
+    history: PortfolioHistory | None = None,
 ) -> None:
     """Build the whole window; tabs are client-side sub-pages backed by the database at ``engine``.
 
     ``rates`` gives NBP Rates (by default from the NBP API through the cache in that database) and ``sources`` the
     Price Sources by their key (by default the real ones). With ``refresh_at_start`` the prices are refreshed in the
     background once the window is open, when they are due at ``now`` (spec 4.1). ``search`` finds Instruments for
-    the Instrument dialog (by default Yahoo and analizy.pl together).
+    the Instrument dialog (by default Yahoo and analizy.pl together). ``history`` is the database's History (by
+    default fetched from Yahoo and Stooq, computed in the process pool); with ``refresh_at_start`` its missing days are
+    fetched after the price refresh.
     """
     rates = rates or NbpRates(engine)
     if sources is None:
         sources = {YAHOO: YahooSource(), BOSSA: BossaSource(), ANALIZY: AnalizySource(), BANKIER: BankierSource()}
     search = search or CombinedSearch({SOURCE_NAMES[YAHOO]: YahooSearch(), SOURCE_NAMES[ANALIZY]: AnalizySearch()})
     install_movable_dialogs()
-    transactions_page = TransactionsPage(engine, rates)
-    portfolio_page = PortfolioPage(engine, rates)
+    shared = shared_history(
+        engine, lambda: history or PortfolioHistory(engine, QuoteHistory(engine), rates, lambda: now().date())
+    )
+    scope = ViewScope(engine)
+    period = PeriodChoice(engine, lambda: now().date())
+    transactions_page = TransactionsPage(engine, rates, scope)
+    portfolio_page = PortfolioPage(engine, rates, scope)
     unpriced = UnpricedSection(engine)
+
+    async def load_history() -> None:
+        """Compute History (or take it already computed) and show it in the switcher."""
+        await shared.values()
+        switcher.refresh()
+
+    def history_outdated() -> None:
+        shared.invalidate()
+        switcher.refresh()
+        background_tasks.create(load_history(), name="history")
+
+    async def fetch_history() -> None:
+        # The status follows the fetch's progress, which a worker thread advances
+        progress = ui.timer(0.5, history_state.refresh)
+        fetch = shared.fetch()
+        history_state.refresh()
+        try:
+            await fetch
+        finally:
+            progress.cancel()
+            history_state.refresh()
+        await load_history()
 
     def transactions_changed() -> None:
         # Only the tab on screen has something to redraw; the others rebuild from the database when opened
         transactions_page.refresh()
         portfolio_page.refresh()
         unpriced.refresh()
+        history_outdated()
+
+    def scope_changed() -> None:
+        switcher.refresh()
+        transactions_page.refresh()
+        portfolio_page.refresh()
+        scope_pages.refresh()
+
+    scope.on_change(scope_changed)
 
     async def refresh_now() -> None:
         running = _running_refreshes.get(engine)
@@ -105,18 +149,27 @@ def build_shell(
             return
         portfolio_page.refresh()
         unpriced.refresh()
+        history_outdated()
         ui.notify(_refresh_message(result), type="warning" if result.failures else "positive")
+
+    async def start() -> None:
+        if engine in _running_refreshes or (refresh_at_start and refresh_due(last_successful_refresh(engine), now())):
+            await refresh_now()
+        if refresh_at_start or shared.fetching is not None:
+            await fetch_history()
 
     with ui.header().classes("bg-indigo-900 items-center").mark("header"):
         ui.label(APP_TITLE).classes("text-lg font-bold")
         ui.space()
+        history_state = ui.refreshable(lambda: history_status(engine, shared))
+        history_state()
         price_status = ui.refreshable(lambda: _price_status(engine, engine in _running_refreshes))
         price_status()
         refresh_button = ui.button(icon="refresh", on_click=refresh_now).props(
             'flat round color=white aria-label="Odśwież wyceny"'
         )
         refresh_button.tooltip("Odśwież wyceny").mark("refresh-prices")
-        ui.select(VIEW_SCOPES, value=VIEW_SCOPES[0], label="Widok").props("dense dark standout").classes("w-48")
+        switcher = ScopeSwitcher(scope, lambda: shared.days)
 
     with ui.left_drawer(value=True).classes("bg-indigo-950").props("width=260").mark("nav-menu"):
         for tab in TABS:
@@ -129,15 +182,28 @@ def build_shell(
             'fab color=indigo aria-label="Dodaj transakcję"'
         ).mark("add-transaction")
 
-    pages: dict[str, Callable[[], None]] = {tab.path: _placeholder_page(tab.label) for tab in TABS}
+    @ui.refreshable
+    def scope_pages(build: Callable[[], None]) -> None:
+        breadcrumbs(scope)
+        build()
+
+    def placeholder(tab: Tab) -> Callable[[], None]:
+        def build() -> None:
+            _placeholder_page(tab.label)()
+            if tab.path in PERIOD_TABS:
+                period_selector(period)
+
+        return lambda: scope_pages(build)
+
+    pages: dict[str, Callable[[], None]] = {tab.path: placeholder(tab) for tab in TABS}
     pages["/transakcje"] = transactions_page.build
     pages["/portfolio"] = portfolio_page.build
     pages["/ustawienia"] = lambda: build_settings_page(engine, rates, search, sources, unpriced)
     ui.sub_pages(pages).classes("w-full").mark("page-content")
 
-    if engine in _running_refreshes or (refresh_at_start and refresh_due(last_successful_refresh(engine), now())):
-        # Once the window is up, so that it never waits for the sources
-        ui.timer(0, refresh_now, once=True)
+    # Once the window is up, so that it never waits for the sources or the computation
+    ui.timer(0, load_history, once=True)
+    ui.timer(0, start, once=True)
 
 
 def _price_status(engine: Engine, refreshing: bool) -> None:
