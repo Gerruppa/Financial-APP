@@ -32,6 +32,10 @@ _Avoid_: ticker, security, asset, symbol
 The identifier of an Instrument in one Price Source (e.g. `PZU.WA` in Yahoo, `pzu` in Stooq).
 _Avoid_: ticker
 
+**Fund Code** (Kod funduszu):
+The code of a Polish fund or PPK shared by analizy.pl and bankier.pl (e.g. `PZU60`, `QRS32`), stored as the Instrument's analizy.pl Source Symbol. bankier.pl uses it whenever the Instrument has no bankier.pl Source Symbol of its own (needed only when the codes differ, e.g. a unit category). Foreign fund series (e.g. `FTI068_AH_EUR`) exist only in analizy.pl.
+_Avoid_: fund ID, fund symbol
+
 **Asset Class** (Klasa aktywów):
 A user-editable category used for allocation, e.g. Akcje zagraniczne, Obligacje skarbowe polskie, Metale i surowce.
 _Avoid_: category, asset type
@@ -123,7 +127,7 @@ The price of an Instrument on one day, in its quote currency, as given by one Pr
 _Avoid_: price point, tick, rate
 
 **Fallback Order** (Kolejność źródeł):
-The ordered list of Price Sources tried for an Asset Class. An Instrument uses only the sources it has a Source Symbol for, in that order; with none it has no automatic valuation.
+The ordered list of Price Sources tried for an Asset Class. An Instrument uses only the sources it has a Source Symbol for (bankier.pl also through the Fund Code), in that order; with none it has no automatic valuation. The Instrument dialog shows the symbol fields in this order and folds the other sources away.
 _Avoid_: priority, source chain
 
 **Stale Price** (Nieaktualna cena):
