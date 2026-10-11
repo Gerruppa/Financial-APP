@@ -151,6 +151,7 @@ def _fill(session: Session, row: InstrumentRow, draft: InstrumentDraft) -> None:
     row.asset_class = asset_class
     row.quote_currency = draft.quote_currency
     row.market = draft.market
+    row.isin = draft.isin
     row.manual_price = _text(draft.manual_price)
     row.metal_grams = _text(draft.metal_grams)
     row.buyback_spread_percent = _text(draft.buyback_spread_percent)
@@ -175,6 +176,7 @@ def _to_instrument(row: InstrumentRow) -> Instrument:
         asset_class_name=row.asset_class.name,
         quote_currency=row.quote_currency,
         market=row.market,
+        isin=row.isin,
         manual_price=_decimal(row.manual_price),
         source_symbols={s.source: s.symbol for s in row.source_symbols},
         metal_grams=_decimal(row.metal_grams),

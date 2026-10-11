@@ -1,5 +1,6 @@
 """Instruments and the Asset Classes they belong to (spec 3.2)."""
 
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from decimal import Decimal
@@ -21,6 +22,9 @@ DEFAULT_ASSET_CLASSES = [
     "Inne",
     "Multi-asset",
 ]
+
+# Two letters of the issuer's country, nine letters or digits and a check digit
+ISIN_PATTERN = re.compile(r"[A-Z]{2}[A-Z0-9]{9}[0-9]")
 
 # A troy ounce, the unit of metal spot prices (spec 4.1)
 GRAMS_PER_TROY_OUNCE = Decimal("31.1034768")
@@ -51,7 +55,8 @@ class InstrumentDraft:
     """The user-editable fields of an Instrument, validated and normalised on creation.
 
     ``manual_price`` is in ``quote_currency``; ``source_symbols`` maps a Price Source (``domain.prices``) to the
-    Instrument's Source Symbol in it.
+    Instrument's Source Symbol in it. ``isin`` is optional and not unique: each listing of a security (exchange,
+    currency) is its own Instrument with the same ISIN.
 
     A physical metal (coins, bars) is still held in units: ``metal_grams`` is the metal weight of one unit, and its
     prices (Manual Price and Quotes) are the spot price of a troy ounce, which ``unit_price`` turns into the value of
@@ -66,6 +71,7 @@ class InstrumentDraft:
     source_symbols: Mapping[str, str] = field(default_factory=dict)
     metal_grams: Decimal | None = None
     buyback_spread_percent: Decimal | None = None
+    isin: str = ""
 
     def __post_init__(self) -> None:
         name = self.name.strip()
@@ -86,6 +92,10 @@ class InstrumentDraft:
                 raise InstrumentError("Spread odkupu wymaga wagi metalu w jednostce.")
             if not 0 <= spread < 100:
                 raise InstrumentError("Spread odkupu musi wynosić od 0 do mniej niż 100%.")
+        isin = self.isin.strip().upper()
+        if isin and not ISIN_PATTERN.fullmatch(isin):
+            raise InstrumentError(f"Nieprawidłowy ISIN: {isin}. ISIN ma 12 znaków, np. IE00B6R52259.")
+        object.__setattr__(self, "isin", isin)
         object.__setattr__(self, "name", name)
         object.__setattr__(self, "quote_currency", currency)
         object.__setattr__(self, "market", self.market.strip())
