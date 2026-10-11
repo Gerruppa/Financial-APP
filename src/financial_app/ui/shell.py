@@ -10,7 +10,7 @@ from sqlalchemy import Engine
 
 from financial_app.domain.formatting import format_count, format_datetime
 from financial_app.domain.instrument_search import InstrumentSearch
-from financial_app.domain.prices import ANALIZY, BANKIER, BOSSA, SOURCE_NAMES, YAHOO, refresh_due
+from financial_app.domain.prices import ANALIZY, BANKIER, BOSSA, YAHOO, refresh_due, source_reason
 from financial_app.persistence.quotes import last_successful_refresh
 from financial_app.sources.analizy import AnalizySource
 from financial_app.sources.bankier import BankierSource
@@ -22,6 +22,7 @@ from financial_app.ui.dialogs import install_movable_dialogs
 from financial_app.ui.portfolio import PortfolioPage
 from financial_app.ui.settings import build_settings_page
 from financial_app.ui.transactions import TransactionsPage, open_transaction_dialog
+from financial_app.ui.unpriced import UnpricedSection
 
 APP_TITLE = "Moje inwestycje"
 
@@ -74,11 +75,13 @@ def build_shell(
     install_movable_dialogs()
     transactions_page = TransactionsPage(engine, rates)
     portfolio_page = PortfolioPage(engine, rates)
+    unpriced = UnpricedSection(engine)
 
     def transactions_changed() -> None:
         # Only the tab on screen has something to redraw; the others rebuild from the database when opened
         transactions_page.refresh()
         portfolio_page.refresh()
+        unpriced.refresh()
 
     async def refresh_now() -> None:
         running = _running_refreshes.get(engine)
@@ -101,6 +104,7 @@ def build_shell(
         if result is None:  # the app is shutting down
             return
         portfolio_page.refresh()
+        unpriced.refresh()
         ui.notify(_refresh_message(result), type="warning" if result.failures else "positive")
 
     with ui.header().classes("bg-indigo-900 items-center").mark("header"):
@@ -128,7 +132,7 @@ def build_shell(
     pages: dict[str, Callable[[], None]] = {tab.path: _placeholder_page(tab.label) for tab in TABS}
     pages["/transakcje"] = transactions_page.build
     pages["/portfolio"] = portfolio_page.build
-    pages["/ustawienia"] = lambda: build_settings_page(engine, rates, search)
+    pages["/ustawienia"] = lambda: build_settings_page(engine, rates, search, unpriced)
     ui.sub_pages(pages).classes("w-full").mark("page-content")
 
     if engine in _running_refreshes or (refresh_at_start and refresh_due(last_successful_refresh(engine), now())):
@@ -165,7 +169,7 @@ def _price_errors_dialog(engine: Engine) -> None:
             for failure in status.failures:
                 ui.label(failure.instrument).classes("font-medium")
                 for source, reason in failure.reasons.items():
-                    ui.label(f"{SOURCE_NAMES.get(source, source)}: {reason}").classes("text-sm pl-4")
+                    ui.label(source_reason(source, reason)).classes("text-sm pl-4")
         with ui.row().classes("w-full justify-end"):
             ui.button("Zamknij", on_click=dialog.close).props("flat")
     dialog.on("hide", dialog.delete)

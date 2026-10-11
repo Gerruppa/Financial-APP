@@ -15,6 +15,12 @@ STOOQ = "stooq"
 # How each Price Source is named in the UI
 SOURCE_NAMES = {YAHOO: "Yahoo", BOSSA: "Bossa", ANALIZY: "analizy.pl", BANKIER: "bankier.pl", STOOQ: "Stooq"}
 
+
+def source_reason(source: str, reason: str) -> str:
+    """Why a Price Source gave no Quote, named as in the UI: "Yahoo: <reason>"."""
+    return f"{SOURCE_NAMES.get(source, source)}: {reason}"
+
+
 # Spec 4.1 defaults for the seeded Asset Classes; until they become editable (issue #41) they follow the class name
 OTHER = "Inne"
 DEFAULT_FALLBACK_ORDERS: dict[str, tuple[str, ...]] = {
