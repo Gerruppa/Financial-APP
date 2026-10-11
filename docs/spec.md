@@ -129,6 +129,23 @@ Shell (UI prototype verdict, branch `prototype/ui-shell`, issue #1): **left navi
 - Benchmarks may carry a "+x pp/year" offset (e.g. CPI + 3 pp) and may be another Account (Q65.13).
 - Benchmarks: any catalog Instrument or CPI; every Deposit/Withdrawal "invested" into the benchmark on its date at its PLN price; CPI accrues monthly inflation spread evenly across days; per portfolio or per Account; no fees/taxes. Defaults: CPI, LON:ACWI, LON:CSPX, AMS:V80A, WSE:WIG, WSE:SWIG80TR.
 
+### 6.1 Stage 4 decisions (grilling of #5, 2026-10-11)
+- **Order**: Stage 4 runs before Stage 3. Slices: (a) History engine (daily value per Account and Asset Class, Net Deposits; no UI), (b) metrics (XIRR, TWR, drawdown, volatility), (j) Historia parity test right after (a)+(b), then (c) View Scope switcher and period selector, (d) Dashboard totals, Account table, currency exposure, (e) charts, (f) Wyniki tab, (g) Multi-asset; (h) Investment Strategies last as a separate slice. Benchmarks stay in Stage 5 (#6); treemap, Account ranking, profit-by-source waterfall and after-tax toggle come after (h).
+- **Quote history sources** (ADR-0006): Yahoo chart history first (it knows the currency, GBp ÷ 100), Stooq as fallback, in a per-Asset-Class history order like the price Fallback Order. Yahoo `close` (split-adjusted only), never `adjclose`: Dividends come from Transactions.
+- **Splits**: history prices are split-adjusted, so before a Split's date History divides the price by the Splits recorded in Transactions (un-adjusts it). An unrecorded split shows as a jump caught by the parity test.
+- **Missing days**: the last known Quote and NBP Rate carry forward; with none on or before the day, the Position is valued at cost and flagged "brak ceny". Bond Series are valued at cost (nominal) marked "do etapu 3" until Stage 3.
+- **FX on day D**: valuation uses the NBP table of day D (else the latest earlier); D-1 stays only for tax costs.
+- **Fetching**: history is fetched in the background after start (after the price refresh), header status "Historia: pobieranie… (n/N)", failures listed like "Wyceny"; later only missing days are fetched.
+- **Computing**: in memory in `run.cpu_bound`, cached until a Transaction save or price refresh; nothing stored (ADR-0002).
+- **Flows**: Total: Deposits and Withdrawals; Account scope also Cash and Security Transfers, a Security Transfer valued at its market value that day (cost without a price). TWR: flows at end of day, daily return (V_D − F_D) / V_{D−1} − 1.
+- **Periods**: XIRR over a period takes the value on the "from" day as an initial deposit and the "to" value as the final withdrawal; TWR chains daily returns; a period before the first Transaction is clipped to it.
+- **Volatility**: from weekday (Mon–Fri) daily TWR returns, annualised by √252.
+- **Real return** waits for GUS CPI (Stage 3); until then Wyniki shows "wynik realny — po dodaniu CPI".
+- **Multi-asset Split**: one fixed split per Instrument (percent per Asset Class, summing to 100%), applied to all of History (documented simplification); an Instrument without one stays in Multi-asset.
+- **View Scope** is remembered in `app_settings` (`view_scope`: `total` or an Account id), falling back to Total if the Account is gone. Daily change = V_today − V_yesterday − today's flows, "—" while history loads.
+- **Allocation chart** shows current class shares (with Multi-asset Splits) until Investment Strategies add targets.
+- **Historia parity test**: skipped without `reference/`; compares total value, Net Deposits and value per class at each month end, tolerance 1% or 50 PLN, reporting only larger differences; each explained one goes to section 9.
+
 ## 7. Import and verification (Q3, Q25, Q42, Q51–Q53)
 - Importer framework: parse file → preview with Instrument/Account mapping (unknown tickers resolved by the user; an unknown Konto is matched to an Account or creates one through the Account dialog, prefilled with its name and PLN plus the foreign cash its rows hold, #63) → duplicate detection → commit. Duplicates: same external id skipped; otherwise similar Transaction (Account, date, Instrument, quantity, ~amount) prompts the user.
 - Stage 1 importer: `reference/Newest portfolio.xlsx` (one-time). Ticker mapping from sheet formats (`EXCH:SYM`, Biznesradar, `EDO-DDMMYY` → Bond Series, `Waluty_<CUR>` → foreign cash).

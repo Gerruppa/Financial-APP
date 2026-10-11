@@ -1,0 +1,3 @@
+# History quotes come from Yahoo then Stooq, un-adjusted for recorded Splits
+
+History (ADR-0002) needs daily prices from each Instrument's first Transaction. Stooq gives only PLN-assumed closes, so foreign Instruments take Yahoo's chart history first (it states the currency and quotes GBp), with Stooq as fallback, in a per-Asset-Class history order. Both sources publish split-adjusted closes while the FIFO engine replays Splits on their date, so before a recorded Split History divides the price by its ratio. We take Yahoo `close`, not `adjclose`, because Dividends are already counted from Transactions. Days without a Quote carry the last one forward; an unrecorded split shows as a jump, which the Historia parity test is meant to catch.
