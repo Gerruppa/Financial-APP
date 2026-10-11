@@ -3,17 +3,42 @@
 from collections.abc import Mapping
 
 from financial_app.domain.instruments import Instrument
+from financial_app.domain.prices import BOSSA, YAHOO, default_fallback_order
 from financial_app.domain.valuation import Unpriced, UnpricedReason, instruments_without_price
 
 AKCJE_POLSKIE = "Akcje polskie"
 
 
-def _instrument(id: int, symbols: Mapping[str, str] | None = None, asset_class_name: str = AKCJE_POLSKIE) -> Instrument:
-    return Instrument(f"I{id}", 2, "PLN", "GPW", None, dict(symbols or {}), id=id, asset_class_name=asset_class_name)
+def _instrument(
+    id: int,
+    symbols: Mapping[str, str] | None = None,
+    asset_class_name: str = AKCJE_POLSKIE,
+    fallback_order: tuple[str, ...] | None = None,
+) -> Instrument:
+    if fallback_order is None:
+        fallback_order = default_fallback_order(asset_class_name)
+    return Instrument(
+        f"I{id}",
+        2,
+        "PLN",
+        "GPW",
+        None,
+        dict(symbols or {}),
+        id=id,
+        asset_class_name=asset_class_name,
+        fallback_order=fallback_order,
+    )
 
 
 def test_a_held_instrument_without_a_source_symbol_has_no_source() -> None:
     instrument = _instrument(1)
+
+    assert instruments_without_price([instrument], {1}, set(), {}) == [Unpriced(instrument, UnpricedReason.NO_SOURCE)]
+
+
+def test_a_symbol_for_a_source_its_asset_class_left_out_counts_as_no_source() -> None:
+    # The user removed Yahoo from the class's Fallback Order (issue #41)
+    instrument = _instrument(1, {YAHOO: "PZU.WA"}, fallback_order=(BOSSA,))
 
     assert instruments_without_price([instrument], {1}, set(), {}) == [Unpriced(instrument, UnpricedReason.NO_SOURCE)]
 

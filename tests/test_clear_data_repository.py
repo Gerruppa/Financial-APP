@@ -11,7 +11,7 @@ from sqlalchemy import Engine, create_engine
 from financial_app.domain.accounts import AccountDraft, AccountType
 from financial_app.domain.currencies import NbpRate
 from financial_app.domain.instruments import DEFAULT_ASSET_CLASSES, InstrumentDraft
-from financial_app.domain.prices import YAHOO, Quote
+from financial_app.domain.prices import BOSSA, YAHOO, Quote, default_fallback_order
 from financial_app.domain.transactions import TransactionDraft, TransactionType, buy_or_sell
 from financial_app.persistence import reset
 from financial_app.persistence.accounts import add_account, list_accounts
@@ -22,6 +22,7 @@ from financial_app.persistence.instruments import (
     list_asset_classes,
     list_instruments,
     rename_asset_class,
+    set_fallback_order,
 )
 from financial_app.persistence.nbp_rates import cache_rate, cached_rate
 from financial_app.persistence.quotes import latest_quotes, save_quote
@@ -90,6 +91,18 @@ def test_clearing_restores_the_default_asset_classes_in_order(engine: Engine) ->
     clear_portfolio(engine)
 
     assert [c.name for c in list_asset_classes(engine)] == DEFAULT_ASSET_CLASSES
+
+
+def test_clearing_restores_the_default_fallback_orders(engine: Engine) -> None:
+    for asset_class in list_asset_classes(engine):
+        set_fallback_order(engine, asset_class.id, [YAHOO])
+
+    clear_portfolio(engine)
+
+    assert {c.name: c.fallback_order for c in list_asset_classes(engine)} == {
+        name: default_fallback_order(name) for name in DEFAULT_ASSET_CLASSES
+    }
+    assert list_asset_classes(engine)[1].fallback_order == (BOSSA, YAHOO)  # Akcje polskie
 
 
 def test_default_asset_classes_match_the_ones_a_new_database_starts_with(engine: Engine) -> None:

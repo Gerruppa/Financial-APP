@@ -1,6 +1,6 @@
 """Ustawienia > Klasy aktywów and Instrumenty: the editable Asset Classes and the Instrument catalog (spec 3.2)."""
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 
@@ -29,7 +29,17 @@ from financial_app.domain.instruments import (
     InstrumentDraft,
     InstrumentError,
 )
-from financial_app.domain.prices import ANALIZY, BANKIER, BOSSA, SOURCE_NAMES, STOOQ, YAHOO, Quote
+from financial_app.domain.prices import (
+    ANALIZY,
+    BANKIER,
+    BOSSA,
+    FALLBACK_SOURCES,
+    SOURCE_NAMES,
+    STOOQ,
+    YAHOO,
+    FallbackOrderError,
+    Quote,
+)
 from financial_app.persistence.instruments import (
     add_asset_class,
     add_instrument,
@@ -37,7 +47,8 @@ from financial_app.persistence.instruments import (
     delete_instrument,
     list_asset_classes,
     list_instruments,
-    rename_asset_class,
+    new_class_fallback_order,
+    update_asset_class,
     update_instrument,
 )
 from financial_app.sources.prices import PriceSource, check_symbol
@@ -47,10 +58,11 @@ from financial_app.ui.fund_details import fund_details
 
 @dataclass
 class AssetClassesSection:
-    """The Klasy aktywów card; ``on_renamed`` lets other sections redraw the new name."""
+    """The Klasy aktywów card, with each class's Fallback Order (spec 4.1); ``on_changed`` lets other sections redraw a
+    new name or what a changed order prices."""
 
     engine: Engine
-    on_renamed: Callable[[], None]
+    on_changed: Callable[[], None]
 
     def build(self) -> None:
         with ui.card().classes("w-full max-w-4xl"):
@@ -65,35 +77,43 @@ class AssetClassesSection:
     @ui.refreshable_method
     def class_list(self) -> None:
         for asset_class in list_asset_classes(self.engine):
-            with ui.row().classes("w-full items-center no-wrap border-b py-1"):
+            with ui.row().classes("w-full items-center no-wrap border-b py-1").mark(f"asset-class-{asset_class.id}"):
                 ui.label(asset_class.name).classes("grow")
+                ui.label(_order_text(asset_class.fallback_order)).classes("text-sm text-gray-500")
                 ui.button(icon="edit", on_click=lambda c=asset_class: self.open_dialog(c)).props(
-                    f'flat round dense aria-label="Zmień nazwę {asset_class.name}"'
+                    f'flat round dense aria-label="Edytuj klasę {asset_class.name}"'
                 ).mark(f"edit-asset-class-{asset_class.id}")
 
     def open_dialog(self, asset_class: AssetClass | None) -> None:
-        """Open a form for a new Asset Class (``None``) or for renaming ``asset_class``."""
+        """Open a form for a new Asset Class (``None``) or for editing ``asset_class``: its name and Fallback Order."""
+        order = list(new_class_fallback_order(self.engine) if asset_class is None else asset_class.fallback_order)
         dialog = movable_dialog()
         dialog.on("hide", dialog.delete)
         with dialog, ui.card().classes("w-[400px]"):
-            ui.label("Nowa klasa aktywów" if asset_class is None else "Zmień nazwę klasy").classes("text-lg font-bold")
+            ui.label("Nowa klasa aktywów" if asset_class is None else "Edytuj klasę").classes("text-lg font-bold")
             name = ui.input("Nazwa", value=asset_class.name if asset_class else "").classes("w-full")
             name.mark("asset-class-name")
+            ui.label("Kolejność źródeł wycen").classes("font-medium")
+            ui.label("Instrument jest wyceniany z pierwszego źródła, dla którego ma symbol.").classes(
+                "text-sm text-gray-500"
+            )
+            with ui.column().classes("w-full gap-1").mark("fallback-order-editor"):
+                _order_editor(order)
             error = ui.label().classes("text-negative").mark("asset-class-error")
 
             def save() -> None:
                 try:
                     if asset_class is None:
-                        add_asset_class(self.engine, name.value)
+                        add_asset_class(self.engine, name.value, order)
                     else:
-                        rename_asset_class(self.engine, asset_class.id, name.value)
-                except InstrumentError as exc:
+                        update_asset_class(self.engine, asset_class.id, name.value, order)
+                except (InstrumentError, FallbackOrderError) as exc:
                     error.text = str(exc)
                     return
                 dialog.close()
                 self.class_list.refresh()
                 if asset_class is not None:
-                    self.on_renamed()
+                    self.on_changed()
 
             def delete() -> None:
                 if asset_class is None:
@@ -105,7 +125,7 @@ class AssetClassesSection:
                     return
                 dialog.close()
                 self.class_list.refresh()
-                self.on_renamed()
+                self.on_changed()
 
             with ui.row().classes("w-full justify-between"):
                 if asset_class is not None:
@@ -118,6 +138,48 @@ class AssetClassesSection:
                     ui.button("Anuluj", on_click=dialog.close).props("flat")
                     ui.button("Zapisz", on_click=save)
         dialog.open()
+
+
+def _order_text(order: Sequence[str]) -> str:
+    return " → ".join(SOURCE_NAMES.get(source, source) for source in order) or "bez źródeł"
+
+
+def _order_editor(order: list[str]) -> None:
+    """The Fallback Order being edited, changed in place: each source with buttons to move or remove it, then a button
+    for each Price Source not in it yet. Each dialog has its own editor, so a refresh redraws only that one."""
+
+    @ui.refreshable
+    def editor() -> None:
+        def change(edit: Callable[[], object]) -> None:
+            edit()
+            editor.refresh()
+
+        def swap(i: int) -> None:
+            order[i], order[i + 1] = order[i + 1], order[i]
+
+        if not order:
+            ui.label("Bez źródeł: instrumenty tej klasy mają tylko cenę ręczną.").classes("text-sm text-gray-500")
+        for i, source in enumerate(order):
+            name = SOURCE_NAMES.get(source, source)
+            with ui.row().classes("w-full items-center no-wrap gap-1"):
+                ui.label(f"{i + 1}. {name}").classes("grow")
+                up = ui.button(icon="arrow_upward", on_click=lambda i=i: change(lambda: swap(i - 1)))
+                up.props(f'flat round dense aria-label="Przesuń {name} wyżej"').mark(f"move-up-{source}")
+                up.set_enabled(i > 0)
+                down = ui.button(icon="arrow_downward", on_click=lambda i=i: change(lambda: swap(i)))
+                down.props(f'flat round dense aria-label="Przesuń {name} niżej"').mark(f"move-down-{source}")
+                down.set_enabled(i < len(order) - 1)
+                ui.button(icon="close", on_click=lambda i=i: change(lambda: order.pop(i))).props(
+                    f'flat round dense aria-label="Usuń {name}"'
+                ).mark(f"remove-source-{source}")
+        with ui.row().classes("gap-1"):
+            for source in FALLBACK_SOURCES:
+                if source not in order:
+                    ui.button(
+                        f"+ {SOURCE_NAMES[source]}", on_click=lambda s=source: change(lambda: order.append(s))
+                    ).props("flat dense no-caps size=sm").mark(f"add-source-{source}")
+
+    editor()
 
 
 @dataclass

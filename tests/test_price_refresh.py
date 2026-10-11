@@ -13,7 +13,7 @@ from financial_app.domain.prices import BOSSA, YAHOO, PriceSourceError, Quote
 from financial_app.domain.transactions import TransactionDraft, TransactionType, buy_or_sell
 from financial_app.persistence.accounts import add_account
 from financial_app.persistence.db import init_db
-from financial_app.persistence.instruments import add_instrument, delete_instrument
+from financial_app.persistence.instruments import add_instrument, delete_instrument, set_fallback_order
 from financial_app.persistence.quotes import last_successful_refresh, latest_quotes
 from financial_app.persistence.transactions import add_transaction, delete_transaction
 from financial_app.sources.prices import (
@@ -92,6 +92,17 @@ def test_when_the_first_source_fails_the_next_one_in_the_order_is_tried(engine: 
 
     assert latest_quotes(engine) == {pzu.id: Quote(Decimal("45.12"), "PLN", FRIDAY, YAHOO)}
     assert result == RefreshResult(refreshed=1, failures=[])
+
+
+def test_a_changed_fallback_order_is_followed_at_the_next_refresh(engine: Engine) -> None:
+    pzu = _held(engine, "PZU", {BOSSA: "PZU", YAHOO: "PZU.WA"})
+    set_fallback_order(engine, AKCJE_POLSKIE, [YAHOO])
+    bossa = FakeSource(BOSSA, {"PZU": "45.10"})
+
+    refresh_prices(engine, {BOSSA: bossa, YAHOO: FakeSource(YAHOO, {"PZU.WA": "45.12"})}, lambda: NOW)
+
+    assert bossa.asked == []
+    assert latest_quotes(engine) == {pzu.id: Quote(Decimal("45.12"), "PLN", FRIDAY, YAHOO)}
 
 
 def test_an_instrument_failing_in_every_source_is_reported_and_the_others_still_refresh(engine: Engine) -> None:

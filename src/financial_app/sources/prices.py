@@ -78,7 +78,7 @@ def refresh_prices(
             continue
         to_try = [
             (source, symbol)
-            for source, symbol in sources_to_try(instrument.asset_class_name, instrument.source_symbols)
+            for source, symbol in sources_to_try(instrument.fallback_order, instrument.source_symbols)
             if source in sources
         ]
         if not to_try:

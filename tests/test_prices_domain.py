@@ -3,29 +3,57 @@ refreshed at start-up (issue #38)."""
 
 from datetime import date, datetime
 
-from financial_app.domain.prices import BOSSA, SESSION_CLOSE, YAHOO, last_weekday_close, refresh_due, sources_to_try
+import pytest
+
+from financial_app.domain.prices import (
+    ANALIZY,
+    BANKIER,
+    BOSSA,
+    SESSION_CLOSE,
+    STOOQ,
+    YAHOO,
+    FallbackOrderError,
+    default_fallback_order,
+    last_weekday_close,
+    refresh_due,
+    sources_to_try,
+    validate_fallback_order,
+)
 
 
 def test_an_instrument_is_tried_in_its_asset_classs_order() -> None:
-    order = sources_to_try("Akcje polskie", {YAHOO: "PZU.WA", BOSSA: "PZU"})
+    order = sources_to_try((BOSSA, YAHOO), {YAHOO: "PZU.WA", BOSSA: "PZU"})
 
     assert order == [(BOSSA, "PZU"), (YAHOO, "PZU.WA")]
 
 
 def test_a_source_without_the_instruments_symbol_is_skipped() -> None:
-    # Akcje zagraniczne try Yahoo, then Bossa; an LSE ETF has no Bossa symbol
-    assert sources_to_try("Akcje zagraniczne", {YAHOO: "ISAC.L"}) == [(YAHOO, "ISAC.L")]
+    # An LSE ETF has no Bossa symbol
+    assert sources_to_try((YAHOO, BOSSA), {YAHOO: "ISAC.L"}) == [(YAHOO, "ISAC.L")]
 
 
-def test_an_asset_class_the_user_added_is_tried_like_inne() -> None:
-    symbols = {YAHOO: "X", BOSSA: "Y"}
-
-    assert sources_to_try("Nieruchomości", symbols) == sources_to_try("Inne", symbols) == [(YAHOO, "X"), (BOSSA, "Y")]
+def test_a_source_left_out_of_the_order_is_never_tried() -> None:
+    assert sources_to_try((), {YAHOO: "X", BOSSA: "Y"}) == []
 
 
-def test_cash_and_polish_treasury_bonds_are_never_fetched() -> None:
+def test_the_defaults_follow_the_spec() -> None:
+    assert default_fallback_order("Akcje polskie") == (BOSSA, YAHOO)
+    assert default_fallback_order("Inne") == (ANALIZY, BANKIER, YAHOO, BOSSA)
     for asset_class in ("Gotówka", "Waluty", "Obligacje skarbowe polskie"):
-        assert sources_to_try(asset_class, {YAHOO: "X", BOSSA: "Y"}) == []
+        assert default_fallback_order(asset_class) == ()
+
+
+def test_an_asset_class_the_user_added_defaults_to_the_order_of_inne() -> None:
+    assert default_fallback_order("Nieruchomości") == default_fallback_order("Inne")
+
+
+def test_an_order_names_each_known_price_source_once() -> None:
+    assert validate_fallback_order([YAHOO, BOSSA]) == (YAHOO, BOSSA)
+    with pytest.raises(FallbackOrderError, match="dwa razy"):
+        validate_fallback_order([YAHOO, YAHOO])
+    # Stooq serves history only, so it never prices a Position
+    with pytest.raises(FallbackOrderError, match="Stooq"):
+        validate_fallback_order([STOOQ])
 
 
 # 2026-10-09 is a Friday
