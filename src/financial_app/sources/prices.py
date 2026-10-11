@@ -45,6 +45,11 @@ class RefreshResult:
     refreshed: int
     failures: list[RefreshFailure]
 
+    @property
+    def succeeded(self) -> bool:
+        """Not every Instrument fetched failed (as with no network), so the next start-up need not refresh."""
+        return self.refreshed > 0 or not self.failures
+
 
 @dataclass(frozen=True)
 class RefreshStatus:
@@ -60,7 +65,7 @@ def refresh_prices(
     """Fetch and save a Quote for every Instrument with an open Position, from the first source that gives one.
 
     A failing source or Instrument never stops the others. The refresh's time and failures are saved for
-    ``last_refresh``.
+    ``last_refresh``, and as the last successful one when the result ``succeeded``.
     """
     # list_transactions is newest first; the FIFO engine wants entry order
     for price_source in sources.values():
@@ -92,8 +97,9 @@ def refresh_prices(
             break
         else:
             failures.append(RefreshFailure(instrument.id, instrument.name, reasons))
-    save_refresh(engine, now(), {failure.instrument_id: failure.reasons for failure in failures})
-    return RefreshResult(refreshed, failures)
+    result = RefreshResult(refreshed, failures)
+    save_refresh(engine, now(), {failure.instrument_id: failure.reasons for failure in failures}, result.succeeded)
+    return result
 
 
 def last_refresh(engine: Engine) -> RefreshStatus | None:

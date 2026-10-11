@@ -13,9 +13,11 @@ from sqlalchemy.orm import Session
 
 from financial_app.domain.prices import STOOQ, Quote
 from financial_app.persistence.models import AppSetting, PriceFailureRow, QuoteRow
+from financial_app.persistence.settings import load_setting
 
-# The app setting holding the time of the last refresh
+# The app settings holding the time of the last refresh and of the last one that was a success
 REFRESHED_AT = "prices_refreshed_at"
+SUCCEEDED_AT = "prices_succeeded_at"
 
 
 def save_quote(engine: Engine, instrument_id: int, quote: Quote, fetched_at: datetime) -> None:
@@ -49,9 +51,12 @@ def latest_quotes(engine: Engine) -> dict[int, Quote]:
         return {row.instrument_id: Quote(Decimal(row.price), row.currency, row.day, row.source) for row in rows}
 
 
-def save_refresh(engine: Engine, refreshed_at: datetime, failures: Mapping[int, Mapping[str, str]]) -> None:
+def save_refresh(
+    engine: Engine, refreshed_at: datetime, failures: Mapping[int, Mapping[str, str]], succeeded: bool
+) -> None:
     """Record a refresh: its time and, by Instrument id, why each source failed for the Instruments no source gave a
-    Quote for. It replaces the previous refresh's failures, so a later success clears them."""
+    Quote for. It replaces the previous refresh's failures, so a later success clears them. Only a refresh that
+    ``succeeded`` becomes the last successful one."""
     with Session(engine) as session, session.begin():
         session.execute(delete(PriceFailureRow))
         session.add_all(
@@ -60,6 +65,8 @@ def save_refresh(engine: Engine, refreshed_at: datetime, failures: Mapping[int, 
             for position, (source, reason) in enumerate(reasons.items())
         )
         session.merge(AppSetting(key=REFRESHED_AT, value=refreshed_at.isoformat()))
+        if succeeded:
+            session.merge(AppSetting(key=SUCCEEDED_AT, value=refreshed_at.isoformat()))
 
 
 def load_refresh(engine: Engine) -> tuple[datetime, dict[int, dict[str, str]]] | None:
@@ -75,3 +82,9 @@ def load_refresh(engine: Engine) -> tuple[datetime, dict[int, dict[str, str]]] |
         for row in rows:
             failures.setdefault(row.instrument_id, {})[row.source] = row.reason
         return datetime.fromisoformat(refreshed_at.value), failures
+
+
+def last_successful_refresh(engine: Engine) -> datetime | None:
+    """The time of the last refresh saved as succeeded; ``None`` before the first."""
+    succeeded_at = load_setting(engine, SUCCEEDED_AT)
+    return None if succeeded_at is None else datetime.fromisoformat(succeeded_at)

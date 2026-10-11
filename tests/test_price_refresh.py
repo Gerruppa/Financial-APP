@@ -14,7 +14,7 @@ from financial_app.domain.transactions import TransactionDraft, TransactionType,
 from financial_app.persistence.accounts import add_account
 from financial_app.persistence.db import init_db
 from financial_app.persistence.instruments import add_instrument, delete_instrument
-from financial_app.persistence.quotes import latest_quotes
+from financial_app.persistence.quotes import last_successful_refresh, latest_quotes
 from financial_app.persistence.transactions import add_transaction, delete_transaction
 from financial_app.sources.prices import (
     PriceSource,
@@ -190,3 +190,30 @@ def test_each_refresh_tells_the_sources_it_starts_so_they_fetch_anew(engine: Eng
     refresh_prices(engine, {YAHOO: yahoo}, lambda: NOW)
 
     assert yahoo.refreshes == 2
+
+
+def test_a_refresh_giving_at_least_one_quote_is_the_last_success(engine: Engine) -> None:
+    _held(engine, "AAA", {YAHOO: "AAA.WA"})
+    _held(engine, "PZU", {YAHOO: "PZU.WA"})
+
+    refresh_prices(engine, {YAHOO: FakeSource(YAHOO, {"PZU.WA": "45.12"})}, lambda: NOW)
+
+    assert last_successful_refresh(engine) == NOW
+
+
+def test_a_refresh_where_every_instrument_failed_is_no_success(engine: Engine) -> None:
+    # e.g. no network: the next start tries again
+    _held(engine, "PZU", {YAHOO: "PZU.WA"})
+    refresh_prices(engine, {YAHOO: FakeSource(YAHOO, {"PZU.WA": "45.12"})}, lambda: NOW)
+
+    refresh_prices(engine, {YAHOO: FakeSource(YAHOO, {})}, lambda: datetime(2026, 10, 12, 18, 0))
+
+    assert last_successful_refresh(engine) == NOW
+
+
+def test_a_refresh_with_nothing_to_fetch_is_a_success(engine: Engine) -> None:
+    assert last_successful_refresh(engine) is None
+
+    refresh_prices(engine, {YAHOO: FakeSource(YAHOO, {})}, lambda: NOW)
+
+    assert last_successful_refresh(engine) == NOW

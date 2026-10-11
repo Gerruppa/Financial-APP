@@ -2,7 +2,7 @@
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 
 # Price Sources by the key their Source Symbols are saved under
@@ -44,6 +44,27 @@ def sources_to_try(asset_class: str, symbols: Mapping[str, str]) -> list[tuple[s
     """
     order = DEFAULT_FALLBACK_ORDERS.get(asset_class, DEFAULT_FALLBACK_ORDERS[OTHER])
     return [(source, symbols[source]) for source in order if source in symbols]
+
+
+# When the day's prices are final enough for the start-up refresh: after the GPW session with its closing auction (local
+# time). There is no exchange holiday calendar; a holiday only costs a refresh that brings the same Quotes.
+SESSION_CLOSE = time(17, 30)
+
+
+def last_weekday_close(now: datetime) -> datetime:
+    """The most recent ``SESSION_CLOSE`` on a weekday, at or before ``now``."""
+    close = datetime.combine(now.date(), SESSION_CLOSE)
+    if close > now:
+        close -= timedelta(days=1)
+    while close.weekday() >= 5:  # Saturday, Sunday
+        close -= timedelta(days=1)
+    return close
+
+
+def refresh_due(last_success: datetime | None, now: datetime) -> bool:
+    """Whether the prices are refreshed at start-up: the last successful refresh (``None`` before the first) was before
+    the most recent weekday close (spec 4.1)."""
+    return last_success is None or last_success < last_weekday_close(now)
 
 
 class PriceSourceError(Exception):
