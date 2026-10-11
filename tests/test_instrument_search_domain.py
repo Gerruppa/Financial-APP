@@ -1,6 +1,15 @@
 """What a chosen Instrument search result fills in the Instrument form (issue #25, spec 4.1)."""
 
-from financial_app.domain.instrument_search import FormFields, SearchResult, fill_empty, looks_like_isin
+import pytest
+
+from financial_app.domain.instrument_search import (
+    CombinedSearch,
+    FormFields,
+    InstrumentSearchError,
+    SearchResult,
+    fill_empty,
+    looks_like_isin,
+)
 from financial_app.domain.prices import BOSSA, YAHOO
 
 ISAC = SearchResult(
@@ -61,3 +70,58 @@ def test_a_result_fills_an_empty_asset_class_only() -> None:
 
     assert fill_empty(FormFields(), stock).asset_class == "Akcje polskie"
     assert fill_empty(FormFields(asset_class="Inne"), stock).asset_class == "Inne"
+
+
+# Yahoo and analizy.pl searched side by side (issue #60)
+
+
+class FakeSearch:
+    def __init__(self, results: list[SearchResult] | None = None, error: str = "") -> None:
+        self.results = results or []
+        self.error = error
+
+    def search(self, query: str) -> list[SearchResult]:
+        if self.error:
+            raise InstrumentSearchError(self.error)
+        return self.results
+
+
+PZU60 = SearchResult(
+    name="PPK inPZU 2060", symbol="PZU60", market="", currency="PLN", source_symbols={"analizy": "PZU60"}
+)
+
+
+def test_the_combined_search_lists_every_searchs_results_marked_with_its_source() -> None:
+    combined = CombinedSearch({"Yahoo": FakeSearch([CDR]), "analizy.pl": FakeSearch([PZU60])})
+
+    results = combined.search("pzu")
+
+    assert [(r.symbol, r.source) for r in results] == [("CDR.WA", "Yahoo"), ("PZU60", "analizy.pl")]
+    assert results.notes == []
+
+
+def test_a_failing_search_leaves_the_others_results_with_a_note() -> None:
+    combined = CombinedSearch({"Yahoo": FakeSearch([CDR]), "analizy.pl": FakeSearch(error="Brak sieci.")})
+
+    results = combined.search("pzu")
+
+    assert [r.symbol for r in results] == ["CDR.WA"]
+    assert results.notes == ["analizy.pl nie odpowiada"]
+
+
+def test_when_every_search_fails_the_combined_search_fails() -> None:
+    combined = CombinedSearch({"Yahoo": FakeSearch(error="Yahoo: brak sieci."), "analizy.pl": FakeSearch(error="x")})
+
+    with pytest.raises(InstrumentSearchError, match="Yahoo: brak sieci."):
+        combined.search("pzu")
+
+
+def test_an_unexpected_error_in_one_search_counts_as_it_not_answering() -> None:
+    class Broken:
+        def search(self, query: str) -> list[SearchResult]:
+            raise AttributeError("changed response")
+
+    results = CombinedSearch({"Yahoo": FakeSearch([CDR]), "analizy.pl": Broken()}).search("pzu")
+
+    assert [r.symbol for r in results] == ["CDR.WA"]
+    assert results.notes == ["analizy.pl nie odpowiada"]

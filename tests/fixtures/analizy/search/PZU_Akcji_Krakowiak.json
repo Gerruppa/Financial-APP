@@ -1,0 +1,43 @@
+{
+ "page": 0,
+ "limit": "20",
+ "total": 4,
+ "products": [
+  {
+   "kod": "PZU01",
+   "nazwa": "<span class=\"searchFundCellKeywords\">PZU</span> <span class=\"searchFundCellKeywords\">Akcji</span> <span class=\"searchFundCellKeywords\">KRAKOWIAK</span><span class=\"prevName\"> (d. <span class=\"searchFundCellKeywords\">PZU</span> FIO <span class=\"searchFundCellKeywords\">Akcji</span> <span class=\"searchFundCellKeywords\">KRAKOWIAK</span>)</span>",
+   "nazwaParasola": "PZU FIO Parasolowy",
+   "kodRodzaju": "FIO",
+   "isin": null,
+   "nazwaDawniej": "PZU FIO Akcji KRAKOWIAK",
+   "type": "fundusz"
+  },
+  {
+   "kod": "UPZU31",
+   "nazwa": "<span class=\"searchFundCellKeywords\">PZU</span> - <span class=\"searchFundCellKeywords\">PZU</span> <span class=\"searchFundCellKeywords\">Akcji</span> <span class=\"searchFundCellKeywords\">Krakowiak</span> UFK",
+   "nazwaParasola": null,
+   "kodRodzaju": "UFK",
+   "isin": null,
+   "nazwaDawniej": null,
+   "type": "fundusz"
+  },
+  {
+   "kod": "UALL121",
+   "nazwa": "Allianz - <span class=\"searchFundCellKeywords\">PZU</span> <span class=\"searchFundCellKeywords\">Akcji</span> <span class=\"searchFundCellKeywords\">Krakowiak</span> UFK",
+   "nazwaParasola": null,
+   "kodRodzaju": "UFK",
+   "isin": null,
+   "nazwaDawniej": null,
+   "type": "fundusz"
+  },
+  {
+   "kod": "PZE01",
+   "nazwa": "<span class=\"searchFundCellKeywords\">PZU</span> <span class=\"searchFundCellKeywords\">Akcji</span> <span class=\"searchFundCellKeywords\">KRAKOWIAK</span> E",
+   "nazwaParasola": "PZU FIO Parasolowy",
+   "kodRodzaju": "FIO",
+   "isin": null,
+   "nazwaDawniej": null,
+   "type": "fundusz"
+  }
+ ]
+}

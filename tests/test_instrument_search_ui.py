@@ -10,8 +10,9 @@ from nicegui import ui
 from nicegui.testing import User, user_simulation
 from sqlalchemy import Engine
 
+from financial_app.domain.instrument_search import CombinedSearch, InstrumentSearchError, SearchResult
 from financial_app.domain.instruments import InstrumentDraft
-from financial_app.domain.prices import BOSSA, YAHOO
+from financial_app.domain.prices import ANALIZY, BOSSA, YAHOO
 from financial_app.persistence.db import init_db
 from financial_app.persistence.instruments import (
     add_instrument,
@@ -158,7 +159,7 @@ async def test_without_network_the_search_says_so_and_the_form_still_saves(engin
         assert [i.name for i in list_instruments(engine)] == ["PZU"]
 
 
-async def test_nothing_found_points_polish_funds_to_manual_entry(user: User) -> None:
+async def test_nothing_found_says_so(user: User) -> None:
     user.find("Dodaj instrument").click()
     await _search(user, "PLFIO0000014")
 
@@ -203,3 +204,73 @@ async def test_a_class_the_user_does_not_have_is_not_set(user: User, engine: Eng
     user.find(marker="search-result-CDR.WA").click()
 
     assert _chosen_class(user) is None
+
+
+# Yahoo and analizy.pl searched together (issue #60)
+
+
+class FakeSearch:
+    def __init__(self, results: list[SearchResult] | None = None, error: str = "") -> None:
+        self.results = results or []
+        self.error = error
+
+    def search(self, query: str) -> list[SearchResult]:
+        if self.error:
+            raise InstrumentSearchError(self.error)
+        return self.results
+
+
+PZU60 = SearchResult(
+    name="PPK inPZU 2060",
+    symbol="PZU60",
+    market="",
+    currency="PLN",
+    source_symbols={ANALIZY: "PZU60"},
+    asset_class="Multi-asset",
+)
+PZU = SearchResult("PZU SA", "PZU.WA", "GPW", "PLN", {YAHOO: "PZU.WA", BOSSA: "PZU"}, asset_class="Akcje polskie")
+
+
+async def test_both_searches_results_are_listed_with_their_source(engine: Engine) -> None:
+    combined = CombinedSearch({"Yahoo": FakeSearch([PZU]), "analizy.pl": FakeSearch([PZU60])})
+
+    async with user_simulation(lambda: build_shell(engine, search=combined)) as user:
+        await user.open("/ustawienia")
+        user.find("Dodaj instrument").click()
+        await _search(user, "PZU")
+        await user.should_see(marker="search-result-PZU60")
+
+        with user.scope(marker="search-result-PZU.WA"):
+            await user.should_see("Yahoo")
+        with user.scope(marker="search-result-PZU60"):
+            await user.should_see("analizy.pl")
+        user.find(marker="search-result-PZU60").click()
+
+        assert _value(user, "instrument-symbol-analizy") == "PZU60"
+        assert _chosen_class(user) == _class_id(engine, "Multi-asset")
+        with user.scope(marker="class-sources"):
+            await user.should_see("Kod funduszu")
+
+
+async def test_a_search_that_does_not_answer_is_noted_beside_the_others_results(engine: Engine) -> None:
+    combined = CombinedSearch({"Yahoo": FakeSearch([PZU]), "analizy.pl": FakeSearch(error="Brak sieci.")})
+
+    async with user_simulation(lambda: build_shell(engine, search=combined)) as user:
+        await user.open("/ustawienia")
+        user.find("Dodaj instrument").click()
+        await _search(user, "PZU")
+
+        await user.should_see(marker="search-result-PZU.WA")
+        await user.should_see("analizy.pl nie odpowiada")
+
+
+async def test_a_search_that_does_not_answer_is_noted_when_the_other_finds_nothing(engine: Engine) -> None:
+    combined = CombinedSearch({"Yahoo": FakeSearch([]), "analizy.pl": FakeSearch(error="Brak sieci.")})
+
+    async with user_simulation(lambda: build_shell(engine, search=combined)) as user:
+        await user.open("/ustawienia")
+        user.find("Dodaj instrument").click()
+        await _search(user, "PZU")
+
+        await user.should_see("Nic nie znaleziono.")
+        await user.should_see("analizy.pl nie odpowiada")

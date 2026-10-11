@@ -266,11 +266,12 @@ async def test_the_analizy_and_bankier_symbols_are_saved_with_the_instrument(eng
         await user.open("/ustawienia")
         user.find(marker="edit-instrument").click()
         user.find(marker="instrument-symbol-analizy").clear().type("PZU60")
-        user.find(marker="instrument-symbol-bankier").clear().type("PZU60")
+        # A bankier.pl symbol of its own, as one only copying the Fund Code is not kept (issue #58)
+        user.find(marker="instrument-symbol-bankier").clear().type("PZU60A")
         user.find("Zapisz").click()
         await user.should_not_see(marker="instrument-dialog")
 
-        assert list_instruments(engine)[0].source_symbols == {ANALIZY: "PZU60", BANKIER: "PZU60"}
+        assert list_instruments(engine)[0].source_symbols == {ANALIZY: "PZU60", BANKIER: "PZU60A"}
         await user.should_see("analizy.pl PZU60")
 
 

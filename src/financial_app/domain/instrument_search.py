@@ -1,7 +1,8 @@
 """Instrument search by ISIN, name or symbol (issue #25, spec 4.1): its results and what a chosen one fills in."""
 
-from collections.abc import Mapping
-from dataclasses import dataclass, field
+from collections.abc import Iterable, Mapping
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass, field, replace
 from typing import Protocol
 
 from financial_app.domain.instruments import ISIN_PATTERN
@@ -16,7 +17,8 @@ class SearchResult:
     """One listing found: ``symbol`` is the ticker the search service shows, ``source_symbols`` the Source Symbols
     it gives (Price Source key to symbol, ``domain.prices``), ``currency`` its quote currency ("" when unknown),
     ``isin`` the ISIN searched for ("" after a search by name or symbol, as Yahoo returns no ISINs) and
-    ``asset_class`` the name of the Asset Class it belongs to ("" when its kind does not tell, e.g. an ETF)."""
+    ``asset_class`` the name of the Asset Class it belongs to ("" when its kind does not tell, e.g. an ETF).
+    ``source`` names the search service that found it, when several are searched together."""
 
     name: str
     symbol: str
@@ -25,12 +27,47 @@ class SearchResult:
     source_symbols: Mapping[str, str] = field(default_factory=dict)
     isin: str = ""
     asset_class: str = ""
+    source: str = ""
 
 
 class InstrumentSearch(Protocol):
-    """A swappable search service (Yahoo now, OpenFIGI could follow); raises ``InstrumentSearchError``."""
+    """A swappable search service (Yahoo, analizy.pl, both together); raises ``InstrumentSearchError``."""
 
     def search(self, query: str) -> list[SearchResult]: ...
+
+
+class SearchResults(list[SearchResult]):
+    """The results of several search services, with a ``notes`` line (Polish) for each one that failed."""
+
+    def __init__(self, results: Iterable[SearchResult] = (), notes: Iterable[str] = ()) -> None:
+        super().__init__(results)
+        self.notes = list(notes)
+
+
+class CombinedSearch:
+    """Several search services, by the name shown beside their results, asked side by side; one failing leaves the
+    others' results with a note, all failing is an ``InstrumentSearchError``. Any error counts as the service
+    failing, as their undocumented APIs may change."""
+
+    def __init__(self, searches: Mapping[str, InstrumentSearch]) -> None:
+        self.searches = searches
+
+    def search(self, query: str) -> SearchResults:
+        with ThreadPoolExecutor(max_workers=len(self.searches)) as pool:
+            pending = {name: pool.submit(search.search, query) for name, search in self.searches.items()}
+        results, notes, errors = [], [], []
+        for name, future in pending.items():
+            try:
+                results += [replace(result, source=name) for result in future.result()]
+            except InstrumentSearchError as error:
+                notes.append(f"{name} nie odpowiada")
+                errors.append(str(error))
+            except Exception as error:  # noqa: BLE001 - one broken service must not hide the others' results
+                notes.append(f"{name} nie odpowiada")
+                errors.append(f"Nieoczekiwany błąd wyszukiwarki {name}: {error}")
+        if errors and len(errors) == len(self.searches):
+            raise InstrumentSearchError(" ".join(errors))
+        return SearchResults(results, notes)
 
 
 @dataclass(frozen=True)

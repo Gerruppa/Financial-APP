@@ -21,6 +21,7 @@ from financial_app.domain.instrument_search import (
     InstrumentSearch,
     InstrumentSearchError,
     SearchResult,
+    SearchResults,
     fill_empty,
 )
 from financial_app.domain.instruments import (
@@ -325,7 +326,8 @@ class InstrumentsSection:
             more_sources: list[str] = []
 
             def typed_symbols() -> dict[str, str]:
-                return {source: field.value for source, field in symbol_inputs.items()}
+                # A cleared field's value is None
+                return {source: field.value or "" for source, field in symbol_inputs.items()}
 
             for source, (label, hint) in _SYMBOL_FIELDS.items():
                 with stooq_section if source == STOOQ else more, ui.column().classes("w-full gap-2") as field:
@@ -337,7 +339,8 @@ class InstrumentsSection:
                 fields[source], symbol_inputs[source] = field, symbol_input
 
             def count_more() -> None:
-                filled = sum(1 for source in more_sources if symbol_inputs[source].value.strip())
+                typed = typed_symbols()
+                filled = sum(1 for source in more_sources if typed[source].strip())
                 more.text = f"Więcej źródeł ({format_count(filled, 'wypełniony', 'wypełnione', 'wypełnionych')})"
 
             def arrange() -> None:
@@ -422,8 +425,12 @@ class InstrumentsSection:
                 search_button.props("loading")
                 try:
                     # The search answers over the network, so the window keeps working meanwhile
-                    results = await run.io_bound(self.search.search, search_input.value) or []
-                    message = "" if results else "Nic nie znaleziono. Fundusze polskie wpisz ręcznie."
+                    found = await run.io_bound(self.search.search, search_input.value)
+                    # An empty SearchResults still carries its notes, so only None (shutting down) counts as nothing
+                    results = [] if found is None else found
+                    # A search service that failed beside the others is noted above their results
+                    notes = results.notes if isinstance(results, SearchResults) else []
+                    message = " · ".join(notes) if results else " · ".join(["Nic nie znaleziono.", *notes])
                 except InstrumentSearchError as exc:
                     results, message = [], str(exc)
                 finally:
@@ -529,7 +536,9 @@ def _quote_text(quote: Quote) -> str:
 
 def _result_row(result: SearchResult, choose: Callable[[SearchResult], None]) -> None:
     """One listing found; clicking it fills the form's empty fields."""
-    details = " · ".join([result.market, result.symbol, result.currency or "waluta nieznana"])
+    details = " · ".join(
+        d for d in [result.source, result.market, result.symbol, result.currency or "waluta nieznana"] if d
+    )
     item = ui.item(on_click=lambda: choose(result)).classes("w-full rounded").mark(f"search-result-{result.symbol}")
     with item, ui.item_section():
         ui.item_label(result.name)
