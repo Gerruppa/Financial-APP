@@ -63,6 +63,11 @@ def format_percent(value: float | Decimal, decimals: int = 2, signed: bool = Fal
     return f"{format_number(value, decimals, signed)}{NBSP}%"
 
 
+def format_exact_percent(value: Decimal) -> str:
+    """Format a stored percent with all its decimals (at least two), e.g. a TER of 0.075 -> '0,075 %'."""
+    return f"{format_exact(value)}{NBSP}%"
+
+
 def format_date(value: date) -> str:
     """Format a date day-first, e.g. 2026-03-07 -> '07.03.2026'."""
     return value.strftime(DATE_FORMAT)

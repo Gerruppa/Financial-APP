@@ -15,7 +15,13 @@ from financial_app.domain.instrument_search import (
     SearchResult,
     fill_empty,
 )
-from financial_app.domain.instruments import AssetClass, Instrument, InstrumentDraft, InstrumentError
+from financial_app.domain.instruments import (
+    AssetClass,
+    DistributionPolicy,
+    Instrument,
+    InstrumentDraft,
+    InstrumentError,
+)
 from financial_app.domain.prices import ANALIZY, BANKIER, BOSSA, SOURCE_NAMES, STOOQ, YAHOO
 from financial_app.persistence.instruments import (
     add_asset_class,
@@ -28,6 +34,7 @@ from financial_app.persistence.instruments import (
     update_instrument,
 )
 from financial_app.ui.dialogs import movable_dialog
+from financial_app.ui.fund_details import fund_details
 
 
 @dataclass
@@ -149,6 +156,7 @@ class InstrumentsSection:
                     details.append(f"metal {format_quantity(instrument.metal_grams)} g")
                 if instrument.buyback_spread_percent is not None:
                     details.append(f"spread odkupu {format_percent(instrument.buyback_spread_percent)}")
+                details.extend(fund_details(instrument))
                 for source, symbol in instrument.source_symbols.items():
                     details.append(f"{SOURCE_NAMES.get(source, source)} {symbol}")
                 ui.label(" · ".join(d for d in details if d)).classes("text-sm text-gray-500")
@@ -220,6 +228,20 @@ class InstrumentsSection:
             spread_input = ui.input("Spread odkupu %", value=_exact_text(spread))
             spread_input.props('hint="O ile poniżej spotu odkupuje dealer, np. 5"')
             spread_input.classes("w-full").mark("instrument-buyback-spread")
+            ter = instrument.ter_percent if instrument else None
+            ter_input = ui.input("TER %", value=_exact_text(ter))
+            ter_input.props('hint="Roczny koszt funduszu, np. 0,07; może zostać puste"')
+            ter_input.classes("w-full").mark("instrument-ter")
+            policy = ui.select(
+                {p: p.label for p in DistributionPolicy},
+                label="Polityka dywidendowa",
+                value=instrument.distribution_policy if instrument else None,
+                clearable=True,
+            ).classes("w-full")
+            policy.mark("instrument-distribution-policy")
+            domicile = ui.input("Siedziba funduszu", value=instrument.domicile if instrument else "")
+            domicile.props('hint="Np. Irlandia, Luksemburg; może zostać puste"').classes("w-full")
+            domicile.mark("instrument-domicile")
             error = ui.label().classes("text-negative").mark("instrument-error")
 
             def choose(result: SearchResult) -> None:
@@ -266,6 +288,7 @@ class InstrumentsSection:
                     manual_price = _parse_number(price_input.value, "Cena ręczna")
                     metal_grams = _parse_number(grams_input.value, "Waga metalu")
                     buyback_spread = _parse_number(spread_input.value, "Spread odkupu")
+                    ter_percent = _parse_number(ter_input.value, "TER")
                     if asset_class.value is None:
                         raise InstrumentError("Wybierz klasę aktywów.")
                     draft = InstrumentDraft(
@@ -286,6 +309,9 @@ class InstrumentsSection:
                         },
                         metal_grams=metal_grams,
                         buyback_spread_percent=buyback_spread,
+                        ter_percent=ter_percent,
+                        distribution_policy=policy.value,
+                        domicile=domicile.value,
                     )
                     if instrument is None:
                         add_instrument(self.engine, draft)

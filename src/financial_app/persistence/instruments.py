@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from financial_app.domain.instruments import (
     AssetClass,
+    DistributionPolicy,
     Instrument,
     InstrumentDraft,
     InstrumentError,
@@ -155,6 +156,9 @@ def _fill(session: Session, row: InstrumentRow, draft: InstrumentDraft) -> None:
     row.manual_price = _text(draft.manual_price)
     row.metal_grams = _text(draft.metal_grams)
     row.buyback_spread_percent = _text(draft.buyback_spread_percent)
+    row.ter_percent = _text(draft.ter_percent)
+    row.distribution_policy = None if draft.distribution_policy is None else draft.distribution_policy.value
+    row.domicile = draft.domicile
     row.source_symbols = [
         SourceSymbolRow(source=source, symbol=symbol) for source, symbol in draft.source_symbols.items()
     ]
@@ -181,4 +185,7 @@ def _to_instrument(row: InstrumentRow) -> Instrument:
         source_symbols={s.source: s.symbol for s in row.source_symbols},
         metal_grams=_decimal(row.metal_grams),
         buyback_spread_percent=_decimal(row.buyback_spread_percent),
+        ter_percent=_decimal(row.ter_percent),
+        distribution_policy=None if row.distribution_policy is None else DistributionPolicy(row.distribution_policy),
+        domicile=row.domicile,
     )
