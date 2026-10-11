@@ -101,3 +101,59 @@ def test_a_polish_treasury_bond_waits_for_stage_3_even_with_a_manual_price() -> 
     price = instrument_price(bond, None, lambda currency: Decimal(1))
 
     assert (price.pln, price.status, price.badge) == (Decimal("104.5"), PriceStatus.MANUAL, Badge.STAGE_3)
+
+
+def _metal(grams: str, spread: str | None, manual_price: str | None = None) -> Instrument:
+    return Instrument(
+        "Złoty Krugerrand 1 oz",
+        8,
+        "USD",
+        "",
+        None if manual_price is None else Decimal(manual_price),
+        {"yahoo": "GC=F"},
+        Decimal(grams),
+        None if spread is None else Decimal(spread),
+        id=1,
+        asset_class_name="Metale i surowce",
+    )
+
+
+def test_a_one_ounce_coin_with_a_5_percent_spread_is_valued_at_95_percent_of_spot_in_pln() -> None:
+    quote = Quote(Decimal(2400), "USD", date(2026, 10, 9), "yahoo")
+
+    price = instrument_price(_metal("31.1034768", "5"), quote, {"USD": Decimal(4)}.get)
+
+    assert (price.price, price.pln) == (Decimal(2280), Decimal(9120))
+    assert (price.spot, price.unit_spot_pln) == (Decimal(2400), Decimal(9600))
+    assert price.status is PriceStatus.QUOTE
+
+
+def test_a_coin_of_31_1035_grams_is_worth_95_percent_of_spot() -> None:
+    quote = Quote(Decimal(2400), "USD", date(2026, 10, 9), "yahoo")
+
+    price = instrument_price(_metal("31.1035", "5"), quote, {"USD": Decimal(4)}.get)
+
+    assert price.pln is not None
+    assert abs(price.pln - Decimal(9120)) < Decimal("0.1")
+
+
+def test_a_metal_manual_price_is_the_spot_per_troy_ounce() -> None:
+    price = instrument_price(_metal("31.1034768", "5", manual_price="2000"), None, {"USD": Decimal(4)}.get)
+
+    assert (price.price, price.pln, price.spot) == (Decimal(1900), Decimal(7600), Decimal(2000))
+
+
+def test_a_metal_without_a_rate_has_its_unit_price_but_no_pln_value() -> None:
+    quote = Quote(Decimal(2400), "USD", date(2026, 10, 9), "yahoo")
+
+    price = instrument_price(_metal("31.1034768", None), quote, lambda currency: None)
+
+    assert (price.price, price.pln, price.spot, price.unit_spot_pln) == (Decimal(2400), None, Decimal(2400), None)
+
+
+def test_an_instrument_without_a_metal_weight_has_no_spot() -> None:
+    quote = Quote(Decimal("45.12"), "PLN", date(2026, 10, 9), "yahoo")
+
+    price = instrument_price(_automatic(), quote, lambda currency: Decimal(1))
+
+    assert (price.spot, price.unit_spot_pln) == (None, None)

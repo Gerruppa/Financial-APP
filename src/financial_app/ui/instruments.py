@@ -7,7 +7,7 @@ from decimal import Decimal
 from nicegui import ui
 from sqlalchemy import Engine
 
-from financial_app.domain.formatting import format_exact, parse_number
+from financial_app.domain.formatting import format_exact, format_percent, format_quantity, parse_number
 from financial_app.domain.instruments import AssetClass, Instrument, InstrumentDraft, InstrumentError
 from financial_app.domain.prices import ANALIZY, BANKIER, BOSSA, SOURCE_NAMES, STOOQ, YAHOO
 from financial_app.persistence.instruments import (
@@ -133,6 +133,10 @@ class InstrumentsSection:
                 details = [instrument.quote_currency, instrument.market]
                 if instrument.manual_price is not None:
                     details.append(f"cena ręczna {format_exact(instrument.manual_price)} {instrument.quote_currency}")
+                if instrument.metal_grams is not None:
+                    details.append(f"metal {format_quantity(instrument.metal_grams)} g")
+                if instrument.buyback_spread_percent is not None:
+                    details.append(f"spread odkupu {format_percent(instrument.buyback_spread_percent)}")
                 for source, symbol in instrument.source_symbols.items():
                     details.append(f"{SOURCE_NAMES.get(source, source)} {symbol}")
                 ui.label(" · ".join(d for d in details if d)).classes("text-sm text-gray-500")
@@ -178,13 +182,29 @@ class InstrumentsSection:
             stooq.classes("w-full").mark("instrument-symbol-stooq")
             price = instrument.manual_price if instrument else None
             price_input = ui.input("Cena ręczna", value="" if price is None else format_exact(price))
-            price_input.props('hint="W walucie notowania; zostaw puste, jeśli cena ma pochodzić ze źródeł wycen"')
+            price_input.props(
+                'hint="W walucie notowania (metal z wagą: spot za uncję); '
+                'zostaw puste, jeśli cena ma pochodzić ze źródeł wycen"'
+            )
             price_input.classes("w-full").mark("instrument-price")
+            grams = instrument.metal_grams if instrument else None
+            grams_input = ui.input("Waga metalu w jednostce (g)", value=_exact_text(grams))
+            grams_input.props(
+                'hint="Metale fizyczne: np. 31,1034768 dla monety 1 oz; cena jest wtedy spotem za uncję. '
+                'Zostaw puste dla zwykłej ceny za jednostkę"'
+            )
+            grams_input.classes("w-full").mark("instrument-metal-grams")
+            spread = instrument.buyback_spread_percent if instrument else None
+            spread_input = ui.input("Spread odkupu %", value=_exact_text(spread))
+            spread_input.props('hint="O ile poniżej spotu odkupuje dealer, np. 5"')
+            spread_input.classes("w-full").mark("instrument-buyback-spread")
             error = ui.label().classes("text-negative").mark("instrument-error")
 
             def save() -> None:
                 try:
-                    manual_price = _parse_price(price_input.value)
+                    manual_price = _parse_number(price_input.value, "Cena ręczna")
+                    metal_grams = _parse_number(grams_input.value, "Waga metalu")
+                    buyback_spread = _parse_number(spread_input.value, "Spread odkupu")
                     if asset_class.value is None:
                         raise InstrumentError("Wybierz klasę aktywów.")
                     draft = InstrumentDraft(
@@ -202,6 +222,8 @@ class InstrumentsSection:
                             BANKIER: bankier.value,
                             STOOQ: stooq.value,
                         },
+                        metal_grams=metal_grams,
+                        buyback_spread_percent=buyback_spread,
                     )
                     if instrument is None:
                         add_instrument(self.engine, draft)
@@ -237,11 +259,15 @@ class InstrumentsSection:
         dialog.open()
 
 
-def _parse_price(text: str) -> Decimal | None:
-    """Read a Manual Price typed the Polish way ("12 850,5"); empty means none."""
+def _exact_text(number: Decimal | None) -> str:
+    return "" if number is None else format_exact(number)
+
+
+def _parse_number(text: str, field: str) -> Decimal | None:
+    """Read a number typed the Polish way ("12 850,5"); empty means none."""
     if not text.strip():
         return None
     try:
         return parse_number(text)
     except ValueError:
-        raise InstrumentError(f"Cena ręczna musi być liczbą, a nie „{text.strip()}”.") from None
+        raise InstrumentError(f"{field} musi być liczbą, a nie „{text.strip()}”.") from None

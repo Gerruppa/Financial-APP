@@ -22,6 +22,9 @@ DEFAULT_ASSET_CLASSES = [
     "Multi-asset",
 ]
 
+# A troy ounce, the unit of metal spot prices (spec 4.1)
+GRAMS_PER_TROY_OUNCE = Decimal("31.1034768")
+
 
 class InstrumentError(ValueError):
     """An Instrument or Asset Class field the user must correct; the message is shown in the UI (Polish)."""
@@ -49,6 +52,10 @@ class InstrumentDraft:
 
     ``manual_price`` is in ``quote_currency``; ``source_symbols`` maps a Price Source (``domain.prices``) to the
     Instrument's Source Symbol in it.
+
+    A physical metal (coins, bars) is still held in units: ``metal_grams`` is the metal weight of one unit, and its
+    prices (Manual Price and Quotes) are the spot price of a troy ounce, which ``unit_price`` turns into the value of
+    a unit less the ``buyback_spread_percent`` a dealer takes when buying it back (spec 4.1).
     """
 
     name: str
@@ -57,6 +64,8 @@ class InstrumentDraft:
     market: str = ""
     manual_price: Decimal | None = None
     source_symbols: Mapping[str, str] = field(default_factory=dict)
+    metal_grams: Decimal | None = None
+    buyback_spread_percent: Decimal | None = None
 
     def __post_init__(self) -> None:
         name = self.name.strip()
@@ -69,12 +78,33 @@ class InstrumentDraft:
             )
         if self.manual_price is not None and not self.manual_price > 0:
             raise InstrumentError("Cena ręczna musi być większa od zera.")
+        if self.metal_grams is not None and not self.metal_grams > 0:
+            raise InstrumentError("Waga metalu musi być większa od zera.")
+        spread = self.buyback_spread_percent
+        if spread is not None:
+            if self.metal_grams is None:
+                raise InstrumentError("Spread odkupu wymaga wagi metalu w jednostce.")
+            if not 0 <= spread < 100:
+                raise InstrumentError("Spread odkupu musi wynosić od 0 do mniej niż 100%.")
         object.__setattr__(self, "name", name)
         object.__setattr__(self, "quote_currency", currency)
         object.__setattr__(self, "market", self.market.strip())
         # A blank symbol means none in that source
         symbols = {source: symbol.strip() for source, symbol in self.source_symbols.items() if symbol.strip()}
         object.__setattr__(self, "source_symbols", symbols)
+
+    def unit_price(self, price: Decimal) -> Decimal:
+        """The value of one unit at ``price``: for a physical metal, ``price`` is the spot of a troy ounce, scaled to
+        the unit's weight and less the Buyback Spread; otherwise it already is the unit price."""
+        spread = self.buyback_spread_percent or Decimal(0)
+        return self.unit_spot(price) * (1 - spread / 100)
+
+    def unit_spot(self, price: Decimal) -> Decimal:
+        """One unit at ``price`` without the Buyback Spread: the spot of a troy ounce scaled to the unit's metal
+        weight, or ``price`` itself for any other Instrument."""
+        if self.metal_grams is None:
+            return price
+        return price * self.metal_grams / GRAMS_PER_TROY_OUNCE
 
 
 @dataclass(frozen=True)

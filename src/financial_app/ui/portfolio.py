@@ -1,11 +1,12 @@
 """The Portfolio tab: a read-only, expandable card per Account (spec section 5) with its Cash Balances and Positions.
 
 Positions are valued at their price from ``domain.valuation`` (the Manual Price or the newest Quote, with a badge when
-it is manual, stale, has no source or waits for Stage 3), converted
-from a foreign currency at the NBP Rate from the last business day before today; one without a price or a rate counts
-at cost and adds nothing to the result. Clicking a Position shows its Lots with both costs. Foreign cash is valued at
-the same NBP Rate; its FX result (realised and unrealised) counts in the Account's result unless the Account excludes
-it (spec 3.1, 3.5). Each card also sums the Account's net Dividends and interest and its commissions and costs.
+it is manual, stale, has no source or waits for Stage 3; a physical metal at its spot less the Buyback Spread, with the
+spot beside it), converted from a foreign currency at the NBP Rate from the last business day before today; one
+without a price or a rate counts at cost and adds nothing to the result. Clicking a Position shows its Lots with both
+costs. Foreign cash is valued at the same NBP Rate; its FX result (realised and unrealised) counts in the Account's
+result unless the Account excludes it (spec 3.1, 3.5). Each card also sums the Account's net Dividends and interest
+and its commissions and costs.
 """
 
 from dataclasses import dataclass
@@ -226,21 +227,32 @@ def _valuation_cells(position: Position, current: InstrumentPrice) -> None:
             ui.label(cell).classes("text-right text-gray-500")
         return
     result = position.result(price)
-    ui.label(format_pln(position.value(price))).classes("text-right")
+    with ui.column().classes("gap-0 items-end"):
+        ui.label(format_pln(position.value(price)))
+        if current.unit_spot_pln is not None:
+            ui.label(f"spot {format_pln(position.value(current.unit_spot_pln))}").classes("text-xs text-gray-500")
     ui.label(format_pln(result, signed=True)).classes(f"text-right {_result_color(result)}")
     ui.label(format_percent(position.result_percent(price), signed=True)).classes(f"text-right {_result_color(result)}")
 
 
 def _price_cell(price: Decimal, current: InstrumentPrice) -> None:
-    """The price with the day of its Quote; beside a Manual Price, the newest Quote it overrides."""
+    """The price with the day of its Quote; beside a Manual Price, the newest Quote it overrides. A physical metal's
+    unit price is rounded to the cent, with the spot of a troy ounce it comes from."""
+    ounce = "" if current.spot is None else "/oz"
     with ui.column().classes("gap-0 items-end"):
-        ui.label(format_unit_price(price, current.currency))
+        if current.spot is None:
+            ui.label(format_unit_price(price, current.currency))
+        else:
+            ui.label(format_amount(price, current.currency))
+            ui.label(f"spot {format_unit_price(current.spot, current.currency)}{ounce}").classes(
+                "text-xs text-gray-500"
+            )
         quote = current.quote
         if quote is None:
             return
         if current.status is PriceStatus.MANUAL:
             source = SOURCE_NAMES.get(quote.source, quote.source)
-            caption = f"{source}: {format_unit_price(quote.price, quote.currency)} ({format_date(quote.day)})"
+            caption = f"{source}: {format_unit_price(quote.price, quote.currency)}{ounce} ({format_date(quote.day)})"
         else:
             caption = format_date(quote.day)
         ui.label(caption).classes("text-xs text-gray-500")

@@ -33,7 +33,7 @@ Re-implement the inwestomat.eu "Portfolio tracker" Google Sheet (v2.0.1, 01.07.2
 
 ### 3.2 Instruments (Q15, Q16, Q46, Q21)
 - Catalog entity: name, Asset Class, quote currency, market, Source Symbol per Price Source, optional Manual Price.
-- Physical metals: weight (oz or g) and Buyback Spread %. Primary value = spot × weight × (1 − spread); spot value shown as secondary (Q46).
+- Physical metals: weight per unit in grams and Buyback Spread %. Primary value = spot × weight × (1 − spread); spot value shown as secondary (Q46).
 - Asset Classes: user-editable list, seeded with the sheet's 12: Gotówka, Akcje polskie, Akcje zagraniczne, Obligacje skarbowe polskie, Obligacje skarbowe zagraniczne, Obligacje korporacyjne polskie, Obligacje korporacyjne zagraniczne, Metale i surowce, Kryptowaluty, Waluty, Inne, Multi-asset. Renaming must not require code changes.
 - Multi-asset Split per Instrument; cannot be saved unless it sums to 100%. Buying an unconfigured Multi-asset Instrument opens the split dialog (Q41).
 - Allocation Target % per Asset Class; warning (not block) when targets ≠ 100% (Q41).
@@ -97,7 +97,7 @@ Dropped: Google Finance, FT, Biznesradar scraping. Each source is a module with 
 - **Quotes**: one table of daily Quotes (Instrument, day, price, Price Source, fetch time); the current price is the newest Quote, a same-day refresh overwrites it, and History (Etap 4) fills older days into the same table.
 - **Refresh**: in the background at start-up when the last successful refresh was before the most recent weekday close, and on demand from the header; only Instruments with an open Position are fetched. A price is **Stale** only when the latest attempt failed in every source; the Quote date is always shown, so no exchange calendar is needed.
 - **Status**: the header shows "Wyceny: <time>" with a refresh button, red with the number of errors, listing failing Instruments and reasons; each Portfolio Position shows the Quote date and a badge (ręczna, nieaktualna, bez źródła, do etapu 3).
-- **Physical metals**: optional metal weight per unit in grams (exact decimal, 31.1034768 g/oz) and Buyback Spread %; value = spot (USD/oz) × weight × (1 − spread) at the NBP Rate, spot shown alongside.
+- **Physical metals**: optional metal weight per unit in grams (exact decimal, 31.1034768 g/oz) and Buyback Spread %; value = spot (USD/oz) × weight × (1 − spread) at the NBP Rate, spot shown alongside. With a weight set, the Instrument's Quotes and Manual Price are the spot of a troy ounce in its quote currency (so a Yahoo-priced metal is quoted in USD); without one it is valued per unit as usual.
 - **ISIN lookup (#25)**: Instruments get an optional, non-unique ISIN (each listing is its own Instrument). One search field "Szukaj (ISIN, nazwa lub symbol)" in the Instrument dialog, on create and edit, prefilled with the name of an Instrument without Source Symbols; it queries Yahoo search behind a swappable module, and a chosen result fills only empty fields (ISIN, quote currency, market, Yahoo and Bossa Source Symbols). Polish funds stay manual. TER, Distribution Policy and domicile are user-entered Instrument fields shown in the Portfolio; scraping them (e.g. justETF) is out of scope under ADR-0005.
 
 ## 5. Screens (tabs)
