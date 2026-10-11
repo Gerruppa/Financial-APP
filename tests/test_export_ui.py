@@ -1,4 +1,4 @@
-"""The export buttons on the Transakcje tab (spec 5, issue #22): each saves every Transaction as a file."""
+"""The export buttons on the Transakcje tab (spec 5, issues #22 and #71): each saves the listed Transactions."""
 
 import io
 from datetime import date
@@ -11,9 +11,10 @@ from nicegui.testing import user_simulation
 from sqlalchemy import Engine
 
 from financial_app.domain.accounts import AccountDraft, AccountType
-from financial_app.domain.transactions import TransactionDraft, TransactionType
+from financial_app.domain.transactions import TransactionDraft, TransactionType, cash_transfer
 from financial_app.persistence.accounts import add_account
 from financial_app.persistence.db import init_db
+from financial_app.persistence.settings import VIEW_SCOPE, save_setting
 from financial_app.persistence.transactions import add_transaction
 from financial_app.sources.export import export_transactions
 from financial_app.ui.shell import build_shell
@@ -68,3 +69,27 @@ async def test_export_with_no_transactions_saves_only_the_header(engine: Engine)
 def test_export_names_the_file_by_its_format(engine: Engine) -> None:
     assert export_transactions(engine, "csv")[0] == "transakcje.csv"
     assert export_transactions(engine, "xlsx")[0] == "transakcje.xlsx"
+
+
+async def test_in_an_account_scope_the_export_holds_its_transactions_and_names_the_account(engine: Engine) -> None:
+    ike = add_account(engine, AccountDraft("mBank IKE", "mBank", AccountType.IKE, ("PLN",))).id
+    xtb = add_account(engine, AccountDraft("XTB/1", "XTB", AccountType.REGULAR, ("PLN",))).id
+    add_transaction(engine, TransactionDraft(ike, date(2026, 10, 5), TransactionType.DEPOSIT, Decimal(10), "ike"))
+    add_transaction(engine, TransactionDraft(xtb, date(2026, 10, 5), TransactionType.DEPOSIT, Decimal(20), "xtb"))
+    add_transaction(engine, cash_transfer(ike, date(2026, 10, 6), xtb, Decimal(5), "przelew"))
+    save_setting(engine, VIEW_SCOPE, str(xtb))
+
+    async with user_simulation(lambda: build_shell(engine)) as user:
+        await user.open("/transakcje")
+        user.find("Eksportuj CSV").click()
+        response = await user.download.next()
+
+    lines = response.content.decode("utf-8-sig").splitlines()
+    assert [line.split(";")[-1] for line in lines[1:]] == ["przelew", "xtb"]
+    assert export_transactions(engine, "csv", xtb)[0] == "transakcje-XTB_1.csv"
+
+
+def test_an_account_export_file_name_keeps_only_safe_characters(engine: Engine) -> None:
+    ike = add_account(engine, AccountDraft('IKE: "mBank" ', "mBank", AccountType.IKE, ("PLN",))).id
+
+    assert export_transactions(engine, "xlsx", ike)[0] == "transakcje-IKE_ _mBank_.xlsx"

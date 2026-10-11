@@ -15,7 +15,7 @@ from financial_app.domain.formatting import format_pln
 from financial_app.domain.metrics import daily_change
 from financial_app.domain.portfolio_history import DayValue
 from financial_app.domain.transactions import Transaction
-from financial_app.domain.view_scope import ScopeEntry, parse_scope, scope_entries, scope_setting
+from financial_app.domain.view_scope import ScopeEntry, in_scope, parse_scope, scope_entries, scope_setting
 from financial_app.persistence.accounts import list_accounts
 from financial_app.persistence.settings import VIEW_SCOPE, load_setting, save_setting
 
@@ -49,9 +49,7 @@ class ViewScope:
         return names.get(self.account_id, TOTAL_LABEL) if self.account_id is not None else TOTAL_LABEL
 
     def includes(self, transaction: Transaction) -> bool:
-        """Whether the Transaction belongs to the scope: every one in Total, else those of the Account or moving
-        cash or units to it."""
-        return self.account_id is None or self.account_id in (transaction.account_id, transaction.target_account_id)
+        return in_scope(transaction, self.account_id)
 
 
 class ScopeSwitcher:

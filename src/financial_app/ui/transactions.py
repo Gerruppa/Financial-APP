@@ -93,8 +93,8 @@ class TransactionsPage:
             self.rows()
 
     def export(self, file_format: FileFormat) -> None:
-        """Hands every saved Transaction to the browser as a file, in the list's order."""
-        name, data = export_transactions(self.engine, file_format)
+        """Hands the listed Transactions (those of the View Scope) to the browser as a file, in the list's order."""
+        name, data = export_transactions(self.engine, file_format, self.scope.account_id)
         ui.download(data, name)
 
     @ui.refreshable_method

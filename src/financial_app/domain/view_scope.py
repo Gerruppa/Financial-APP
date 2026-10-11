@@ -11,6 +11,7 @@ from decimal import Decimal
 from financial_app.domain.accounts import Account
 from financial_app.domain.metrics import daily_change
 from financial_app.domain.portfolio_history import DayValue
+from financial_app.domain.transactions import TransactionDraft
 
 TOTAL = "total"
 
@@ -39,6 +40,12 @@ def parse_scope(text: str | None, account_ids: Collection[int]) -> int | None:
         return None
     account_id = int(text)
     return account_id if account_id in account_ids else None
+
+
+def in_scope(transaction: TransactionDraft, account_id: int | None) -> bool:
+    """Whether the Transaction belongs to the scope: every one in Total, else those of the Account or moving cash or
+    units to it."""
+    return account_id is None or account_id in (transaction.account_id, transaction.target_account_id)
 
 
 def scope_entries(accounts: Sequence[Account], history: Sequence[DayValue] | None) -> list[ScopeEntry]:
