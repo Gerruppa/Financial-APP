@@ -17,6 +17,7 @@ from financial_app.domain.spreadsheet_import import (
     SheetLine,
     Ticker,
     TickerKind,
+    cash_currencies_of,
     classify_ticker,
     fingerprints,
     parse_lines,
@@ -319,3 +320,16 @@ def test_editing_the_total_or_comment_of_a_row_keeps_its_fingerprint() -> None:
     original = fingerprints(lines_of(row()))
     edited = fingerprints(lines_of(row(**{"Total PLN": 150.0, "Komentarz": "poprawiony"})))
     assert original == edited
+
+
+def test_a_new_account_starts_with_pln_and_the_foreign_cash_its_rows_hold() -> None:
+    lines = lines_of(
+        row(Ticker="Waluty_USD", Waluta="USD"),
+        row(Ticker="Waluty_EUR", Waluta="EUR"),
+        row(Ticker="LON:ISAC", Waluta="GBP"),
+        row(Konto="IKZE", Ticker="Waluty_CHF", Waluta="CHF"),
+    )
+
+    assert cash_currencies_of(lines, "IKE") == ("PLN", "EUR", "USD")
+    assert cash_currencies_of(lines, "IKZE") == ("PLN", "CHF")
+    assert cash_currencies_of(lines, "Brak") == ("PLN",)
