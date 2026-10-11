@@ -1,0 +1,16 @@
+{
+ "page": 0,
+ "limit": "20",
+ "total": 1,
+ "products": [
+  {
+   "kod": "PZU60",
+   "nazwa": "<span class=\"searchFundCellKeywords\">PPK</span> inPZU <span class=\"searchFundCellKeywords\">2060</span>",
+   "nazwaParasola": "PPK inPZU SFIO",
+   "kodRodzaju": "PPK",
+   "isin": null,
+   "nazwaDawniej": null,
+   "type": "fundusz"
+  }
+ ]
+}

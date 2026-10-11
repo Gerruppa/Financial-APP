@@ -1,0 +1,70 @@
+{
+ "page": 0,
+ "limit": "20",
+ "total": 7,
+ "products": [
+  {
+   "kod": "QRS06",
+   "nazwa": "<span class=\"searchFundCellKeywords\">QUERCUS</span> lev",
+   "nazwaParasola": "QUERCUS Parasolowy SFIO",
+   "kodRodzaju": "FIO",
+   "isin": null,
+   "nazwaDawniej": null,
+   "type": "fundusz"
+  },
+  {
+   "kod": "QRS19",
+   "nazwa": "<span class=\"searchFundCellKeywords\">QUERCUS</span> Absolutny<span class=\"prevName\"> (d. <span class=\"searchFundCellKeywords\">QUERCUS</span> Stabilny)</span>",
+   "nazwaParasola": "QUERCUS Parasolowy SFIO",
+   "kodRodzaju": "FIO",
+   "isin": null,
+   "nazwaDawniej": "QUERCUS Stabilny",
+   "type": "fundusz"
+  },
+  {
+   "kod": "QRS20",
+   "nazwa": "<span class=\"searchFundCellKeywords\">QUERCUS</span> Gold",
+   "nazwaParasola": "QUERCUS Parasolowy SFIO",
+   "kodRodzaju": "FIO",
+   "isin": null,
+   "nazwaDawniej": null,
+   "type": "fundusz"
+  },
+  {
+   "kod": "QRS32",
+   "nazwa": "<span class=\"searchFundCellKeywords\">QUERCUS</span> Silver",
+   "nazwaParasola": "QUERCUS Parasolowy SFIO",
+   "kodRodzaju": "FIO",
+   "isin": null,
+   "nazwaDawniej": null,
+   "type": "fundusz"
+  },
+  {
+   "kod": "QRS21",
+   "nazwa": "<span class=\"searchFundCellKeywords\">QUERCUS</span> Multistrategy FIZ",
+   "nazwaParasola": null,
+   "kodRodzaju": "FIZ",
+   "isin": null,
+   "nazwaDawniej": null,
+   "type": "fundusz"
+  },
+  {
+   "kod": "QRS16",
+   "nazwa": "Acer Multistrategy FIZ",
+   "nazwaParasola": null,
+   "kodRodzaju": "FIZ",
+   "isin": null,
+   "nazwaDawniej": "Acer Aggressive FIZ",
+   "type": "fundusz"
+  },
+  {
+   "kod": "QRS36",
+   "nazwa": "Alphaset FIZ",
+   "nazwaParasola": null,
+   "kodRodzaju": "FIZ",
+   "isin": null,
+   "nazwaDawniej": null,
+   "type": "fundusz"
+  }
+ ]
+}

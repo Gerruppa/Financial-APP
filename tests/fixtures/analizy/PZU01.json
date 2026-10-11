@@ -1,0 +1,40 @@
+{
+ "id": "PZU01",
+ "label": "PZU Akcji KRAKOWIAK",
+ "currency": "PLN",
+ "isRegular": true,
+ "isDividend": false,
+ "periods": [
+  {
+   "period": "1M",
+   "label": "1M",
+   "start": "2026-09-08",
+   "end": "2026-10-08"
+  }
+ ],
+ "events": [],
+ "dividends": [],
+ "series": [
+  {
+   "id": "fund_PZU01",
+   "label": "Fundusz",
+   "currency": "PLN",
+   "price": [
+    {
+     "date": "2026-10-07",
+     "value": 165.66
+    },
+    {
+     "date": "2026-10-08",
+     "value": 164.51
+    }
+   ]
+  },
+  {
+   "id": "fund_with_dividend_PZU01",
+   "label": "Fundusz z dywidendą",
+   "currency": "PLN",
+   "price": []
+  }
+ ]
+}

@@ -90,3 +90,11 @@ def test_the_list_keeps_the_instruments_order() -> None:
     listed = instruments_without_price([first, second], {1, 2}, set(), {})
 
     assert [item.instrument for item in listed] == [first, second]
+
+
+def test_a_fund_code_prices_through_bankier_in_a_class_with_only_bankier() -> None:
+    instrument = _instrument(1, {"analizy": "PZU60"}, fallback_order=("bankier",))
+
+    assert instruments_without_price([instrument], {1}, set(), {}) == [
+        Unpriced(instrument, UnpricedReason.NOT_REFRESHED)
+    ]

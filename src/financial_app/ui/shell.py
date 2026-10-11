@@ -9,10 +9,10 @@ from nicegui import run, ui
 from sqlalchemy import Engine
 
 from financial_app.domain.formatting import format_count, format_datetime
-from financial_app.domain.instrument_search import InstrumentSearch
-from financial_app.domain.prices import ANALIZY, BANKIER, BOSSA, YAHOO, refresh_due, source_reason
+from financial_app.domain.instrument_search import CombinedSearch, InstrumentSearch
+from financial_app.domain.prices import ANALIZY, BANKIER, BOSSA, SOURCE_NAMES, YAHOO, refresh_due, source_reason
 from financial_app.persistence.quotes import last_successful_refresh
-from financial_app.sources.analizy import AnalizySource
+from financial_app.sources.analizy import AnalizySearch, AnalizySource
 from financial_app.sources.bankier import BankierSource
 from financial_app.sources.bossa import BossaSource
 from financial_app.sources.nbp import NbpRates
@@ -66,12 +66,12 @@ def build_shell(
     ``rates`` gives NBP Rates (by default from the NBP API through the cache in that database) and ``sources`` the
     Price Sources by their key (by default the real ones). With ``refresh_at_start`` the prices are refreshed in the
     background once the window is open, when they are due at ``now`` (spec 4.1). ``search`` finds Instruments for
-    the Instrument dialog (by default through Yahoo).
+    the Instrument dialog (by default Yahoo and analizy.pl together).
     """
     rates = rates or NbpRates(engine)
     if sources is None:
         sources = {YAHOO: YahooSource(), BOSSA: BossaSource(), ANALIZY: AnalizySource(), BANKIER: BankierSource()}
-    search = search or YahooSearch()
+    search = search or CombinedSearch({SOURCE_NAMES[YAHOO]: YahooSearch(), SOURCE_NAMES[ANALIZY]: AnalizySearch()})
     install_movable_dialogs()
     transactions_page = TransactionsPage(engine, rates)
     portfolio_page = PortfolioPage(engine, rates)
