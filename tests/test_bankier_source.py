@@ -8,7 +8,7 @@ from urllib.error import HTTPError, URLError
 
 import pytest
 
-from financial_app.domain.prices import BANKIER, PriceSourceError, Quote
+from financial_app.domain.prices import BANKIER, CurrencyMismatchError, PriceSourceError, Quote
 from financial_app.sources.bankier import BankierSource
 
 FIXTURES = Path(__file__).parent / "fixtures" / "bankier"
@@ -62,9 +62,11 @@ def test_a_page_not_found_is_an_unknown_fund_too() -> None:
         BankierSource(lambda url: None).quote("QRS32", "PLN")
 
 
-def test_a_fund_valued_in_another_currency_than_the_instruments_is_an_error() -> None:
-    with pytest.raises(PriceSourceError, match="PLN.*EUR"):
+def test_a_fund_valued_in_another_currency_than_the_instruments_is_an_error_carrying_its_valuation() -> None:
+    with pytest.raises(CurrencyMismatchError, match="PLN.*EUR") as raised:
         BankierSource(SavedBankier()).quote("QRS32", "EUR")
+
+    assert raised.value.quote == Quote(Decimal("203.83"), "PLN", date(2026, 10, 8), BANKIER)
 
 
 def test_a_price_with_thousands_separators_is_read() -> None:

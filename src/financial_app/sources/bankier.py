@@ -14,7 +14,7 @@ from decimal import Decimal, InvalidOperation
 from urllib.error import HTTPError
 from urllib.parse import quote as url_quote
 
-from financial_app.domain.prices import BANKIER, PriceSourceError, Quote
+from financial_app.domain.prices import BANKIER, CurrencyMismatchError, PriceSourceError, Quote
 
 # Investment funds first, then PPK; an unknown fund leads to the home page, without the fund's header
 PAGES = ("https://www.bankier.pl/fundusze/notowania/{symbol}", "https://www.bankier.pl/ppk/notowania/{symbol}")
@@ -86,7 +86,8 @@ def _quote_in_header(symbol: str, header: str, currency: str) -> Quote:
     except ValueError, InvalidOperation:
         raise PriceSourceError("Nieprawidłowa odpowiedź bankier.pl.") from None
     if source_currency != currency:
-        raise PriceSourceError(
-            f"bankier.pl wycenia {symbol} w {source_currency}, a instrument jest notowany w {currency}."
+        raise CurrencyMismatchError(
+            f"bankier.pl wycenia {symbol} w {source_currency}, a instrument jest notowany w {currency}.",
+            Quote(price, source_currency, day, BANKIER),
         )
     return Quote(price, currency, day, BANKIER)

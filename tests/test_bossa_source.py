@@ -9,7 +9,7 @@ from urllib.error import HTTPError, URLError
 
 import pytest
 
-from financial_app.domain.prices import BOSSA, PriceSourceError, Quote
+from financial_app.domain.prices import BOSSA, CurrencyMismatchError, PriceSourceError, Quote
 from financial_app.sources.bossa import BossaSource
 
 FIXTURES = Path(__file__).parent / "fixtures" / "bossa"
@@ -88,9 +88,18 @@ def test_an_unknown_symbol_is_an_error() -> None:
         BossaSource(SavedBossa()).quote("XYZ", "PLN")
 
 
-def test_an_instrument_quoted_in_another_currency_is_an_error() -> None:
-    with pytest.raises(PriceSourceError, match="PLN.*USD"):
+def test_an_instrument_quoted_in_another_currency_is_an_error_carrying_bossas_quote() -> None:
+    with pytest.raises(CurrencyMismatchError, match="PLN.*USD") as raised:
         BossaSource(SavedBossa()).quote("PZU", "USD")
+
+    assert raised.value.quote == Quote(Decimal("69.8200"), "PLN", date(2026, 10, 2), BOSSA)
+
+
+def test_an_instrument_in_another_currency_is_a_currency_error_even_when_bossa_does_not_know_the_symbol() -> None:
+    with pytest.raises(PriceSourceError, match="PLN.*USD") as raised:
+        BossaSource(SavedBossa()).quote("XYZ", "USD")
+
+    assert not isinstance(raised.value, CurrencyMismatchError)
 
 
 def test_without_a_connection_the_error_says_so() -> None:

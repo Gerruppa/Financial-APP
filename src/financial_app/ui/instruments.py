@@ -1,13 +1,20 @@
 """Ustawienia > Klasy aktywów and Instrumenty: the editable Asset Classes and the Instrument catalog (spec 3.2)."""
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from decimal import Decimal
 
 from nicegui import run, ui
 from sqlalchemy import Engine
 
-from financial_app.domain.formatting import format_exact, format_percent, format_quantity, parse_number
+from financial_app.domain.formatting import (
+    format_date,
+    format_exact,
+    format_percent,
+    format_quantity,
+    format_unit_price,
+    parse_number,
+)
 from financial_app.domain.instrument_search import (
     FormFields,
     InstrumentSearch,
@@ -22,7 +29,7 @@ from financial_app.domain.instruments import (
     InstrumentDraft,
     InstrumentError,
 )
-from financial_app.domain.prices import ANALIZY, BANKIER, BOSSA, SOURCE_NAMES, STOOQ, YAHOO
+from financial_app.domain.prices import ANALIZY, BANKIER, BOSSA, SOURCE_NAMES, STOOQ, YAHOO, Quote
 from financial_app.persistence.instruments import (
     add_asset_class,
     add_instrument,
@@ -33,6 +40,7 @@ from financial_app.persistence.instruments import (
     rename_asset_class,
     update_instrument,
 )
+from financial_app.sources.prices import PriceSource, check_symbol
 from financial_app.ui.dialogs import movable_dialog
 from financial_app.ui.fund_details import fund_details
 
@@ -116,10 +124,11 @@ class AssetClassesSection:
 class InstrumentsSection:
     """The Instrumenty card; ``refresh`` redraws the catalog after a save or an Asset Class rename, and calls
     ``on_changed`` so that other sections redraw too. ``search`` fills the Instrument dialog from a listing found by
-    ISIN, name or symbol (spec 4.1)."""
+    ISIN, name or symbol, and ``sources`` give the "Sprawdź" button beside each Source Symbol one Quote (spec 4.1)."""
 
     engine: Engine
     search: InstrumentSearch
+    sources: Mapping[str, PriceSource]
     on_changed: Callable[[], None]
 
     def refresh(self) -> None:
@@ -164,6 +173,37 @@ class InstrumentsSection:
                 f'flat round aria-label="Edytuj {instrument.name}"'
             ).mark("edit-instrument")
 
+    def _symbol_check(self, source: str, symbol: ui.input, currency: ui.input) -> None:
+        """The "Sprawdź" button under ``symbol``'s field and the line it shows: the Quote with its currency and day, a
+        warning when the source quotes in another currency than the one typed, or why there is no Quote. Nothing is
+        saved, so the Instrument saves whatever the check found."""
+        price_source = self.sources.get(source)
+        if price_source is None:
+            return
+        with ui.row().classes("w-full items-center no-wrap gap-2 -mt-2"):
+            button = ui.button("Sprawdź").props("flat dense no-caps size=sm").mark(f"check-symbol-{source}")
+            result = ui.column().classes("gap-0 text-sm").mark(f"symbol-check-{source}")
+
+        async def check() -> None:
+            result.clear()
+            button.props("loading")
+            try:
+                # The source answers over the network, so the window keeps working meanwhile
+                found = await run.io_bound(check_symbol, price_source, symbol.value, currency.value)
+            finally:
+                button.props(remove="loading")
+            if found is None:  # the app is shutting down
+                return
+            with result:
+                if found.quote is not None:
+                    ui.label(_quote_text(found.quote))
+                if found.warning:
+                    ui.label(found.warning).classes("text-warning")
+                if found.error:
+                    ui.label(found.error).classes("text-negative")
+
+        button.on_click(check)
+
     def open_dialog(self, instrument: Instrument | None) -> None:
         """Open a fresh form for a new Instrument (``None``) or for editing ``instrument``."""
         dialog = movable_dialog()
@@ -196,17 +236,21 @@ class InstrumentsSection:
             yahoo = ui.input("Symbol Yahoo", value=symbols.get(YAHOO, ""))
             yahoo.props('hint="Np. ISAC.L, AAPL, BTC-USD; zostaw puste, jeśli Yahoo nie notuje instrumentu"')
             yahoo.classes("w-full").mark("instrument-symbol-yahoo")
+            self._symbol_check(YAHOO, yahoo, currency)
             bossa = ui.input("Symbol Bossa", value=symbols.get(BOSSA, ""))
             bossa.props('hint="Np. PZU, CDR, ETFBDIVPL; zostaw puste, jeśli instrumentu nie ma na GPW"')
             bossa.classes("w-full").mark("instrument-symbol-bossa")
+            self._symbol_check(BOSSA, bossa, currency)
             analizy = ui.input("Symbol analizy.pl", value=symbols.get(ANALIZY, ""))
             analizy.props(
                 'hint="Fundusze i PPK: id z adresu strony funduszu, np. PZU60 z analizy.pl/fundusze/ppk/PZU60"'
             )
             analizy.classes("w-full").mark("instrument-symbol-analizy")
+            self._symbol_check(ANALIZY, analizy, currency)
             bankier = ui.input("Symbol bankier.pl", value=symbols.get(BANKIER, ""))
             bankier.props('hint="Zapasowe źródło funduszy i PPK; zwykle to samo id co w analizy.pl"')
             bankier.classes("w-full").mark("instrument-symbol-bankier")
+            self._symbol_check(BANKIER, bankier, currency)
             stooq = ui.input("Symbol Stooq", value=symbols.get(STOOQ, ""))
             stooq.props('hint="Tylko historia notowań (wykresy, benchmarki), np. wig, swig80tr, cdr; nie wycenia"')
             stooq.classes("w-full").mark("instrument-symbol-stooq")
@@ -345,6 +389,11 @@ class InstrumentsSection:
                     ui.button("Anuluj", on_click=dialog.close).props("flat")
                     ui.button("Zapisz", on_click=save)
         dialog.open()
+
+
+def _quote_text(quote: Quote) -> str:
+    """A checked Quote, e.g. "45,12 zł · 09.10.2026"."""
+    return f"{format_unit_price(quote.price, quote.currency)} · {format_date(quote.day)}"
 
 
 def _result_row(result: SearchResult, choose: Callable[[SearchResult], None]) -> None:

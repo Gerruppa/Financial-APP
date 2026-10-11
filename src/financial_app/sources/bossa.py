@@ -13,7 +13,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 from urllib.error import HTTPError
 
-from financial_app.domain.prices import BOSSA, PriceSourceError, Quote
+from financial_app.domain.prices import BOSSA, CurrencyMismatchError, PriceSourceError, Quote
 
 API = "https://bossa.pl/fl_api/API/GPW/v2/Q/C/{category}"
 # Searched in this order, each only when the symbol is not in the ones before
@@ -48,10 +48,20 @@ class BossaSource:
         """The newest Quote of ``symbol``: Bossa's short symbol (e.g. CDR) or full one (CDPROJEKT), with or without a
         ``WSE:`` prefix as in the sheet.
 
-        Without a trade in the session the reference price is the Quote, as in the sheet.
+        Without a trade in the session the reference price is the Quote, as in the sheet. Bossa quotes in PLN only, so
+        an Instrument in another currency gets a ``CurrencyMismatchError`` carrying the PLN Quote.
         """
         if currency != CURRENCY:
-            raise PriceSourceError(f"Bossa podaje ceny w {CURRENCY}, a instrument jest notowany w {currency}.")
+            message = f"Bossa podaje ceny w {CURRENCY}, a instrument jest notowany w {currency}."
+            try:
+                quote = self._find(symbol)
+            except PriceSourceError:
+                # The currency is the reason a refresh reports, whatever else went wrong
+                raise PriceSourceError(message) from None
+            raise CurrencyMismatchError(message, quote)
+        return self._find(symbol)
+
+    def _find(self, symbol: str) -> Quote:
         key = symbol.strip().upper().removeprefix("WSE:")
         first_error = None
         for category in CATEGORIES:

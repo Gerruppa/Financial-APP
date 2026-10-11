@@ -10,7 +10,7 @@ from urllib.parse import unquote
 
 import pytest
 
-from financial_app.domain.prices import PriceSourceError, Quote
+from financial_app.domain.prices import CurrencyMismatchError, PriceSourceError, Quote
 from financial_app.sources.yahoo import YahooSource
 
 FIXTURES = Path(__file__).parent / "fixtures" / "yahoo"
@@ -36,9 +36,11 @@ def test_a_price_in_pence_is_stored_in_pounds() -> None:
     assert quote == Quote(Decimal("5.863"), "GBP", date(2026, 10, 9), "yahoo")
 
 
-def test_a_price_in_another_currency_than_the_instruments_is_an_error() -> None:
-    with pytest.raises(PriceSourceError, match="USD.*GBP"):
+def test_a_price_in_another_currency_than_the_instruments_is_an_error_carrying_yahoos_quote() -> None:
+    with pytest.raises(CurrencyMismatchError, match="USD.*GBP") as raised:
         YahooSource(_saved).quote("ISAC.L", "GBP")
+
+    assert raised.value.quote == Quote(Decimal("123.91"), "USD", date(2026, 10, 9), "yahoo")
 
 
 def test_crypto_in_usd_for_a_pln_instrument_is_converted_at_yahoos_usd_rate() -> None:

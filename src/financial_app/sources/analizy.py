@@ -12,7 +12,7 @@ from decimal import Decimal
 from urllib.error import HTTPError
 from urllib.parse import quote as url_quote
 
-from financial_app.domain.prices import ANALIZY, PriceSourceError, Quote
+from financial_app.domain.prices import ANALIZY, CurrencyMismatchError, PriceSourceError, Quote
 
 # The fund type in the path does not change the answer, so every fund is asked for as "fio"
 API = "https://www.analizy.pl/api/quotation/fio/{symbol}"
@@ -68,7 +68,8 @@ class AnalizySource:
         except ValueError, KeyError, IndexError, TypeError:
             raise PriceSourceError("Nieprawidłowa odpowiedź analizy.pl.") from None
         if source_currency != currency:
-            raise PriceSourceError(
-                f"analizy.pl wycenia {key} w {source_currency}, a instrument jest notowany w {currency}."
+            raise CurrencyMismatchError(
+                f"analizy.pl wycenia {key} w {source_currency}, a instrument jest notowany w {currency}.",
+                Quote(price, source_currency, day, ANALIZY),
             )
         return Quote(price, currency, day, ANALIZY)

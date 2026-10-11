@@ -8,7 +8,7 @@ from urllib.error import HTTPError, URLError
 
 import pytest
 
-from financial_app.domain.prices import ANALIZY, PriceSourceError, Quote
+from financial_app.domain.prices import ANALIZY, CurrencyMismatchError, PriceSourceError, Quote
 from financial_app.sources.analizy import AnalizySource
 
 FIXTURES = Path(__file__).parent / "fixtures" / "analizy"
@@ -42,9 +42,11 @@ def test_a_foreign_fund_is_quoted_in_its_own_currency() -> None:
     assert quote == Quote(Decimal("13.65"), "EUR", date(2026, 10, 9), ANALIZY)
 
 
-def test_a_fund_valued_in_another_currency_than_the_instruments_is_an_error() -> None:
-    with pytest.raises(PriceSourceError, match="EUR.*PLN"):
+def test_a_fund_valued_in_another_currency_than_the_instruments_is_an_error_carrying_its_valuation() -> None:
+    with pytest.raises(CurrencyMismatchError, match="EUR.*PLN") as raised:
         AnalizySource(_saved).quote("FTI068_AH_EUR", "PLN")
+
+    assert raised.value.quote == Quote(Decimal("13.65"), "EUR", date(2026, 10, 9), ANALIZY)
 
 
 def test_an_unknown_id_is_an_error_naming_it() -> None:
