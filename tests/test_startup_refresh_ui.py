@@ -122,3 +122,34 @@ async def test_with_no_network_the_app_starts_and_shows_the_errors(engine: Engin
         await user.should_see("1 błąd")
         with user.scope(marker="portfolio"):
             await user.should_see("brak ceny")
+
+
+async def test_reloading_the_window_during_the_start_up_refresh_joins_it_instead_of_starting_another(
+    engine: Engine,
+) -> None:
+    gate = threading.Event()
+    yahoo = FakeYahoo({"PZU.WA": "45.12"}, gate)
+    try:
+        async with user_simulation(_shell(engine, yahoo, FRIDAY_EVENING)) as user:
+            await user.open("/")
+            await user.should_see("Wyceny: odświeżanie…")
+
+            await user.open("/")
+            await user.should_see("Wyceny: odświeżanie…")
+            gate.set()
+            await user.should_see("Wyceny: 09.10.2026 19:00")
+    finally:
+        gate.set()
+    assert yahoo.asked == ["PZU.WA"]
+
+
+async def test_an_unexpected_error_in_the_refresh_is_shown(engine: Engine) -> None:
+    class BrokenYahoo(FakeYahoo):
+        def new_refresh(self) -> None:
+            raise RuntimeError("baza zablokowana")
+
+    async with user_simulation(_shell(engine, BrokenYahoo({}), FRIDAY_EVENING)) as user:
+        await user.open("/")
+
+        await user.should_see("Odświeżanie wycen nie powiodło się: baza zablokowana")
+        await user.should_see("Wyceny: brak")

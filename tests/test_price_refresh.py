@@ -14,7 +14,7 @@ from financial_app.domain.transactions import TransactionDraft, TransactionType,
 from financial_app.persistence.accounts import add_account
 from financial_app.persistence.db import init_db
 from financial_app.persistence.instruments import add_instrument, delete_instrument
-from financial_app.persistence.quotes import latest_quotes
+from financial_app.persistence.quotes import last_successful_refresh, latest_quotes
 from financial_app.persistence.transactions import add_transaction, delete_transaction
 from financial_app.sources.prices import (
     PriceSource,
@@ -22,7 +22,6 @@ from financial_app.sources.prices import (
     RefreshResult,
     RefreshStatus,
     last_refresh,
-    last_successful_refresh,
     refresh_prices,
 )
 

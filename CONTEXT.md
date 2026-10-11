@@ -130,6 +130,10 @@ _Avoid_: priority, source chain
 The last known Quote of an Instrument, still used for valuation, after the latest refresh failed for it in every Price Source.
 _Avoid_: old price, cached price
 
+**Successful Refresh** (Udane odświeżenie):
+A refresh of the Quotes in which not every Instrument fetched failed (one with nothing to fetch counts too). At start-up the app refreshes when the last Successful Refresh was before the most recent weekday session close (17:30), so a start with no network tries again next time.
+_Avoid_: last update, sync
+
 **Distribution Policy** (Polityka dywidendowa):
 Whether a fund pays out its income (Dystrybucja) or reinvests it (Akumulacja). Entered by the user, like the fund's TER and domicile.
 _Avoid_: dividend type

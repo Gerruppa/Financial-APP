@@ -1,5 +1,6 @@
 """App shell (UI prototype variant B, issue #1): left menu, header with View Scope, "+" button."""
 
+import asyncio
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
@@ -9,17 +10,12 @@ from sqlalchemy import Engine
 
 from financial_app.domain.formatting import format_count, format_datetime
 from financial_app.domain.prices import ANALIZY, BANKIER, BOSSA, SOURCE_NAMES, YAHOO, refresh_due
+from financial_app.persistence.quotes import last_successful_refresh
 from financial_app.sources.analizy import AnalizySource
 from financial_app.sources.bankier import BankierSource
 from financial_app.sources.bossa import BossaSource
 from financial_app.sources.nbp import NbpRates
-from financial_app.sources.prices import (
-    PriceSource,
-    RefreshResult,
-    last_refresh,
-    last_successful_refresh,
-    refresh_prices,
-)
+from financial_app.sources.prices import PriceSource, RefreshResult, last_refresh, refresh_prices
 from financial_app.sources.yahoo import YahooSource
 from financial_app.ui.dialogs import install_movable_dialogs
 from financial_app.ui.portfolio import PortfolioPage
@@ -46,6 +42,10 @@ TABS = [
     Tab("Benchmarki", "/benchmarki", "compare_arrows"),
     Tab("Ustawienia", "/ustawienia", "settings"),
 ]
+
+# The refresh running on each database, shared by every window, so that a reloaded window joins it instead of starting
+# another; ``None`` from it means the app is shutting down
+_running_refreshes: dict[Engine, asyncio.Future[RefreshResult | None]] = {}
 
 # Only Total for now; Accounts join the switcher in Stage 4 (spec section 5, View Scope)
 VIEW_SCOPES = ["Total"]
@@ -76,20 +76,22 @@ def build_shell(
         transactions_page.refresh()
         portfolio_page.refresh()
 
-    refreshing = False
-
     async def refresh_now() -> None:
-        nonlocal refreshing
-        if refreshing:
-            return
-        # The sources answer over the network, so the window keeps working meanwhile
-        refreshing = True
+        running = _running_refreshes.get(engine)
+        if running is None:
+            # The sources answer over the network, so the window keeps working meanwhile
+            running = asyncio.ensure_future(run.io_bound(refresh_prices, engine, sources, now))
+            _running_refreshes[engine] = running
+            running.add_done_callback(lambda _: _running_refreshes.pop(engine, None))
         refresh_button.props("loading")
         price_status.refresh()
         try:
-            result = await run.io_bound(refresh_prices, engine, sources, now)
+            # Shielded, so that closing this window never cancels the refresh another window waits for
+            result = await asyncio.shield(running)
+        except Exception as error:  # noqa: BLE001 - the window must stay usable whatever the refresh hit
+            ui.notify(f"Odświeżanie wycen nie powiodło się: {error}", type="negative")
+            return
         finally:
-            refreshing = False
             refresh_button.props(remove="loading")
             price_status.refresh()
         if result is None:  # the app is shutting down
@@ -100,7 +102,7 @@ def build_shell(
     with ui.header().classes("bg-indigo-900 items-center").mark("header"):
         ui.label(APP_TITLE).classes("text-lg font-bold")
         ui.space()
-        price_status = ui.refreshable(lambda: _price_status(engine, refreshing))
+        price_status = ui.refreshable(lambda: _price_status(engine, engine in _running_refreshes))
         price_status()
         refresh_button = ui.button(icon="refresh", on_click=refresh_now).props(
             'flat round color=white aria-label="Odśwież wyceny"'
@@ -125,7 +127,7 @@ def build_shell(
     pages["/ustawienia"] = lambda: build_settings_page(engine, rates)
     ui.sub_pages(pages).classes("w-full").mark("page-content")
 
-    if refresh_at_start and refresh_due(last_successful_refresh(engine), now()):
+    if engine in _running_refreshes or (refresh_at_start and refresh_due(last_successful_refresh(engine), now())):
         # Once the window is up, so that it never waits for the sources
         ui.timer(0, refresh_now, once=True)
 
@@ -134,15 +136,15 @@ def _price_status(engine: Engine, refreshing: bool) -> None:
     """ "Wyceny: <time of the last refresh>", red with the number of errors; clicking lists them with their reasons.
     While a refresh runs it says so."""
     status = last_refresh(engine)
-    failed = bool(status and status.failures) and not refreshing
+    failures = status.failures if status and not refreshing else []
     if refreshing:
         text = "Wyceny: odświeżanie…"
     else:
         text = f"Wyceny: {format_datetime(status.refreshed_at) if status else 'brak'}"
-    if failed and status:
-        text += f" · {format_count(len(status.failures), 'błąd', 'błędy', 'błędów')}"
+    if failures:
+        text += f" · {format_count(len(failures), 'błąd', 'błędy', 'błędów')}"
     button = ui.button(text, on_click=lambda: _price_errors_dialog(engine)).props("flat no-caps")
-    button.props(f"color={'red-4' if failed else 'white'}").mark("price-status")
+    button.props(f"color={'red-4' if failures else 'white'}").mark("price-status")
 
 
 def _price_errors_dialog(engine: Engine) -> None:
