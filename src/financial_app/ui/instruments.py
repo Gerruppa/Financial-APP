@@ -42,6 +42,8 @@ from financial_app.domain.prices import (
     YAHOO,
     FallbackOrderError,
     Quote,
+    symbol_in,
+    without_fund_code_copy,
 )
 from financial_app.persistence.instruments import (
     add_asset_class,
@@ -54,7 +56,7 @@ from financial_app.persistence.instruments import (
     update_asset_class,
     update_instrument,
 )
-from financial_app.sources.prices import PriceSource, check_symbol
+from financial_app.sources.prices import PriceSource, SymbolCheck, check_symbol
 from financial_app.ui.dialogs import movable_dialog
 from financial_app.ui.fund_details import fund_details
 
@@ -238,34 +240,43 @@ class InstrumentsSection:
                 f'flat round aria-label="Edytuj {instrument.name}"'
             ).mark("edit-instrument")
 
-    def _symbol_check(self, source: str, symbol: ui.input, currency: ui.input) -> None:
-        """The "Sprawdź" button under ``symbol``'s field and the line it shows: the Quote with its currency and day, a
-        warning when the source quotes in another currency than the one typed, or why there is no Quote. Nothing is
+    def _symbol_check(
+        self, field: str, sources: Sequence[str], symbols: Callable[[], Mapping[str, str]], currency: ui.input
+    ) -> None:
+        """The "Sprawdź" button under ``field``'s Source Symbol field and the lines it shows for each of ``sources``
+        (named when there are two, as for the Fund Code): the Quote with its currency and day, a warning when the
+        source quotes in another currency than the one typed, or why there is no Quote. ``symbols`` gives the form's
+        Source Symbols; each source is checked with its own, bankier.pl falling back to the Fund Code. Nothing is
         saved, so the Instrument saves whatever the check found."""
-        price_source = self.sources.get(source)
-        if price_source is None:
+        checked = [(source, self.sources[source]) for source in sources if source in self.sources]
+        if not checked:
             return
         with ui.row().classes("w-full items-center no-wrap gap-2 -mt-2"):
-            button = ui.button("Sprawdź").props("flat dense no-caps size=sm").mark(f"check-symbol-{source}")
-            result = ui.column().classes("gap-0 text-sm").mark(f"symbol-check-{source}")
+            button = ui.button("Sprawdź").props("flat dense no-caps size=sm").mark(f"check-symbol-{field}")
+            result = ui.column().classes("gap-0 text-sm").mark(f"symbol-check-{field}")
+
+        def check_all(typed: Mapping[str, str], currency: str) -> list[SymbolCheck]:
+            return [check_symbol(price_source, symbol_in(source, typed), currency) for source, price_source in checked]
 
         async def check() -> None:
             result.clear()
             button.props("loading")
             try:
-                # The source answers over the network, so the window keeps working meanwhile
-                found = await run.io_bound(check_symbol, price_source, symbol.value, currency.value)
+                # The sources answer over the network, so the window keeps working meanwhile
+                found = await run.io_bound(check_all, symbols(), currency.value)
             finally:
                 button.props(remove="loading")
             if found is None:  # the app is shutting down
                 return
             with result:
-                if found.quote is not None:
-                    ui.label(_quote_text(found.quote))
-                if found.warning:
-                    ui.label(found.warning).classes("text-warning")
-                if found.error:
-                    ui.label(found.error).classes("text-negative")
+                for (source, _), one in zip(checked, found, strict=True):
+                    prefix = f"{SOURCE_NAMES[source]}: " if len(checked) > 1 else ""
+                    if one.quote is not None:
+                        ui.label(prefix + _quote_text(one.quote))
+                    if one.warning:
+                        ui.label(prefix + one.warning).classes("text-warning")
+                    if one.error:
+                        ui.label(prefix + one.error).classes("text-negative")
 
         button.on_click(check)
 
@@ -298,10 +309,12 @@ class InstrumentsSection:
             market.mark("instrument-market")
             isin = ui.input("ISIN", value=instrument.isin if instrument else "")
             isin.props('hint="Np. IE00B6R52259; może zostać puste"').classes("w-full").mark("instrument-isin")
-            symbols = dict(instrument.source_symbols) if instrument else {}
+            # A bankier.pl symbol only repeating the Fund Code is dropped, as bankier.pl uses the Fund Code anyway
+            symbols = without_fund_code_copy(instrument.source_symbols) if instrument else {}
             class_orders = {c.id: c.fallback_order for c in asset_classes}
-            # The Asset Class's sources first, in its Fallback Order; the others wait under "Więcej źródeł" and keep
-            # their symbols, and Stooq, which never values a Position, has its own section
+            # The Asset Class's sources first, in its Fallback Order, the Fund Code field standing for analizy.pl and
+            # bankier.pl; the others wait under "Więcej źródeł" and keep their symbols, and Stooq, which never values
+            # a Position, has its own section
             with ui.column().classes("w-full gap-2").mark("class-sources"):
                 note = ui.label().classes("text-sm text-gray-500").mark("class-sources-note")
                 class_sources = ui.column().classes("w-full gap-2")
@@ -310,12 +323,17 @@ class InstrumentsSection:
             fields: dict[str, ui.column] = {}
             symbol_inputs: dict[str, ui.input] = {}
             more_sources: list[str] = []
+
+            def typed_symbols() -> dict[str, str]:
+                return {source: field.value for source, field in symbol_inputs.items()}
+
             for source, (label, hint) in _SYMBOL_FIELDS.items():
                 with stooq_section if source == STOOQ else more, ui.column().classes("w-full gap-2") as field:
                     symbol_input = ui.input(label, value=symbols.get(source, ""))
                     symbol_input.props(f'hint="{hint}"').classes("w-full").mark(f"instrument-symbol-{source}")
                     if source != STOOQ:  # history only, it gives no Quote to check
-                        self._symbol_check(source, symbol_input, currency)
+                        checked = (ANALIZY, BANKIER) if source == ANALIZY else (source,)
+                        self._symbol_check(source, checked, typed_symbols, currency)
                 fields[source], symbol_inputs[source] = field, symbol_input
 
             def count_more() -> None:
@@ -324,7 +342,9 @@ class InstrumentsSection:
 
             def arrange() -> None:
                 order = class_orders.get(asset_class.value, ())
-                shown = [source for source in order if source in fields]
+                # The Fund Code (the analizy.pl field) stands where the first of analizy.pl and bankier.pl is; a
+                # bankier.pl symbol of its own is needed only when its code differs, so it waits under "Więcej źródeł"
+                shown = list(dict.fromkeys(ANALIZY if source == BANKIER else source for source in order))
                 for i, source in enumerate(shown):
                     fields[source].move(class_sources, target_index=i)
                 more_sources[:] = [source for source in FALLBACK_SOURCES if source not in shown]
@@ -382,7 +402,7 @@ class InstrumentsSection:
                         isin=isin.value,
                         quote_currency="" if untouched_default else currency.value,
                         market=market.value,
-                        source_symbols={source: field.value for source, field in symbol_inputs.items()},
+                        source_symbols=typed_symbols(),
                     ),
                     result,
                 )
@@ -428,10 +448,7 @@ class InstrumentsSection:
                         isin=isin.value,
                         manual_price=manual_price,
                         # Symbols in sources without a field here are kept
-                        source_symbols={
-                            **symbols,
-                            **{source: field.value for source, field in symbol_inputs.items()},
-                        },
+                        source_symbols=without_fund_code_copy({**symbols, **typed_symbols()}),
                         metal_grams=metal_grams,
                         buyback_spread_percent=buyback_spread,
                         ter_percent=ter_percent,
@@ -476,11 +493,15 @@ class InstrumentsSection:
 _SYMBOL_FIELDS = {
     YAHOO: ("Symbol Yahoo", "Np. ISAC.L, AAPL, BTC-USD; zostaw puste, jeśli Yahoo nie notuje instrumentu"),
     BOSSA: ("Symbol Bossa", "Np. PZU, CDR, ETFBDIVPL; zostaw puste, jeśli instrumentu nie ma na GPW"),
+    # The Fund Code, shared by analizy.pl and bankier.pl, is saved as the analizy.pl Source Symbol
     ANALIZY: (
-        "Symbol analizy.pl",
-        "Fundusze i PPK: id z adresu strony funduszu, np. PZU60 z analizy.pl/fundusze/ppk/PZU60",
+        "Kod funduszu",
+        "Fundusze i PPK: kod z adresu strony funduszu, np. PZU60 z analizy.pl/fundusze/ppk/PZU60",
     ),
-    BANKIER: ("Symbol bankier.pl", "Zapasowe źródło funduszy i PPK; zwykle to samo id co w analizy.pl"),
+    BANKIER: (
+        "Symbol bankier.pl (gdy inny niż kod funduszu)",
+        "Zwykle puste, bo bankier.pl używa kodu funduszu; wpisz, gdy kod w bankier.pl jest inny",
+    ),
     STOOQ: ("Symbol Stooq", "Tylko historia notowań (wykresy, benchmarki), np. wig, swig80tr, cdr; nie wycenia"),
 }
 

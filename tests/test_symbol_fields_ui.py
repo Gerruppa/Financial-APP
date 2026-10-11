@@ -193,3 +193,81 @@ async def test_the_search_fills_fields_that_are_not_shown(engine: Engine) -> Non
         user.find("Zapisz").click()
 
     assert list_instruments(engine)[0].source_symbols == {YAHOO: "PZU.WA", BOSSA: "PZU"}
+
+
+# The Fund Code (issue #58): one field for analizy.pl and bankier.pl, saved as the analizy.pl Source Symbol
+
+FUND_SOURCES = {
+    ANALIZY: FakeSource(ANALIZY, {"PZU60": "15.31"}),
+    BANKIER: FakeSource(BANKIER, {"PZU60": "15.30"}),
+}
+
+
+async def test_the_fund_code_stands_in_for_analizy_and_bankier(engine: Engine) -> None:
+    multi_asset = _class_named(engine, "Multi-asset")
+    add_instrument(engine, InstrumentDraft("PZU PPK 2060", multi_asset.id, "PLN", source_symbols={ANALIZY: "PZU60"}))
+
+    async with user_simulation(lambda: build_shell(engine, sources={})) as user:
+        await _edit(engine, user)
+
+        # Multi-asset: analizy.pl, bankier.pl, Yahoo, Bossa
+        assert _fields_in(user, "class-sources") == [ANALIZY, YAHOO, BOSSA]
+        assert _fields_in(user, "more-sources") == [BANKIER]
+        with user.scope(marker="class-sources"):
+            await user.should_see("Kod funduszu")
+        with user.scope(marker="more-sources"):
+            await user.should_see("Symbol bankier.pl (gdy inny niż kod funduszu)")
+
+
+async def test_the_fund_code_takes_the_place_of_bankier_when_it_comes_first(engine: Engine) -> None:
+    custom = add_asset_class(engine, "Fundusze", [YAHOO, BANKIER])
+    add_instrument(engine, InstrumentDraft("PZU PPK 2060", custom.id, "PLN"))
+
+    async with user_simulation(lambda: build_shell(engine, sources={})) as user:
+        await _edit(engine, user)
+
+        assert _fields_in(user, "class-sources") == [YAHOO, ANALIZY]
+        assert _fields_in(user, "more-sources") == [BOSSA, BANKIER]
+
+
+async def test_checking_the_fund_code_checks_analizy_and_bankier(engine: Engine) -> None:
+    multi_asset = _class_named(engine, "Multi-asset")
+    add_instrument(engine, InstrumentDraft("PZU PPK 2060", multi_asset.id, "PLN", source_symbols={ANALIZY: "PZU60"}))
+
+    async with user_simulation(lambda: build_shell(engine, sources=FUND_SOURCES)) as user:
+        await _edit(engine, user)
+        user.find(marker="check-symbol-analizy").click()
+
+        with user.scope(marker="symbol-check-analizy"):
+            await user.should_see(f"analizy.pl: 15,31{NBSP}zł · 09.10.2026")
+            await user.should_see(f"bankier.pl: 15,30{NBSP}zł · 09.10.2026")
+
+
+async def test_a_bankier_symbol_copying_the_fund_code_is_not_kept(engine: Engine) -> None:
+    multi_asset = _class_named(engine, "Multi-asset")
+    # As the sheet import fills both
+    add_instrument(
+        engine,
+        InstrumentDraft("PZU PPK 2060", multi_asset.id, "PLN", source_symbols={ANALIZY: "PZU60", BANKIER: "PZU60"}),
+    )
+
+    async with user_simulation(lambda: build_shell(engine, sources={})) as user:
+        await _edit(engine, user)
+        await user.should_see("Więcej źródeł (0 wypełnionych)")
+        user.find("Zapisz").click()
+        await user.should_not_see(marker="instrument-dialog")
+
+    assert list_instruments(engine)[0].source_symbols == {ANALIZY: "PZU60"}
+
+
+async def test_a_typed_bankier_symbol_equal_to_the_fund_code_is_not_saved(engine: Engine) -> None:
+    multi_asset = _class_named(engine, "Multi-asset")
+    add_instrument(engine, InstrumentDraft("PZU PPK 2060", multi_asset.id, "PLN", source_symbols={ANALIZY: "PZU60"}))
+
+    async with user_simulation(lambda: build_shell(engine, sources={})) as user:
+        await _edit(engine, user)
+        user.find(marker="instrument-symbol-bankier").type(" pzu60 ")
+        user.find("Zapisz").click()
+        await user.should_not_see(marker="instrument-dialog")
+
+    assert list_instruments(engine)[0].source_symbols == {ANALIZY: "PZU60"}

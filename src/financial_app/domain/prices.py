@@ -71,7 +71,27 @@ def validate_fallback_order(order: Iterable[str]) -> tuple[str, ...]:
 def sources_to_try(fallback_order: Sequence[str], symbols: Mapping[str, str]) -> list[tuple[str, str]]:
     """The Price Sources to try for an Instrument whose Asset Class has ``fallback_order``, each with the Instrument's
     Source Symbol in it; only sources the Instrument has a Source Symbol for are tried."""
-    return [(source, symbols[source]) for source in fallback_order if source in symbols]
+    tried = ((source, symbol_in(source, symbols)) for source in fallback_order)
+    return [(source, symbol) for source, symbol in tried if symbol]
+
+
+def symbol_in(source: str, symbols: Mapping[str, str]) -> str:
+    """The Instrument's Source Symbol in ``source`` ("" when none): bankier.pl falls back to the Fund Code, which is
+    the analizy.pl Source Symbol, unless it has a symbol of its own."""
+    symbol = symbols.get(source, "").strip()
+    if not symbol and source == BANKIER:
+        return symbols.get(ANALIZY, "").strip()
+    return symbol
+
+
+def without_fund_code_copy(symbols: Mapping[str, str]) -> dict[str, str]:
+    """``symbols`` without a bankier.pl Source Symbol that only repeats the Fund Code, as bankier.pl uses the Fund
+    Code anyway (e.g. both filled by the sheet import)."""
+    result = dict(symbols)
+    fund_code = result.get(ANALIZY, "").strip().upper()
+    if fund_code and result.get(BANKIER, "").strip().upper() == fund_code:
+        del result[BANKIER]
+    return result
 
 
 # When the day's prices are final enough for the start-up refresh: after the GPW session with its closing auction (local
