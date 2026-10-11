@@ -42,6 +42,8 @@ DEFAULT_FALLBACK_ORDERS: dict[str, tuple[str, ...]] = {
 }
 # Asset Classes of the Bond Series, which keep their Manual Price until Stage 3 values them from the MF data
 STAGE_3_CLASSES = frozenset({"Obligacje skarbowe polskie"})
+# Seeded Asset Classes nothing quotes, priced only by a Manual Price
+MANUAL_PRICE_CLASSES = frozenset({"Gotówka", "Waluty"})
 
 
 def default_fallback_order(asset_class: str) -> tuple[str, ...]:

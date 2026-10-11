@@ -8,6 +8,7 @@ from nicegui import run, ui
 from sqlalchemy import Engine
 
 from financial_app.domain.formatting import (
+    format_count,
     format_date,
     format_exact,
     format_percent,
@@ -34,7 +35,9 @@ from financial_app.domain.prices import (
     BANKIER,
     BOSSA,
     FALLBACK_SOURCES,
+    MANUAL_PRICE_CLASSES,
     SOURCE_NAMES,
+    STAGE_3_CLASSES,
     STOOQ,
     YAHOO,
     FallbackOrderError,
@@ -270,7 +273,8 @@ class InstrumentsSection:
         """Open a fresh form for a new Instrument (``None``) or for editing ``instrument``."""
         dialog = movable_dialog()
         dialog.on("hide", dialog.delete)
-        class_options = {c.id: c.name for c in list_asset_classes(self.engine)}
+        asset_classes = list_asset_classes(self.engine)
+        class_options = {c.id: c.name for c in asset_classes}
         with dialog, ui.card().classes("w-[480px]").mark("instrument-dialog"):
             ui.label("Nowy instrument" if instrument is None else "Edytuj instrument").classes("text-lg font-bold")
             # An Instrument without Source Symbols (e.g. imported as "ISAC") is searched by its name
@@ -295,27 +299,47 @@ class InstrumentsSection:
             isin = ui.input("ISIN", value=instrument.isin if instrument else "")
             isin.props('hint="Np. IE00B6R52259; może zostać puste"').classes("w-full").mark("instrument-isin")
             symbols = dict(instrument.source_symbols) if instrument else {}
-            yahoo = ui.input("Symbol Yahoo", value=symbols.get(YAHOO, ""))
-            yahoo.props('hint="Np. ISAC.L, AAPL, BTC-USD; zostaw puste, jeśli Yahoo nie notuje instrumentu"')
-            yahoo.classes("w-full").mark("instrument-symbol-yahoo")
-            self._symbol_check(YAHOO, yahoo, currency)
-            bossa = ui.input("Symbol Bossa", value=symbols.get(BOSSA, ""))
-            bossa.props('hint="Np. PZU, CDR, ETFBDIVPL; zostaw puste, jeśli instrumentu nie ma na GPW"')
-            bossa.classes("w-full").mark("instrument-symbol-bossa")
-            self._symbol_check(BOSSA, bossa, currency)
-            analizy = ui.input("Symbol analizy.pl", value=symbols.get(ANALIZY, ""))
-            analizy.props(
-                'hint="Fundusze i PPK: id z adresu strony funduszu, np. PZU60 z analizy.pl/fundusze/ppk/PZU60"'
-            )
-            analizy.classes("w-full").mark("instrument-symbol-analizy")
-            self._symbol_check(ANALIZY, analizy, currency)
-            bankier = ui.input("Symbol bankier.pl", value=symbols.get(BANKIER, ""))
-            bankier.props('hint="Zapasowe źródło funduszy i PPK; zwykle to samo id co w analizy.pl"')
-            bankier.classes("w-full").mark("instrument-symbol-bankier")
-            self._symbol_check(BANKIER, bankier, currency)
-            stooq = ui.input("Symbol Stooq", value=symbols.get(STOOQ, ""))
-            stooq.props('hint="Tylko historia notowań (wykresy, benchmarki), np. wig, swig80tr, cdr; nie wycenia"')
-            stooq.classes("w-full").mark("instrument-symbol-stooq")
+            class_orders = {c.id: c.fallback_order for c in asset_classes}
+            # The Asset Class's sources first, in its Fallback Order; the others wait under "Więcej źródeł" and keep
+            # their symbols, and Stooq, which never values a Position, has its own section
+            with ui.column().classes("w-full gap-2").mark("class-sources"):
+                note = ui.label().classes("text-sm text-gray-500").mark("class-sources-note")
+                class_sources = ui.column().classes("w-full gap-2")
+            more = ui.expansion().classes("w-full").mark("more-sources")
+            stooq_section = ui.expansion("Historia notowań (Stooq)").classes("w-full").mark("stooq-history")
+            fields: dict[str, ui.column] = {}
+            symbol_inputs: dict[str, ui.input] = {}
+            more_sources: list[str] = []
+            for source, (label, hint) in _SYMBOL_FIELDS.items():
+                with stooq_section if source == STOOQ else more, ui.column().classes("w-full gap-2") as field:
+                    symbol_input = ui.input(label, value=symbols.get(source, ""))
+                    symbol_input.props(f'hint="{hint}"').classes("w-full").mark(f"instrument-symbol-{source}")
+                    if source != STOOQ:  # history only, it gives no Quote to check
+                        self._symbol_check(source, symbol_input, currency)
+                fields[source], symbol_inputs[source] = field, symbol_input
+
+            def count_more() -> None:
+                filled = sum(1 for source in more_sources if symbol_inputs[source].value.strip())
+                more.text = f"Więcej źródeł ({format_count(filled, 'wypełniony', 'wypełnione', 'wypełnionych')})"
+
+            def arrange() -> None:
+                order = class_orders.get(asset_class.value, ())
+                shown = [source for source in order if source in fields]
+                for i, source in enumerate(shown):
+                    fields[source].move(class_sources, target_index=i)
+                more_sources[:] = [source for source in FALLBACK_SOURCES if source not in shown]
+                for source in more_sources:
+                    fields[source].move(more)
+                note.visible = not shown
+                if not shown:
+                    note.text = _no_sources_note(class_options.get(asset_class.value))
+                more.visible = bool(more_sources)
+                count_more()
+
+            for symbol_input in symbol_inputs.values():
+                symbol_input.on_value_change(count_more)
+            asset_class.on_value_change(arrange)
+            arrange()
             price = instrument.manual_price if instrument else None
             price_input = ui.input("Cena ręczna", value="" if price is None else format_exact(price))
             price_input.props(
@@ -353,7 +377,6 @@ class InstrumentsSection:
             def choose(result: SearchResult) -> None:
                 # A new Instrument's default PLN was not typed by the user, so a listing's own currency replaces it
                 untouched_default = instrument is None and currency.value == "PLN"
-                symbol_inputs = {YAHOO: yahoo, BOSSA: bossa, ANALIZY: analizy, BANKIER: bankier, STOOQ: stooq}
                 filled = fill_empty(
                     FormFields(
                         isin=isin.value,
@@ -407,11 +430,7 @@ class InstrumentsSection:
                         # Symbols in sources without a field here are kept
                         source_symbols={
                             **symbols,
-                            YAHOO: yahoo.value,
-                            BOSSA: bossa.value,
-                            ANALIZY: analizy.value,
-                            BANKIER: bankier.value,
-                            STOOQ: stooq.value,
+                            **{source: field.value for source, field in symbol_inputs.items()},
                         },
                         metal_grams=metal_grams,
                         buyback_spread_percent=buyback_spread,
@@ -451,6 +470,30 @@ class InstrumentsSection:
                     ui.button("Anuluj", on_click=dialog.close).props("flat")
                     ui.button("Zapisz", on_click=save)
         dialog.open()
+
+
+# Each Source Symbol field's label and hint, in the order the fields outside the Asset Class's sources are listed
+_SYMBOL_FIELDS = {
+    YAHOO: ("Symbol Yahoo", "Np. ISAC.L, AAPL, BTC-USD; zostaw puste, jeśli Yahoo nie notuje instrumentu"),
+    BOSSA: ("Symbol Bossa", "Np. PZU, CDR, ETFBDIVPL; zostaw puste, jeśli instrumentu nie ma na GPW"),
+    ANALIZY: (
+        "Symbol analizy.pl",
+        "Fundusze i PPK: id z adresu strony funduszu, np. PZU60 z analizy.pl/fundusze/ppk/PZU60",
+    ),
+    BANKIER: ("Symbol bankier.pl", "Zapasowe źródło funduszy i PPK; zwykle to samo id co w analizy.pl"),
+    STOOQ: ("Symbol Stooq", "Tylko historia notowań (wykresy, benchmarki), np. wig, swig80tr, cdr; nie wycenia"),
+}
+
+
+def _no_sources_note(class_name: str | None) -> str:
+    """Where the price comes from when the Asset Class (``None``: not chosen yet) has no Price Sources."""
+    if class_name is None:
+        return "Wybierz klasę aktywów, żeby zobaczyć źródła wycen."
+    if class_name in STAGE_3_CLASSES:
+        return "Ta klasa będzie wyceniana automatycznie w etapie 3; do tego czasu podaj cenę ręczną."
+    if class_name in MANUAL_PRICE_CLASSES:
+        return "Ta klasa nie ma źródeł wycen: podaj cenę ręczną."
+    return "Ta klasa nie ma źródeł wycen. Dodaj je w Ustawienia > Klasy aktywów albo podaj cenę ręczną."
 
 
 def _quote_text(quote: Quote) -> str:
