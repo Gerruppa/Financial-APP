@@ -222,19 +222,20 @@ class InstrumentsSection:
             def choose(result: SearchResult) -> None:
                 # A new Instrument's default PLN was not typed by the user, so a listing's own currency replaces it
                 untouched_default = instrument is None and currency.value == "PLN"
+                symbol_inputs = {YAHOO: yahoo, BOSSA: bossa, ANALIZY: analizy, BANKIER: bankier, STOOQ: stooq}
                 filled = fill_empty(
                     FormFields(
                         isin=isin.value,
                         quote_currency="" if untouched_default else currency.value,
                         market=market.value,
-                        yahoo=yahoo.value,
-                        bossa=bossa.value,
+                        source_symbols={source: field.value for source, field in symbol_inputs.items()},
                     ),
                     result,
                 )
                 isin.value, market.value = filled.isin, filled.market
-                yahoo.value, bossa.value = filled.yahoo, filled.bossa
                 currency.value = filled.quote_currency or currency.value
+                for source, field in symbol_inputs.items():
+                    field.value = filled.source_symbols[source]
                 search_results.clear()
 
             async def find() -> None:

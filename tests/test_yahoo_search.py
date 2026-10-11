@@ -7,6 +7,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 import pytest
 
 from financial_app.domain.instrument_search import InstrumentSearchError, SearchResult
+from financial_app.domain.prices import BOSSA, YAHOO
 from financial_app.sources.yahoo import YahooSearch
 
 FIXTURES = Path(__file__).parent / "fixtures" / "yahoo"
@@ -43,7 +44,13 @@ def test_an_isin_finds_every_listing_of_the_fund_with_its_currency() -> None:
 def test_a_name_finds_listings_without_an_isin_and_warsaw_is_gpw() -> None:
     results = YahooSearch(_saved).search("cd projekt")
 
-    assert results[0] == SearchResult(name="CD Projekt Red S.A.", symbol="CDR.WA", market="GPW", currency="PLN")
+    assert results[0] == SearchResult(
+        name="CD Projekt Red S.A.",
+        symbol="CDR.WA",
+        market="GPW",
+        currency="PLN",
+        source_symbols={YAHOO: "CDR.WA", BOSSA: "CDR"},
+    )
     assert len(results) == 7
 
 
@@ -72,3 +79,9 @@ def test_no_network_is_a_polish_error() -> None:
 def test_an_unexpected_response_is_a_polish_error() -> None:
     with pytest.raises(InstrumentSearchError, match="Nieprawidłowa"):
         YahooSearch(lambda url: "<html>").search("ISAC")
+
+
+def test_only_a_warsaw_listing_gives_a_bossa_symbol() -> None:
+    results = YahooSearch(_saved).search("IE00B6R52259")
+
+    assert results[0].source_symbols == {YAHOO: "ISAC.L"}

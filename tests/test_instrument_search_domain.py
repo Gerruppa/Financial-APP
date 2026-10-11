@@ -1,27 +1,43 @@
 """What a chosen Instrument search result fills in the Instrument form (issue #25, spec 4.1)."""
 
 from financial_app.domain.instrument_search import FormFields, SearchResult, fill_empty, looks_like_isin
+from financial_app.domain.prices import BOSSA, YAHOO
 
-ISAC = SearchResult(name="iShares MSCI ACWI", symbol="ISAC.L", market="London", currency="USD", isin="IE00B6R52259")
-CDR = SearchResult(name="CD Projekt Red S.A.", symbol="CDR.WA", market="GPW", currency="PLN")
+ISAC = SearchResult(
+    name="iShares MSCI ACWI",
+    symbol="ISAC.L",
+    market="London",
+    currency="USD",
+    source_symbols={YAHOO: "ISAC.L"},
+    isin="IE00B6R52259",
+)
+CDR = SearchResult(
+    name="CD Projekt Red S.A.",
+    symbol="CDR.WA",
+    market="GPW",
+    currency="PLN",
+    source_symbols={YAHOO: "CDR.WA", BOSSA: "CDR"},
+)
 
 
 def test_a_result_fills_every_empty_field() -> None:
-    filled = fill_empty(FormFields(), ISAC)
+    filled = fill_empty(FormFields(source_symbols={YAHOO: "", BOSSA: ""}), ISAC)
 
-    assert filled == FormFields(isin="IE00B6R52259", quote_currency="USD", market="London", yahoo="ISAC.L")
+    assert filled == FormFields(
+        isin="IE00B6R52259", quote_currency="USD", market="London", source_symbols={YAHOO: "ISAC.L", BOSSA: ""}
+    )
 
 
-def test_a_warsaw_result_also_gives_the_bossa_symbol() -> None:
-    assert CDR.bossa_symbol == "CDR"
-    assert fill_empty(FormFields(), CDR).bossa == "CDR"
-    assert ISAC.bossa_symbol == ""
+def test_every_source_symbol_of_the_result_is_filled() -> None:
+    assert fill_empty(FormFields(), CDR).source_symbols == {YAHOO: "CDR.WA", BOSSA: "CDR"}
 
 
 def test_values_already_entered_are_kept() -> None:
-    entered = FormFields(isin="IE00B4L5Y983", quote_currency="EUR", market="XETRA", yahoo="IUSQ.DE", bossa="X")
+    entered = FormFields(
+        isin="IE00B4L5Y983", quote_currency="EUR", market="XETRA", source_symbols={YAHOO: "IUSQ.DE", BOSSA: "X"}
+    )
 
-    assert fill_empty(entered, ISAC) == entered
+    assert fill_empty(entered, CDR) == entered
 
 
 def test_blank_values_count_as_empty() -> None:

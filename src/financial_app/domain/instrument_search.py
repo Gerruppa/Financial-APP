@@ -1,12 +1,10 @@
 """Instrument search by ISIN, name or symbol (issue #25, spec 4.1): its results and what a chosen one fills in."""
 
-from dataclasses import dataclass, replace
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from typing import Protocol
 
 from financial_app.domain.instruments import ISIN_PATTERN
-
-# Yahoo's suffix of Warsaw listings; the symbol without it is the Bossa symbol
-WARSAW_SUFFIX = ".WA"
 
 
 class InstrumentSearchError(Exception):
@@ -15,19 +13,16 @@ class InstrumentSearchError(Exception):
 
 @dataclass(frozen=True)
 class SearchResult:
-    """One listing found: ``symbol`` is its Yahoo symbol, ``currency`` its quote currency ("" when unknown) and
-    ``isin`` the ISIN searched for ("" after a search by name or symbol)."""
+    """One listing found: ``symbol`` is the ticker the search service shows, ``source_symbols`` the Source Symbols
+    it gives (Price Source key to symbol, ``domain.prices``), ``currency`` its quote currency ("" when unknown) and
+    ``isin`` the ISIN searched for ("" after a search by name or symbol, as Yahoo returns no ISINs)."""
 
     name: str
     symbol: str
     market: str
     currency: str
+    source_symbols: Mapping[str, str] = field(default_factory=dict)
     isin: str = ""
-
-    @property
-    def bossa_symbol(self) -> str:
-        """The Bossa symbol of a Warsaw listing, else ""."""
-        return self.symbol.removesuffix(WARSAW_SUFFIX) if self.symbol.endswith(WARSAW_SUFFIX) else ""
 
 
 class InstrumentSearch(Protocol):
@@ -38,13 +33,12 @@ class InstrumentSearch(Protocol):
 
 @dataclass(frozen=True)
 class FormFields:
-    """The Instrument form's fields a search result can fill."""
+    """The Instrument form's fields a search result can fill; ``source_symbols`` as in ``InstrumentDraft``."""
 
     isin: str = ""
     quote_currency: str = ""
     market: str = ""
-    yahoo: str = ""
-    bossa: str = ""
+    source_symbols: Mapping[str, str] = field(default_factory=dict)
 
 
 def fill_empty(fields: FormFields, result: SearchResult) -> FormFields:
@@ -54,15 +48,17 @@ def fill_empty(fields: FormFields, result: SearchResult) -> FormFields:
     def pick(current: str, found: str) -> str:
         return current if current.strip() else found
 
-    return replace(
-        fields,
+    symbols = dict(fields.source_symbols)
+    for source, symbol in result.source_symbols.items():
+        symbols[source] = pick(symbols.get(source, ""), symbol)
+    return FormFields(
         isin=pick(fields.isin, result.isin),
         quote_currency=pick(fields.quote_currency, result.currency),
         market=pick(fields.market, result.market),
-        yahoo=pick(fields.yahoo, result.symbol),
-        bossa=pick(fields.bossa, result.bossa_symbol),
+        source_symbols=symbols,
     )
 
 
 def looks_like_isin(query: str) -> bool:
+    """Whether ``query`` has the shape of an ISIN, so its results can carry it."""
     return ISIN_PATTERN.fullmatch(query.strip().upper()) is not None
