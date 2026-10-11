@@ -4,10 +4,17 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from decimal import Decimal
 
-from nicegui import ui
+from nicegui import run, ui
 from sqlalchemy import Engine
 
 from financial_app.domain.formatting import format_exact, format_percent, format_quantity, parse_number
+from financial_app.domain.instrument_search import (
+    FormFields,
+    InstrumentSearch,
+    InstrumentSearchError,
+    SearchResult,
+    fill_empty,
+)
 from financial_app.domain.instruments import AssetClass, Instrument, InstrumentDraft, InstrumentError
 from financial_app.domain.prices import ANALIZY, BANKIER, BOSSA, SOURCE_NAMES, STOOQ, YAHOO
 from financial_app.persistence.instruments import (
@@ -100,9 +107,11 @@ class AssetClassesSection:
 
 @dataclass
 class InstrumentsSection:
-    """The Instrumenty card; ``refresh`` redraws the catalog after a save or an Asset Class rename."""
+    """The Instrumenty card; ``refresh`` redraws the catalog after a save or an Asset Class rename. ``search`` fills
+    the Instrument dialog from a listing found by ISIN, name or symbol (spec 4.1)."""
 
     engine: Engine
+    search: InstrumentSearch
 
     def refresh(self) -> None:
         self.instrument_list.refresh()
@@ -130,7 +139,7 @@ class InstrumentsSection:
                 with ui.row().classes("items-center gap-2"):
                     ui.label(instrument.name).classes("font-medium")
                     ui.badge(instrument.asset_class_name).props("outline")
-                details = [instrument.quote_currency, instrument.market]
+                details = [instrument.quote_currency, instrument.market, instrument.isin]
                 if instrument.manual_price is not None:
                     details.append(f"cena ręczna {format_exact(instrument.manual_price)} {instrument.quote_currency}")
                 if instrument.metal_grams is not None:
@@ -151,6 +160,14 @@ class InstrumentsSection:
         class_options = {c.id: c.name for c in list_asset_classes(self.engine)}
         with dialog, ui.card().classes("w-[480px]").mark("instrument-dialog"):
             ui.label("Nowy instrument" if instrument is None else "Edytuj instrument").classes("text-lg font-bold")
+            # An Instrument without Source Symbols (e.g. imported as "ISAC") is searched by its name
+            query = instrument.name if instrument and not instrument.source_symbols else ""
+            with ui.row().classes("w-full items-center no-wrap"):
+                search_input = ui.input("Szukaj (ISIN, nazwa lub symbol)", value=query).classes("grow")
+                search_input.mark("instrument-search")
+                search_button = ui.button(icon="search").props('flat round aria-label="Szukaj instrumentu"')
+                search_button.mark("instrument-search-button")
+            search_results = ui.column().classes("w-full gap-0")
             name = ui.input("Nazwa", value=instrument.name if instrument else "").classes("w-full")
             name.mark("instrument-name")
             asset_class = ui.select(
@@ -162,6 +179,8 @@ class InstrumentsSection:
             market = ui.input("Rynek", value=instrument.market if instrument else "")
             market.props('hint="Np. GPW, NYSE, XETRA; może zostać puste"').classes("w-full")
             market.mark("instrument-market")
+            isin = ui.input("ISIN", value=instrument.isin if instrument else "")
+            isin.props('hint="Np. IE00B6R52259; może zostać puste"').classes("w-full").mark("instrument-isin")
             symbols = dict(instrument.source_symbols) if instrument else {}
             yahoo = ui.input("Symbol Yahoo", value=symbols.get(YAHOO, ""))
             yahoo.props('hint="Np. ISAC.L, AAPL, BTC-USD; zostaw puste, jeśli Yahoo nie notuje instrumentu"')
@@ -200,6 +219,45 @@ class InstrumentsSection:
             spread_input.classes("w-full").mark("instrument-buyback-spread")
             error = ui.label().classes("text-negative").mark("instrument-error")
 
+            def choose(result: SearchResult) -> None:
+                # A new Instrument's default PLN was not typed by the user, so a listing's own currency replaces it
+                untouched_default = instrument is None and currency.value == "PLN"
+                symbol_inputs = {YAHOO: yahoo, BOSSA: bossa, ANALIZY: analizy, BANKIER: bankier, STOOQ: stooq}
+                filled = fill_empty(
+                    FormFields(
+                        isin=isin.value,
+                        quote_currency="" if untouched_default else currency.value,
+                        market=market.value,
+                        source_symbols={source: field.value for source, field in symbol_inputs.items()},
+                    ),
+                    result,
+                )
+                isin.value, market.value = filled.isin, filled.market
+                currency.value = filled.quote_currency or currency.value
+                for source, field in symbol_inputs.items():
+                    field.value = filled.source_symbols[source]
+                search_results.clear()
+
+            async def find() -> None:
+                search_results.clear()
+                search_button.props("loading")
+                try:
+                    # The search answers over the network, so the window keeps working meanwhile
+                    results = await run.io_bound(self.search.search, search_input.value) or []
+                    message = "" if results else "Nic nie znaleziono. Fundusze polskie wpisz ręcznie."
+                except InstrumentSearchError as exc:
+                    results, message = [], str(exc)
+                finally:
+                    search_button.props(remove="loading")
+                with search_results:
+                    if message:
+                        ui.label(message).classes("text-sm text-gray-500").mark("instrument-search-message")
+                    for result in results:
+                        _result_row(result, choose)
+
+            search_button.on_click(find)
+            search_input.on("keydown.enter", find)
+
             def save() -> None:
                 try:
                     manual_price = _parse_number(price_input.value, "Cena ręczna")
@@ -212,6 +270,7 @@ class InstrumentsSection:
                         asset_class_id=asset_class.value,
                         quote_currency=currency.value,
                         market=market.value,
+                        isin=isin.value,
                         manual_price=manual_price,
                         # Symbols in sources without a field here are kept
                         source_symbols={
@@ -257,6 +316,15 @@ class InstrumentsSection:
                     ui.button("Anuluj", on_click=dialog.close).props("flat")
                     ui.button("Zapisz", on_click=save)
         dialog.open()
+
+
+def _result_row(result: SearchResult, choose: Callable[[SearchResult], None]) -> None:
+    """One listing found; clicking it fills the form's empty fields."""
+    details = " · ".join([result.market, result.symbol, result.currency or "waluta nieznana"])
+    item = ui.item(on_click=lambda: choose(result)).classes("w-full rounded").mark(f"search-result-{result.symbol}")
+    with item, ui.item_section():
+        ui.item_label(result.name)
+        ui.item_label(details).props("caption")
 
 
 def _exact_text(number: Decimal | None) -> str:

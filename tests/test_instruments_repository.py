@@ -217,3 +217,12 @@ def test_clearing_the_metal_weight_values_the_instrument_per_unit_again(engine: 
     update_instrument(engine, added.id, replace(added, metal_grams=None))
 
     assert list_instruments(engine)[0].metal_grams is None
+
+
+def test_two_listings_of_one_isin_are_two_instruments(db_file: Path, engine: Engine) -> None:
+    etfs = _class_named(engine, "Akcje zagraniczne").id
+    add_instrument(engine, InstrumentDraft("ISAC", etfs, "USD", "London", isin="IE00B6R52259"))
+    add_instrument(engine, InstrumentDraft("IUSQ", etfs, "EUR", "XETRA", isin="IE00B6R52259"))
+    engine.dispose()
+
+    assert [i.isin for i in list_instruments(init_db(db_file))] == ["IE00B6R52259", "IE00B6R52259"]

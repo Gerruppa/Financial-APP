@@ -9,6 +9,7 @@ from nicegui import run, ui
 from sqlalchemy import Engine
 
 from financial_app.domain.formatting import format_count, format_datetime
+from financial_app.domain.instrument_search import InstrumentSearch
 from financial_app.domain.prices import ANALIZY, BANKIER, BOSSA, SOURCE_NAMES, YAHOO, refresh_due
 from financial_app.persistence.quotes import last_successful_refresh
 from financial_app.sources.analizy import AnalizySource
@@ -16,7 +17,7 @@ from financial_app.sources.bankier import BankierSource
 from financial_app.sources.bossa import BossaSource
 from financial_app.sources.nbp import NbpRates
 from financial_app.sources.prices import PriceSource, RefreshResult, last_refresh, refresh_prices
-from financial_app.sources.yahoo import YahooSource
+from financial_app.sources.yahoo import YahooSearch, YahooSource
 from financial_app.ui.dialogs import install_movable_dialogs
 from financial_app.ui.portfolio import PortfolioPage
 from financial_app.ui.settings import build_settings_page
@@ -57,16 +58,19 @@ def build_shell(
     sources: Mapping[str, PriceSource] | None = None,
     refresh_at_start: bool = False,
     now: Callable[[], datetime] = datetime.now,
+    search: InstrumentSearch | None = None,
 ) -> None:
     """Build the whole window; tabs are client-side sub-pages backed by the database at ``engine``.
 
     ``rates`` gives NBP Rates (by default from the NBP API through the cache in that database) and ``sources`` the
     Price Sources by their key (by default the real ones). With ``refresh_at_start`` the prices are refreshed in the
-    background once the window is open, when they are due at ``now`` (spec 4.1).
+    background once the window is open, when they are due at ``now`` (spec 4.1). ``search`` finds Instruments for
+    the Instrument dialog (by default through Yahoo).
     """
     rates = rates or NbpRates(engine)
     if sources is None:
         sources = {YAHOO: YahooSource(), BOSSA: BossaSource(), ANALIZY: AnalizySource(), BANKIER: BankierSource()}
+    search = search or YahooSearch()
     install_movable_dialogs()
     transactions_page = TransactionsPage(engine, rates)
     portfolio_page = PortfolioPage(engine, rates)
@@ -124,7 +128,7 @@ def build_shell(
     pages: dict[str, Callable[[], None]] = {tab.path: _placeholder_page(tab.label) for tab in TABS}
     pages["/transakcje"] = transactions_page.build
     pages["/portfolio"] = portfolio_page.build
-    pages["/ustawienia"] = lambda: build_settings_page(engine, rates)
+    pages["/ustawienia"] = lambda: build_settings_page(engine, rates, search)
     ui.sub_pages(pages).classes("w-full").mark("page-content")
 
     if engine in _running_refreshes or (refresh_at_start and refresh_due(last_successful_refresh(engine), now())):

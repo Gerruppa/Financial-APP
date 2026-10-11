@@ -131,6 +131,8 @@ class InstrumentRow(Base):
     # A physical metal's weight per unit and Buyback Spread % (issue #34), also exact decimal text
     metal_grams: Mapped[str | None] = mapped_column(String(30))
     buyback_spread_percent: Mapped[str | None] = mapped_column(String(20))
+    # Optional and not unique: each listing of a security is its own Instrument (issue #25)
+    isin: Mapped[str] = mapped_column(String(12), default="", server_default="")
 
     asset_class: Mapped[AssetClassRow] = relationship()
     source_symbols: Mapped[list[SourceSymbolRow]] = relationship(cascade="all, delete-orphan")

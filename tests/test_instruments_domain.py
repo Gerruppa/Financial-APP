@@ -91,3 +91,14 @@ def test_a_metal_unit_is_worth_the_spot_per_troy_ounce_for_its_weight_less_the_s
 
 def test_without_a_metal_weight_the_price_is_the_unit_price() -> None:
     assert _draft().unit_price(Decimal("45.12")) == Decimal("45.12")
+
+
+def test_isin_is_optional_trimmed_and_upper_cased() -> None:
+    assert _draft().isin == ""
+    assert _draft(isin=" ie00b6r52259 ").isin == "IE00B6R52259"
+
+
+@pytest.mark.parametrize("isin", ["IE00B6R5225", "IE00B6R522599", "1E00B6R52259", "IE00B6R5225X", "IE00-6R52259"])
+def test_malformed_isin_is_rejected(isin: str) -> None:
+    with pytest.raises(InstrumentError, match="ISIN"):
+        _draft(isin=isin)
