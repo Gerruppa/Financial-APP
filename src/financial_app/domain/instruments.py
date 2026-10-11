@@ -4,6 +4,7 @@ import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from decimal import Decimal
+from enum import StrEnum
 
 from financial_app.domain.currencies import is_currency_code
 
@@ -28,6 +29,17 @@ ISIN_PATTERN = re.compile(r"[A-Z]{2}[A-Z0-9]{9}[0-9]")
 
 # A troy ounce, the unit of metal spot prices (spec 4.1)
 GRAMS_PER_TROY_OUNCE = Decimal("31.1034768")
+
+
+class DistributionPolicy(StrEnum):
+    """Whether a fund reinvests its income or pays it out. Values are stored in the database, so never rename them."""
+
+    ACCUMULATING = "accumulating"
+    DISTRIBUTING = "distributing"
+
+    @property
+    def label(self) -> str:
+        return "Akumulacja" if self is DistributionPolicy.ACCUMULATING else "Dystrybucja"
 
 
 class InstrumentError(ValueError):
@@ -61,6 +73,8 @@ class InstrumentDraft:
     A physical metal (coins, bars) is still held in units: ``metal_grams`` is the metal weight of one unit, and its
     prices (Manual Price and Quotes) are the spot price of a troy ounce, which ``unit_price`` turns into the value of
     a unit less the ``buyback_spread_percent`` a dealer takes when buying it back (spec 4.1).
+
+    A fund's ``ter_percent``, ``distribution_policy`` and ``domicile`` are optional details the user enters (issue #42).
     """
 
     name: str
@@ -72,6 +86,9 @@ class InstrumentDraft:
     metal_grams: Decimal | None = None
     buyback_spread_percent: Decimal | None = None
     isin: str = ""
+    ter_percent: Decimal | None = None
+    distribution_policy: DistributionPolicy | None = None
+    domicile: str = ""
 
     def __post_init__(self) -> None:
         name = self.name.strip()
@@ -92,6 +109,8 @@ class InstrumentDraft:
                 raise InstrumentError("Spread odkupu wymaga wagi metalu w jednostce.")
             if not 0 <= spread < 100:
                 raise InstrumentError("Spread odkupu musi wynosić od 0 do mniej niż 100%.")
+        if self.ter_percent is not None and not 0 <= self.ter_percent < 100:
+            raise InstrumentError("TER musi wynosić od 0 do mniej niż 100%.")
         isin = self.isin.strip().upper()
         if isin and not ISIN_PATTERN.fullmatch(isin):
             raise InstrumentError(f"Nieprawidłowy ISIN: {isin}. ISIN ma 12 znaków, np. IE00B6R52259.")
@@ -99,6 +118,7 @@ class InstrumentDraft:
         object.__setattr__(self, "name", name)
         object.__setattr__(self, "quote_currency", currency)
         object.__setattr__(self, "market", self.market.strip())
+        object.__setattr__(self, "domicile", self.domicile.strip())
         # A blank symbol means none in that source
         symbols = {source: symbol.strip() for source, symbol in self.source_symbols.items() if symbol.strip()}
         object.__setattr__(self, "source_symbols", symbols)

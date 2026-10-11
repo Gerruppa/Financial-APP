@@ -4,9 +4,9 @@ Positions are valued at their price from ``domain.valuation`` (the Manual Price 
 it is manual, stale, has no source or waits for Stage 3; a physical metal at its spot less the Buyback Spread, with the
 spot beside it), converted from a foreign currency at the NBP Rate from the last business day before today; one
 without a price or a rate counts at cost and adds nothing to the result. Clicking a Position shows its Lots with both
-costs. Foreign cash is valued at the same NBP Rate; its FX result (realised and unrealised) counts in the Account's
-result unless the Account excludes it (spec 3.1, 3.5). Each card also sums the Account's net Dividends and interest
-and its commissions and costs.
+costs, below the fund's TER, Distribution Policy and domicile when entered. Foreign cash is valued at the same NBP
+Rate; its FX result (realised and unrealised) counts in the Account's result unless the Account excludes it (spec 3.1,
+3.5). Each card also sums the Account's net Dividends and interest and its commissions and costs.
 """
 
 from dataclasses import dataclass
@@ -26,6 +26,7 @@ from financial_app.domain.formatting import (
     format_rate,
     format_unit_price,
 )
+from financial_app.domain.instruments import Instrument
 from financial_app.domain.lots import ForeignCash, Position, foreign_cash, fx_result, open_positions
 from financial_app.domain.prices import SOURCE_NAMES
 from financial_app.domain.transactions import PLN, cash_balances, costs_by_account, dividends_by_account
@@ -36,6 +37,7 @@ from financial_app.persistence.quotes import latest_quotes
 from financial_app.persistence.transactions import list_transactions
 from financial_app.sources.nbp import NbpRates
 from financial_app.sources.prices import last_refresh
+from financial_app.ui.fund_details import fund_details
 
 COLUMNS = "grid-template-columns: minmax(8rem, 2fr) repeat(7, minmax(6rem, 1fr))"
 HEADERS = ("Instrument", "Liczba", "Śr. cena", "Koszt", "Cena", "Wartość", "Zysk/strata", "Zysk/strata %")
@@ -84,7 +86,7 @@ class PortfolioPage:
         if not accounts:
             ui.label("Brak kont. Dodaj konto w zakładce Ustawienia.").classes("text-gray-500")
         instruments = list_instruments(self.engine)
-        names = {i.id: i.name for i in instruments}
+        catalog = {i.id: i for i in instruments}
         held_instruments = {p.instrument_id for p in positions}
         rates: dict[str, Decimal | None] = {PLN: Decimal(1)}
         quotes = latest_quotes(self.engine)
@@ -100,10 +102,10 @@ class PortfolioPage:
         for account in accounts:
             own = sorted(
                 (p for p in positions if p.account_id == account.id),
-                key=lambda p: names[p.instrument_id].casefold(),
+                key=lambda p: catalog[p.instrument_id].name.casefold(),
             )
             own_cash = sorted((c for c in cash if c.account_id == account.id), key=lambda c: c.currency)
-            _account_card(account, balances.get(account.id, Decimal(0)), own, own_cash, prices, rates, names, totals)
+            _account_card(account, balances.get(account.id, Decimal(0)), own, own_cash, prices, rates, catalog, totals)
 
     def _rate(self, currency: str, rates: dict[str, Decimal | None]) -> Decimal | None:
         """The NBP Rate from the last business day before today, fetched once per currency into ``rates``."""
@@ -122,7 +124,7 @@ def _account_card(
     foreign: list[ForeignCash],
     prices: dict[int, InstrumentPrice],
     rates: dict[str, Decimal | None],
-    names: dict[int, str],
+    catalog: dict[int, Instrument],
     totals: _Totals,
 ) -> None:
     known_rates = {currency: rate for currency, rate in rates.items() if rate is not None}
@@ -163,7 +165,7 @@ def _account_card(
                 fx_label = ui.label(f"{format_pln(fx, signed=True)}{excluded}").classes(_result_color(fx))
                 fx_label.mark("fx-result")
         if positions:
-            _positions_table(positions, prices, names)
+            _positions_table(positions, prices, catalog)
 
 
 def _foreign_cash_table(foreign: list[ForeignCash], rates: dict[str, Decimal]) -> None:
@@ -192,7 +194,9 @@ def _cash_value(balance: ForeignCash, rate: Decimal | None) -> Decimal:
     return balance.cost if rate is None else balance.value(rate)
 
 
-def _positions_table(positions: list[Position], prices: dict[int, InstrumentPrice], names: dict[int, str]) -> None:
+def _positions_table(
+    positions: list[Position], prices: dict[int, InstrumentPrice], catalog: dict[int, Instrument]
+) -> None:
     with ui.element("div").classes("grid w-full gap-x-4 border-b py-1 font-medium").style(COLUMNS):
         for header in HEADERS:
             ui.label(header).classes("text-right" if header != "Instrument" else "")
@@ -201,7 +205,7 @@ def _positions_table(positions: list[Position], prices: dict[int, InstrumentPric
         with row.style(COLUMNS).mark("position-row"):
             current = prices[position.instrument_id]
             with ui.row().classes("items-center gap-2"):
-                ui.label(names[position.instrument_id])
+                ui.label(catalog[position.instrument_id].name)
                 if current.badge is not None:
                     color = "orange" if current.badge is Badge.STALE else "grey"
                     ui.badge(current.badge.value, color=color).props("outline").mark("price-badge")
@@ -209,7 +213,7 @@ def _positions_table(positions: list[Position], prices: dict[int, InstrumentPric
             ui.label(format_pln(position.average_price)).classes("text-right")
             ui.label(format_pln(position.cost)).classes("text-right")
             _valuation_cells(position, current)
-        details = _lots_table(position)
+        details = _lots_table(position, catalog[position.instrument_id])
         row.on("click", lambda details=details: details.set_visibility(not details.visible))
 
 
@@ -258,9 +262,12 @@ def _price_cell(price: Decimal, current: InstrumentPrice) -> None:
         ui.label(caption).classes("text-xs text-gray-500")
 
 
-def _lots_table(position: Position) -> ui.element:
-    """The Position's open Lots with their Actual and Tax cost, hidden until the Position is clicked."""
+def _lots_table(position: Position, instrument: Instrument) -> ui.element:
+    """The Position's open Lots with their Actual and Tax cost, below the fund's details when entered, hidden until
+    the Position is clicked."""
     with ui.column().classes("w-full gap-0 pl-8 pb-2").mark("position-lots") as details:
+        if fund := fund_details(instrument):
+            ui.label(" · ".join(fund)).classes("text-sm text-gray-500 pb-1").mark("fund-details")
         with ui.element("div").classes("grid gap-x-4 text-sm font-medium").style(LOT_COLUMNS):
             for header in ("Data zakupu", "Liczba", "Koszt rzeczywisty", "Koszt podatkowy"):
                 ui.label(header).classes("text-right" if header != "Data zakupu" else "")

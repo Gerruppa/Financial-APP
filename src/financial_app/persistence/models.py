@@ -133,6 +133,10 @@ class InstrumentRow(Base):
     buyback_spread_percent: Mapped[str | None] = mapped_column(String(20))
     # Optional and not unique: each listing of a security is its own Instrument (issue #25)
     isin: Mapped[str] = mapped_column(String(12), default="", server_default="")
+    # A fund's details entered by the user (issue #42); the TER is exact decimal text, the policy a DistributionPolicy
+    ter_percent: Mapped[str | None] = mapped_column(String(20))
+    distribution_policy: Mapped[str | None] = mapped_column(String(20))
+    domicile: Mapped[str] = mapped_column(String(100), default="", server_default="")
 
     asset_class: Mapped[AssetClassRow] = relationship()
     source_symbols: Mapped[list[SourceSymbolRow]] = relationship(cascade="all, delete-orphan")

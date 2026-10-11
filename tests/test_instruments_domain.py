@@ -4,7 +4,12 @@ from decimal import Decimal
 
 import pytest
 
-from financial_app.domain.instruments import InstrumentDraft, InstrumentError, validate_asset_class_name
+from financial_app.domain.instruments import (
+    DistributionPolicy,
+    InstrumentDraft,
+    InstrumentError,
+    validate_asset_class_name,
+)
 
 
 def _draft(**overrides: object) -> InstrumentDraft:
@@ -102,3 +107,31 @@ def test_isin_is_optional_trimmed_and_upper_cased() -> None:
 def test_malformed_isin_is_rejected(isin: str) -> None:
     with pytest.raises(InstrumentError, match="ISIN"):
         _draft(isin=isin)
+
+
+def test_fund_details_are_optional() -> None:
+    draft = _draft()
+
+    assert (draft.ter_percent, draft.distribution_policy, draft.domicile) == (None, None, "")
+
+
+def test_fund_details_keep_ter_policy_and_trimmed_domicile() -> None:
+    draft = _draft(
+        ter_percent=Decimal("0.07"), distribution_policy=DistributionPolicy.ACCUMULATING, domicile="  Irlandia "
+    )
+
+    assert (draft.ter_percent, draft.distribution_policy, draft.domicile) == (
+        Decimal("0.07"),
+        DistributionPolicy.ACCUMULATING,
+        "Irlandia",
+    )
+
+
+@pytest.mark.parametrize("ter", [Decimal("-0.01"), Decimal(100), Decimal(250)])
+def test_ter_is_at_least_zero_and_below_100(ter: Decimal) -> None:
+    with pytest.raises(InstrumentError, match="TER"):
+        _draft(ter_percent=ter)
+
+
+def test_distribution_policies_have_polish_labels() -> None:
+    assert [policy.label for policy in DistributionPolicy] == ["Akumulacja", "Dystrybucja"]

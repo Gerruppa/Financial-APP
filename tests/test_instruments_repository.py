@@ -9,7 +9,7 @@ import pytest
 from sqlalchemy import Engine
 
 from financial_app.domain.accounts import AccountDraft, AccountType
-from financial_app.domain.instruments import AssetClass, InstrumentDraft, InstrumentError
+from financial_app.domain.instruments import AssetClass, DistributionPolicy, InstrumentDraft, InstrumentError
 from financial_app.domain.transactions import TransactionType, buy_or_sell
 from financial_app.persistence.accounts import add_account
 from financial_app.persistence.db import init_db
@@ -226,3 +226,40 @@ def test_two_listings_of_one_isin_are_two_instruments(db_file: Path, engine: Eng
     engine.dispose()
 
     assert [i.isin for i in list_instruments(init_db(db_file))] == ["IE00B6R52259", "IE00B6R52259"]
+
+
+def test_fund_details_are_kept_exactly_after_restart(db_file: Path, engine: Engine) -> None:
+    etfs = _class_named(engine, "Akcje zagraniczne").id
+    draft = InstrumentDraft(
+        "ISAC",
+        etfs,
+        "USD",
+        ter_percent=Decimal("0.075"),
+        distribution_policy=DistributionPolicy.DISTRIBUTING,
+        domicile="Irlandia",
+    )
+    add_instrument(engine, draft)
+    engine.dispose()
+
+    [saved] = list_instruments(init_db(db_file))
+
+    assert (saved.ter_percent, saved.distribution_policy, saved.domicile) == (
+        Decimal("0.075"),
+        DistributionPolicy.DISTRIBUTING,
+        "Irlandia",
+    )
+
+
+def test_clearing_fund_details_removes_them(engine: Engine) -> None:
+    etfs = _class_named(engine, "Akcje zagraniczne").id
+    added = add_instrument(
+        engine,
+        InstrumentDraft(
+            "ISAC", etfs, "USD", ter_percent=Decimal("0.2"), distribution_policy=DistributionPolicy.ACCUMULATING
+        ),
+    )
+
+    update_instrument(engine, added.id, replace(added, ter_percent=None, distribution_policy=None))
+
+    [saved] = list_instruments(engine)
+    assert (saved.ter_percent, saved.distribution_policy) == (None, None)

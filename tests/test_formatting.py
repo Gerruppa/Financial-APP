@@ -9,6 +9,7 @@ from financial_app.domain.formatting import (
     format_date,
     format_datetime,
     format_exact,
+    format_exact_percent,
     format_percent,
     format_pln,
     format_quantity,
@@ -46,6 +47,11 @@ def test_percent_uses_decimal_comma_and_non_breaking_space_before_sign() -> None
 def test_percent_can_show_explicit_sign_and_custom_precision() -> None:
     assert format_percent(1.25, decimals=1, signed=True) == f"+1,3{NBSP}%"
     assert format_percent(-0.04, decimals=1, signed=True) == f"+0,0{NBSP}%"  # no "-0,0"
+
+
+def test_exact_percent_keeps_every_decimal_but_shows_at_least_two() -> None:
+    assert format_exact_percent(Decimal("0.075")) == f"0,075{NBSP}%"
+    assert format_exact_percent(Decimal("0.2")) == f"0,20{NBSP}%"
 
 
 @pytest.mark.parametrize(
