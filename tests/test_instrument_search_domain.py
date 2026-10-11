@@ -10,6 +10,7 @@ from financial_app.domain.instrument_search import (
     fill_empty,
     looks_like_isin,
 )
+from financial_app.domain.instruments import DistributionPolicy
 from financial_app.domain.prices import BOSSA, YAHOO
 
 ISAC = SearchResult(
@@ -33,7 +34,11 @@ def test_a_result_fills_every_empty_field() -> None:
     filled = fill_empty(FormFields(source_symbols={YAHOO: "", BOSSA: ""}), ISAC)
 
     assert filled == FormFields(
-        isin="IE00B6R52259", quote_currency="USD", market="London", source_symbols={YAHOO: "ISAC.L", BOSSA: ""}
+        name="iShares MSCI ACWI",
+        isin="IE00B6R52259",
+        quote_currency="USD",
+        market="London",
+        source_symbols={YAHOO: "ISAC.L", BOSSA: ""},
     )
 
 
@@ -43,7 +48,14 @@ def test_every_source_symbol_of_the_result_is_filled() -> None:
 
 def test_values_already_entered_are_kept() -> None:
     entered = FormFields(
-        isin="IE00B4L5Y983", quote_currency="EUR", market="XETRA", source_symbols={YAHOO: "IUSQ.DE", BOSSA: "X"}
+        name="IUSQ",
+        isin="IE00B4L5Y983",
+        quote_currency="EUR",
+        market="XETRA",
+        source_symbols={YAHOO: "IUSQ.DE", BOSSA: "X"},
+        asset_class="Akcje zagraniczne",
+        domicile="Irlandia",
+        distribution_policy=DistributionPolicy.ACCUMULATING,
     )
 
     assert fill_empty(entered, CDR) == entered
@@ -125,3 +137,74 @@ def test_an_unexpected_error_in_one_search_counts_as_it_not_answering() -> None:
 
     assert [r.symbol for r in results] == ["CDR.WA"]
     assert results.notes == ["analizy.pl nie odpowiada"]
+
+
+# A chosen result also fills the name and, for a fund, its domicile and distribution policy
+
+
+ETF = SearchResult(
+    name="iShares MSCI All Country World UCITS ETF USD Acc",
+    symbol="ISAC.L",
+    market="London",
+    currency="USD",
+    source_symbols={YAHOO: "ISAC.L"},
+    isin="IE00B6R52259",
+    fund=True,
+)
+
+
+def test_an_empty_name_is_filled_and_an_entered_one_kept() -> None:
+    assert fill_empty(FormFields(), CDR).name == "CD Projekt Red S.A."
+    assert fill_empty(FormFields(name="CDR"), CDR).name == "CDR"
+
+
+def test_a_funds_domicile_comes_from_its_isins_country() -> None:
+    assert fill_empty(FormFields(), ETF).domicile == "Irlandia"
+    # Also from an ISIN the user typed
+    no_isin = SearchResult(name="Fund", symbol="X", market="", currency="EUR", fund=True)
+    assert fill_empty(FormFields(isin="LU0109392836"), no_isin).domicile == "Luksemburg"
+
+
+def test_a_stocks_isin_says_nothing_about_a_domicile() -> None:
+    stock = SearchResult(name="CDR", symbol="CDR.WA", market="GPW", currency="PLN", isin="PLOPTTC00011")
+
+    assert fill_empty(FormFields(), stock).domicile == ""
+
+
+def test_an_unknown_isin_country_leaves_the_domicile_empty() -> None:
+    # The ISIN entered stays, so the domicile follows it rather than the result's
+    assert fill_empty(FormFields(isin="XS1234567890"), ETF).domicile == ""
+    no_isin = SearchResult(name="Fund", symbol="X", market="", currency="EUR", fund=True)
+    assert fill_empty(FormFields(isin="XS1234567890"), no_isin).domicile == ""
+
+
+@pytest.mark.parametrize(
+    ("name", "policy"),
+    [
+        ("iShares MSCI All Country World UCITS ETF USD Acc", DistributionPolicy.ACCUMULATING),
+        ("Franklin Technology Fund A (Acc) (USD", DistributionPolicy.ACCUMULATING),
+        ("Vanguard FTSE All-World UCITS ETF (USD) Accumulating", DistributionPolicy.ACCUMULATING),
+        ("Vanguard FTSE All-World UCITS ETF Distributing", DistributionPolicy.DISTRIBUTING),
+        ("iShares Core MSCI World UCITS ETF USD (Dist)", DistributionPolicy.DISTRIBUTING),
+        ("PPK inPZU 2060", None),
+        ("Xtrackers MSCI World Accelerated Ltd", None),
+    ],
+)
+def test_a_funds_distribution_policy_comes_from_its_name(name: str, policy: DistributionPolicy | None) -> None:
+    fund = SearchResult(name=name, symbol="X", market="", currency="USD", fund=True)
+
+    assert fill_empty(FormFields(), fund).distribution_policy == policy
+
+
+def test_a_stocks_name_sets_no_policy() -> None:
+    stock = SearchResult(name="Accenture Acc", symbol="ACN", market="NYSE", currency="USD")
+
+    assert fill_empty(FormFields(), stock).distribution_policy is None
+
+
+def test_an_entered_domicile_and_policy_are_kept() -> None:
+    entered = FormFields(domicile="Luksemburg", distribution_policy=DistributionPolicy.DISTRIBUTING)
+
+    filled = fill_empty(entered, ETF)
+
+    assert (filled.domicile, filled.distribution_policy) == ("Luksemburg", DistributionPolicy.DISTRIBUTING)

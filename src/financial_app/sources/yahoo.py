@@ -24,6 +24,8 @@ WARSAW_SUFFIX = ".WA"
 # The Asset Class of a listing by Yahoo's quoteType (stocks also by their market, in asset_class); an ETF's class
 # depends on what it holds, so it and any other type get none
 ASSET_CLASSES = {"CRYPTOCURRENCY": "Kryptowaluty", "FUTURE": "Metale i surowce", "MUTUALFUND": "Inne"}
+# Yahoo's quoteTypes of funds, whose ISIN tells their domicile and name their distribution policy
+FUND_TYPES = frozenset({"ETF", "MUTUALFUND"})
 
 
 def fetch_from_yahoo(url: str) -> str | None:
@@ -103,6 +105,7 @@ class YahooSearch:
                 source_symbols=_source_symbols(symbol),
                 isin=isin,
                 asset_class=_asset_class(symbol, listing),
+                fund=listing.get("quoteType") in FUND_TYPES,
             )
             for (symbol, listing), currency in zip(listings.items(), currencies, strict=True)
         ]

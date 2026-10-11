@@ -120,3 +120,19 @@ def test_a_yahoo_mutual_fund_is_other() -> None:
 def test_an_etf_sets_no_class() -> None:
     # What an ETF holds, not where it is listed, decides its class
     assert set(_classes("IE00B6R52259").values()) == {""}
+
+
+def test_etfs_and_mutual_funds_are_funds_and_stocks_are_not() -> None:
+    assert {r.fund for r in YahooSearch(_saved).search("IE00B6R52259")} == {True}
+    assert {r.fund for r in YahooSearch(_saved).search("cd projekt")} == {False}
+    assert _funds("GC=F") == {
+        "GC=F": False,
+        "GCM.AX": False,
+        "GCM.XA": False,
+        "0P0000V2MI.SA": True,
+        "0P00019HF1.SA": True,
+    }
+
+
+def _funds(query: str) -> dict[str, bool]:
+    return {r.symbol: r.fund for r in YahooSearch(_saved).search(query)}
