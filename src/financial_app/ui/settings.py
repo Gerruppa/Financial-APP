@@ -35,7 +35,7 @@ def build_settings_page(
     instruments.build()
     unpriced.build(open_instrument=instruments.open_dialog)
     PriceSourcesSection(engine).build()
-    sheet_import = SheetImportSection(engine, rates)
+    sheet_import = SheetImportSection(engine, rates, on_account_added=accounts.account_list.refresh)
     sheet_import.build()
 
     def redraw() -> None:

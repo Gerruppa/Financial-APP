@@ -103,3 +103,13 @@ def test_saving_an_account_under_its_own_name_is_allowed(engine: Engine) -> None
     update_account(engine, saved.id, replace(XTB, broker="X-Trade Brokers"))
 
     assert list_accounts(engine)[0].broker == "X-Trade Brokers"
+
+
+@pytest.mark.parametrize("account_type", [AccountType.BONDS, AccountType.OTHER])
+def test_bonds_and_other_accounts_survive_a_restart(db_file: Path, engine: Engine, account_type: AccountType) -> None:
+    saved = add_account(engine, replace(IKE, name="Sejf", account_type=account_type))
+    engine.dispose()
+
+    [listed] = list_accounts(init_db(db_file))
+    assert listed == saved
+    assert listed.account_type is account_type

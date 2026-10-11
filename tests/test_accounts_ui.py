@@ -4,6 +4,7 @@ from collections.abc import AsyncIterator
 from pathlib import Path
 
 import pytest
+from nicegui import ui
 from nicegui.testing import User, user_simulation
 from sqlalchemy import Engine
 
@@ -102,3 +103,22 @@ async def test_user_edits_and_deactivates_an_account(engine: Engine) -> None:
     [saved] = list_accounts(engine)
     assert saved.name == "mBank eMakler"
     assert not saved.active
+
+
+@pytest.mark.parametrize(
+    ("account_type", "note"), [(AccountType.BONDS, "pobierany przez emitenta"), (AccountType.OTHER, "6 miesięcy")]
+)
+async def test_user_adds_a_bonds_or_other_account(
+    user: User, engine: Engine, account_type: AccountType, note: str
+) -> None:
+    user.find("Dodaj konto").click()
+    # "Obligacje" and "Inne" also name Asset Classes on this page, so set the select rather than click its option
+    user.find(marker="account-type", kind=ui.select).elements.pop().set_value(account_type.value)
+    await user.should_see(note)
+    _fill_form(user, **{"account-name": "Sejf"})
+    user.find("Zapisz").click()
+
+    with user.scope(marker="accounts"):
+        await user.should_see("Sejf")
+    [saved] = list_accounts(engine)
+    assert saved.account_type is account_type

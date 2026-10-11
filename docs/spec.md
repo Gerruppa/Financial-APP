@@ -24,11 +24,14 @@ Re-implement the inwestomat.eu "Portfolio tracker" Google Sheet (v2.0.1, 01.07.2
 
 ### 3.1 Accounts (Q14, Q48, Q49)
 - Managed list (not free text). Fields: name, broker name, Account Type, Cash Currencies (e.g. PLN only, or PLN+USD), optional FX Conversion Fee % (e.g. XTB 0.5%; empty for most accounts), flag "exclude FX result from Dashboard P&L", active/inactive.
-- Account Types: Regular, IKE, IKZE, OIPE, PPK, OKI, Deposit/Savings. Each type maps to a **Tax Regime** module:
+- Account Types: Regular, IKE, IKZE, OIPE, PPK, OKI, Deposit/Savings, Bonds, Other (#64). Each type maps to a **Tax Regime** module:
   - Regular: 19% Belka per sale, reported in PIT-38.
   - IKE/OIPE: exempt on a qualifying withdrawal, otherwise tax on the whole gain.
   - IKZE: contributions deductible, 10% flat tax at withdrawal.
   - PPK: own rules.
+  - Deposit/Savings: 19% Belka on interest, withheld by the bank.
+  - Bonds (a retail treasury bond register, e.g. PKO BP): 19% Belka on interest and the gain at redemption, withheld by the issuer, outside PIT-38. Bonds held on an IKE stay on an IKE Account.
+  - Other (assets held outside a financial institution, e.g. physical metals at home): no Belka; selling a thing within 6 months from the end of the month it was bought is taxed at the PIT scale, later it is exempt. Description only until Stage 6.
   - **OKI: placeholder** — no calculation, UI note that rules will be added once the law is final. From the start the app keeps everything a future OKI rule might need: Transactions, daily Account value (from History), Deposits/Withdrawals.
 
 ### 3.2 Instruments (Q15, Q16, Q46, Q21)
@@ -127,7 +130,7 @@ Shell (UI prototype verdict, branch `prototype/ui-shell`, issue #1): **left navi
 - Benchmarks: any catalog Instrument or CPI; every Deposit/Withdrawal "invested" into the benchmark on its date at its PLN price; CPI accrues monthly inflation spread evenly across days; per portfolio or per Account; no fees/taxes. Defaults: CPI, LON:ACWI, LON:CSPX, AMS:V80A, WSE:WIG, WSE:SWIG80TR.
 
 ## 7. Import and verification (Q3, Q25, Q42, Q51–Q53)
-- Importer framework: parse file → preview with Instrument/Account mapping (unknown tickers resolved by the user) → duplicate detection → commit. Duplicates: same external id skipped; otherwise similar Transaction (Account, date, Instrument, quantity, ~amount) prompts the user.
+- Importer framework: parse file → preview with Instrument/Account mapping (unknown tickers resolved by the user; an unknown Konto is matched to an Account or creates one through the Account dialog, prefilled with its name and PLN plus the foreign cash its rows hold, #63) → duplicate detection → commit. Duplicates: same external id skipped; otherwise similar Transaction (Account, date, Instrument, quantity, ~amount) prompts the user.
 - Stage 1 importer: `reference/Newest portfolio.xlsx` (one-time). Ticker mapping from sheet formats (`EXCH:SYM`, Biznesradar, `EDO-DDMMYY` → Bond Series, `Waluty_<CUR>` → foreign cash).
 - **Parity tests**: the sheet's transactions with prices/FX frozen at export date; compare Portfolio, Dashboard totals, FIFO, XIRR and bonds within 0.01 PLN; each difference explained or recorded as a deviation. Stored Historia compared day by day for large discrepancies only. Fixtures stay in `reference/` (git-ignored).
 - Stage 6: **XTB importer** (xStation account-history XLSX) and **Reconciliation** view: pair sheet vs XTB Transactions (Account, Instrument, type, quantity, date ±3 days); lists of differing pairs, sheet-only, XTB-only; per-pair or bulk "take XTB" / "keep mine"; XTB is the source of truth for XTB Accounts by default.
