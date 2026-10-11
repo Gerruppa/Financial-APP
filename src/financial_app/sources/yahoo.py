@@ -21,6 +21,9 @@ MINOR_UNITS = {"GBp": ("GBP", 100)}
 MARKET_NAMES = {"WSE": "GPW"}
 # Yahoo's suffix of Warsaw listings; the symbol without it is the Bossa symbol
 WARSAW_SUFFIX = ".WA"
+# The Asset Class of a listing by Yahoo's quoteType (stocks also by their market, in asset_class); an ETF's class
+# depends on what it holds, so it and any other type get none
+ASSET_CLASSES = {"CRYPTOCURRENCY": "Kryptowaluty", "FUTURE": "Metale i surowce", "MUTUALFUND": "Inne"}
 
 
 def fetch_from_yahoo(url: str) -> str | None:
@@ -99,6 +102,7 @@ class YahooSearch:
                 currency=currency,
                 source_symbols=_source_symbols(symbol),
                 isin=isin,
+                asset_class=_asset_class(symbol, listing),
             )
             for (symbol, listing), currency in zip(listings.items(), currencies, strict=True)
         ]
@@ -121,6 +125,13 @@ class YahooSearch:
 def _market(listing: dict[str, object]) -> str:
     exchange = str(listing.get("exchange") or "")
     return MARKET_NAMES.get(exchange, str(listing.get("exchDisp") or exchange))
+
+
+def _asset_class(symbol: str, listing: dict[str, object]) -> str:
+    kind = str(listing.get("quoteType") or "")
+    if kind == "EQUITY":
+        return "Akcje polskie" if symbol.endswith(WARSAW_SUFFIX) else "Akcje zagraniczne"
+    return ASSET_CLASSES.get(kind, "")
 
 
 def _source_symbols(symbol: str) -> dict[str, str]:

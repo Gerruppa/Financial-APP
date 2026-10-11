@@ -403,6 +403,7 @@ class InstrumentsSection:
                         quote_currency="" if untouched_default else currency.value,
                         market=market.value,
                         source_symbols=typed_symbols(),
+                        asset_class=class_options.get(asset_class.value, ""),
                     ),
                     result,
                 )
@@ -410,6 +411,10 @@ class InstrumentsSection:
                 currency.value = filled.quote_currency or currency.value
                 for source, field in symbol_inputs.items():
                     field.value = filled.source_symbols[source]
+                # The class is matched by name, whatever its case; a class the user does not have is left unset
+                if asset_class.value is None:
+                    wanted = filled.asset_class.casefold()
+                    asset_class.value = next((i for i, n in class_options.items() if n.casefold() == wanted), None)
                 search_results.clear()
 
             async def find() -> None:

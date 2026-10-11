@@ -54,3 +54,10 @@ def test_isin_like_queries_are_recognised() -> None:
     assert looks_like_isin(" ie00b6r52259 ")
     assert not looks_like_isin("ISAC")
     assert not looks_like_isin("iShares MSCI ACWI")
+
+
+def test_a_result_fills_an_empty_asset_class_only() -> None:
+    stock = SearchResult(name="CDR", symbol="CDR.WA", market="GPW", currency="PLN", asset_class="Akcje polskie")
+
+    assert fill_empty(FormFields(), stock).asset_class == "Akcje polskie"
+    assert fill_empty(FormFields(asset_class="Inne"), stock).asset_class == "Inne"

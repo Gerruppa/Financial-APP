@@ -50,6 +50,7 @@ def test_a_name_finds_listings_without_an_isin_and_warsaw_is_gpw() -> None:
         market="GPW",
         currency="PLN",
         source_symbols={YAHOO: "CDR.WA", BOSSA: "CDR"},
+        asset_class="Akcje polskie",
     )
     assert len(results) == 7
 
@@ -85,3 +86,37 @@ def test_only_a_warsaw_listing_gives_a_bossa_symbol() -> None:
     results = YahooSearch(_saved).search("IE00B6R52259")
 
     assert results[0].source_symbols == {YAHOO: "ISAC.L"}
+
+
+# The Asset Class a result sets on an Instrument without one (issue #59), from Yahoo's quoteType
+
+
+def _classes(query: str) -> dict[str, str]:
+    return {r.symbol: r.asset_class for r in YahooSearch(_saved).search(query)}
+
+
+def test_a_warsaw_stock_is_polish_and_any_other_stock_foreign() -> None:
+    classes = _classes("cd projekt")
+
+    assert classes["CDR.WA"] == "Akcje polskie"
+    assert classes["OTGLY"] == "Akcje zagraniczne"
+
+
+def test_a_cryptocurrency_is_crypto_and_a_future_a_commodity() -> None:
+    classes = _classes("bitcoin")
+
+    assert classes["BTC-USD"] == "Kryptowaluty"
+    assert classes["BTC=F"] == "Metale i surowce"
+
+
+def test_a_yahoo_mutual_fund_is_other() -> None:
+    classes = _classes("GC=F")
+
+    assert classes["GC=F"] == "Metale i surowce"
+    assert classes["GCM.AX"] == "Akcje zagraniczne"
+    assert classes["0P0000V2MI.SA"] == "Inne"
+
+
+def test_an_etf_sets_no_class() -> None:
+    # What an ETF holds, not where it is listed, decides its class
+    assert set(_classes("IE00B6R52259").values()) == {""}

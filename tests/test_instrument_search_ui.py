@@ -13,7 +13,12 @@ from sqlalchemy import Engine
 from financial_app.domain.instruments import InstrumentDraft
 from financial_app.domain.prices import BOSSA, YAHOO
 from financial_app.persistence.db import init_db
-from financial_app.persistence.instruments import add_instrument, list_asset_classes, list_instruments
+from financial_app.persistence.instruments import (
+    add_instrument,
+    list_asset_classes,
+    list_instruments,
+    update_asset_class,
+)
 from financial_app.sources.yahoo import YahooSearch
 from financial_app.ui.shell import build_shell
 
@@ -158,3 +163,43 @@ async def test_nothing_found_points_polish_funds_to_manual_entry(user: User) -> 
     await _search(user, "PLFIO0000014")
 
     await user.should_see("Nic nie znaleziono")
+
+
+def _chosen_class(user: User) -> object:
+    [field] = user.find(marker="instrument-class").elements
+    assert isinstance(field, ui.select)
+    return field.value
+
+
+async def test_a_result_sets_an_empty_class_and_shows_its_fields(user: User, engine: Engine) -> None:
+    user.find("Dodaj instrument").click()
+    await _search(user, "cd projekt")
+    await user.should_see(marker="search-result-CDR.WA")
+    user.find(marker="search-result-CDR.WA").click()
+
+    assert _chosen_class(user) == _class_id(engine, "Akcje polskie")
+    with user.scope(marker="class-sources"):
+        await user.should_see("Symbol Bossa")
+
+
+async def test_a_class_already_chosen_is_kept(user: User, engine: Engine) -> None:
+    user.find("Dodaj instrument").click()
+    with user.scope(marker="instrument-dialog"):
+        user.find(marker="instrument-class").click()
+        user.find("Multi-asset").click()
+    await _search(user, "cd projekt")
+    await user.should_see(marker="search-result-CDR.WA")
+    user.find(marker="search-result-CDR.WA").click()
+
+    assert _chosen_class(user) == _class_id(engine, "Multi-asset")
+
+
+async def test_a_class_the_user_does_not_have_is_not_set(user: User, engine: Engine) -> None:
+    stocks = next(c for c in list_asset_classes(engine) if c.name == "Akcje polskie")
+    update_asset_class(engine, stocks.id, "Spółki GPW", stocks.fallback_order)
+    user.find("Dodaj instrument").click()
+    await _search(user, "cd projekt")
+    await user.should_see(marker="search-result-CDR.WA")
+    user.find(marker="search-result-CDR.WA").click()
+
+    assert _chosen_class(user) is None

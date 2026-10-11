@@ -14,8 +14,9 @@ class InstrumentSearchError(Exception):
 @dataclass(frozen=True)
 class SearchResult:
     """One listing found: ``symbol`` is the ticker the search service shows, ``source_symbols`` the Source Symbols
-    it gives (Price Source key to symbol, ``domain.prices``), ``currency`` its quote currency ("" when unknown) and
-    ``isin`` the ISIN searched for ("" after a search by name or symbol, as Yahoo returns no ISINs)."""
+    it gives (Price Source key to symbol, ``domain.prices``), ``currency`` its quote currency ("" when unknown),
+    ``isin`` the ISIN searched for ("" after a search by name or symbol, as Yahoo returns no ISINs) and
+    ``asset_class`` the name of the Asset Class it belongs to ("" when its kind does not tell, e.g. an ETF)."""
 
     name: str
     symbol: str
@@ -23,6 +24,7 @@ class SearchResult:
     currency: str
     source_symbols: Mapping[str, str] = field(default_factory=dict)
     isin: str = ""
+    asset_class: str = ""
 
 
 class InstrumentSearch(Protocol):
@@ -33,12 +35,14 @@ class InstrumentSearch(Protocol):
 
 @dataclass(frozen=True)
 class FormFields:
-    """The Instrument form's fields a search result can fill; ``source_symbols`` as in ``InstrumentDraft``."""
+    """The Instrument form's fields a search result can fill; ``source_symbols`` as in ``InstrumentDraft`` and
+    ``asset_class`` the chosen Asset Class's name."""
 
     isin: str = ""
     quote_currency: str = ""
     market: str = ""
     source_symbols: Mapping[str, str] = field(default_factory=dict)
+    asset_class: str = ""
 
 
 def fill_empty(fields: FormFields, result: SearchResult) -> FormFields:
@@ -56,6 +60,7 @@ def fill_empty(fields: FormFields, result: SearchResult) -> FormFields:
         quote_currency=pick(fields.quote_currency, result.currency),
         market=pick(fields.market, result.market),
         source_symbols=symbols,
+        asset_class=pick(fields.asset_class, result.asset_class),
     )
 
 
