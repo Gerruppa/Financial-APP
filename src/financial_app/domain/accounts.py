@@ -21,6 +21,8 @@ class AccountType(StrEnum):
     PPK = "ppk"
     OKI = "oki"
     DEPOSIT = "deposit"
+    BONDS = "bonds"
+    OTHER = "other"
 
     @property
     def label(self) -> str:
@@ -35,6 +37,8 @@ _LABELS = {
     AccountType.PPK: "PPK",
     AccountType.OKI: "OKI",
     AccountType.DEPOSIT: "Lokata / oszczędności",
+    AccountType.BONDS: "Obligacje",
+    AccountType.OTHER: "Inne",
 }
 
 
@@ -65,6 +69,15 @@ _TAX_REGIMES = {
         is_placeholder=True,
     ),
     AccountType.DEPOSIT: TaxRegime("Podatek Belki od odsetek", "19% podatku od odsetek, pobierany przez bank."),
+    AccountType.BONDS: TaxRegime(
+        "Podatek Belki pobierany u źródła",
+        "19% podatku od odsetek i zysku przy wykupie, pobierany przez emitenta; bez rozliczenia w PIT-38.",
+    ),
+    AccountType.OTHER: TaxRegime(
+        "Sprzedaż rzeczy ruchomych",
+        "Bez podatku Belki. Sprzedaż rzeczy (np. metali fizycznych) przed upływem 6 miesięcy od końca miesiąca "
+        "nabycia jest opodatkowana według skali PIT; później jest zwolniona.",
+    ),
 }
 
 

@@ -24,11 +24,14 @@ Re-implement the inwestomat.eu "Portfolio tracker" Google Sheet (v2.0.1, 01.07.2
 
 ### 3.1 Accounts (Q14, Q48, Q49)
 - Managed list (not free text). Fields: name, broker name, Account Type, Cash Currencies (e.g. PLN only, or PLN+USD), optional FX Conversion Fee % (e.g. XTB 0.5%; empty for most accounts), flag "exclude FX result from Dashboard P&L", active/inactive.
-- Account Types: Regular, IKE, IKZE, OIPE, PPK, OKI, Deposit/Savings. Each type maps to a **Tax Regime** module:
+- Account Types: Regular, IKE, IKZE, OIPE, PPK, OKI, Deposit/Savings, Bonds, Other (#64). Each type maps to a **Tax Regime** module:
   - Regular: 19% Belka per sale, reported in PIT-38.
   - IKE/OIPE: exempt on a qualifying withdrawal, otherwise tax on the whole gain.
   - IKZE: contributions deductible, 10% flat tax at withdrawal.
   - PPK: own rules.
+  - Deposit/Savings: 19% Belka on interest, withheld by the bank.
+  - Bonds (a retail treasury bond register, e.g. PKO BP): 19% Belka on interest and the gain at redemption, withheld by the issuer, outside PIT-38. Bonds held on an IKE stay on an IKE Account.
+  - Other (assets held outside a financial institution, e.g. physical metals at home): no Belka; selling a thing within 6 months from the end of the month it was bought is taxed at the PIT scale, later it is exempt. Description only until Stage 6.
   - **OKI: placeholder** — no calculation, UI note that rules will be added once the law is final. From the start the app keeps everything a future OKI rule might need: Transactions, daily Account value (from History), Deposits/Withdrawals.
 
 ### 3.2 Instruments (Q15, Q16, Q46, Q21)

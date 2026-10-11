@@ -9,11 +9,11 @@ A place where the user holds cash and positions, e.g. an IKE at a broker or a ba
 _Avoid_: wallet, portfolio, platform, broker
 
 **Account Type** (Typ konta):
-The legal wrapper of an Account — Regular, IKE, IKZE, OIPE, PPK, OKI or Deposit — which determines its Tax Regime.
+The legal wrapper of an Account — Regular, IKE, IKZE, OIPE, PPK, OKI, Deposit, Bonds (a retail treasury bond register) or Other (assets held outside a financial institution, e.g. physical metals) — which determines its Tax Regime.
 _Avoid_: account kind, wrapper
 
 **Tax Regime** (Sposób opodatkowania):
-The rules by which gains on an Account are taxed (e.g. 19% Belka per sale for Regular, exemption for IKE, not yet defined for OKI).
+The rules by which gains on an Account are taxed (e.g. 19% Belka per sale for Regular, exemption for IKE, Belka withheld by the issuer for Bonds, the 6-month rule for selling things for Other, not yet defined for OKI).
 _Avoid_: tax mode, tax strategy
 
 **Cash Currency** (Waluta rachunku):
