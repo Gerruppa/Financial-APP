@@ -2,17 +2,24 @@
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from datetime import datetime
 
 from nicegui import run, ui
 from sqlalchemy import Engine
 
 from financial_app.domain.formatting import format_count, format_datetime
-from financial_app.domain.prices import ANALIZY, BANKIER, BOSSA, SOURCE_NAMES, YAHOO
+from financial_app.domain.prices import ANALIZY, BANKIER, BOSSA, SOURCE_NAMES, YAHOO, refresh_due
 from financial_app.sources.analizy import AnalizySource
 from financial_app.sources.bankier import BankierSource
 from financial_app.sources.bossa import BossaSource
 from financial_app.sources.nbp import NbpRates
-from financial_app.sources.prices import PriceSource, RefreshResult, last_refresh, refresh_prices
+from financial_app.sources.prices import (
+    PriceSource,
+    RefreshResult,
+    last_refresh,
+    last_successful_refresh,
+    refresh_prices,
+)
 from financial_app.sources.yahoo import YahooSource
 from financial_app.ui.dialogs import install_movable_dialogs
 from financial_app.ui.portfolio import PortfolioPage
@@ -45,12 +52,17 @@ VIEW_SCOPES = ["Total"]
 
 
 def build_shell(
-    engine: Engine, rates: NbpRates | None = None, sources: Mapping[str, PriceSource] | None = None
+    engine: Engine,
+    rates: NbpRates | None = None,
+    sources: Mapping[str, PriceSource] | None = None,
+    refresh_at_start: bool = False,
+    now: Callable[[], datetime] = datetime.now,
 ) -> None:
     """Build the whole window; tabs are client-side sub-pages backed by the database at ``engine``.
 
     ``rates`` gives NBP Rates (by default from the NBP API through the cache in that database) and ``sources`` the
-    Price Sources by their key (by default the real ones).
+    Price Sources by their key (by default the real ones). With ``refresh_at_start`` the prices are refreshed in the
+    background once the window is open, when they are due at ``now`` (spec 4.1).
     """
     rates = rates or NbpRates(engine)
     if sources is None:
@@ -64,23 +76,31 @@ def build_shell(
         transactions_page.refresh()
         portfolio_page.refresh()
 
+    refreshing = False
+
     async def refresh_now() -> None:
+        nonlocal refreshing
+        if refreshing:
+            return
         # The sources answer over the network, so the window keeps working meanwhile
+        refreshing = True
         refresh_button.props("loading")
+        price_status.refresh()
         try:
-            result = await run.io_bound(refresh_prices, engine, sources)
+            result = await run.io_bound(refresh_prices, engine, sources, now)
         finally:
+            refreshing = False
             refresh_button.props(remove="loading")
+            price_status.refresh()
         if result is None:  # the app is shutting down
             return
         portfolio_page.refresh()
-        price_status.refresh()
         ui.notify(_refresh_message(result), type="warning" if result.failures else "positive")
 
     with ui.header().classes("bg-indigo-900 items-center").mark("header"):
         ui.label(APP_TITLE).classes("text-lg font-bold")
         ui.space()
-        price_status = ui.refreshable(lambda: _price_status(engine))
+        price_status = ui.refreshable(lambda: _price_status(engine, refreshing))
         price_status()
         refresh_button = ui.button(icon="refresh", on_click=refresh_now).props(
             'flat round color=white aria-label="Odśwież wyceny"'
@@ -105,15 +125,24 @@ def build_shell(
     pages["/ustawienia"] = lambda: build_settings_page(engine, rates)
     ui.sub_pages(pages).classes("w-full").mark("page-content")
 
+    if refresh_at_start and refresh_due(last_successful_refresh(engine), now()):
+        # Once the window is up, so that it never waits for the sources
+        ui.timer(0, refresh_now, once=True)
 
-def _price_status(engine: Engine) -> None:
-    """ "Wyceny: <time of the last refresh>", red with the number of errors; clicking lists them with their reasons."""
+
+def _price_status(engine: Engine, refreshing: bool) -> None:
+    """ "Wyceny: <time of the last refresh>", red with the number of errors; clicking lists them with their reasons.
+    While a refresh runs it says so."""
     status = last_refresh(engine)
-    text = f"Wyceny: {format_datetime(status.refreshed_at) if status else 'brak'}"
-    if status and status.failures:
+    failed = bool(status and status.failures) and not refreshing
+    if refreshing:
+        text = "Wyceny: odświeżanie…"
+    else:
+        text = f"Wyceny: {format_datetime(status.refreshed_at) if status else 'brak'}"
+    if failed and status:
         text += f" · {format_count(len(status.failures), 'błąd', 'błędy', 'błędów')}"
     button = ui.button(text, on_click=lambda: _price_errors_dialog(engine)).props("flat no-caps")
-    button.props(f"color={'red-4' if status and status.failures else 'white'}").mark("price-status")
+    button.props(f"color={'red-4' if failed else 'white'}").mark("price-status")
 
 
 def _price_errors_dialog(engine: Engine) -> None:

@@ -28,5 +28,10 @@ def main() -> None:
     backup_database(database_path(), backups_dir())
     engine = init_db(database_path())
     ui.run(
-        lambda: build_shell(engine), title=APP_TITLE, native=True, window_size=(1400, 900), reload=False, language="pl"
+        lambda: build_shell(engine, refresh_at_start=True),
+        title=APP_TITLE,
+        native=True,
+        window_size=(1400, 900),
+        reload=False,
+        language="pl",
     )

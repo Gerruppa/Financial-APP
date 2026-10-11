@@ -10,7 +10,7 @@ from sqlalchemy import Engine
 from financial_app.domain.lots import open_positions
 from financial_app.domain.prices import PriceSourceError, Quote, sources_to_try
 from financial_app.persistence.instruments import list_instruments
-from financial_app.persistence.quotes import load_refresh, save_quote, save_refresh
+from financial_app.persistence.quotes import load_last_success, load_refresh, save_quote, save_refresh
 from financial_app.persistence.transactions import list_transactions
 
 
@@ -60,7 +60,8 @@ def refresh_prices(
     """Fetch and save a Quote for every Instrument with an open Position, from the first source that gives one.
 
     A failing source or Instrument never stops the others. The refresh's time and failures are saved for
-    ``last_refresh``.
+    ``last_refresh``; it is a success for ``last_successful_refresh`` unless every Instrument fetched failed (e.g. with
+    no network).
     """
     # list_transactions is newest first; the FIFO engine wants entry order
     for price_source in sources.values():
@@ -92,7 +93,8 @@ def refresh_prices(
             break
         else:
             failures.append(RefreshFailure(instrument.id, instrument.name, reasons))
-    save_refresh(engine, now(), {failure.instrument_id: failure.reasons for failure in failures})
+    succeeded = refreshed > 0 or not failures
+    save_refresh(engine, now(), {failure.instrument_id: failure.reasons for failure in failures}, succeeded)
     return RefreshResult(refreshed, failures)
 
 
@@ -104,3 +106,8 @@ def last_refresh(engine: Engine) -> RefreshStatus | None:
     refreshed_at, reasons = saved
     failures = [RefreshFailure(i.id, i.name, reasons[i.id]) for i in list_instruments(engine) if i.id in reasons]
     return RefreshStatus(refreshed_at, failures)
+
+
+def last_successful_refresh(engine: Engine) -> datetime | None:
+    """When the last refresh that gave a Quote (or had nothing to fetch) ran; ``None`` before the first."""
+    return load_last_success(engine)
