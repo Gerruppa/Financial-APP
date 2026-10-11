@@ -1,7 +1,8 @@
 """An Instrument's price for valuing its Positions, and why it has none (spec 4.1).
 
 The Manual Price wins while it is set; otherwise the Instrument's newest Quote from the Price Sources is its price.
-A badge beside the Position says where the price comes from when it is not a fresh Quote.
+A badge beside the Position says where the price comes from when it is not a fresh Quote. A physical metal's price is
+the spot of a troy ounce, so its unit is valued at its weight less the Buyback Spread, with the spot kept beside it.
 """
 
 from collections.abc import Callable
@@ -9,7 +10,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from enum import StrEnum
 
-from financial_app.domain.instruments import Instrument
+from financial_app.domain.instruments import GRAMS_PER_TROY_OUNCE, Instrument
 from financial_app.domain.prices import STAGE_3_CLASSES, Quote, sources_to_try
 
 
@@ -31,9 +32,11 @@ class Badge(StrEnum):
 
 @dataclass(frozen=True)
 class InstrumentPrice:
-    """``price`` is in ``currency``, the Instrument's quote currency; ``pln`` is that price in PLN.
+    """``price`` is one unit's price in ``currency``, the Instrument's quote currency; ``pln`` is that price in PLN.
 
-    ``quote`` is the newest Quote, also when the Manual Price wins, so that it can be shown beside it.
+    ``quote`` is the newest Quote, also when the Manual Price wins, so that it can be shown beside it. For a physical
+    metal, ``spot`` is the spot of a troy ounce (in ``currency``) that ``price`` comes from and ``spot_pln`` one unit
+    at the spot without the Buyback Spread, in PLN; both are ``None`` for any other Instrument.
     """
 
     price: Decimal | None
@@ -42,6 +45,8 @@ class InstrumentPrice:
     status: PriceStatus
     quote: Quote | None = None
     badge: Badge | None = None
+    spot: Decimal | None = None
+    spot_pln: Decimal | None = None
 
 
 def instrument_price(
@@ -60,10 +65,13 @@ def instrument_price(
         price, status = quote.price, PriceStatus.QUOTE
     else:
         return InstrumentPrice(None, currency, None, PriceStatus.NO_PRICE, badge=badge)
+    unit = instrument.unit_price(price)
+    spot = None if instrument.metal_grams is None else price
     rate = rate_for(currency)
     if rate is None:
-        return InstrumentPrice(price, currency, None, PriceStatus.NO_RATE, quote, badge)
-    return InstrumentPrice(price, currency, price * rate, status, quote, badge)
+        return InstrumentPrice(unit, currency, None, PriceStatus.NO_RATE, quote, badge, spot)
+    spot_pln = None if instrument.metal_grams is None else price * instrument.metal_grams / GRAMS_PER_TROY_OUNCE * rate
+    return InstrumentPrice(unit, currency, unit * rate, status, quote, badge, spot, spot_pln)
 
 
 def _badge(instrument: Instrument, quote: Quote | None, stale: bool) -> Badge | None:

@@ -193,3 +193,27 @@ def test_currency_of_an_instrument_with_transactions_cannot_change(engine: Engin
     with pytest.raises(InstrumentError, match="waluty"):
         update_instrument(engine, pzu.id, replace(pzu, quote_currency="USD"))
     assert update_instrument(engine, pzu.id, replace(pzu, market="GPW")).market == "GPW"
+
+
+def test_a_physical_metal_keeps_its_exact_weight_and_buyback_spread_after_restart(
+    db_file: Path, engine: Engine
+) -> None:
+    metals = _class_named(engine, "Metale i surowce")
+    draft = InstrumentDraft(
+        "Krugerrand 1 oz", metals.id, "USD", metal_grams=Decimal("31.1034768"), buyback_spread_percent=Decimal("4.5")
+    )
+    add_instrument(engine, draft)
+    engine.dispose()
+
+    [saved] = list_instruments(init_db(db_file))
+
+    assert (saved.metal_grams, saved.buyback_spread_percent) == (Decimal("31.1034768"), Decimal("4.5"))
+
+
+def test_clearing_the_metal_weight_values_the_instrument_per_unit_again(engine: Engine) -> None:
+    metals = _class_named(engine, "Metale i surowce").id
+    added = add_instrument(engine, InstrumentDraft("Sztabka", metals, "USD", metal_grams=Decimal(100)))
+
+    update_instrument(engine, added.id, replace(added, metal_grams=None))
+
+    assert list_instruments(engine)[0].metal_grams is None

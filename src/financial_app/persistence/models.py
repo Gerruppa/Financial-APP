@@ -128,6 +128,9 @@ class InstrumentRow(Base):
     market: Mapped[str] = mapped_column(String(100))
     # In the quote currency, as exact decimal text like the FX Conversion Fee
     manual_price: Mapped[str | None] = mapped_column(String(30))
+    # A physical metal's weight per unit and Buyback Spread % (issue #34), also exact decimal text
+    metal_grams: Mapped[str | None] = mapped_column(String(30))
+    buyback_spread_percent: Mapped[str | None] = mapped_column(String(20))
 
     asset_class: Mapped[AssetClassRow] = relationship()
     source_symbols: Mapped[list[SourceSymbolRow]] = relationship(cascade="all, delete-orphan")

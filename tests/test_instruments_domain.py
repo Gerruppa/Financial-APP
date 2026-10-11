@@ -56,3 +56,38 @@ def test_asset_class_name_is_trimmed() -> None:
 def test_empty_asset_class_name_is_rejected() -> None:
     with pytest.raises(InstrumentError, match="Nazwa klasy"):
         validate_asset_class_name(" ")
+
+
+def test_a_physical_metal_has_its_weight_in_grams_and_buyback_spread() -> None:
+    draft = _draft(metal_grams=Decimal("31.1034768"), buyback_spread_percent=Decimal(5))
+
+    assert (draft.metal_grams, draft.buyback_spread_percent) == (Decimal("31.1034768"), Decimal(5))
+
+
+@pytest.mark.parametrize("grams", [Decimal(0), Decimal(-1)])
+def test_metal_weight_must_be_positive(grams: Decimal) -> None:
+    with pytest.raises(InstrumentError, match="Waga metalu"):
+        _draft(metal_grams=grams)
+
+
+@pytest.mark.parametrize("spread", [Decimal(-1), Decimal(100)])
+def test_buyback_spread_is_at_least_zero_and_below_100(spread: Decimal) -> None:
+    with pytest.raises(InstrumentError, match="Spread odkupu"):
+        _draft(metal_grams=Decimal(1), buyback_spread_percent=spread)
+
+
+def test_a_buyback_spread_needs_a_metal_weight() -> None:
+    with pytest.raises(InstrumentError, match="wagi metalu"):
+        _draft(buyback_spread_percent=Decimal(5))
+
+
+def test_a_metal_unit_is_worth_the_spot_per_troy_ounce_for_its_weight_less_the_spread() -> None:
+    coin = _draft(metal_grams=Decimal("31.1034768"), buyback_spread_percent=Decimal(5))
+    bar = _draft(metal_grams=Decimal("15.5517384"))
+
+    assert coin.unit_price(Decimal(2400)) == Decimal(2280)
+    assert bar.unit_price(Decimal(2400)) == Decimal(1200)
+
+
+def test_without_a_metal_weight_the_price_is_the_unit_price() -> None:
+    assert _draft().unit_price(Decimal("45.12")) == Decimal("45.12")

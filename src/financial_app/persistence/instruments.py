@@ -151,15 +151,23 @@ def _fill(session: Session, row: InstrumentRow, draft: InstrumentDraft) -> None:
     row.asset_class = asset_class
     row.quote_currency = draft.quote_currency
     row.market = draft.market
-    price = draft.manual_price
-    row.manual_price = None if price is None else str(price)
+    row.manual_price = _text(draft.manual_price)
+    row.metal_grams = _text(draft.metal_grams)
+    row.buyback_spread_percent = _text(draft.buyback_spread_percent)
     row.source_symbols = [
         SourceSymbolRow(source=source, symbol=symbol) for source, symbol in draft.source_symbols.items()
     ]
 
 
+def _text(number: Decimal | None) -> str | None:
+    return None if number is None else str(number)
+
+
+def _decimal(text: str | None) -> Decimal | None:
+    return None if text is None else Decimal(text)
+
+
 def _to_instrument(row: InstrumentRow) -> Instrument:
-    price = row.manual_price
     return Instrument(
         id=row.id,
         name=row.name,
@@ -167,6 +175,8 @@ def _to_instrument(row: InstrumentRow) -> Instrument:
         asset_class_name=row.asset_class.name,
         quote_currency=row.quote_currency,
         market=row.market,
-        manual_price=None if price is None else Decimal(price),
+        manual_price=_decimal(row.manual_price),
         source_symbols={s.source: s.symbol for s in row.source_symbols},
+        metal_grams=_decimal(row.metal_grams),
+        buyback_spread_percent=_decimal(row.buyback_spread_percent),
     )
