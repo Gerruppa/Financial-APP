@@ -10,6 +10,7 @@ from sqlalchemy import Engine
 
 from financial_app.domain.accounts import AccountDraft, AccountType
 from financial_app.domain.instruments import AssetClass, DistributionPolicy, InstrumentDraft, InstrumentError
+from financial_app.domain.prices import ANALIZY, BANKIER, BOSSA, YAHOO, FallbackOrderError
 from financial_app.domain.transactions import TransactionType, buy_or_sell
 from financial_app.persistence.accounts import add_account
 from financial_app.persistence.db import init_db
@@ -21,6 +22,8 @@ from financial_app.persistence.instruments import (
     list_asset_classes,
     list_instruments,
     rename_asset_class,
+    set_fallback_order,
+    update_asset_class,
     update_instrument,
 )
 from financial_app.persistence.transactions import add_transaction
@@ -263,3 +266,68 @@ def test_clearing_fund_details_removes_them(engine: Engine) -> None:
 
     [saved] = list_instruments(engine)
     assert (saved.ter_percent, saved.distribution_policy) == (None, None)
+
+
+def test_seeded_asset_classes_have_the_spec_fallback_orders(engine: Engine) -> None:
+    assert _class_named(engine, "Akcje polskie").fallback_order == (BOSSA, YAHOO)
+    assert _class_named(engine, "Multi-asset").fallback_order == (ANALIZY, BANKIER, YAHOO, BOSSA)
+    assert _class_named(engine, "Gotówka").fallback_order == ()
+
+
+def test_a_changed_fallback_order_is_kept_and_reaches_the_instruments_after_restart(
+    db_file: Path, engine: Engine
+) -> None:
+    stocks = _class_named(engine, "Akcje polskie")
+    add_instrument(engine, InstrumentDraft("PZU", stocks.id, "PLN", "GPW"))
+
+    set_fallback_order(engine, stocks.id, [YAHOO])
+
+    restarted = init_db(db_file)
+    assert _class_named(restarted, "Akcje polskie").fallback_order == (YAHOO,)
+    assert list_instruments(restarted)[0].fallback_order == (YAHOO,)
+
+
+def test_a_fallback_order_naming_a_source_twice_is_rejected(engine: Engine) -> None:
+    stocks = _class_named(engine, "Akcje polskie")
+
+    with pytest.raises(FallbackOrderError):
+        set_fallback_order(engine, stocks.id, [YAHOO, YAHOO])
+    assert _class_named(engine, "Akcje polskie").fallback_order == (BOSSA, YAHOO)
+
+
+def test_a_new_asset_class_gets_the_order_of_inne(engine: Engine) -> None:
+    set_fallback_order(engine, _class_named(engine, "Inne").id, [BANKIER, YAHOO])
+
+    assert add_asset_class(engine, "Nieruchomości").fallback_order == (BANKIER, YAHOO)
+
+
+def test_a_new_asset_class_gets_the_default_order_of_inne_when_inne_was_renamed(engine: Engine) -> None:
+    rename_asset_class(engine, _class_named(engine, "Inne").id, "Pozostałe")
+
+    assert add_asset_class(engine, "Nieruchomości").fallback_order == (ANALIZY, BANKIER, YAHOO, BOSSA)
+
+
+def test_a_new_asset_class_may_be_given_its_own_order(engine: Engine) -> None:
+    assert add_asset_class(engine, "Nieruchomości", [YAHOO]).fallback_order == (YAHOO,)
+
+
+def test_renaming_an_asset_class_keeps_its_fallback_order(engine: Engine) -> None:
+    stocks = _class_named(engine, "Akcje polskie")
+
+    assert rename_asset_class(engine, stocks.id, "Akcje GPW").fallback_order == (BOSSA, YAHOO)
+
+
+def test_a_class_with_a_taken_name_keeps_both_its_name_and_its_order(engine: Engine) -> None:
+    stocks = _class_named(engine, "Akcje polskie")
+
+    with pytest.raises(InstrumentError, match="już istnieje"):
+        update_asset_class(engine, stocks.id, "Inne", [YAHOO])
+    assert _class_named(engine, "Akcje polskie").fallback_order == (BOSSA, YAHOO)
+
+
+def test_a_class_is_renamed_and_given_a_new_order_at_once(engine: Engine) -> None:
+    stocks = _class_named(engine, "Akcje polskie")
+
+    update_asset_class(engine, stocks.id, "Akcje GPW", [YAHOO])
+
+    assert _class_named(engine, "Akcje GPW").fallback_order == (YAHOO,)

@@ -1,5 +1,6 @@
 """Reading and saving Asset Classes and the Instrument catalog (spec 3.2)."""
 
+from collections.abc import Iterable
 from decimal import Decimal
 
 from sqlalchemy import Engine, delete, func, select
@@ -14,7 +15,7 @@ from financial_app.domain.instruments import (
     InstrumentError,
     validate_asset_class_name,
 )
-from financial_app.domain.prices import STOOQ
+from financial_app.domain.prices import OTHER, STOOQ, default_fallback_order, validate_fallback_order
 from financial_app.persistence.history import forget_quote_history
 from financial_app.persistence.models import (
     AssetClassRow,
@@ -30,18 +31,36 @@ def list_asset_classes(engine: Engine) -> list[AssetClass]:
     """All Asset Classes in the sheet's order, followed by those the user added."""
     with Session(engine) as session:
         rows = session.scalars(select(AssetClassRow).order_by(AssetClassRow.position))
-        return [AssetClass(id=row.id, name=row.name) for row in rows]
+        return [_to_asset_class(row) for row in rows]
 
 
-def add_asset_class(engine: Engine, name: str) -> AssetClass:
+def add_asset_class(engine: Engine, name: str, fallback_order: Iterable[str] | None = None) -> AssetClass:
+    """A new Asset Class at the end of the list; without a ``fallback_order`` it gets the order of "Inne"."""
     name = validate_asset_class_name(name)
     with Session(engine) as session, session.begin():
         _check_class_name_is_free(session, name, class_id=None)
+        if fallback_order is None:
+            order = _new_class_fallback_order(session)
+        else:
+            order = validate_fallback_order(fallback_order)
         last = session.scalar(select(func.max(AssetClassRow.position)))
-        row = AssetClassRow(name=name, position=0 if last is None else last + 1)
+        row = AssetClassRow(
+            name=name, position=0 if last is None else last + 1, fallback_order=fallback_order_column(order)
+        )
         session.add(row)
         _flush(session, f"Klasa aktywów o nazwie „{name}” już istnieje.")
-        return AssetClass(id=row.id, name=row.name)
+        return _to_asset_class(row)
+
+
+def new_class_fallback_order(engine: Engine) -> tuple[str, ...]:
+    """The Fallback Order a class the user adds starts with: that of "Inne", or its default once "Inne" was renamed."""
+    with Session(engine) as session:
+        return _new_class_fallback_order(session)
+
+
+def _new_class_fallback_order(session: Session) -> tuple[str, ...]:
+    row = session.scalar(select(AssetClassRow).where(AssetClassRow.name == OTHER))
+    return default_fallback_order(OTHER) if row is None else _fallback_order(row)
 
 
 def rename_asset_class(engine: Engine, class_id: int, name: str) -> AssetClass:
@@ -52,7 +71,29 @@ def rename_asset_class(engine: Engine, class_id: int, name: str) -> AssetClass:
         _check_class_name_is_free(session, name, class_id)
         row.name = name
         _flush(session, f"Klasa aktywów o nazwie „{name}” już istnieje.")
-        return AssetClass(id=row.id, name=row.name)
+        return _to_asset_class(row)
+
+
+def set_fallback_order(engine: Engine, class_id: int, fallback_order: Iterable[str]) -> AssetClass:
+    """Replace the Asset Class's Fallback Order; the next price refresh tries its Instruments in it."""
+    order = validate_fallback_order(fallback_order)
+    with Session(engine) as session, session.begin():
+        row = session.get_one(AssetClassRow, class_id)
+        row.fallback_order = fallback_order_column(order)
+        return _to_asset_class(row)
+
+
+def update_asset_class(engine: Engine, class_id: int, name: str, fallback_order: Iterable[str]) -> AssetClass:
+    """Rename the Asset Class and replace its Fallback Order, both or neither."""
+    name = validate_asset_class_name(name)
+    order = validate_fallback_order(fallback_order)
+    with Session(engine) as session, session.begin():
+        row = session.get_one(AssetClassRow, class_id)
+        _check_class_name_is_free(session, name, class_id)
+        row.name = name
+        row.fallback_order = fallback_order_column(order)
+        _flush(session, f"Klasa aktywów o nazwie „{name}” już istnieje.")
+        return _to_asset_class(row)
 
 
 def delete_asset_class(engine: Engine, class_id: int) -> None:
@@ -172,12 +213,26 @@ def _decimal(text: str | None) -> Decimal | None:
     return None if text is None else Decimal(text)
 
 
+def fallback_order_column(order: Iterable[str]) -> str:
+    """A Fallback Order as ``asset_classes.fallback_order`` stores it: the source keys, comma-separated."""
+    return ",".join(order)
+
+
+def _fallback_order(row: AssetClassRow) -> tuple[str, ...]:
+    return tuple(row.fallback_order.split(",")) if row.fallback_order else ()
+
+
+def _to_asset_class(row: AssetClassRow) -> AssetClass:
+    return AssetClass(id=row.id, name=row.name, fallback_order=_fallback_order(row))
+
+
 def _to_instrument(row: InstrumentRow) -> Instrument:
     return Instrument(
         id=row.id,
         name=row.name,
         asset_class_id=row.asset_class_id,
         asset_class_name=row.asset_class.name,
+        fallback_order=_fallback_order(row.asset_class),
         quote_currency=row.quote_currency,
         market=row.market,
         isin=row.isin,

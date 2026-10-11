@@ -4,13 +4,23 @@ from datetime import date
 from decimal import Decimal
 
 from financial_app.domain.instruments import Instrument
-from financial_app.domain.prices import Quote
+from financial_app.domain.prices import BOSSA, YAHOO, Quote, default_fallback_order
 from financial_app.domain.valuation import Badge, InstrumentPrice, PriceStatus, instrument_price
 
 
 def _instrument(currency: str = "PLN", manual_price: str | None = "45.12") -> Instrument:
     price = None if manual_price is None else Decimal(manual_price)
-    return Instrument("PZU", 2, currency, "GPW", price, {"yahoo": "PZU.WA"}, id=1, asset_class_name="Akcje polskie")
+    return Instrument(
+        "PZU",
+        2,
+        currency,
+        "GPW",
+        price,
+        {"yahoo": "PZU.WA"},
+        id=1,
+        asset_class_name="Akcje polskie",
+        fallback_order=(BOSSA, YAHOO),
+    )
 
 
 def test_a_pln_manual_price_is_its_value_in_pln() -> None:
@@ -64,7 +74,17 @@ def test_a_manual_price_wins_over_the_quote_which_is_kept_to_show_beside_it() ->
 
 def _automatic(asset_class: str = "Akcje polskie", symbols: dict[str, str] | None = None) -> Instrument:
     symbols = {"yahoo": "PZU.WA"} if symbols is None else symbols
-    return Instrument("PZU", 2, "PLN", "GPW", None, symbols, id=1, asset_class_name=asset_class)
+    return Instrument(
+        "PZU",
+        2,
+        "PLN",
+        "GPW",
+        None,
+        symbols,
+        id=1,
+        asset_class_name=asset_class,
+        fallback_order=default_fallback_order(asset_class),
+    )
 
 
 def test_a_manual_price_has_the_manual_badge() -> None:
@@ -96,7 +116,16 @@ def test_an_instrument_without_a_source_symbol_for_its_asset_class_has_no_source
 
 
 def test_a_polish_treasury_bond_waits_for_stage_3_even_with_a_manual_price() -> None:
-    bond = Instrument("EDO0735", 4, "PLN", "", Decimal("104.5"), id=1, asset_class_name="Obligacje skarbowe polskie")
+    bond = Instrument(
+        "EDO0735",
+        4,
+        "PLN",
+        "",
+        Decimal("104.5"),
+        id=1,
+        asset_class_name="Obligacje skarbowe polskie",
+        fallback_order=(),
+    )
 
     price = instrument_price(bond, None, lambda currency: Decimal(1))
 
@@ -115,6 +144,7 @@ def _metal(grams: str, spread: str | None, manual_price: str | None = None) -> I
         None if spread is None else Decimal(spread),
         id=1,
         asset_class_name="Metale i surowce",
+        fallback_order=(YAHOO,),
     )
 
 

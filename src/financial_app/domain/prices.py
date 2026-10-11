@@ -1,6 +1,6 @@
 """Quotes from the Price Sources and the Fallback Order they are tried in (spec 4.1, ADR-0005)."""
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
@@ -21,7 +21,9 @@ def source_reason(source: str, reason: str) -> str:
     return f"{SOURCE_NAMES.get(source, source)}: {reason}"
 
 
-# Spec 4.1 defaults for the seeded Asset Classes; until they become editable (issue #41) they follow the class name
+# The Price Sources a Fallback Order can name, in the order the UI offers them
+FALLBACK_SOURCES = (YAHOO, BOSSA, ANALIZY, BANKIER)
+# Spec 4.1 defaults for the seeded Asset Classes; each class keeps its own, editable order (issue #41)
 OTHER = "Inne"
 DEFAULT_FALLBACK_ORDERS: dict[str, tuple[str, ...]] = {
     "Gotówka": (),
@@ -42,14 +44,32 @@ DEFAULT_FALLBACK_ORDERS: dict[str, tuple[str, ...]] = {
 STAGE_3_CLASSES = frozenset({"Obligacje skarbowe polskie"})
 
 
-def sources_to_try(asset_class: str, symbols: Mapping[str, str]) -> list[tuple[str, str]]:
-    """The Price Sources to try for an Instrument of ``asset_class``, each with the Instrument's Source Symbol in it.
+def default_fallback_order(asset_class: str) -> tuple[str, ...]:
+    """The spec 4.1 Fallback Order of a seeded Asset Class; any other class gets the order of "Inne"."""
+    return DEFAULT_FALLBACK_ORDERS.get(asset_class, DEFAULT_FALLBACK_ORDERS[OTHER])
 
-    Only sources the Instrument has a Source Symbol for are tried, in its Asset Class's Fallback Order; a class the
-    user added has the order of "Inne".
-    """
-    order = DEFAULT_FALLBACK_ORDERS.get(asset_class, DEFAULT_FALLBACK_ORDERS[OTHER])
-    return [(source, symbols[source]) for source in order if source in symbols]
+
+class FallbackOrderError(ValueError):
+    """A Fallback Order the user must correct; the message is shown in the UI (Polish)."""
+
+
+def validate_fallback_order(order: Iterable[str]) -> tuple[str, ...]:
+    """The Fallback Order the user chose: known Price Sources, each at most once."""
+    result: list[str] = []
+    for source in order:
+        name = SOURCE_NAMES.get(source, source)
+        if source not in FALLBACK_SOURCES:
+            raise FallbackOrderError(f"Źródło {name} nie może wyceniać instrumentów.")
+        if source in result:
+            raise FallbackOrderError(f"Źródło {name} jest w kolejności dwa razy.")
+        result.append(source)
+    return tuple(result)
+
+
+def sources_to_try(fallback_order: Sequence[str], symbols: Mapping[str, str]) -> list[tuple[str, str]]:
+    """The Price Sources to try for an Instrument whose Asset Class has ``fallback_order``, each with the Instrument's
+    Source Symbol in it; only sources the Instrument has a Source Symbol for are tried."""
+    return [(source, symbols[source]) for source in fallback_order if source in symbols]
 
 
 # When the day's prices are final enough for the start-up refresh: after the GPW session with its closing auction (local

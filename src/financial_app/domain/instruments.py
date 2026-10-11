@@ -51,10 +51,12 @@ class InstrumentError(ValueError):
 
 @dataclass(frozen=True)
 class AssetClass:
-    """A saved Asset Class. Instruments refer to it by ``id``, so renaming it changes no other data."""
+    """A saved Asset Class. Instruments refer to it by ``id``, so renaming it changes no other data. Its
+    ``fallback_order`` is the Price Sources its Instruments are priced from, in order (spec 4.1)."""
 
     id: int
     name: str
+    fallback_order: tuple[str, ...]
 
 
 def validate_asset_class_name(name: str) -> str:
@@ -144,7 +146,8 @@ class InstrumentDraft:
 
 @dataclass(frozen=True)
 class Instrument(InstrumentDraft):
-    """A saved Instrument with the current name of its Asset Class."""
+    """A saved Instrument with the current name and Fallback Order of its Asset Class."""
 
     id: int = field(kw_only=True)
     asset_class_name: str = field(kw_only=True)
+    fallback_order: tuple[str, ...] = field(kw_only=True)

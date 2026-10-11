@@ -23,8 +23,8 @@ from financial_app.domain.transactions import (
 DAY = date(2026, 3, 7)
 ACCOUNTS = {1: "IKE", 2: "IKZE"}
 INSTRUMENTS = {
-    10: Instrument("ISAC", 1, "USD", id=10, asset_class_name="Akcje"),
-    11: Instrument("ETFPZU", 1, PLN, id=11, asset_class_name="Akcje"),
+    10: Instrument("ISAC", 1, "USD", id=10, asset_class_name="Akcje", fallback_order=()),
+    11: Instrument("ETFPZU", 1, PLN, id=11, asset_class_name="Akcje", fallback_order=()),
 }
 USD = NbpRate("USD", Decimal("3.6500"), date(2026, 3, 6), "045/A/NBP/2026")
 

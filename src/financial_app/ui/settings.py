@@ -30,7 +30,7 @@ def build_settings_page(
     accounts = AccountsSection(engine)
     accounts.build()
     instruments = InstrumentsSection(engine, search, sources, on_changed=unpriced.refresh)
-    asset_classes = AssetClassesSection(engine, on_renamed=instruments.refresh)
+    asset_classes = AssetClassesSection(engine, on_changed=instruments.refresh)
     asset_classes.build()
     instruments.build()
     unpriced.build(open_instrument=instruments.open_dialog)

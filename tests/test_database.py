@@ -1,10 +1,13 @@
 from pathlib import Path
 
+from alembic import command
 from alembic.autogenerate import compare_metadata
+from alembic.config import Config
 from alembic.migration import MigrationContext
-from sqlalchemy import inspect
+from sqlalchemy import inspect, text
 
-from financial_app.persistence.db import init_db
+from financial_app.persistence.db import MIGRATIONS_DIR, init_db, open_engine
+from financial_app.persistence.instruments import list_asset_classes
 from financial_app.persistence.models import Base
 
 
@@ -33,3 +36,20 @@ def test_migrations_match_the_orm_models(tmp_path: Path) -> None:
         diff = compare_metadata(MigrationContext.configure(connection), Base.metadata)
 
     assert diff == []
+
+
+def test_upgrading_gives_each_existing_asset_class_its_default_fallback_order(tmp_path: Path) -> None:
+    db_file = tmp_path / "app.sqlite3"
+    engine = open_engine(db_file)
+    config = Config()
+    config.set_main_option("script_location", str(MIGRATIONS_DIR))
+    with engine.begin() as connection:
+        config.attributes["connection"] = connection
+        command.upgrade(config, "0017")
+        connection.execute(text("INSERT INTO asset_classes (name, position) VALUES ('Nieruchomości', 12)"))
+
+    orders = {c.name: c.fallback_order for c in list_asset_classes(init_db(db_file))}
+
+    assert orders["Akcje polskie"] == ("bossa", "yahoo")
+    assert orders["Waluty"] == ()
+    assert orders["Nieruchomości"] == ("analizy", "bankier", "yahoo", "bossa")

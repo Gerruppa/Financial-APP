@@ -107,13 +107,15 @@ class TransactionRow(Base):
 
 
 class AssetClassRow(Base):
-    """An Asset Class (spec 3.2); ``position`` keeps the sheet's order, with classes the user adds at the end."""
+    """An Asset Class (spec 3.2); ``position`` keeps the sheet's order, with classes the user adds at the end.
+    ``fallback_order`` is its Fallback Order (spec 4.1): the Price Source keys, comma-separated, empty for none."""
 
     __tablename__ = "asset_classes"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(100, collation="NOCASE"), unique=True)
     position: Mapped[int] = mapped_column(Integer)
+    fallback_order: Mapped[str] = mapped_column(String(100), server_default="")
 
 
 class InstrumentRow(Base):

@@ -81,7 +81,7 @@ def _badge(instrument: Instrument, quote: Quote | None, stale: bool) -> Badge | 
         return Badge.STAGE_3
     if instrument.manual_price is not None:
         return Badge.MANUAL
-    if not sources_to_try(instrument.asset_class_name, instrument.source_symbols):
+    if not sources_to_try(instrument.fallback_order, instrument.source_symbols):
         return Badge.NO_SOURCE
     if quote is not None and stale:
         return Badge.STALE
@@ -120,7 +120,7 @@ def instruments_without_price(
     for instrument in instruments:
         if instrument.id not in held or instrument.asset_class_name in STAGE_3_CLASSES:
             continue
-        if not sources_to_try(instrument.asset_class_name, instrument.source_symbols):
+        if not sources_to_try(instrument.fallback_order, instrument.source_symbols):
             listed.append(Unpriced(instrument, UnpricedReason.NO_SOURCE))
         elif instrument.id in failures:
             listed.append(Unpriced(instrument, UnpricedReason.FAILED, dict(failures[instrument.id])))
