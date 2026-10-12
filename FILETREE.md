@@ -47,6 +47,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 
 - `__init__.py`: Docstring marking the domain package as pure-Python calculations with no UI or database imports.
 - `accounts.py`: Account Types, their Tax Regime descriptions and validation of Account fields with Polish error messages.
+- `charts.py`: Dashboard chart data from History and Transactions: value, profit, XIRR, class shares and dividends by year, per scope and period
 - `currencies.py`: Currency code check and the NBP Rate value type, plus the error raised when a rate is missing.
 - `dashboard.py`: Dashboard totals, Account table and currency exposure from Transactions, prices, NBP Rates and History's Net Deposits
 - `export.py`: Builds the transaction export rows with columns, amounts, origin and comment, independent of file format.
@@ -59,6 +60,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `periods.py`: Period presets and custom ranges for charts and results, with date calculation and text persistence
 - `portfolio_history.py`: Computes daily Portfolio value and Net Deposits per Account and Asset Class from transactions and cached prices
 - `prices.py`: Quote model, Price Source keys and names, and the per-Asset-Class Fallback Order deciding which sources to try.
+- `results.py`: Wyniki tab figures: period XIRR, TWR, drawdown, volatility and fixed-period returns per Total and Account, from History
 - `spreadsheet_import.py`: Pure conversion of the user's Inwestomat Transakcje sheet rows into Transaction drafts, with fingerprints for re-import skipping.
 - `transactions.py`: Transaction types, drafts and builders for every kind, plus cash balances and cost and dividend totals per Account.
 - `valuation.py`: Decides each Instrument's price and status from Manual Price or Quote, including metal spot conversion and badges.
@@ -126,7 +128,8 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 
 - `__init__.py`: Package marker for the NiceGUI user interface layer, a thin layer over domain and persistence
 - `accounts.py`: Ustawienia Konta card: lists Accounts and opens the add and edit dialog
-- `dashboard.py`: Dashboard tab UI: totals tiles, price status, Account table and currency exposure under the period selector
+- `charts.py`: Dashboard's nine ECharts charts (exposure, allocation, Account values, dividends, History series), following the View Scope and period
+- `dashboard.py`: Dashboard tab UI: totals tiles, price status, Account table, currency exposure and charts under the period selector
 - `dialogs.py`: Draggable dialog support with no backdrop, so the screen behind stays readable
 - `fund_details.py`: Builds the short fund detail texts (TER, Distribution Policy, domicile) shared by Instrument list and Portfolio
 - `history.py`: Shared per-database History window state: background fetch, progress and failure status, cached days
@@ -136,6 +139,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `portfolio.py`: Read-only Portfolio tab: per-Account cards with cash balances, valued Positions, Lots, FX result and dividends
 - `price_sources.py`: Ustawienia Źródła wycen card where the user stores the personal Stooq API key
 - `reset.py`: Ustawienia Wyczyść dane card that clears the whole portfolio after a warning and typed confirmation
+- `results.py`: Wyniki tab page: result tiles, drawdown chart and per-Account results table under the period selector
 - `settings.py`: Builds the Ustawienia page by assembling its sections: Accounts, Asset Classes, Instruments, sources, import, reset
 - `shell.py`: Main app window shell: left menu, header with refresh status and View Scope, and the transaction button
 - `transactions.py`: Transakcje tab and transaction dialog for adding, editing and deleting all supported transaction types
@@ -153,10 +157,12 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_backup.py`: Tests database backup copies and the retention of the newest backups
 - `test_bankier_source.py`: Tests the bankier.pl fund and PPK quote source against saved pages
 - `test_bossa_source.py`: Tests the Bossa JSON API quote source against saved responses
+- `test_charts_domain.py`: Unit tests for the Dashboard chart data: value, profit, XIRR, class shares and dividends by year
 - `test_clear_data_repository.py`: Tests that clearing the portfolio removes user data and restores default Asset Classes
 - `test_clear_data_ui.py`: UI tests for the Wyczyść dane confirmation flow in Ustawienia
 - `test_conversion_fee_domain.py`: Domain tests for the broker FX Conversion Fee on foreign-currency Buys and Sells
 - `test_conversion_fee_ui.py`: UI tests for the FX Conversion Fee and payment source in the transaction dialog
+- `test_dashboard_charts_ui.py`: UI tests that the Dashboard's nine charts follow the View Scope and the period
 - `test_dashboard_domain.py`: Tests the Dashboard domain totals, Account table and currency exposure
 - `test_dashboard_ui.py`: UI tests for the Dashboard tab: totals, Account table, currency exposure and price status
 - `test_database.py`: Checks that the ORM models and Alembic migrations stay in sync
@@ -197,6 +203,8 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_prices_domain.py`: Tests the order of Price Sources per Instrument and when start-up price refresh is due.
 - `test_prices_repository.py`: Tests saving Source Symbols and Quotes in SQLite.
 - `test_prices_ui.py`: Tests Source Symbols in the Instrument dialog, Portfolio valuation from Quotes and refresh status badges.
+- `test_results_domain.py`: Tests for the Wyniki tab's period results and fixed-period rows per Total and Account
+- `test_results_ui.py`: UI tests for the Wyniki tab: tiles, drawdown chart, results table and pending state
 - `test_shell.py`: Smoke tests of the app shell's tabs and navigation, run without a browser.
 - `test_splits_and_transfers_domain.py`: Tests Splits, Cash Transfers and Security Transfers in the FIFO engine and Cash Balances.
 - `test_splits_and_transfers_repository.py`: Tests saving Splits, Cash Transfers and Security Transfers in SQLite.

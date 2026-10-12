@@ -77,7 +77,14 @@ def dashboard_charts(
         _card("Wartość konta vs wpłaty netto", "value", _value(history, first, last, account_id))
         _card("Zysk / strata", "profit", _profit(history, first, last, account_id))
         _card("XIRR", "xirr", _xirr(history, first, last, account_id))
-        _card("Drawdown", "drawdown", _drawdown(history, first, last, account_id))
+        drawdown_chart(history, first, last, account_id)
+
+
+def drawdown_chart(
+    history: Sequence[DayValue], first: date, last: date, account_id: int | None, name: str = "drawdown"
+) -> None:
+    """The drawdown of the TWR from the "from" day, in a card marked ``chart-<name>``; also on the Wyniki tab."""
+    _card("Drawdown", name, _drawdown(history, first, last, account_id))
 
 
 def _card(title: str, name: str, options: dict[str, Any]) -> None:
