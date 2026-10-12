@@ -50,6 +50,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `__init__.py`: Docstring marking the domain package as pure-Python calculations with no UI or database imports.
 - `account_ranking.py`: Account ranking and treemap figures for the Total Dashboard: XIRR, TWR, P&L, Net Deposits and costs per Account, sorted with best and worst marked
 - `accounts.py`: Account Types, their Tax Regime descriptions and validation of Account fields with Polish error messages.
+- `bonds.py`: Polish retail treasury bond types, their terms, GUS CPI readings and NBP reference rates as pure-Python values
 - `charts.py`: Dashboard chart data from History and Transactions: value, profit, XIRR, class shares and dividends by year, per scope and period
 - `currencies.py`: Currency code check and the NBP Rate value type, plus the error raised when a rate is missing.
 - `dashboard.py`: Dashboard totals, Account table, currency exposure and allocation from Transactions, prices, NBP Rates and History, plus estimated tax and profit by source
@@ -77,6 +78,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `__init__.py`: Package marker for the SQLite and SQLAlchemy persistence layer.
 - `accounts.py`: Saves and reads Accounts, enforcing case-insensitive unique names and cash currency rows.
 - `backup.py`: Copies the database to the backups folder at each start and keeps only the newest copies.
+- `bond_data.py`: SQLite copy of the bond data sources (MF Bond Series, GUS CPI, NBP reference rates) and each source's fetch status
 - `db.py`: Opens the SQLite engine and applies pending Alembic migrations at start-up.
 - `history.py`: Reads and writes cached Stooq Quote history and NBP Rate history, with the cover of fetched days.
 - `instruments.py`: Saves and reads Asset Classes and Instruments, and deletes Instrument data including its Quotes and failures.
@@ -117,12 +119,14 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `0019_multi_asset_splits.py`: Migration 0019 creates the multi_asset_shares table holding each Instrument's Multi-asset Split
 - `0020_multi_asset_class.py`: Alembic revision adding the asset_classes multi_asset flag and marking the seeded Multi-asset class
 - `0021_investment_strategies.py`: Migration creating the strategy, class target and instrument target tables for Investment Strategies
+- `0022_bond_data.py`: Alembic migration adding the bond data tables: Bond Series, CPI, reference rates and fetch status
 
 ## src/financial_app/sources/
 
 - `__init__.py`: Package marker describing the external price sources package
 - `analizy.py`: Fund and PPK Quotes and fund search through the undocumented analizy.pl API, a price source and an Instrument lookup.
 - `bankier.py`: Fetches fund and PPK Quotes from bankier.pl pages as the fallback price source
+- `bond_data.py`: Fetches and parses the MF bond file, GUS CPI and NBP reference rates, refreshing their SQLite copies at most once a day
 - `bossa.py`: Fetches GPW, NewConnect, ETF and bond Quotes in PLN from the Bossa JSON API
 - `current_prices.py`: Today's valuation inputs shared by the Portfolio and the Dashboard: Instrument prices and NBP Rates from the last business day before today, each currency fetched once
 - `dashboard.py`: Computes today's Dashboard of a View Scope from the database, shared by the Dashboard and the Investment Strategy
@@ -140,6 +144,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `__init__.py`: Package marker for the NiceGUI user interface layer, a thin layer over domain and persistence
 - `account_ranking.py`: Total Dashboard's Accounts treemap and sortable Account ranking; clicking a tile switches the View Scope to that Account
 - `accounts.py`: Ustawienia Konta card: lists Accounts and opens the add and edit dialog
+- `bond_data.py`: Header status listing failing bond data sources with their reasons, shown only while one keeps failing
 - `charts.py`: Dashboard's nine ECharts charts plus the profit-by-source waterfall, following the View Scope and period
 - `dashboard.py`: Dashboard tab UI: totals, price status, Account table, exposure, charts, Account treemap and ranking, and the after-tax toggle
 - `dialogs.py`: Draggable dialog support with no backdrop, so the screen behind stays readable
@@ -172,6 +177,8 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_architecture.py`: Architecture test enforcing that the domain core does not import UI or database code
 - `test_backup.py`: Tests database backup copies and the retention of the newest backups
 - `test_bankier_source.py`: Tests the bankier.pl fund and PPK quote source against saved pages
+- `test_bond_data.py`: Tests for bond data parsers, SQLite persistence and daily refresh rules on saved fixtures
+- `test_bond_data_ui.py`: UI tests for the bond data header status and its error dialog
 - `test_bossa_source.py`: Tests the Bossa JSON API quote source against saved responses
 - `test_charts_domain.py`: Unit tests for the Dashboard chart data: value, profit, XIRR, class shares and dividends by year
 - `test_clear_data_repository.py`: Tests that clearing the portfolio removes user data and restores default Asset Classes
@@ -280,10 +287,24 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `_cat_nConnect.json`: Trimmed Bossa API response listing NewConnect quotes, for offline Bossa source tests
 - `_cat_shares.json`: Trimmed Bossa API response listing GPW shares and PDA quotes, for offline Bossa source tests
 
+## tests/fixtures/gus/
+
+- `cpi.csv`: Saved GUS consumer price index CSV fixture for the bond data parser tests
+- `page.html`: Saved stat.gov.pl page fixture linking to the GUS CPI CSV file
+
+## tests/fixtures/mf/
+
+- `dane_obligacji_detalicznych.xls`: Saved MF retail bond data .xls file fixture for the bond parser tests
+- `page.html`: Saved gov.pl page fixture linking to the MF retail bond data file
+
 ## tests/fixtures/nbp/
 
 - `usd_2025-12-24_2026-01-06.json`: Saved NBP API response with USD mid rates for late December 2025, for offline NBP tests
 - `usd_2026-03-24_2026-04-06.json`: Saved NBP API response with USD mid rates for late March 2026, for offline NBP tests
+
+## tests/fixtures/nbp_reference/
+
+- `stopy_procentowe_archiwum.xml`: Saved NBP reference rate archive XML fixture for the reference rate parser tests
 
 ## tests/fixtures/stooq/
 

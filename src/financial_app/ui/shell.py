@@ -11,15 +11,18 @@ from sqlalchemy import Engine
 from financial_app.domain.formatting import format_datetime
 from financial_app.domain.instrument_search import CombinedSearch, InstrumentSearch
 from financial_app.domain.prices import ANALIZY, BANKIER, BOSSA, SOURCE_NAMES, YAHOO, refresh_due, source_reason
+from financial_app.persistence.bond_data import bond_data_statuses
 from financial_app.persistence.quotes import last_successful_refresh
 from financial_app.sources.analizy import AnalizySearch, AnalizySource
 from financial_app.sources.bankier import BankierSource
+from financial_app.sources.bond_data import BondDataSources, bond_data_due, refresh_bond_data
 from financial_app.sources.bossa import BossaSource
 from financial_app.sources.history import QuoteHistory
 from financial_app.sources.nbp import NbpRates
 from financial_app.sources.portfolio_history import PortfolioHistory
 from financial_app.sources.prices import PriceSource, RefreshResult, last_refresh, refresh_prices, refresh_summary
 from financial_app.sources.yahoo import YahooSearch, YahooSource
+from financial_app.ui.bond_data import bond_data_status
 from financial_app.ui.dashboard import DashboardPage
 from financial_app.ui.dialogs import install_movable_dialogs
 from financial_app.ui.history import history_status, shared_history
@@ -68,6 +71,7 @@ def build_shell(
     now: Callable[[], datetime] = datetime.now,
     search: InstrumentSearch | None = None,
     history: PortfolioHistory | None = None,
+    bond_data: BondDataSources | None = None,
 ) -> None:
     """Build the whole window; tabs are client-side sub-pages backed by the database at ``engine``.
 
@@ -76,10 +80,12 @@ def build_shell(
     background once the window is open, when they are due at ``now`` (spec 4.1). ``search`` finds Instruments for
     the Instrument dialog (by default Yahoo and analizy.pl together). ``history`` is the database's History (by
     default fetched from Yahoo and Stooq, computed in the process pool); with ``refresh_at_start`` its missing days are
-    fetched after the price refresh.
+    fetched after the price refresh. ``bond_data`` gives the MF file, GUS CPI and the NBP reference rate, fetched
+    with the price refresh at most once a day (by default the real sources, or none when test ``sources`` are given).
     """
     rates = rates or NbpRates(engine)
     if sources is None:
+        bond_data = bond_data or BondDataSources.real()
         sources = {YAHOO: YahooSource(), BOSSA: BossaSource(), ANALIZY: AnalizySource(), BANKIER: BankierSource()}
     search = search or CombinedSearch({SOURCE_NAMES[YAHOO]: YahooSearch(), SOURCE_NAMES[ANALIZY]: AnalizySearch()})
     install_movable_dialogs()
@@ -155,7 +161,7 @@ def build_shell(
         running = _running_refreshes.get(engine)
         if running is None:
             # The sources answer over the network, so the window keeps working meanwhile
-            running = asyncio.ensure_future(run.io_bound(refresh_prices, engine, sources, now))
+            running = asyncio.ensure_future(run.io_bound(_refresh, engine, sources, bond_data, now))
             _running_refreshes[engine] = running
             running.add_done_callback(lambda _: _running_refreshes.pop(engine, None))
         refresh_button.props("loading")
@@ -169,6 +175,7 @@ def build_shell(
         finally:
             refresh_button.props(remove="loading")
             price_status.refresh()
+            bond_state.refresh()
         if result is None:  # the app is shutting down
             return
         portfolio_page.refresh()
@@ -180,9 +187,16 @@ def build_shell(
         if notice := out_of_band_notice(engine, rates):
             ui.notify(notice, type="warning", multi_line=True)
 
+    async def refresh_bond_data_now(sources: BondDataSources) -> None:
+        await run.io_bound(refresh_bond_data, engine, sources, now)
+        bond_state.refresh()
+
     async def start() -> None:
         if engine in _running_refreshes or (refresh_at_start and refresh_due(last_successful_refresh(engine), now())):
             await refresh_now()
+        elif refresh_at_start and bond_data and bond_data_due(bond_data_statuses(engine), now()):
+            # Prices are fresh, yet a new day may have brought bond data
+            await refresh_bond_data_now(bond_data)
         if refresh_at_start or shared.fetching is not None:
             await fetch_history()
 
@@ -191,6 +205,8 @@ def build_shell(
         ui.space()
         history_state = ui.refreshable(lambda: history_status(engine, shared))
         history_state()
+        bond_state = ui.refreshable(lambda: bond_data_status(engine))
+        bond_state()
         price_status = ui.refreshable(lambda: _price_status(engine, engine in _running_refreshes))
         price_status()
         refresh_button = ui.button(icon="refresh", on_click=refresh_now).props(
@@ -231,6 +247,19 @@ def build_shell(
     # Once the window is up, so that it never waits for the sources or the computation
     ui.timer(0, load_history, once=True)
     ui.timer(0, start, once=True)
+
+
+def _refresh(
+    engine: Engine,
+    sources: Mapping[str, PriceSource],
+    bond_data: BondDataSources | None,
+    now: Callable[[], datetime],
+) -> RefreshResult:
+    """Refresh the prices, then the bond data due today; a bond data failure never fails the price refresh."""
+    result = refresh_prices(engine, sources, now)
+    if bond_data is not None:
+        refresh_bond_data(engine, bond_data, now)
+    return result
 
 
 def _price_status(engine: Engine, refreshing: bool) -> None:

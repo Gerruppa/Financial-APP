@@ -15,7 +15,7 @@ Mark an item done with `[x]` and the merge commit or branch. When GitHub is back
 
 Decided in the grilling of 2026-10-12: `docs/spec.md` 3.4.1 and ADR-0007. Slices in this order:
 
-- [ ] L-1 Sources: the MF file (gov.pl), GUS CPI and the NBP reference rate history; check their formats first, then parsers on fixtures and SQLite caches, fetched with the price refresh at most once a day, failures in the header status.
+- [x] L-1 Sources: the MF file (gov.pl), GUS CPI and the NBP reference rate history; check their formats first, then parsers on fixtures and SQLite caches, fetched with the price refresh at most once a day, failures in the header status. Branch `feat/bond-sources`.
 - [ ] L-2 Bond Series with their rates (first-year rate, margin, each period's) from the MF file, correctable by hand; the "+" dialog's bond mode (type and date give the Series, price 100 or the Rollover price with "z rolowania"); a migration clearing the imported Manual Prices; the sheet import stops setting one.
 - [ ] L-3 EDO valuation by the MF issue letters (per bond, MF rounding), with Estimated and Forecast Rates and their labels, in the Portfolio, Dashboard and History; unit tests on issue-letter examples and the parity test against the sheet's Obligacje tab (0.01 PLN per bond); drop the bond deviation of the Historia parity test.
 - [ ] L-4 Obligacje tab: Series expanding to Lots, gross and net value (fee and the Account's Tax Regime), the after-tax toggle.

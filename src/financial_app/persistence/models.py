@@ -281,3 +281,53 @@ class NbpHistoryRow(Base):
     currency: Mapped[str] = mapped_column(String(3), primary_key=True)
     first_day: Mapped[dt.date] = mapped_column(Date)
     last_day: Mapped[dt.date] = mapped_column(Date)
+
+
+class MfBondSeriesRow(Base):
+    """A Bond Series as the MF file last fetched lists it (spec 3.4.1); each fetch replaces all rows.
+
+    ``rates`` and ``interest`` hold one decimal per period, comma-separated, empty where MF has published none.
+    """
+
+    __tablename__ = "mf_bond_series"
+
+    series: Mapped[str] = mapped_column(String(10), primary_key=True)
+    isin: Mapped[str] = mapped_column(String(12))
+    sale_start: Mapped[dt.date] = mapped_column(Date)
+    sale_end: Mapped[dt.date] = mapped_column(Date)
+    issue_price: Mapped[str] = mapped_column(String(20))
+    rollover_price: Mapped[str | None] = mapped_column(String(20))
+    margin: Mapped[str | None] = mapped_column(String(20))
+    rates: Mapped[str] = mapped_column(Text)
+    interest: Mapped[str] = mapped_column(Text)
+
+
+class CpiRow(Base):
+    """The GUS consumer price indices of a month (spec 3.4.1); each fetch replaces all rows."""
+
+    __tablename__ = "cpi"
+
+    year: Mapped[int] = mapped_column(Integer, primary_key=True)
+    month: Mapped[int] = mapped_column(Integer, primary_key=True)
+    year_on_year: Mapped[str | None] = mapped_column(String(20))
+    month_on_month: Mapped[str | None] = mapped_column(String(20))
+
+
+class ReferenceRateRow(Base):
+    """The NBP reference rate in force from ``valid_from`` (spec 3.4.1); each fetch replaces all rows."""
+
+    __tablename__ = "nbp_reference_rates"
+
+    valid_from: Mapped[dt.date] = mapped_column(Date, primary_key=True)
+    rate: Mapped[str] = mapped_column(String(20))
+
+
+class BondDataStatusRow(Base):
+    """The last successful fetch of a bond data source and, while it keeps failing, the last failure's reason."""
+
+    __tablename__ = "bond_data_status"
+
+    source: Mapped[str] = mapped_column(String(20), primary_key=True)
+    succeeded_at: Mapped[dt.datetime | None] = mapped_column(DateTime)
+    failed_at: Mapped[dt.datetime | None] = mapped_column(DateTime)
+    error: Mapped[str | None] = mapped_column(Text)
