@@ -8,7 +8,7 @@ from datetime import datetime
 from nicegui import background_tasks, run, ui
 from sqlalchemy import Engine
 
-from financial_app.domain.formatting import format_count, format_datetime
+from financial_app.domain.formatting import format_datetime
 from financial_app.domain.instrument_search import CombinedSearch, InstrumentSearch
 from financial_app.domain.prices import ANALIZY, BANKIER, BOSSA, SOURCE_NAMES, YAHOO, refresh_due, source_reason
 from financial_app.persistence.quotes import last_successful_refresh
@@ -18,8 +18,9 @@ from financial_app.sources.bossa import BossaSource
 from financial_app.sources.history import QuoteHistory
 from financial_app.sources.nbp import NbpRates
 from financial_app.sources.portfolio_history import PortfolioHistory
-from financial_app.sources.prices import PriceSource, RefreshResult, last_refresh, refresh_prices
+from financial_app.sources.prices import PriceSource, RefreshResult, last_refresh, refresh_prices, refresh_summary
 from financial_app.sources.yahoo import YahooSearch, YahooSource
+from financial_app.ui.dashboard import DashboardPage
 from financial_app.ui.dialogs import install_movable_dialogs
 from financial_app.ui.history import history_status, shared_history
 from financial_app.ui.periods import PeriodChoice, period_selector
@@ -55,7 +56,7 @@ TABS = [
 _running_refreshes: dict[Engine, asyncio.Future[RefreshResult | None]] = {}
 
 # The tabs showing the period selector until their charts and results arrive (spec section 5)
-PERIOD_TABS = {"/", "/wyniki"}
+PERIOD_TABS = {"/wyniki"}
 
 
 def build_shell(
@@ -86,6 +87,7 @@ def build_shell(
     )
     scope = ViewScope(engine)
     period = PeriodChoice(engine, lambda: now().date())
+    dashboard_page = DashboardPage(engine, rates, scope, period, lambda: shared.days)
     transactions_page = TransactionsPage(engine, rates, scope)
     portfolio_page = PortfolioPage(engine, rates, scope)
     unpriced = UnpricedSection(engine)
@@ -94,10 +96,12 @@ def build_shell(
         """Compute History (or take it already computed) and show it in the switcher."""
         await shared.values()
         switcher.refresh()
+        dashboard_page.refresh()
 
     def history_outdated() -> None:
         shared.invalidate()
         switcher.refresh()
+        dashboard_page.refresh()
         background_tasks.create(load_history(), name="history")
 
     async def fetch_history() -> None:
@@ -123,6 +127,7 @@ def build_shell(
         switcher.refresh()
         transactions_page.refresh()
         portfolio_page.refresh()
+        dashboard_page.refresh()
         scope_pages.refresh()
 
     scope.on_change(scope_changed)
@@ -198,6 +203,7 @@ def build_shell(
     pages: dict[str, Callable[[], None]] = {tab.path: placeholder(tab) for tab in TABS}
     pages["/transakcje"] = transactions_page.build
     pages["/portfolio"] = portfolio_page.build
+    pages["/"] = lambda: scope_pages(dashboard_page.build)
     pages["/ustawienia"] = lambda: build_settings_page(engine, rates, search, sources, unpriced)
     ui.sub_pages(pages).classes("w-full").mark("page-content")
 
@@ -211,12 +217,7 @@ def _price_status(engine: Engine, refreshing: bool) -> None:
     While a refresh runs it says so."""
     status = last_refresh(engine)
     failures = status.failures if status and not refreshing else []
-    if refreshing:
-        text = "Wyceny: odświeżanie…"
-    else:
-        text = f"Wyceny: {format_datetime(status.refreshed_at) if status else 'brak'}"
-    if failures:
-        text += f" · {format_count(len(failures), 'błąd', 'błędy', 'błędów')}"
+    text = "Wyceny: odświeżanie…" if refreshing else refresh_summary(status)
     button = ui.button(text, on_click=lambda: _price_errors_dialog(engine)).props("flat no-caps")
     button.props(f"color={'red-4' if failures else 'white'}").mark("price-status")
 

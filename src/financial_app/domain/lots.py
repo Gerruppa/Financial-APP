@@ -107,11 +107,31 @@ def open_positions(transactions: Iterable[TransactionDraft]) -> list[Position]:
     or Security Transfer (by date) that is not covered, and SplitBeforeFirstBuyError for a Split before the Account
     first held the Instrument.
     """
+    positions, _ = _replay(transactions)
+    return [
+        Position(account_id, instrument_id, tuple(lots))
+        for (account_id, instrument_id), lots in positions.items()
+        if lots
+    ]
+
+
+def realized_results(transactions: Iterable[TransactionDraft]) -> dict[int, Decimal]:
+    """The realised result of Sells in PLN per Account: each Sell's Actual Amount (net of its commission) less the
+    Actual cost of the Lots it consumed, FIFO as in ``open_positions``. Only Accounts with a Sell are keys."""
+    _, realized = _replay(transactions)
+    return realized
+
+
+def _replay(
+    transactions: Iterable[TransactionDraft],
+) -> tuple[dict[tuple[int, int], list[Lot]], dict[int, Decimal]]:
+    """The open Lots per Account and Instrument and the realised result per Account (see ``open_positions``)."""
     moves = sorted(
         (t for t in transactions if t.transaction_type in _SAME_DAY_ORDER),
         key=lambda t: (t.date, _SAME_DAY_ORDER[t.transaction_type]),
     )
     positions: dict[tuple[int, int], list[Lot]] = {}
+    realized: dict[int, Decimal] = {}
     ever_held: set[tuple[int, int]] = set()
     for t in moves:
         assert t.instrument_id is not None  # guaranteed for these types by TransactionDraft
@@ -136,12 +156,10 @@ def open_positions(transactions: Iterable[TransactionDraft]) -> list[Position]:
             positions[target_key] = sorted([*positions.get(target_key, []), *moved], key=lambda lot: lot.date)
             ever_held.add(target_key)
         else:
-            _consume(lots, t.date, t.quantity, t.transaction_type)
-    return [
-        Position(account_id, instrument_id, tuple(lots))
-        for (account_id, instrument_id), lots in positions.items()
-        if lots
-    ]
+            sold = _consume(lots, t.date, t.quantity, t.transaction_type)
+            cost = sum((lot.cost for lot in sold), Decimal(0))
+            realized[t.account_id] = realized.get(t.account_id, Decimal(0)) + t.actual_amount - cost
+    return positions, realized
 
 
 @dataclass(frozen=True)

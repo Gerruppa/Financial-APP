@@ -143,6 +143,7 @@ Shell (UI prototype verdict, branch `prototype/ui-shell`, issue #1): **left navi
 - **Real return** waits for GUS CPI (Stage 3); until then Wyniki shows "wynik realny — po dodaniu CPI".
 - **Multi-asset Split**: one fixed split per Instrument (percent per Asset Class, summing to 100%), applied to all of History (documented simplification); an Instrument without one stays in Multi-asset.
 - **View Scope** is remembered in `app_settings` (`view_scope`: `total` or an Account id), falling back to Total if the Account is gone. Daily change = V_today − V_yesterday − today's flows, "—" while history loads.
+- **Dashboard** (#72): like the sheet, "Gotówka" is the PLN Cash Balance and "Otwarte pozycje" also holds the foreign cash; Net Deposits come from History; XIRR ends at today's value as the Dashboard shows it (Manual Prices included, which History does not know yet), so Wyniki may differ until it does. The Account table hides an inactive Account once it holds nothing.
 - **Allocation chart** shows current class shares (with Multi-asset Splits) until Investment Strategies add targets.
 - **Historia parity test**: skipped without `reference/`; compares total value, Net Deposits and value per class at each month end, tolerance 1% or 50 PLN (whichever is larger), reporting only larger differences; each explained one goes to section 9. Until Stage 3 the bond class differs by the accrued interest, as Bond Series stay at cost (#70).
 

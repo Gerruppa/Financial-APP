@@ -17,7 +17,6 @@ from nicegui import ui
 from sqlalchemy import Engine
 
 from financial_app.domain.accounts import Account
-from financial_app.domain.currencies import MissingNbpRateError
 from financial_app.domain.formatting import (
     format_amount,
     format_date,
@@ -30,12 +29,12 @@ from financial_app.domain.formatting import (
 from financial_app.domain.instruments import Instrument
 from financial_app.domain.lots import ForeignCash, Position, foreign_cash, fx_result, open_positions
 from financial_app.domain.prices import SOURCE_NAMES
-from financial_app.domain.transactions import PLN, cash_balances, costs_by_account, dividends_by_account
-from financial_app.domain.valuation import Badge, InstrumentPrice, PriceStatus, instrument_price
+from financial_app.domain.transactions import cash_balances, costs_by_account, dividends_by_account
+from financial_app.domain.valuation import Badge, InstrumentPrice, PriceStatus
 from financial_app.persistence.accounts import list_accounts
 from financial_app.persistence.instruments import list_instruments
-from financial_app.persistence.quotes import latest_quotes
 from financial_app.persistence.transactions import list_transactions
+from financial_app.sources.current_prices import TodaysRates, current_prices
 from financial_app.sources.nbp import NbpRates
 from financial_app.sources.prices import last_refresh
 from financial_app.ui.fund_details import fund_details
@@ -94,17 +93,11 @@ class PortfolioPage:
         instruments = list_instruments(self.engine)
         instruments_by_id = {i.id: i for i in instruments}
         held_instruments = {p.instrument_id for p in positions}
-        rates: dict[str, Decimal | None] = {PLN: Decimal(1)}
-        quotes = latest_quotes(self.engine)
-        refresh = last_refresh(self.engine)
-        stale = {failure.instrument_id for failure in refresh.failures} if refresh else set()
-        prices = {
-            i.id: instrument_price(i, quotes.get(i.id), lambda currency: self._rate(currency, rates), i.id in stale)
-            for i in instruments
-            if i.id in held_instruments
-        }
+        rates = TodaysRates(self.rates)
+        held_list = [i for i in instruments if i.id in held_instruments]
+        prices = current_prices(self.engine, held_list, rates, last_refresh(self.engine))
         for balance in cash:
-            self._rate(balance.currency, rates)
+            rates(balance.currency)
         for account in accounts:
             own = sorted(
                 (p for p in positions if p.account_id == account.id),
@@ -112,17 +105,15 @@ class PortfolioPage:
             )
             own_cash = sorted((c for c in cash if c.account_id == account.id), key=lambda c: c.currency)
             _account_card(
-                account, balances.get(account.id, Decimal(0)), own, own_cash, prices, rates, instruments_by_id, totals
+                account,
+                balances.get(account.id, Decimal(0)),
+                own,
+                own_cash,
+                prices,
+                rates.known(),
+                instruments_by_id,
+                totals,
             )
-
-    def _rate(self, currency: str, rates: dict[str, Decimal | None]) -> Decimal | None:
-        """The NBP Rate from the last business day before today, fetched once per currency into ``rates``."""
-        if currency not in rates:
-            try:
-                rates[currency] = self.rates.latest(currency).rate
-            except MissingNbpRateError:
-                rates[currency] = None
-        return rates[currency]
 
 
 def _account_card(
@@ -131,11 +122,10 @@ def _account_card(
     positions: list[Position],
     foreign: list[ForeignCash],
     prices: dict[int, InstrumentPrice],
-    rates: dict[str, Decimal | None],
+    known_rates: dict[str, Decimal],
     instruments_by_id: dict[int, Instrument],
     totals: _Totals,
 ) -> None:
-    known_rates = {currency: rate for currency, rate in rates.items() if rate is not None}
     value = (
         cash
         + sum((_value(p, prices[p.instrument_id].pln) for p in positions), Decimal(0))
