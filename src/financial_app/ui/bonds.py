@@ -1,9 +1,10 @@
 """The Obligacje tab (spec 3.4.1, L-4): the Bond Series held in the View Scope, each expanding to its Lots, with what
 was paid in, the current period and its rate (labelled when MF has not published it), the gross value, the net value
 after the early-redemption fee and the tax the Account's Tax Regime withholds, the next anniversary and the maturity.
-The "Do zatwierdzenia" list and the calendar come in later slices (L-6, L-9)."""
+Above them, the "Do zatwierdzenia" list of the Lots held past their maturity (L-6); the calendar comes in L-9."""
 
-from dataclasses import dataclass
+from collections.abc import Callable
+from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
 
@@ -19,6 +20,7 @@ from financial_app.persistence.bond_series import load_bond_data
 from financial_app.persistence.instruments import list_instruments
 from financial_app.persistence.transactions import list_transactions
 from financial_app.sources.nbp import NbpRates
+from financial_app.ui.bond_drafts import drafts_list
 from financial_app.ui.view_scope import ViewScope
 
 COLUMNS = "grid-template-columns: minmax(8rem, 2fr) repeat(7, minmax(6rem, 1fr))"
@@ -43,6 +45,8 @@ class BondsPage:
     engine: Engine
     rates: NbpRates
     scope: ViewScope
+    # Called once a Draft is confirmed, as after any saved Transaction
+    on_saved: Callable[[], None] = field(default=lambda: None)
 
     def refresh(self) -> None:
         """Redraw the tab if it is on screen (e.g. after a save, a price refresh or a scope change)."""
@@ -55,6 +59,8 @@ class BondsPage:
 
     @ui.refreshable_method
     def content(self) -> None:
+        today = self.rates.today()
+        drafts_list(self.engine, today, self.scope.account_id, self.on_saved)
         # list_transactions is newest first; the FIFO engine wants entry order
         positions = open_positions(reversed(list_transactions(self.engine)))
         instruments = {i.id: i for i in list_instruments(self.engine)}
@@ -63,7 +69,7 @@ class BondsPage:
             instruments,
             list_accounts(self.engine),
             load_bond_data(self.engine),
-            self.rates.today(),
+            today,
             self.scope.account_id,
         )
         if not holdings:

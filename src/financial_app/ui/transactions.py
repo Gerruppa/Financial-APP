@@ -59,8 +59,8 @@ from financial_app.domain.transactions import (
 )
 from financial_app.persistence.accounts import list_accounts
 from financial_app.persistence.bond_data import load_series_terms
-from financial_app.persistence.bond_series import list_bond_series, load_bond_data, series_instrument
-from financial_app.persistence.instruments import delete_instrument, get_instrument, list_instruments
+from financial_app.persistence.bond_series import drop_if_unused, list_bond_series, load_bond_data, series_instrument
+from financial_app.persistence.instruments import get_instrument, list_instruments
 from financial_app.persistence.transactions import (
     add_transactions,
     delete_transaction,
@@ -787,18 +787,18 @@ def open_transaction_dialog(
                 else:
                     update_transaction(engine, transaction.id, draft)
             except (TransactionError, MissingNbpRateError, InstrumentError) as exc:
-                _drop_if_unused(engine, created)
+                drop_if_unused(engine, created)
                 error.text = str(exc)
                 return
             except Exception:
-                _drop_if_unused(engine, created)
+                drop_if_unused(engine, created)
                 raise
             if (
                 transaction is not None
                 and edited_series is not None
                 and draft.instrument_id != transaction.instrument_id
             ):
-                _drop_if_unused(engine, transaction.instrument_id)  # the Series the Buy left, if it holds nothing else
+                drop_if_unused(engine, transaction.instrument_id)  # the Series the Buy left, if it holds nothing else
             dialog.close()
             # An edit may move the Transaction to another day or Account, so also check where it was
             _warn_if_cash_runs_out(engine, "Zapisano", account_names, draft, transaction)
@@ -825,16 +825,6 @@ def open_transaction_dialog(
             ui.button("Anuluj", on_click=dialog.close).props("flat")
             ui.button("Zapisz" if transaction is None else "Zapisz zmiany", on_click=save)
     dialog.open()
-
-
-def _drop_if_unused(engine: Engine, instrument_id: int | None) -> None:
-    """Remove a Bond Series Instrument no Transaction uses any more."""
-    if instrument_id is None:
-        return
-    try:
-        delete_instrument(engine, instrument_id)
-    except InstrumentError:
-        pass  # other Transactions still use it
 
 
 def _ask_for_multi_asset_split(engine: Engine, draft: TransactionDraft, on_saved: Callable[[], None]) -> None:

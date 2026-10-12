@@ -10,7 +10,13 @@ from financial_app.domain.bond_valuation import BondData
 from financial_app.domain.bonds import TREASURY_BOND_CLASS, BondSeries, RateCorrection
 from financial_app.domain.instruments import Instrument, InstrumentDraft, InstrumentError
 from financial_app.persistence.bond_data import load_cpi, load_series_terms
-from financial_app.persistence.instruments import add_asset_class, add_instrument, list_asset_classes, list_instruments
+from financial_app.persistence.instruments import (
+    add_asset_class,
+    add_instrument,
+    delete_instrument,
+    list_asset_classes,
+    list_instruments,
+)
 from financial_app.persistence.models import InstrumentRow, RateCorrectionRow
 
 
@@ -64,6 +70,16 @@ def series_instrument(engine: Engine, name: str) -> tuple[Instrument, bool]:
     terms = load_series_terms(engine).get(name)
     draft = InstrumentDraft(name, asset_class.id, "PLN", isin="" if terms is None else terms.isin)
     return add_instrument(engine, draft), True
+
+
+def drop_if_unused(engine: Engine, instrument_id: int | None) -> None:
+    """Remove a Bond Series Instrument no Transaction uses any more (one created for a save that failed)."""
+    if instrument_id is None:
+        return
+    try:
+        delete_instrument(engine, instrument_id)
+    except InstrumentError:
+        pass  # other Transactions still use it
 
 
 def _corrections(engine: Engine) -> dict[int, RateCorrection]:

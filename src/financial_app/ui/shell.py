@@ -23,6 +23,7 @@ from financial_app.sources.portfolio_history import PortfolioHistory
 from financial_app.sources.prices import PriceSource, RefreshResult, last_refresh, refresh_prices, refresh_summary
 from financial_app.sources.yahoo import YahooSearch, YahooSource
 from financial_app.ui.bond_data import bond_data_status
+from financial_app.ui.bond_drafts import drafts_count
 from financial_app.ui.bonds import BondsPage
 from financial_app.ui.dashboard import DashboardPage
 from financial_app.ui.dialogs import install_movable_dialogs
@@ -101,7 +102,7 @@ def build_shell(
     results_page = ResultsPage(engine, scope, period, lambda: shared.days)
     transactions_page = TransactionsPage(engine, rates, scope)
     portfolio_page = PortfolioPage(engine, rates, scope)
-    bonds_page = BondsPage(engine, rates, scope)
+    bonds_page = BondsPage(engine, rates, scope, on_saved=lambda: transactions_changed())
     unpriced = UnpricedSection(engine)
 
     async def load_history() -> None:
@@ -138,6 +139,7 @@ def build_shell(
         transactions_page.refresh()
         portfolio_page.refresh()
         bonds_page.refresh()
+        drafts_state.refresh()
         multi_asset_page.refresh()
         strategy_page.refresh()
         unpriced.refresh()
@@ -184,6 +186,7 @@ def build_shell(
             return
         portfolio_page.refresh()
         bonds_page.refresh()
+        drafts_state.refresh()
         multi_asset_page.refresh()
         strategy_page.refresh()
         unpriced.refresh()
@@ -196,6 +199,7 @@ def build_shell(
         await run.io_bound(refresh_bond_data, engine, sources, now)
         bond_state.refresh()
         bonds_page.refresh()
+        drafts_state.refresh()
 
     async def start() -> None:
         if engine in _running_refreshes or (refresh_at_start and refresh_due(last_successful_refresh(engine), now())):
@@ -209,6 +213,9 @@ def build_shell(
     with ui.header().classes("bg-indigo-900 items-center").mark("header"):
         ui.label(APP_TITLE).classes("text-lg font-bold")
         ui.space()
+        # MF's new rates may value a matured Series, so the bond data refresh redraws it too
+        drafts_state = ui.refreshable(lambda: drafts_count(engine, rates.today()))
+        drafts_state()
         history_state = ui.refreshable(lambda: history_status(engine, shared))
         history_state()
         bond_state = ui.refreshable(lambda: bond_data_status(engine))

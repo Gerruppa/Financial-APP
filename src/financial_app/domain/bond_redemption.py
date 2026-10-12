@@ -73,7 +73,8 @@ def net_value(price: BondPrice, lot: Lot, tax_rate: Decimal) -> NetValue | None:
 
 @dataclass(frozen=True)
 class EarlyRedemption:
-    """What the "+" dialog prefills a Sell of a Bond Series with (spec 3.4.1): the gross value of one bond as the
+    """What the "+" dialog prefills a Sell of a Bond Series with (spec 3.4.1), and a maturity Draft saves (no fee
+    then): the gross value of one bond as the
     ``price``, the early-redemption ``fee`` as the commission and the ``tax`` withheld, both for all the bonds redeemed,
     in PLN."""
 
