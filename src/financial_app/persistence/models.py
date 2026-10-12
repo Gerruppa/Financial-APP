@@ -170,6 +170,41 @@ class MultiAssetShareRow(Base):
     asset_class: Mapped[AssetClassRow] = relationship()
 
 
+class StrategyRow(Base):
+    """An Investment Strategy (issue #76): Total's when ``account_id`` is empty, else that Account's own. The
+    repository keeps one per Account and one for Total (SQLite lets a unique column hold several NULLs)."""
+
+    __tablename__ = "strategies"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    account_id: Mapped[int | None] = mapped_column(ForeignKey("accounts.id"), unique=True)
+
+    class_targets: Mapped[list[ClassTargetRow]] = relationship(cascade="all, delete-orphan")
+    instrument_targets: Mapped[list[InstrumentTargetRow]] = relationship(cascade="all, delete-orphan")
+
+
+class ClassTargetRow(Base):
+    """An Allocation Target of a strategy with its tolerance band (± percentage points)."""
+
+    __tablename__ = "class_targets"
+
+    strategy_id: Mapped[int] = mapped_column(ForeignKey("strategies.id"), primary_key=True)
+    asset_class_id: Mapped[int] = mapped_column(ForeignKey("asset_classes.id"), primary_key=True, index=True)
+    # Percent and percentage points, as exact decimal text
+    percent: Mapped[str] = mapped_column(String(20))
+    band: Mapped[str] = mapped_column(String(20))
+
+
+class InstrumentTargetRow(Base):
+    """An Instrument Target of a strategy: percent of the Instrument's Asset Class."""
+
+    __tablename__ = "instrument_targets"
+
+    strategy_id: Mapped[int] = mapped_column(ForeignKey("strategies.id"), primary_key=True)
+    instrument_id: Mapped[int] = mapped_column(ForeignKey("instruments.id"), primary_key=True, index=True)
+    percent: Mapped[str] = mapped_column(String(20))
+
+
 class QuoteRow(Base):
     """An Instrument's Quote for ``day`` (issue #30); a later fetch on the same day replaces it."""
 

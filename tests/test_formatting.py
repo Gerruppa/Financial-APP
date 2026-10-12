@@ -12,6 +12,7 @@ from financial_app.domain.formatting import (
     format_exact_percent,
     format_percent,
     format_pln,
+    format_points,
     format_quantity,
     format_rate,
     format_unit_price,
@@ -141,3 +142,10 @@ def test_a_time_is_shown_day_first_to_the_minute() -> None:
 )
 def test_a_count_takes_the_polish_plural(count: int, expected: str) -> None:
     assert format_count(count, "błąd", "błędy", "błędów") == expected
+
+
+def test_points_are_percentage_points_with_the_band_shown_as_typed() -> None:
+    assert format_points(Decimal("-10")) == f"-10,00{NBSP}pp"
+    assert format_points(Decimal("7.234"), signed=True) == f"+7,23{NBSP}pp"
+    assert format_points(Decimal("2.5"), exact=True) == f"2,5{NBSP}pp"
+    assert format_points(Decimal("5"), exact=True) == f"5{NBSP}pp"

@@ -28,6 +28,7 @@ from financial_app.ui.periods import PeriodChoice
 from financial_app.ui.portfolio import PortfolioPage
 from financial_app.ui.results import ResultsPage
 from financial_app.ui.settings import build_settings_page
+from financial_app.ui.strategy import PlannedDeposit, StrategyPage, out_of_band_notice
 from financial_app.ui.transactions import TransactionsPage, open_transaction_dialog
 from financial_app.ui.unpriced import UnpricedSection
 from financial_app.ui.view_scope import ScopeSwitcher, ViewScope, breadcrumbs
@@ -87,7 +88,9 @@ def build_shell(
     )
     scope = ViewScope(engine)
     period = PeriodChoice(engine, lambda: now().date())
-    dashboard_page = DashboardPage(engine, rates, scope, period, lambda: shared.days)
+    planned = PlannedDeposit()
+    dashboard_page = DashboardPage(engine, rates, scope, period, lambda: shared.days, planned)
+    strategy_page = StrategyPage(engine, rates, scope, planned)
     results_page = ResultsPage(engine, scope, period, lambda: shared.days)
     transactions_page = TransactionsPage(engine, rates, scope)
     portfolio_page = PortfolioPage(engine, rates, scope)
@@ -127,6 +130,7 @@ def build_shell(
         transactions_page.refresh()
         portfolio_page.refresh()
         multi_asset_page.refresh()
+        strategy_page.refresh()
         unpriced.refresh()
         history_outdated()
 
@@ -140,6 +144,7 @@ def build_shell(
         transactions_page.refresh()
         portfolio_page.refresh()
         multi_asset_page.refresh()
+        strategy_page.refresh()
         dashboard_page.refresh()
         results_page.refresh()
         scope_pages.refresh()
@@ -168,9 +173,12 @@ def build_shell(
             return
         portfolio_page.refresh()
         multi_asset_page.refresh()
+        strategy_page.refresh()
         unpriced.refresh()
         history_outdated()
         ui.notify(_refresh_message(result), type="warning" if result.failures else "positive")
+        if notice := out_of_band_notice(engine, rates):
+            ui.notify(notice, type="warning", multi_line=True)
 
     async def start() -> None:
         if engine in _running_refreshes or (refresh_at_start and refresh_due(last_successful_refresh(engine), now())):
@@ -216,6 +224,7 @@ def build_shell(
     pages["/"] = lambda: scope_pages(dashboard_page.build)
     pages["/wyniki"] = lambda: scope_pages(results_page.build)
     pages["/multi-asset"] = lambda: scope_pages(multi_asset_page.build)
+    pages["/strategie"] = lambda: scope_pages(strategy_page.build)
     pages["/ustawienia"] = lambda: build_settings_page(engine, rates, search, sources, unpriced, instruments_changed)
     ui.sub_pages(pages).classes("w-full").mark("page-content")
 

@@ -63,6 +63,13 @@ def format_percent(value: float | Decimal, decimals: int = 2, signed: bool = Fal
     return f"{format_number(value, decimals, signed)}{NBSP}%"
 
 
+def format_points(value: Decimal, signed: bool = False, exact: bool = False) -> str:
+    """Format percentage points, e.g. a difference from an Allocation Target -10 -> '-10,00 pp'; ``exact`` keeps only
+    the decimals the value has, as for a Tolerance Band of 5 -> '5 pp'."""
+    number = format_quantity(value) if exact else format_number(value, signed=signed)
+    return f"{number}{NBSP}pp"
+
+
 def format_exact_percent(value: Decimal) -> str:
     """Format a stored percent with all its decimals (at least two), e.g. a TER of 0.075 -> '0,075 %'."""
     return f"{format_exact(value)}{NBSP}%"

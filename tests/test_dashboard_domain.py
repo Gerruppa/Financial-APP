@@ -206,3 +206,15 @@ def test_an_inactive_account_shows_only_while_it_still_holds_something() -> None
     board = dashboard(transactions, [*ACCOUNTS, closed, emptied], INSTRUMENTS, {}, {}, None)
 
     assert [row.account.name for row in board.accounts] == ["IKE", "XTB", "Stare"]
+
+
+def test_the_allocation_comes_by_account_and_by_instrument_for_the_investment_strategy() -> None:
+    transactions = [_deposit("1000"), _buy("10", "50"), _deposit("300", account=XTB)]
+
+    board = dashboard(transactions, ACCOUNTS, INSTRUMENTS, {PZU: Decimal(60)}, {}, None)
+
+    assert board.holdings == {"Akcje": {PZU: Decimal(600)}}
+    assert board.account_classes == {
+        IKE: {"Akcje": Decimal(600), "Gotówka": Decimal(500)},
+        XTB: {"Gotówka": Decimal(300)},
+    }
