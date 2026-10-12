@@ -5,7 +5,7 @@ Each Lot carries an Actual cost (what really left the Account) and a Tax cost (a
 """
 
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 from decimal import Decimal
 
@@ -49,17 +49,54 @@ class SplitBeforeFirstBuyError(TransactionError):
 
 
 @dataclass(frozen=True)
+class FxBasis:
+    """What a foreign-currency Lot cost: ``foreign`` in the Instrument's currency (quantity × price, a DRIP's net
+    amount) and ``pln``, that amount in PLN at the rate paid, without the commission and the FX Conversion Fee."""
+
+    foreign: Decimal
+    pln: Decimal
+
+    def fx_result(self, rate: Decimal) -> Decimal:
+        """How much more (or less) in PLN the foreign amount is worth at ``rate`` than it cost."""
+        return self.foreign * rate - self.pln
+
+
+@dataclass(frozen=True)
 class Lot:
     """The still-open part of one Buy or DRIP (or of foreign cash coming in); ``cost`` is its Actual cost and
     ``tax_cost`` its Tax cost, in PLN.
 
-    Both include the commission.
+    Both include the commission. A Lot of a foreign-currency Instrument also has its ``fx_basis``, so its result
+    splits into a price and an FX effect (issue #89).
     """
 
     date: date
     quantity: Decimal
     cost: Decimal
     tax_cost: Decimal
+    fx_basis: FxBasis | None = None
+
+    def part(self, share: Decimal) -> Lot:
+        """``share`` (a fraction) of the Lot: its units, costs and FX basis pro rata."""
+        basis = self.fx_basis
+        return Lot(
+            self.date,
+            self.quantity * share,
+            self.cost * share,
+            self.tax_cost * share,
+            None if basis is None else FxBasis(basis.foreign * share, basis.pln * share),
+        )
+
+    def rest(self, taken: Lot) -> Lot:
+        """What is left of the Lot once ``taken``, a part of it, is gone."""
+        basis, used = self.fx_basis, taken.fx_basis
+        return Lot(
+            self.date,
+            self.quantity - taken.quantity,
+            self.cost - taken.cost,
+            self.tax_cost - taken.tax_cost,
+            None if basis is None or used is None else FxBasis(basis.foreign - used.foreign, basis.pln - used.pln),
+        )
 
 
 @dataclass(frozen=True)
@@ -101,6 +138,11 @@ class Position:
     def result_percent(self, price: Decimal) -> Decimal:
         return self.result(price) / self.cost * 100
 
+    def fx_result(self, rate: Decimal) -> Decimal:
+        """The FX part of the unrealised result at ``rate`` PLN per unit of the Instrument's currency: how much more
+        (or less) the Lots' cost in that currency is worth than it cost in PLN; 0 for a PLN Instrument."""
+        return sum((lot.fx_basis.fx_result(rate) for lot in self.lots if lot.fx_basis), Decimal(0))
+
 
 def open_positions(transactions: Iterable[TransactionDraft]) -> list[Position]:
     """The open Positions after all Buys, Sells, DRIPs, Splits and Security Transfers, keyed by Account and Instrument.
@@ -111,31 +153,55 @@ def open_positions(transactions: Iterable[TransactionDraft]) -> list[Position]:
     or Security Transfer (by date) that is not covered, and SplitBeforeFirstBuyError for a Split before the Account
     first held the Instrument.
     """
-    positions, _ = _replay(transactions)
-    return [
-        Position(account_id, instrument_id, tuple(lots))
-        for (account_id, instrument_id), lots in positions.items()
-        if lots
-    ]
+    return replay(transactions).positions
 
 
 def realized_results(transactions: Iterable[TransactionDraft]) -> dict[int, Decimal]:
-    """The realised result of Sells in PLN per Account: each Sell's Actual Amount (net of its commission) less the
-    Actual cost of the Lots it consumed, FIFO as in ``open_positions``. Only Accounts with a Sell are keys."""
-    _, realized = _replay(transactions)
-    return realized
+    """The realised result of Sells in PLN per Account (see ``Replay``)."""
+    return replay(transactions).realized
+
+
+def realized_fx_results(transactions: Iterable[TransactionDraft]) -> dict[int, Decimal]:
+    """The FX part of ``realized_results`` per Account (see ``Replay``)."""
+    return replay(transactions).realized_fx
+
+
+@dataclass(frozen=True)
+class Replay:
+    """What one FIFO replay of the Transactions gives (see ``open_positions``): the open ``positions``; the
+    ``realized`` result of Sells in PLN per Account, each Sell's Actual Amount (net of its commission) less the Actual
+    cost of the Lots it consumed; and its FX part ``realized_fx``, how much more (or less) in PLN the sold Lots' cost
+    in the Instrument's currency brought at the Sell's rate than it cost at theirs. Only Accounts with a Sell (a
+    foreign-currency one for ``realized_fx``) are keys."""
+
+    positions: list[Position]
+    realized: dict[int, Decimal]
+    realized_fx: dict[int, Decimal]
+
+
+def replay(transactions: Iterable[TransactionDraft]) -> Replay:
+    """The Positions and realised results of ``transactions`` from one replay, for callers needing both."""
+    lots, realized, realized_fx = _replay(transactions)
+    positions = [
+        Position(account_id, instrument_id, tuple(open_lots))
+        for (account_id, instrument_id), open_lots in lots.items()
+        if open_lots
+    ]
+    return Replay(positions, realized, realized_fx)
 
 
 def _replay(
     transactions: Iterable[TransactionDraft],
-) -> tuple[dict[tuple[int, int], list[Lot]], dict[int, Decimal]]:
-    """The open Lots per Account and Instrument and the realised result per Account (see ``open_positions``)."""
+) -> tuple[dict[tuple[int, int], list[Lot]], dict[int, Decimal], dict[int, Decimal]]:
+    """The open Lots per Account and Instrument, the realised result and its FX part per Account (see
+    ``open_positions``)."""
     moves = sorted(
         (t for t in transactions if t.transaction_type in _SAME_DAY_ORDER),
         key=lambda t: (t.date, _SAME_DAY_ORDER[t.transaction_type]),
     )
     positions: dict[tuple[int, int], list[Lot]] = {}
     realized: dict[int, Decimal] = {}
+    realized_fx: dict[int, Decimal] = {}
     ever_held: set[tuple[int, int]] = set()
     for t in moves:
         assert t.instrument_id is not None  # guaranteed for these types by TransactionDraft
@@ -146,11 +212,11 @@ def _replay(
             if key not in ever_held:
                 raise SplitBeforeFirstBuyError(t.date)
             ratio = t.split_ratio
-            lots[:] = [Lot(lot.date, ratio.rescale(lot.quantity), lot.cost, lot.tax_cost) for lot in lots]
+            lots[:] = [replace(lot, quantity=ratio.rescale(lot.quantity)) for lot in lots]
             continue
         assert t.quantity is not None
         if t.transaction_type.opens_lot:
-            lots.append(Lot(t.date, t.quantity, t.actual_amount, t.tax_amount))
+            lots.append(Lot(t.date, t.quantity, t.actual_amount, t.tax_amount, _fx_basis(t)))
             ever_held.add(key)
         elif t.transaction_type is TransactionType.SECURITY_TRANSFER:
             assert t.target_account_id is not None
@@ -163,7 +229,24 @@ def _replay(
             sold = _consume(lots, t.date, t.quantity, t.transaction_type)
             cost = sum((lot.cost for lot in sold), Decimal(0))
             realized[t.account_id] = realized.get(t.account_id, Decimal(0)) + t.actual_amount - cost
-    return positions, realized
+            sold_basis = _fx_basis(t)
+            if sold_basis is not None:
+                rate = sold_basis.pln / sold_basis.foreign
+                fx = sum((lot.fx_basis.fx_result(rate) for lot in sold if lot.fx_basis), Decimal(0))
+                realized_fx[t.account_id] = realized_fx.get(t.account_id, Decimal(0)) + fx
+    return positions, realized, realized_fx
+
+
+def _fx_basis(t: TransactionDraft) -> FxBasis | None:
+    """The foreign amount of a foreign-currency Buy, Sell or DRIP and its PLN at the rate paid (the market rate,
+    without the broker's FX Conversion Fee); ``None`` for a PLN one."""
+    if t.nbp_rate is None:
+        return None
+    if t.transaction_type is TransactionType.DRIP:
+        return FxBasis(t.net, t.actual_amount) if t.net else None
+    assert t.quantity is not None and t.price is not None  # a Buy or Sell, checked on creation
+    foreign = t.quantity * t.price
+    return FxBasis(foreign, t.market_amount) if foreign else None
 
 
 @dataclass(frozen=True)
@@ -287,9 +370,8 @@ def _net(lots: list[Lot], incoming: Lot) -> Decimal:
 def _split(lot: Lot, units: Decimal) -> tuple[Lot, Lot]:
     """``units`` (unsigned) of ``lot`` and what is left of it, each with its costs pro rata."""
     share = units / abs(lot.quantity)
-    taken = Lot(lot.date, lot.quantity * share, lot.cost * share, lot.tax_cost * share)
-    left = Lot(lot.date, lot.quantity - taken.quantity, lot.cost - taken.cost, lot.tax_cost - taken.tax_cost)
-    return taken, left
+    taken = lot.part(share)
+    return taken, lot.rest(taken)
 
 
 def _consume(lots: list[Lot], day: date, quantity: Decimal, kind: TransactionType) -> list[Lot]:
@@ -307,10 +389,8 @@ def _consume(lots: list[Lot], day: date, quantity: Decimal, kind: TransactionTyp
             quantity -= oldest.quantity
             taken.append(lots.pop(0))
         else:
-            left = oldest.quantity - quantity
-            share = left / oldest.quantity
-            rest = Lot(oldest.date, left, oldest.cost * share, oldest.tax_cost * share)
+            rest = oldest.part((oldest.quantity - quantity) / oldest.quantity)
             lots[0] = rest
-            taken.append(Lot(oldest.date, quantity, oldest.cost - rest.cost, oldest.tax_cost - rest.tax_cost))
+            taken.append(oldest.rest(rest))
             quantity = Decimal(0)
     return taken

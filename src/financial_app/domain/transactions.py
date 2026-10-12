@@ -330,6 +330,15 @@ class TransactionDraft:
         return self.converted_amount / (self.quantity * self.price)
 
     @property
+    def market_amount(self) -> Decimal:
+        """Quantity × price of a Buy or Sell (a Dividend's net amount) in PLN at the market rate: the converted amount
+        without the broker's FX Conversion Fee, which a Buy paid on top and a Sell or Dividend lost."""
+        fee = self.fx_conversion_fee or Decimal(0)
+        if self.transaction_type is TransactionType.BUY:
+            return self.converted_amount - fee
+        return self.converted_amount + fee
+
+    @property
     def fx_conversion_fee(self) -> Decimal | None:
         """The broker's FX Conversion Fee in PLN, a cost of the trade; None unless the broker converted it."""
         if self.fx_conversion_fee_percent is None:
