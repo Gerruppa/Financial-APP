@@ -6,8 +6,10 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from enum import StrEnum
 
+from financial_app.domain.bonds import bond_type_of
 from financial_app.domain.currencies import is_currency_code
 from financial_app.domain.formatting import format_percent, parse_number
+from financial_app.domain.prices import STAGE_3_CLASSES
 
 # The sheet's Asset Classes in its order (spec 3.2): migration 0004 seeds them and clearing the portfolio restores them
 DEFAULT_ASSET_CLASSES = [
@@ -182,6 +184,11 @@ class Instrument(InstrumentDraft):
     def is_multi_asset(self) -> bool:
         """In the Multi-asset class, or spread across classes by a Multi-asset Split."""
         return bool(self.multi_asset_split) or self.in_multi_asset_class
+
+    @property
+    def is_bond_series(self) -> bool:
+        """A retail treasury Bond Series (spec 3.4.1): named like EDO1036, in a class Stage 3 values."""
+        return self.asset_class_name in STAGE_3_CLASSES and bond_type_of(self.name) is not None
 
     def class_parts(self, value: Decimal) -> list[tuple[str, Decimal]]:
         """``value`` by the name of the Asset Class it counts in: split by the Multi-asset Split, else whole in the

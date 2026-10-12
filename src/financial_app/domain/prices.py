@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 
+from financial_app.domain.bonds import TREASURY_BOND_CLASS
+
 # Price Sources by the key their Source Symbols are saved under
 YAHOO = "yahoo"
 BOSSA = "bossa"
@@ -46,8 +48,8 @@ DEFAULT_FALLBACK_ORDERS: dict[str, tuple[str, ...]] = {
     OTHER: (ANALIZY, BANKIER, YAHOO, BOSSA),
     "Multi-asset": (ANALIZY, BANKIER, YAHOO, BOSSA),
 }
-# Asset Classes of the Bond Series, which keep their Manual Price until Stage 3 values them from the MF data
-STAGE_3_CLASSES = frozenset({"Obligacje skarbowe polskie"})
+# Asset Classes of the Bond Series, which Stage 3 values from the MF data (no Price Source quotes them)
+STAGE_3_CLASSES = frozenset({TREASURY_BOND_CLASS})
 # Seeded Asset Classes nothing quotes, priced only by a Manual Price
 MANUAL_PRICE_CLASSES = frozenset({"Gotówka", "Waluty"})
 

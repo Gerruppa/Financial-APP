@@ -145,6 +145,7 @@ class InstrumentRow(Base):
     asset_class: Mapped[AssetClassRow] = relationship()
     source_symbols: Mapped[list[SourceSymbolRow]] = relationship(cascade="all, delete-orphan")
     multi_asset_split: Mapped[list[MultiAssetShareRow]] = relationship(cascade="all, delete-orphan")
+    rate_correction: Mapped[RateCorrectionRow | None] = relationship(cascade="all, delete-orphan")
 
 
 class SourceSymbolRow(Base):
@@ -155,6 +156,17 @@ class SourceSymbolRow(Base):
     instrument_id: Mapped[int] = mapped_column(ForeignKey("instruments.id"), primary_key=True)
     source: Mapped[str] = mapped_column(String(20), primary_key=True)
     symbol: Mapped[str] = mapped_column(String(100))
+
+
+class RateCorrectionRow(Base):
+    """The user's corrections of a Bond Series' MF rates (spec 3.4.1): exact decimal text, ``rates`` one per period,
+    comma-separated, empty where the MF file's rate stands."""
+
+    __tablename__ = "bond_rate_corrections"
+
+    instrument_id: Mapped[int] = mapped_column(ForeignKey("instruments.id"), primary_key=True)
+    margin: Mapped[str | None] = mapped_column(String(20))
+    rates: Mapped[str] = mapped_column(Text, default="", server_default="")
 
 
 class MultiAssetShareRow(Base):

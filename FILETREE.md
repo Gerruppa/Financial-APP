@@ -79,6 +79,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `accounts.py`: Saves and reads Accounts, enforcing case-insensitive unique names and cash currency rows.
 - `backup.py`: Copies the database to the backups folder at each start and keeps only the newest copies.
 - `bond_data.py`: SQLite copy of the bond data sources (MF Bond Series, GUS CPI, NBP reference rates) and each source's fetch status
+- `bond_series.py`: Bond Series persistence: lists Series with their MF terms and rate corrections, saves corrections, finds or creates Series Instruments
 - `db.py`: Opens the SQLite engine and applies pending Alembic migrations at start-up.
 - `history.py`: Reads and writes cached Stooq Quote history and NBP Rate history, with the cover of fetched days.
 - `instruments.py`: Saves and reads Asset Classes and Instruments, and deletes Instrument data including its Quotes and failures.
@@ -120,6 +121,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `0020_multi_asset_class.py`: Alembic revision adding the asset_classes multi_asset flag and marking the seeded Multi-asset class
 - `0021_investment_strategies.py`: Migration creating the strategy, class target and instrument target tables for Investment Strategies
 - `0022_bond_data.py`: Alembic migration adding the bond data tables: Bond Series, CPI, reference rates and fetch status
+- `0023_bond_rate_corrections.py`: Migration adding the bond rate corrections table and clearing imported Manual Prices on Bond Series
 
 ## src/financial_app/sources/
 
@@ -145,6 +147,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `account_ranking.py`: Total Dashboard's Accounts treemap and sortable Account ranking; clicking a tile switches the View Scope to that Account
 - `accounts.py`: Ustawienia Konta card: lists Accounts and opens the add and edit dialog
 - `bond_data.py`: Header status listing failing bond data sources with their reasons, shown only while one keeps failing
+- `bond_series.py`: Bond Series rate summary and dialog for correcting MF rates by hand in Ustawienia Instrumenty
 - `charts.py`: Dashboard's nine ECharts charts plus the profit-by-source waterfall, following the View Scope and period
 - `dashboard.py`: Dashboard tab UI: totals, price status, Account table, exposure, charts, Account treemap and ranking, and the after-tax toggle
 - `dialogs.py`: Draggable dialog support with no backdrop, so the screen behind stays readable
@@ -179,6 +182,10 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_bankier_source.py`: Tests the bankier.pl fund and PPK quote source against saved pages
 - `test_bond_data.py`: Tests for bond data parsers, SQLite persistence and daily refresh rules on saved fixtures
 - `test_bond_data_ui.py`: UI tests for the bond data header status and its error dialog
+- `test_bond_purchase_ui.py`: UI tests for buying retail treasury bonds in the transaction dialog's bond mode
+- `test_bond_rates_ui.py`: UI tests for correcting a Bond Series' MF rates in Ustawienia Instrumenty
+- `test_bond_series_domain.py`: Domain tests for Bond Series naming and corrected MF rates
+- `test_bond_series_repository.py`: Repository tests for Bond Series as Instruments with saved rate corrections
 - `test_bossa_source.py`: Tests the Bossa JSON API quote source against saved responses
 - `test_charts_domain.py`: Unit tests for the Dashboard chart data: value, profit, XIRR, class shares and dividends by year
 - `test_clear_data_repository.py`: Tests that clearing the portfolio removes user data and restores default Asset Classes

@@ -149,7 +149,7 @@ _Avoid_: dividend type
 ## Bonds
 
 **Bond Series** (Seria obligacji):
-A Polish retail treasury bond issue identified by type, maturity month and year, e.g. `EDO0735`. It is an Instrument and carries the rates (first-year rate, margin, each period's rate); each purchase of it is a separate Lot earning from its own date.
+A Polish retail treasury bond issue identified by type, maturity month and year, e.g. `EDO0735`. It is an Instrument, created on its first purchase from the type and purchase date, and carries the rates (first-year rate, margin, each period's rate) from the MF file, which the user may correct by hand; each purchase of it is a separate Lot earning from its own date.
 _Avoid_: bond ticker, bond
 
 **Estimated Rate** (Oprocentowanie szacunkowe):

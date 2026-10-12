@@ -7,6 +7,7 @@ from decimal import Decimal
 from nicegui import run, ui
 from sqlalchemy import Engine
 
+from financial_app.domain.bonds import BondSeries
 from financial_app.domain.formatting import (
     format_count,
     format_date,
@@ -46,6 +47,7 @@ from financial_app.domain.prices import (
     symbol_in,
     without_fund_code_copy,
 )
+from financial_app.persistence.bond_series import list_bond_series
 from financial_app.persistence.instruments import (
     add_asset_class,
     add_instrument,
@@ -58,6 +60,7 @@ from financial_app.persistence.instruments import (
     update_instrument,
 )
 from financial_app.sources.prices import PriceSource, SymbolCheck, check_symbol
+from financial_app.ui.bond_series import open_rates_dialog, rates_summary
 from financial_app.ui.dialogs import movable_dialog
 from financial_app.ui.fund_details import fund_details
 from financial_app.ui.multi_asset import split_editor
@@ -218,10 +221,12 @@ class InstrumentsSection:
         instruments = list_instruments(self.engine)
         if not instruments:
             ui.label("Nie dodano jeszcze żadnego instrumentu.").classes("text-gray-500")
+        bond_series = list_bond_series(self.engine)
         for instrument in instruments:
-            self._instrument_row(instrument)
+            self._instrument_row(instrument, bond_series.get(instrument.id))
 
-    def _instrument_row(self, instrument: Instrument) -> None:
+    def _instrument_row(self, instrument: Instrument, series: BondSeries | None) -> None:
+        """The Instrument's details; a Bond Series also shows its rates, with a button to correct them."""
         with ui.row().classes("w-full items-center no-wrap border-b py-1"):
             with ui.column().classes("gap-0 grow"):
                 with ui.row().classes("items-center gap-2"):
@@ -238,6 +243,12 @@ class InstrumentsSection:
                 for source, symbol in instrument.source_symbols.items():
                     details.append(f"{SOURCE_NAMES.get(source, source)} {symbol}")
                 ui.label(" · ".join(d for d in details if d)).classes("text-sm text-gray-500")
+                if series is not None:
+                    ui.label(rates_summary(series)).classes("text-sm text-gray-500").mark("bond-rates")
+            if series is not None:
+                ui.button(icon="percent", on_click=lambda: open_rates_dialog(self.engine, series, self.refresh)).props(
+                    f'flat round aria-label="Oprocentowanie {instrument.name}"'
+                ).mark("edit-bond-rates")
             ui.button(icon="edit", on_click=lambda: self.open_dialog(instrument)).props(
                 f'flat round aria-label="Edytuj {instrument.name}"'
             ).mark("edit-instrument")

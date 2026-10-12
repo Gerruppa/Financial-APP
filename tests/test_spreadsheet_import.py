@@ -298,11 +298,9 @@ def test_a_row_like_a_manual_transaction_is_held_back_until_the_user_keeps_it(en
     assert len(list_transactions(engine)) == 2
 
 
-def test_an_existing_bond_without_a_manual_price_gets_the_sheet_price_and_keeps_one_it_has(
-    engine: Engine, ike: int
-) -> None:
+def test_bonds_are_saved_without_a_manual_price_and_keep_one_set_by_hand(engine: Engine, ike: int) -> None:
+    """Stage 3 values Bond Series from the MF data (spec 3.4.1), so the sheet's price is no Manual Price."""
     class_id = list_asset_classes(engine)[0].id
-    plain = add_instrument(engine, InstrumentDraft("EDO0836", class_id, "PLN"))
     priced = add_instrument(engine, InstrumentDraft("EDO0636", class_id, "PLN", manual_price=Decimal("101.5")))
     bond_row = dict(Konto="IKE", Ticker="EDO-040836", Waluta="PLN", Liczba=50.0, Cena=100.0, **{"Total PLN": 5000.0})
     other_row = dict(bond_row, Ticker="EDO-170636")
@@ -311,9 +309,9 @@ def test_an_existing_bond_without_a_manual_price_gets_the_sheet_price_and_keeps_
     save_import(engine, lines, FakeRates({}), Decisions(accounts={"IKE": ike}))
 
     by_name = {instrument.name: instrument for instrument in list_instruments(engine)}
-    assert by_name["EDO0836"].manual_price == Decimal("100")
+    assert by_name["EDO0836"].manual_price is None
     assert by_name["EDO0636"].manual_price == Decimal("101.5")
-    assert plain.id == by_name["EDO0836"].id and priced.id == by_name["EDO0636"].id
+    assert priced.id == by_name["EDO0636"].id
 
 
 def test_editing_the_total_or_comment_of_a_row_keeps_its_fingerprint() -> None:

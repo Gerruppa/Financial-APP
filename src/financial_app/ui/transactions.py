@@ -3,7 +3,8 @@
 For now: PLN Deposits and Withdrawals, Costs (in PLN or foreign cash), Currency Exchanges, Buys and Sells
 (foreign-currency ones paid from foreign cash or in PLN, converted at the user's rate, the NBP Rate (D-1) or by the
 broker for its FX Conversion Fee), Dividends and interest (paid into PLN or foreign cash the same way), DRIPs,
-Splits, and PLN Cash Transfers and Security Transfers to another Account.
+Splits, and PLN Cash Transfers and Security Transfers to another Account. A Buy of retail treasury bonds has its bond
+mode: the type and the purchase date give the Bond Series, created on its first purchase (spec 3.4.1).
 """
 
 from collections.abc import Callable
@@ -14,6 +15,8 @@ from decimal import Decimal
 from nicegui import ui
 from sqlalchemy import Engine
 
+from financial_app.domain.accounts import AccountType
+from financial_app.domain.bonds import ISSUE_PRICE, BondSeries, BondType, bond_type_of, series_name
 from financial_app.domain.currencies import MissingNbpRateError, NbpRate
 from financial_app.domain.formatting import (
     currency_unit,
@@ -29,6 +32,7 @@ from financial_app.domain.formatting import (
     parse_number,
     parse_ratio,
 )
+from financial_app.domain.instruments import InstrumentError
 from financial_app.domain.transactions import (
     PLN,
     BrokerConversion,
@@ -50,7 +54,9 @@ from financial_app.domain.transactions import (
     split,
 )
 from financial_app.persistence.accounts import list_accounts
-from financial_app.persistence.instruments import get_instrument, list_instruments
+from financial_app.persistence.bond_data import load_series_terms
+from financial_app.persistence.bond_series import list_bond_series, series_instrument
+from financial_app.persistence.instruments import delete_instrument, get_instrument, list_instruments
 from financial_app.persistence.transactions import (
     add_transactions,
     delete_transaction,
@@ -68,6 +74,17 @@ SUGGESTED_EXCHANGE_CURRENCIES = ("USD", "EUR")
 # Currency Exchange directions in the dialog: buying the foreign currency for PLN, or selling it for PLN
 _BUY, _SELL = "buy", "sell"
 TRANSACTION_TYPE_OPTIONS = {transaction_type.value: transaction_type.label for transaction_type in TransactionType}
+# The bond types in the order the dialog offers them, the most bought first, with their terms
+BOND_TYPE_OPTIONS = {
+    BondType.EDO.value: "EDO · 10 lat",
+    BondType.COI.value: "COI · 4 lata",
+    BondType.TOS.value: "TOS · 3 lata",
+    BondType.OTS.value: "OTS · 3 miesiące",
+    BondType.ROR.value: "ROR · 1 rok",
+    BondType.DOR.value: "DOR · 2 lata",
+    BondType.ROS.value: "ROS · 6 lat",
+    BondType.ROD.value: "ROD · 12 lat",
+}
 COLUMNS = "grid-template-columns: 7rem minmax(8rem, 1fr) 6rem minmax(9rem, 1fr) 9rem minmax(8rem, 2fr)"
 
 
@@ -211,6 +228,20 @@ def open_transaction_dialog(
     all_instruments = list_instruments(engine)
     instruments = {i.id: i.name for i in all_instruments}
     currencies = {i.id: i.quote_currency for i in all_instruments}
+    held_series = {series.name: series for series in list_bond_series(engine).values()}
+    mf_terms = load_series_terms(engine)
+    # An edited Buy of a Bond Series opens in the bond mode, with its type
+    edited_series = next(
+        (
+            i.name
+            for i in all_instruments
+            if transaction is not None
+            and transaction.transaction_type is TransactionType.BUY
+            and i.id == transaction.instrument_id
+            and i.is_bond_series
+        ),
+        None,
+    )
     with dialog, ui.card().classes("w-[460px]"):
         ui.label("Nowa transakcja" if transaction is None else "Edytuj transakcję").classes("text-lg font-bold")
         if not accounts:
@@ -256,6 +287,20 @@ def open_transaction_dialog(
         cost_currency.mark("transaction-cost-currency")
         amount = ui.input("Kwota (zł)", value=texts.amount).classes("w-full").mark("transaction-amount")
         with ui.column().classes("w-full gap-0") as instrument_fields:
+            # A new Buy on a Bonds Account starts in the bond mode
+            bonds_account = accounts_by_id[account_id].account_type is AccountType.BONDS
+            starts_in_bonds = edited_series is not None or (transaction is None and bonds_account)
+            bond_mode = ui.checkbox("Obligacje skarbowe detaliczne", value=starts_in_bonds)
+            bond_mode.mark("transaction-bond-mode")
+            own_type = bond_type_of(edited_series) if edited_series else None
+            # The Series the edited Buy's own type and date give, which may differ from its own (an imported Buy dated
+            # on the settlement day, say)
+            own_name = series_name(own_type, transaction.date) if own_type and transaction else None
+            bond_type = ui.select(BOND_TYPE_OPTIONS, label="Rodzaj obligacji", value=(own_type or BondType.EDO).value)
+            bond_type.classes("w-full").mark("transaction-bond-type")
+            series_text = ui.label().classes("text-sm text-gray-600").mark("transaction-bond-series")
+            rolled = edited_series is not None and transaction is not None and transaction.price != ISSUE_PRICE
+            rollover = ui.checkbox("z rolowania", value=rolled).mark("transaction-rollover")
             instrument_id = transaction.instrument_id if transaction else None
             # A Dividend without an Instrument is interest, e.g. on the Account's cash
             instrument = ui.select(instruments, label="Instrument", value=instrument_id, clearable=True)
@@ -313,8 +358,26 @@ def open_transaction_dialog(
                 return trade_currency()
             return paid_from.value if paid_from.visible and paid_from.value else PLN
 
+        def bonds_chosen() -> bool:
+            """A Buy in the bond mode: the type and date give the Instrument, a Bond Series in PLN."""
+            return TransactionType(transaction_type.value) is TransactionType.BUY and bool(bond_mode.value)
+
+        def chosen_series() -> BondSeries | None:
+            """The Bond Series the chosen type and purchase date give, ``None`` until the date reads as one."""
+            try:
+                day_value = parse_date(day.value or "")
+            except ValueError:
+                return None
+            name = series_name(BondType(bond_type.value), day_value)
+            # An edited Buy stays in its own Series while its type and the month of its date stay
+            if name == own_name and edited_series is not None:
+                name = edited_series
+            return held_series.get(name) or BondSeries(None, name, mf_terms.get(name))
+
         def trade_currency() -> str:
             """The Instrument's currency; interest without one is in the currency the user chose."""
+            if bonds_chosen():
+                return PLN
             if instrument.value is not None:
                 return currencies[instrument.value]
             if TransactionType(transaction_type.value) is TransactionType.DIVIDEND and dividend_currency.value:
@@ -379,8 +442,14 @@ def open_transaction_dialog(
                 dividend_currency.set_options(options, value=chosen_currency)
             currency = trade_currency()
             quantity.visible = trade or kind in (TransactionType.DRIP, TransactionType.SECURITY_TRANSFER)
-            for trade_field in (price, commission):
-                trade_field.visible = trade
+            bonds = bonds_chosen()
+            bond_mode.visible = kind is TransactionType.BUY
+            for bond_field in (bond_type, series_text):
+                bond_field.visible = bonds
+            instrument.visible = not bonds
+            price.visible = trade
+            commission.visible = trade
+            show_series(bonds)
             for dividend_field in (gross, withholding_tax, net):
                 dividend_field.visible = dividend_type
             gross.props(f'label="Kwota brutto ({currency_unit(currency)})"')
@@ -434,7 +503,46 @@ def open_transaction_dialog(
             direction.set_options({_BUY: f"PLN → {shown}", _SELL: f"{shown} → PLN"}, value=direction.value)
             foreign_amount.props(f'label="Kwota ({shown})"')
 
+        def show_series(bonds: bool) -> None:
+            """Name the Series the bond mode buys, with its first rate, and offer a Rollover where one buys it."""
+            series = chosen_series() if bonds else None
+            rollover.visible = series is not None and series.rollover_price is not None
+            quantity.props(f'label="{"Liczba obligacji" if bonds else "Liczba"}"')
+            if series is None:
+                series_text.text = "Podaj datę zakupu, by wybrać serię." if bonds else ""
+                return
+            parts = [f"Seria {series.name}"]
+            if series.first_rate is not None:
+                parts.append(f"1. okres: {format_percent(series.first_rate * 100)}")
+            if series.mf is None:
+                parts.append("jeszcze nie ma jej w pliku MF")
+            series_text.text = " · ".join(parts)
+
+        set_price = [""]  # the price the bond mode set last, which it may set again
+
+        def bond_price(rollover_changed: bool = False) -> None:
+            """Price the bond mode's purchase: 100 zł, or the Rollover price of the Series. A price the user typed (or
+            the edited Buy's own) stays unless the Rollover is switched."""
+            series = chosen_series()
+            if not bonds_chosen() or series is None:
+                return
+            if not rollover_changed and price.value.strip() and price.value != set_price[0]:
+                return
+            rollover_price = series.rollover_price if rollover.value else None
+            price.value = set_price[0] = format_exact(rollover_price or ISSUE_PRICE)
+
+        def account_changed() -> None:
+            # A new Buy follows the Account: the bond mode on a Bonds Account, else an Instrument
+            if transaction is None:
+                bond_mode.value = accounts_by_id[account.value].account_type is AccountType.BONDS
+
         update()
+        if transaction is None:
+            bond_price()
+        account.on_value_change(account_changed)
+        rollover.on_value_change(lambda: bond_price(rollover_changed=True))
+        for bond_field in (bond_mode, bond_type, day, transaction_type):
+            bond_field.on_value_change(lambda: bond_price())
         for field in (
             transaction_type,
             account,
@@ -444,6 +552,9 @@ def open_transaction_dialog(
             dividend_currency,
             paid_from,
             convert,
+            bond_mode,
+            bond_type,
+            day,
         ):
             field.on_value_change(update)
         for dividend_input in (gross, withholding_tax):
@@ -463,7 +574,8 @@ def open_transaction_dialog(
                     return own
             return rates.before(currency, day_value)
 
-        def read_draft() -> TransactionDraft:
+        def read_draft(series_id: int | None = None) -> TransactionDraft:
+            """The Transaction the fields describe; a bond-mode Buy buys the Series ``series_id``."""
             kind = TransactionType(transaction_type.value)
             day_value = _read(parse_date, day.value, "Data musi mieć postać DD.MM.RRRR.")
             if kind is TransactionType.CURRENCY_EXCHANGE:
@@ -492,9 +604,10 @@ def open_transaction_dialog(
                     nbp = stored_nbp_rate(paid_in, day_value)
                     return cost(account.value, day_value, value, comment.value, cash_currency=paid_in, nbp_rate=nbp)
                 return TransactionDraft(account.value, day_value, kind, value, comment.value)
-            if instrument.value is None:
+            bought = instrument.value if series_id is None else series_id
+            if bought is None:
                 raise TransactionError("Wybierz instrument.")
-            currency = currencies[instrument.value]
+            currency = trade_currency()
             nbp_rate = None if currency == PLN else stored_nbp_rate(currency, day_value)
             conversion = broker_conversion(kind)
             own_rate = fx_rate.value.strip() if nbp_rate and conversion is None else ""
@@ -502,7 +615,7 @@ def open_transaction_dialog(
                 account.value,
                 day_value,
                 kind,
-                instrument.value,
+                bought,
                 _read(parse_number, quantity.value, "Liczba musi być liczbą, np. 10 lub 0,5."),
                 _read(parse_number, price.value, "Cena musi być liczbą, np. 45,50."),
                 _read(parse_number, commission.value, "Prowizja musi być liczbą, np. 5,00.")
@@ -557,17 +670,35 @@ def open_transaction_dialog(
             )  # fmt: skip
 
         def save() -> None:
+            created: int | None = None  # a Bond Series created for this purchase, removed again if it fails
             try:
-                draft = read_draft()
+                series_id = None
+                if bonds_chosen():
+                    series = chosen_series()
+                    if series is None:
+                        raise TransactionError("Data musi mieć postać DD.MM.RRRR.")
+                    bought, new = series_instrument(engine, series.name)
+                    series_id, created = bought.id, bought.id if new else None
+                draft = read_draft(series_id)
                 if transaction is None:
                     # The Exchange goes first, so the Buy spends the cash it brings (spec 3.3)
                     exchange = [covering_exchange(draft)] if auto_exchange.visible and auto_exchange.value else []
                     add_transactions(engine, [*exchange, draft])
                 else:
                     update_transaction(engine, transaction.id, draft)
-            except (TransactionError, MissingNbpRateError) as exc:
+            except (TransactionError, MissingNbpRateError, InstrumentError) as exc:
+                _drop_if_unused(engine, created)
                 error.text = str(exc)
                 return
+            except Exception:
+                _drop_if_unused(engine, created)
+                raise
+            if (
+                transaction is not None
+                and edited_series is not None
+                and draft.instrument_id != transaction.instrument_id
+            ):
+                _drop_if_unused(engine, transaction.instrument_id)  # the Series the Buy left, if it holds nothing else
             dialog.close()
             # An edit may move the Transaction to another day or Account, so also check where it was
             _warn_if_cash_runs_out(engine, "Zapisano", account_names, draft, transaction)
@@ -594,6 +725,16 @@ def open_transaction_dialog(
             ui.button("Anuluj", on_click=dialog.close).props("flat")
             ui.button("Zapisz" if transaction is None else "Zapisz zmiany", on_click=save)
     dialog.open()
+
+
+def _drop_if_unused(engine: Engine, instrument_id: int | None) -> None:
+    """Remove a Bond Series Instrument no Transaction uses any more."""
+    if instrument_id is None:
+        return
+    try:
+        delete_instrument(engine, instrument_id)
+    except InstrumentError:
+        pass  # other Transactions still use it
 
 
 def _ask_for_multi_asset_split(engine: Engine, draft: TransactionDraft, on_saved: Callable[[], None]) -> None:
