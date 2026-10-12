@@ -20,18 +20,29 @@ from financial_app.domain.charts import (
     value_series,
     xirr_series,
 )
-from financial_app.domain.dashboard import Dashboard
+from financial_app.domain.dashboard import Dashboard, Totals
 from financial_app.domain.formatting import format_date
 from financial_app.domain.metrics import drawdowns
 from financial_app.domain.portfolio_history import DayValue
 from financial_app.domain.transactions import TransactionDraft
 
-# Polish numbers in tooltips and axes: a decimal comma and spaces between thousands
-_DECIMALS = "new Intl.NumberFormat('pl-PL', {minimumFractionDigits: 2, maximumFractionDigits: 2})"
-_PLN = f"value => value == null ? '—' : {_DECIMALS}.format(value) + ' zł'"
-_PERCENT = f"value => value == null ? '—' : {_DECIMALS}.format(value) + ' %'"
-_AXIS_PLN = "value => new Intl.NumberFormat('pl-PL', {maximumFractionDigits: 0}).format(value)"
-_AXIS_PERCENT = "value => value + ' %'"
+# ECharts formats in the browser, so its tooltips and axes write numbers as domain/formatting.py does: a decimal comma,
+# non-breaking spaces between thousands (4-digit numbers too) and before "zł" and "%"
+_NBSP = "\N{NO-BREAK SPACE}"
+_DECIMALS = "minimumFractionDigits: 2, maximumFractionDigits: 2"
+_PLN = (
+    f"value => value == null ? '—' : new Intl.NumberFormat('pl-PL', {{{_DECIMALS}, useGrouping: 'always'}})"
+    rf".format(value).replace(/\s/g, '{_NBSP}') + '{_NBSP}zł'"
+)
+_PERCENT = (
+    f"value => value == null ? '—' : new Intl.NumberFormat('pl-PL', {{{_DECIMALS}, useGrouping: 'always'}})"
+    rf".format(value).replace(/\s/g, '{_NBSP}') + '{_NBSP}%'"
+)
+_AXIS_PLN = (
+    "value => new Intl.NumberFormat('pl-PL', {maximumFractionDigits: 0, useGrouping: 'always'})"
+    rf".format(value).replace(/\s/g, '{_NBSP}')"
+)
+_AXIS_PERCENT = f"value => value + '{_NBSP}%'"
 
 
 def dashboard_charts(
@@ -66,7 +77,7 @@ def dashboard_charts(
         _card("Wartość konta vs wpłaty netto", "value", _value(history, first, last, account_id))
         _card("Zysk / strata", "profit", _profit(history, first, last, account_id))
         _card("XIRR", "xirr", _xirr(history, first, last, account_id))
-        _card("Drawdown portfela", "drawdown", _drawdown(history, first, last, account_id))
+        _card("Drawdown", "drawdown", _drawdown(history, first, last, account_id))
 
 
 def _card(title: str, name: str, options: dict[str, Any]) -> None:
@@ -156,7 +167,7 @@ def _currencies(board: Dashboard) -> dict[str, Any]:
 def _accounts(board: Dashboard) -> dict[str, Any]:
     """Each Account's value as its open Positions and cash, the largest at the top."""
     rows = sorted(board.accounts, key=lambda row: row.totals.value)
-    parts: tuple[tuple[str, Callable[[Any], Decimal]], ...] = (
+    parts: tuple[tuple[str, Callable[[Totals], Decimal]], ...] = (
         ("Otwarte pozycje", lambda totals: totals.open_positions),
         ("Gotówka", lambda totals: totals.cash),
     )
