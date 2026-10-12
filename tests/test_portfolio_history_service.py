@@ -90,3 +90,27 @@ def test_an_empty_portfolio_has_no_history(tmp_path: Path) -> None:
     history = _history(init_db(tmp_path / "app.sqlite3"))
 
     assert asyncio.run(history.values()) == []
+
+
+def test_a_computation_overtaken_by_an_invalidation_is_not_kept(tmp_path: Path) -> None:
+    engine, _ = _portfolio(tmp_path)
+    calls: list[int] = []
+    history = _history(engine)
+
+    async def slow(function: Callable[..., list[DayValue]], *args: object) -> list[DayValue]:
+        calls.append(1)
+        await asyncio.sleep(0)
+        return function(*args)
+
+    history.compute = slow
+
+    async def overtaken() -> None:
+        started = asyncio.ensure_future(history.values())
+        await asyncio.sleep(0)
+        history.invalidate()
+        await started
+        await history.values()
+
+    asyncio.run(overtaken())
+
+    assert len(calls) == 2

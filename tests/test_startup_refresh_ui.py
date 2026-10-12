@@ -12,12 +12,16 @@ from sqlalchemy import Engine
 
 from financial_app.domain.accounts import AccountDraft, AccountType
 from financial_app.domain.instruments import InstrumentDraft
+from financial_app.domain.portfolio_history import DayValue
 from financial_app.domain.prices import YAHOO, PriceSourceError, Quote
 from financial_app.domain.transactions import TransactionDraft, TransactionType, buy_or_sell
 from financial_app.persistence.accounts import add_account
 from financial_app.persistence.db import init_db
 from financial_app.persistence.instruments import add_instrument
 from financial_app.persistence.transactions import add_transaction
+from financial_app.sources.history import QuoteHistory
+from financial_app.sources.nbp import NbpRates
+from financial_app.sources.portfolio_history import PortfolioHistory
 from financial_app.sources.prices import refresh_prices
 from financial_app.ui.shell import build_shell
 
@@ -62,7 +66,14 @@ def engine(tmp_path: Path) -> Engine:
 
 
 def _shell(engine: Engine, yahoo: FakeYahoo, now: datetime) -> Callable[[], None]:
-    return lambda: build_shell(engine, sources={YAHOO: yahoo}, refresh_at_start=True, now=lambda: now)
+    # History asks no source here: Yahoo knows no symbol and Stooq has no data
+    quotes = QuoteHistory(engine, lambda url: "Brak danych", lambda: now.date(), lambda: now, lambda url: None)
+    history = PortfolioHistory(engine, quotes, NbpRates(engine), lambda: now.date(), _inline)
+    return lambda: build_shell(engine, sources={YAHOO: yahoo}, refresh_at_start=True, now=lambda: now, history=history)
+
+
+async def _inline(function: Callable[..., list[DayValue]], *args: object) -> list[DayValue]:
+    return function(*args)
 
 
 async def test_a_start_after_the_close_refreshes_and_the_portfolio_shows_the_quote(engine: Engine) -> None:
@@ -153,3 +164,13 @@ async def test_an_unexpected_error_in_the_refresh_is_shown(engine: Engine) -> No
 
         await user.should_see("Odświeżanie wycen nie powiodło się: baza zablokowana")
         await user.should_see("Wyceny: brak")
+
+
+async def test_after_the_refresh_the_history_is_fetched_and_its_failures_listed(engine: Engine) -> None:
+    async with user_simulation(_shell(engine, FakeYahoo({"PZU.WA": "45.12"}), FRIDAY_EVENING)) as user:
+        await user.open("/")
+
+        await user.should_see("Historia: 1 błąd")
+        user.find(marker="history-status").click()
+        with user.scope(marker="history-errors"):
+            await user.should_see("PZU")

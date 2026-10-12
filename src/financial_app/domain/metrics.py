@@ -1,4 +1,4 @@
-"""Metrics on History (spec 6.1): XIRR, TWR, drawdown and volatility of the Total or one Account over a period.
+"""Metrics on History (spec 6.1): XIRR, TWR, drawdown, volatility and the daily change of the Total or one Account.
 
 Each takes the History (``portfolio_history.daily_history``), a period from ``first`` to ``last`` and the scope:
 ``account_id`` ``None`` for the Total, whose flows are Deposits and Withdrawals, or an Account, whose flows also count
@@ -135,6 +135,15 @@ def volatility(history: Sequence[DayValue], first: date, last: date, account_id:
     mean = sum(returns, Decimal(0)) / len(returns)
     variance = sum(((rate - mean) ** 2 for rate in returns), Decimal(0)) / (len(returns) - 1)
     return (variance * _TRADING_DAYS).sqrt()
+
+
+def daily_change(history: Sequence[DayValue], account_id: int | None = None) -> Decimal | None:
+    """The last day's change: its value less the day before's and less its flows (spec 6.1); ``None`` without days."""
+    days = _scope_days(history, account_id)
+    if not days:
+        return None
+    previous = days[-2].value if len(days) > 1 else Decimal(0)
+    return days[-1].value - previous - days[-1].flow
 
 
 def _growth(period: _Period) -> list[tuple[date, Decimal]]:

@@ -61,6 +61,8 @@ class PortfolioHistory:
         self.today = today
         self.compute = compute
         self._cached: list[DayValue] | None = None
+        # Counts the invalidations, so that a computation started before one never caches its outdated result
+        self._generation = 0
 
     def fetch(self, progress: Callable[[int, int], None] = lambda done, total: None) -> HistoryFetch:
         """Fetch the days still missing from each traded Instrument's first Transaction and each foreign currency's
@@ -121,26 +123,30 @@ class PortfolioHistory:
 
     async def values(self) -> list[DayValue]:
         """Each day's value from the first Transaction to today, computed once and then kept until ``invalidate``."""
-        if self._cached is None:
-            inputs = self.inputs()
-            if inputs is None:
-                self._cached = []
-            else:
-                compute = self.compute or _cpu_bound
-                self._cached = await compute(
-                    daily_history,
-                    inputs.transactions,
-                    inputs.instruments,
-                    inputs.prices,
-                    inputs.rates,
-                    inputs.first,
-                    inputs.last,
-                )
-        return self._cached
+        if self._cached is not None:
+            return self._cached
+        generation = self._generation
+        inputs = self.inputs()
+        values: list[DayValue] = []
+        if inputs is not None:
+            compute = self.compute or _cpu_bound
+            values = await compute(
+                daily_history,
+                inputs.transactions,
+                inputs.instruments,
+                inputs.prices,
+                inputs.rates,
+                inputs.first,
+                inputs.last,
+            )
+        if generation == self._generation:
+            self._cached = values
+        return values
 
     def invalidate(self) -> None:
         """Forget the computed History, after a Transaction save or a price refresh or fetch."""
         self._cached = None
+        self._generation += 1
 
 
 # A Transaction on a day after a holiday still needs the NBP Rate published before it

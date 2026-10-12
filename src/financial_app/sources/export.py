@@ -6,6 +6,7 @@ comma and day-first dates. XLSX keeps numbers and dates as Excel cells.
 
 import csv
 import io
+import re
 from collections.abc import Sequence
 from datetime import date
 from decimal import Decimal
@@ -16,6 +17,7 @@ from sqlalchemy import Engine
 
 from financial_app.domain.export import COLUMNS, export_rows
 from financial_app.domain.formatting import format_date
+from financial_app.domain.view_scope import in_scope
 from financial_app.persistence.accounts import list_accounts
 from financial_app.persistence.instruments import list_instruments
 from financial_app.persistence.transactions import list_transactions
@@ -67,12 +69,18 @@ def to_xlsx(headers: Sequence[str], rows: Sequence[Sequence[object]]) -> bytes:
     return buffer.getvalue()
 
 
-def export_transactions(engine: Engine, file_format: FileFormat) -> tuple[str, bytes]:
-    """The file name and the bytes of every saved Transaction, in the order the Transakcje list shows them."""
-    transactions = list_transactions(engine)
+def export_transactions(engine: Engine, file_format: FileFormat, account_id: int | None = None) -> tuple[str, bytes]:
+    """The file name and the bytes of the saved Transactions in the order the Transakcje list shows them: every one,
+    or with ``account_id`` that Account's View Scope, named after the Account."""
     accounts = {account.id: account.name for account in list_accounts(engine)}
+    transactions = [t for t in list_transactions(engine) if in_scope(t, account_id)]
     instruments = {instrument.id: instrument for instrument in list_instruments(engine)}
     rows = export_rows(transactions, accounts, instruments)
+    name = "transakcje" if account_id is None else f"transakcje-{_UNSAFE.sub('_', accounts[account_id])}"
     if file_format == "csv":
-        return "transakcje.csv", to_csv(COLUMNS, rows)
-    return "transakcje.xlsx", to_xlsx(COLUMNS, rows)
+        return f"{name}.csv", to_csv(COLUMNS, rows)
+    return f"{name}.xlsx", to_xlsx(COLUMNS, rows)
+
+
+# Characters a Windows file name cannot hold
+_UNSAFE = re.compile(r'[<>:"/\\|?*\x00-\x1f]')

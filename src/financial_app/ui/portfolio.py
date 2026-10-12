@@ -6,7 +6,8 @@ spot beside it), converted from a foreign currency at the NBP Rate from the last
 without a price or a rate counts at cost and adds nothing to the result. Clicking a Position shows its Lots with both
 costs, below the fund's TER, Distribution Policy and domicile when entered. Foreign cash is valued at the same NBP
 Rate; its FX result (realised and unrealised) counts in the Account's result unless the Account excludes it (spec 3.1,
-3.5). Each card also sums the Account's net Dividends and interest and its commissions and costs.
+3.5). Each card also sums the Account's net Dividends and interest and its commissions and costs. In an Account's
+View Scope only its card shows, under the breadcrumbs back to Total.
 """
 
 from dataclasses import dataclass
@@ -38,6 +39,7 @@ from financial_app.persistence.transactions import list_transactions
 from financial_app.sources.nbp import NbpRates
 from financial_app.sources.prices import last_refresh
 from financial_app.ui.fund_details import fund_details
+from financial_app.ui.view_scope import ViewScope, breadcrumbs
 
 COLUMNS = "grid-template-columns: minmax(8rem, 2fr) repeat(7, minmax(6rem, 1fr))"
 HEADERS = ("Instrument", "Liczba", "Śr. cena", "Koszt", "Cena", "Wartość", "Zysk/strata", "Zysk/strata %")
@@ -61,9 +63,10 @@ class PortfolioPage:
 
     engine: Engine
     rates: NbpRates
+    scope: ViewScope
 
     def refresh(self) -> None:
-        """Redraw the cards if they are on screen (e.g. after a save)."""
+        """Redraw the cards if they are on screen (e.g. after a save or a scope change)."""
         self.cards.refresh()
 
     def build(self) -> None:
@@ -74,6 +77,7 @@ class PortfolioPage:
 
     @ui.refreshable_method
     def cards(self) -> None:
+        breadcrumbs(self.scope)
         transactions = list_transactions(self.engine)
         # list_transactions is newest first; the FIFO engine wants entry order
         positions = open_positions(reversed(transactions))
@@ -83,6 +87,8 @@ class PortfolioPage:
         held = {position.account_id for position in positions} | {c.account_id for c in cash if c.lots}
         # Inactive Accounts stay hidden unless they still hold cash or Positions
         accounts = [a for a in list_accounts(self.engine) if a.active or balances.get(a.id, Decimal(0)) or a.id in held]
+        if self.scope.account_id is not None:
+            accounts = [a for a in list_accounts(self.engine) if a.id == self.scope.account_id]
         if not accounts:
             ui.label("Brak kont. Dodaj konto w zakładce Ustawienia.").classes("text-gray-500")
         instruments = list_instruments(self.engine)
