@@ -105,6 +105,25 @@ def test_a_matured_bond_pays_no_fee() -> None:
     assert value is not None and value.fee == Decimal(0)
 
 
+def test_an_ots_redeemed_early_forfeits_its_interest_so_it_nets_its_nominal() -> None:
+    price = BondPrice(_ots(), date(2026, 11, 4), Cpi(()))
+
+    value = net_value(price, _lot(date(2026, 10, 5)), BELKA_RATE)
+
+    # 30 days at 2% accrue 0.16 zł, which an early redemption does not pay
+    assert value == NetValue(Decimal("100.16"), Decimal("0.16"), Decimal("0.00"))
+    assert early_redemption_fee(_ots()) == Decimal(0)
+
+
+def test_an_ots_at_maturity_pays_its_interest_less_belka() -> None:
+    price = BondPrice(_ots(), date(2027, 1, 5), Cpi(()))
+
+    value = net_value(price, _lot(date(2026, 10, 5)), BELKA_RATE)
+
+    # 92 days at 2%: 0.50 zł, of which 19% is 0.095 zł
+    assert value == NetValue(Decimal("100.50"), Decimal(0), Decimal("0.10"))
+
+
 def test_a_series_without_a_value_has_no_net_value() -> None:
     series = BondSeries(1, "COI0530", None)
     price = BondPrice(series, date(2026, 10, 8), Cpi(()))
@@ -119,7 +138,11 @@ def test_the_next_anniversary_is_the_next_period_start_before_maturity() -> None
     assert next_anniversary(BondType.EDO, date(2026, 5, 22), date(2035, 6, 1)) is None
 
 
-def _with_rates(series: BondSeries, rates: tuple[str, ...]) -> BondSeries:
+def _ots() -> BondSeries:
+    return _with_rates(_series("OTS0127"), ("0.02",), periods=1)
+
+
+def _with_rates(series: BondSeries, rates: tuple[str, ...], periods: int = 10) -> BondSeries:
     assert series.mf is not None
-    padded = tuple(Decimal(rate) for rate in rates) + (None,) * (10 - len(rates))
+    padded = tuple(Decimal(rate) for rate in rates) + (None,) * (periods - len(rates))
     return replace(series, mf=replace(series.mf, rates=padded))

@@ -3,8 +3,9 @@ the tax withheld on its profit, computed for one bond as the issue letters do.
 
 The MF file does not carry the early-redemption fee, so the app has its own table, updated with app releases: each bond
 type's fee per bond from the first issue it applies to. The fee is capped at the accrued interest and none is due at
-maturity. The tax is the Account's Tax Regime's (Belka, none in IKE or IKZE) on the profit of one bond over its Tax
-cost, rounded half up to the grosz; a bond bought in a Rollover below its nominal is taxed on that discount too.
+maturity. An OTS has no fee but forfeits its interest when redeemed early, so that interest counts as its fee. The tax
+is the Account's Tax Regime's (Belka, none in IKE or IKZE) on the profit of one bond over its Tax cost, rounded half up
+to the grosz; a bond bought in a Rollover below its nominal is taxed on that discount too.
 """
 
 from dataclasses import dataclass
@@ -27,6 +28,8 @@ EARLY_REDEMPTION_FEES: dict[BondType, tuple[tuple[date, Decimal], ...]] = {
     BondType.ROS: ((date(1999, 1, 1), Decimal("0.70")), (date(2024, 9, 1), Decimal("2.00"))),
     BondType.ROD: ((date(1999, 1, 1), Decimal("2.00")), (date(2024, 9, 1), Decimal("3.00"))),
 }
+# The types that pay no interest when redeemed early, only the nominal
+FORFEITING_TYPES = frozenset({BondType.OTS})
 
 
 def early_redemption_fee(series: BondSeries) -> Decimal:
@@ -62,10 +65,13 @@ def net_value(price: BondPrice, lot: Lot, tax_rate: Decimal) -> NetValue | None:
     if value is None:
         return None
     gross = value.value
+    interest = max(gross - ISSUE_PRICE, Decimal(0))
     if price.day >= maturity(price.series.bond_type, lot.date):
         fee = Decimal(0)
+    elif price.series.bond_type in FORFEITING_TYPES:
+        fee = interest
     else:
-        fee = min(early_redemption_fee(price.series), max(gross - ISSUE_PRICE, Decimal(0)))
+        fee = min(early_redemption_fee(price.series), interest)
     profit = gross - fee - lot.tax_cost / lot.quantity
     tax = (tax_rate * max(profit, Decimal(0))).quantize(GROSZ, ROUND_HALF_UP)
     return NetValue(gross, fee, tax)

@@ -18,7 +18,7 @@ from nicegui import ui
 from sqlalchemy import Engine
 
 from financial_app.domain.accounts import Account
-from financial_app.domain.bond_valuation import BondPrice, most_uncertain
+from financial_app.domain.bond_valuation import BondPrice, most_uncertain, rate_text
 from financial_app.domain.formatting import (
     format_amount,
     format_date,
@@ -280,7 +280,7 @@ def _bond_rate(bond: BondPrice, lot: Lot, labelled: tuple[Lot, ...]) -> None:
     if value is None:
         ui.label("po koszcie").classes("text-xs text-gray-500")
         return
-    ui.label(f"{format_percent(value.rate.rate * 100)} · rok {value.period}").classes("text-xs text-gray-500")
+    ui.label(rate_text(value)).classes("text-xs text-gray-500")
     label = most_uncertain(v.label for other in labelled if (v := bond.value(other.date)) is not None)
     if label is not None:
         ui.label(label.value).classes("text-xs text-orange-700").mark("bond-rate-label")

@@ -21,7 +21,7 @@ Decided in the grilling of 2026-10-12: `docs/spec.md` 3.4.1 and ADR-0007. Slices
 - [x] L-4 Obligacje tab: Series expanding to Lots, gross and net value (fee and the Account's Tax Regime), the after-tax toggle. Branch `feat/bond-sources`.
 - [x] L-5 Early Redemption: a Sell of a Bond Series picks its Lot (ADR-0007), prefilled with the value, the fee (built-in fee table) and the tax. Branch `feat/bond-sources`.
 - [x] L-6 Maturity and Rollover as Drafts: the "Do zatwierdzenia" list, the header count, "roluj do…".
-- [ ] L-7 ROS, ROD, TOS, OTS. An OTS redeemed early pays no fee but loses its interest, so its Net Value before maturity is the nominal (`domain/bond_redemption.py` lists its fee as 0).
+- [x] L-7 ROS, ROD, TOS, OTS. An OTS redeemed early pays no fee but loses its interest, so its Net Value before maturity is the nominal (the forfeited interest counts as its fee).
 - [ ] L-8 COI, ROR, DOR: coupons as Drafts (interest Dividends with Belka withheld).
 - [ ] L-9 Calendar of coupons, anniversaries and maturities (next 12 months) in the Obligacje tab.
 - [ ] L-10 Real return in Wyniki (TWR adjusted by GUS CPI).

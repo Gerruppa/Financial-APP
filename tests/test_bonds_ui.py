@@ -79,6 +79,32 @@ async def test_the_tab_lists_each_series_with_its_gross_and_net_value(engine: En
             await user.should_see(f"opłata 30,00{NBSP}zł · podatek 8,90{NBSP}zł")
 
 
+async def test_an_ots_nets_its_nominal_before_maturity_and_shows_no_year(engine: Engine) -> None:
+    ots = SeriesTerms(
+        "OTS1026",
+        "PL0000119145",
+        date(2026, 7, 1),
+        date(2026, 7, 31),
+        *(Decimal(100),) * 2,
+        None,
+        (Decimal("0.02"),),
+        (None,),
+    )
+    save_series_terms(engine, [ots])
+    _bought(engine, "Obligacje", AccountType.BONDS, "OTS1026", date(2026, 7, 10))
+
+    async with user_simulation(lambda: _shell(engine)) as user:
+        await user.open("/obligacje")
+
+        with user.scope(marker="bonds"):
+            # 90 days at 2% out of 365: 0.49 zł a bond, forfeited when redeemed early
+            await user.should_see(f"1{NBSP}004,90{NBSP}zł")
+            await user.should_see(marker="bond-net", content=f"1{NBSP}000,00{NBSP}zł")
+            await user.should_see(f"2,00{NBSP}%")
+            await user.should_not_see("· rok")
+            await user.should_see("10.10.2026")  # maturity
+
+
 async def test_an_ike_withholds_no_tax(engine: Engine) -> None:
     _bought(engine, "IKE", AccountType.IKE, "EDO0535", date(2025, 5, 22))
 

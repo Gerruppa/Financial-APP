@@ -162,7 +162,7 @@ async def test_a_failed_refresh_keeps_the_earlier_quote_marked_stale_until_a_ref
 
 
 async def test_a_bond_series_not_valued_yet_waits_for_stage_3_and_is_not_an_error(engine: Engine) -> None:
-    _held(engine, InstrumentDraft("ROS0732", OBLIGACJE_SKARBOWE_POLSKIE, "PLN"))
+    _held(engine, InstrumentDraft("COI0730", OBLIGACJE_SKARBOWE_POLSKIE, "PLN"))
 
     async with user_simulation(lambda: build_shell(engine, sources={YAHOO: FakeYahoo({})})) as user:
         await user.open("/portfolio")

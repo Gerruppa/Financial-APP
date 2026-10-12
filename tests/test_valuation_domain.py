@@ -152,9 +152,9 @@ def test_a_bond_series_without_its_first_rate_says_so() -> None:
 
 
 def test_a_bond_not_valued_yet_waits_for_its_slice_of_stage_3() -> None:
-    ros = Instrument("ROS0532", 4, "PLN", id=1, asset_class_name="Obligacje skarbowe polskie", fallback_order=())
+    coi = Instrument("COI0530", 4, "PLN", id=1, asset_class_name="Obligacje skarbowe polskie", fallback_order=())
 
-    assert instrument_price(ros, None, lambda currency: Decimal(1)).badge is Badge.STAGE_3
+    assert instrument_price(coi, None, lambda currency: Decimal(1)).badge is Badge.STAGE_3
 
 
 def _metal(grams: str, spread: str | None, manual_price: str | None = None) -> Instrument:

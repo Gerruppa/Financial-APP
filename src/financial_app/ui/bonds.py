@@ -12,8 +12,8 @@ from nicegui import ui
 from sqlalchemy import Engine
 
 from financial_app.domain.bond_holdings import LotHolding, SeriesHolding, bond_holdings, bond_totals
-from financial_app.domain.bond_valuation import BondValue, RateLabel
-from financial_app.domain.formatting import format_date, format_percent, format_pln, format_quantity
+from financial_app.domain.bond_valuation import BondValue, RateLabel, rate_text
+from financial_app.domain.formatting import format_date, format_pln, format_quantity
 from financial_app.domain.lots import open_positions
 from financial_app.persistence.accounts import list_accounts
 from financial_app.persistence.bond_series import load_bond_data
@@ -128,13 +128,13 @@ def _lot_row(held: LotHolding) -> None:
 
 
 def _rate_cell(value: BondValue | None, label: RateLabel | None) -> None:
-    """The period's rate and number, with the label of the most uncertain rate the value rests on; "po koszcie" for a
-    Series not valued yet."""
+    """The period's rate and number (no number for a bond running months), with the label of the most uncertain rate
+    the value rests on; "po koszcie" for a Series not valued yet."""
     with ui.column().classes("gap-0 items-end"):
         if value is None:
             ui.label("po koszcie").classes("text-gray-500")
             return
-        ui.label(f"{format_percent(value.rate.rate * 100)} · rok {value.period}")
+        ui.label(rate_text(value))
         if label is not None:
             ui.label(label.value).classes("text-xs text-orange-700").mark("bond-rate-label")
 

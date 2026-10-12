@@ -1,6 +1,6 @@
-"""EDO valuation by the MF issue letters (L-3, spec 3.4.1): one bond's value, compounded yearly and accrued linearly
-within the year, rounded to the grosz once; the rates MF has not published estimated from GUS CPI, else forecast from
-the last reading."""
+"""EDO, ROS, ROD, TOS and OTS valuation by the MF issue letters (L-3, L-7, spec 3.4.1): one bond's value, compounded
+yearly and accrued linearly within the year (an OTS over its days out of 365), rounded to the grosz once; the rates MF
+has not published estimated from GUS CPI, else forecast from the last reading."""
 
 from datetime import date
 from decimal import Decimal
@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from financial_app.domain.bond_valuation import BondData, BondValue, Cpi, PeriodRate, RateLabel, bond_value
-from financial_app.domain.bonds import BondSeries, CpiReading, RateCorrection, SeriesTerms
+from financial_app.domain.bond_valuation import BondData, BondValue, Cpi, PeriodRate, RateLabel, bond_value, rate_text
+from financial_app.domain.bonds import BondSeries, BondType, CpiReading, RateCorrection, SeriesTerms, maturity
 from financial_app.domain.lots import Lot
 from financial_app.sources.bond_data import parse_mf_file
 
@@ -140,8 +140,69 @@ def test_without_a_first_rate_or_cpi_for_a_later_year_there_is_no_value() -> Non
     assert bond_value(_series(), date(2026, 5, 22), date(2027, 6, 1), Cpi(())) is None
 
 
-def test_only_edo_is_valued_so_far() -> None:
-    assert bond_value(_series("ROS0532"), date(2026, 5, 22), date(2026, 6, 1), Cpi(())) is None
+def test_the_coupon_types_are_not_valued_yet() -> None:
+    assert bond_value(_series("COI0530"), date(2026, 5, 22), date(2026, 6, 1), Cpi(())) is None
+
+
+@pytest.mark.parametrize("bond_type", ["TOS", "ROS"])
+def test_every_matured_tos_and_ros_series_in_the_mf_file_matches_its_interest(bond_type: str) -> None:
+    """TOS compounds its one fixed rate yearly, ROS its yearly rates as EDO; both rounded once."""
+    matured = 0
+    for terms in parse_mf_file(MF_FILE.read_bytes()):
+        if terms.bond_type != bond_type or None in terms.rates or terms.interest[0] is None:
+            continue
+        start = terms.sale_start
+        end = maturity(terms.bond_type, start)
+        value = bond_value(BondSeries(1, terms.series, terms), start, end, Cpi(()))
+        assert value is not None and value.value - 100 == terms.interest[0], terms.series
+        matured += 1
+    assert matured > 0
+
+
+def test_every_ots_series_in_the_mf_file_pays_its_rate_over_the_days_of_its_three_months() -> None:
+    """OTS pays 100 x rate x days / 365 at maturity, in a leap year too; MF lists a purchase on the first day."""
+    for terms in parse_mf_file(MF_FILE.read_bytes()):
+        if terms.bond_type != "OTS" or terms.interest[0] is None:
+            continue
+        start = terms.sale_start
+        value = bond_value(BondSeries(1, terms.series, terms), start, maturity(BondType.OTS, start), Cpi(()))
+        assert value is not None and value.value - 100 == terms.interest[0], terms.series
+
+
+def test_an_ots_accrues_linearly_over_365_days_a_year() -> None:
+    series = _series("OTS0127", (Decimal("0.02"),))
+
+    # 30 days at 2%: 0.1644 PLN
+    value = bond_value(series, date(2026, 10, 5), date(2026, 11, 4), Cpi(()))
+
+    assert value == BondValue(Decimal("100.16"), None, PeriodRate(Decimal("0.02")), None)
+
+
+def test_a_tos_compounds_its_fixed_rate_in_every_year_without_cpi() -> None:
+    series = _series("TOS1028", (Decimal("0.0515"),))
+
+    # Year 2 runs 05.10.2026-05.10.2027, 365 days; 184 of them gone: 100 x 1.0515 x (1 + 0.0515 x 184 / 365)
+    value = bond_value(series, date(2025, 10, 5), date(2027, 4, 7), Cpi(()))
+
+    assert value == BondValue(Decimal("107.88"), 2, PeriodRate(Decimal("0.0515")), None)
+
+
+@pytest.mark.parametrize("name", ["ROS0532", "ROD0538"])
+def test_a_family_bond_estimates_its_later_years_from_cpi_as_edo(name: str) -> None:
+    cpi = (_cpi(2027, 3, "103.0"),)
+
+    value = bond_value(_series(name, (FIRST_RATE,) + (None,) * 11), date(2026, 5, 22), date(2027, 11, 22), Cpi(cpi))
+
+    estimated = PeriodRate(Decimal("0.05"), RateLabel.ESTIMATED_CPI)
+    assert value == BondValue(Decimal("108.00"), 2, estimated, RateLabel.ESTIMATED_CPI)
+
+
+def test_the_rate_text_names_the_year_unless_the_bond_runs_months() -> None:
+    edo = bond_value(_series(), date(2026, 5, 22), date(2026, 10, 8), Cpi(()))
+    ots = bond_value(_series("OTS0127", (Decimal("0.02"),)), date(2026, 10, 5), date(2026, 11, 4), Cpi(()))
+
+    assert edo is not None and rate_text(edo) == "5,35 % · rok 1"
+    assert ots is not None and rate_text(ots) == "2,00 %"
 
 
 def test_a_lot_bought_in_a_rollover_is_valued_from_the_nominal_like_any_other() -> None:
@@ -159,7 +220,7 @@ def test_a_lot_without_a_value_counts_at_its_cost() -> None:
     assert price.of(Lot(date(2026, 5, 22), Decimal(50), Decimal(5000), Decimal(5000))) == Decimal(100)
 
 
-@pytest.mark.parametrize("name", ["ROS0532", "EDO0536"])
+@pytest.mark.parametrize("name", ["COI0530", "EDO0536"])
 def test_only_a_valued_series_with_a_first_rate_has_a_price(name: str) -> None:
     data = BondData({1: _series(name), 2: BondSeries(2, "EDO0636", None)}, ())
 

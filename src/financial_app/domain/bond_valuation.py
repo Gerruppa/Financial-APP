@@ -1,9 +1,12 @@
-"""The value of a retail treasury bond by the MF issue letters (spec 3.4.1, L-3), so far for EDO.
+"""The value of a retail treasury bond by the MF issue letters (spec 3.4.1, L-3, L-7), so far for EDO, ROS, ROD, TOS
+and OTS.
 
-One bond is valued, then multiplied by the quantity: its nominal compounds yearly at each year's rate, and within the
-current year the interest accrues linearly over the days gone of the year's days; the bond is rounded to the grosz once,
-as MF does (every matured EDO in the MF file pays exactly that). Each purchase earns from its own day, so a Bond
-Series' price depends on its Lot's purchase day, and a Lot bought in a Rollover earns on the nominal like any other.
+One bond is valued, then multiplied by the quantity: its nominal compounds yearly at each year's rate (TOS at its one
+fixed rate every year), and within the current year the interest accrues linearly over the days gone of the year's days;
+the bond is rounded to the grosz once, as MF does (every matured EDO, ROS and TOS in the MF file pays exactly that). The
+three-month OTS earns its yearly rate over its days out of 365, as every OTS in the MF file pays. Each purchase earns
+from its own day, so a Bond Series' price depends on its Lot's purchase day, and a Lot bought in a Rollover earns on the
+nominal like any other.
 
 A rate MF has not published (nor the user corrected) is estimated as GUS CPI year on year of the month two months
 before the year's anniversary, minus 100 and floored at 0 (deflation leaves the margin, as MF paid in 2015-16), plus the
@@ -19,6 +22,7 @@ from enum import StrEnum
 from functools import cached_property
 
 from financial_app.domain.bonds import (
+    FIXED_RATE_TYPES,
     ISSUE_PRICE,
     PERIODS,
     TERM_MONTHS,
@@ -26,11 +30,16 @@ from financial_app.domain.bonds import (
     BondType,
     CpiReading,
     add_months,
+    maturity,
 )
+from financial_app.domain.formatting import format_percent
 from financial_app.domain.lots import Lot
 
-# The bond types valued so far; any other Bond Series stays at cost until its slice (L-7, L-8)
-VALUED_TYPES = frozenset({BondType.EDO})
+# The bond types valued so far; any other Bond Series stays at cost until its slice (L-8)
+VALUED_TYPES = frozenset({BondType.EDO, BondType.ROS, BondType.ROD, BondType.TOS, BondType.OTS})
+# The types running less than a year, which earn their rate over their days out of DAYS_A_YEAR
+SHORT_TYPES = frozenset(bond_type for bond_type, months in TERM_MONTHS.items() if months < 12)
+DAYS_A_YEAR = 365
 # Months between a CPI reading and the anniversary whose rate it sets
 CPI_LAG_MONTHS = 2
 GROSZ = Decimal("0.01")
@@ -62,12 +71,12 @@ class PeriodRate:
 
 @dataclass(frozen=True)
 class BondValue:
-    """One bond on a day: ``value`` its nominal with the interest so far, to the grosz; ``period`` the interest period
-    it is in (from 1, the last one after maturity) and ``rate`` that period's rate; ``label`` the most uncertain label
-    of the rates the value rests on."""
+    """One bond on a day: ``value`` its nominal with the interest so far, to the grosz; ``period`` the year it is in
+    (from 1, the last one after maturity; ``None`` for a bond running less than a year) and ``rate`` that period's
+    rate; ``label`` the most uncertain label of the rates the value rests on."""
 
     value: Decimal
-    period: int
+    period: int | None
     rate: PeriodRate
     label: RateLabel | None
 
@@ -100,6 +109,8 @@ def bond_value(series: BondSeries, purchase_day: date, day: date, cpi: Cpi) -> B
     if bond_type not in VALUED_TYPES:
         return None
     day = max(day, purchase_day)
+    if bond_type in SHORT_TYPES:
+        return _short_bond_value(series, purchase_day, day)
     years = TERM_MONTHS[bond_type] // 12
     period = min(_years_between(purchase_day, day), years - 1)
     factor = Decimal(1)
@@ -121,9 +132,20 @@ def bond_value(series: BondSeries, purchase_day: date, day: date, cpi: Cpi) -> B
     return BondValue(value, period + 1, rate, most_uncertain(labels))
 
 
+def _short_bond_value(series: BondSeries, purchase_day: date, day: date) -> BondValue | None:
+    rate = series.first_rate
+    if rate is None:
+        return None
+    gone = min(day, maturity(series.bond_type, purchase_day)) - purchase_day
+    value = (ISSUE_PRICE * (1 + rate * gone.days / DAYS_A_YEAR)).quantize(GROSZ, ROUND_HALF_UP)
+    return BondValue(value, None, PeriodRate(rate), None)
+
+
 def _rate(series: BondSeries, year: int, start: date, cpi: Cpi) -> PeriodRate | None:
     rates = series.rates
-    published = rates[year] if year < len(rates) else None
+    # A fixed rate holds every year; a TOS has one period in the MF file
+    period = 0 if series.bond_type in FIXED_RATE_TYPES else year
+    published = rates[period] if period < len(rates) else None
     if published is not None:
         return PeriodRate(published)
     margin = series.margin
@@ -131,6 +153,12 @@ def _rate(series: BondSeries, year: int, start: date, cpi: Cpi) -> PeriodRate | 
         return None
     months = start.year * 12 + start.month - 1 - CPI_LAG_MONTHS
     return cpi.rate(months // 12, months % 12 + 1, margin)
+
+
+def rate_text(value: BondValue) -> str:
+    """The rate of the period ``value`` is in, with its year when the bond runs years: "5,35% · rok 2"."""
+    rate = format_percent(value.rate.rate * 100)
+    return rate if value.period is None else f"{rate} · rok {value.period}"
 
 
 def _anniversary(purchase_day: date, years: int) -> date:
