@@ -125,6 +125,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `0021_investment_strategies.py`: Migration creating the strategy, class target and instrument target tables for Investment Strategies
 - `0022_bond_data.py`: Alembic migration adding the bond data tables: Bond Series, CPI, reference rates and fetch status
 - `0023_bond_rate_corrections.py`: Migration adding the bond rate corrections table and clearing imported Manual Prices on Bond Series
+- `0024_redeemed_lots.py`: Migration 0024 adds the nullable lot_id column to transactions, naming the Lot an Early Redemption Sell redeems
 
 ## src/financial_app/sources/
 
@@ -209,6 +210,9 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_dividends_domain.py`: Domain tests for Dividends, interest, Costs and DRIP calculations
 - `test_dividends_repository.py`: Tests saving Dividends, Costs and DRIPs to SQLite
 - `test_dividends_ui.py`: UI tests for Dividends, Costs and DRIP in the transaction dialog, Transakcje and Portfolio
+- `test_early_redemption_domain.py`: Tests Early Redemption domain rules: a Sell naming its Lot, the early-redemption fee and the tax withheld
+- `test_early_redemption_repository.py`: Tests saving an Early Redemption, its named Lot kept across reloads, and guarding that Lot's Buy
+- `test_early_redemption_ui.py`: Tests the early redemption in the "+" dialog: choosing the Lot and the prefilled fee and tax
 - `test_export_domain.py`: Tests the export rows built for the Transakcje list across all Transaction types
 - `test_export_files.py`: Tests the CSV and XLSX export files, including Polish characters and read-back
 - `test_export_ui.py`: UI tests for the Transakcje export buttons saving CSV and XLSX files

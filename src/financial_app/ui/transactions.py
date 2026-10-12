@@ -4,7 +4,9 @@ For now: PLN Deposits and Withdrawals, Costs (in PLN or foreign cash), Currency 
 (foreign-currency ones paid from foreign cash or in PLN, converted at the user's rate, the NBP Rate (D-1) or by the
 broker for its FX Conversion Fee), Dividends and interest (paid into PLN or foreign cash the same way), DRIPs,
 Splits, and PLN Cash Transfers and Security Transfers to another Account. A Buy of retail treasury bonds has its bond
-mode: the type and the purchase date give the Bond Series, created on its first purchase (spec 3.4.1).
+mode: the type and the purchase date give the Bond Series, created on its first purchase (spec 3.4.1). A Sell of a
+Bond Series is an Early Redemption: it picks its Lot, the oldest by default, and is prefilled with the gross value of
+one bond, the early-redemption fee and the tax withheld (ADR-0007).
 """
 
 from collections.abc import Callable
@@ -15,7 +17,8 @@ from decimal import Decimal
 from nicegui import ui
 from sqlalchemy import Engine
 
-from financial_app.domain.accounts import AccountType
+from financial_app.domain.accounts import AccountType, tax_regime_for
+from financial_app.domain.bond_redemption import early_redemption
 from financial_app.domain.bonds import ISSUE_PRICE, BondSeries, BondType, bond_type_of, series_name
 from financial_app.domain.currencies import MissingNbpRateError, NbpRate
 from financial_app.domain.formatting import (
@@ -33,6 +36,7 @@ from financial_app.domain.formatting import (
     parse_ratio,
 )
 from financial_app.domain.instruments import InstrumentError
+from financial_app.domain.lots import Lot, open_lots
 from financial_app.domain.transactions import (
     PLN,
     BrokerConversion,
@@ -55,7 +59,7 @@ from financial_app.domain.transactions import (
 )
 from financial_app.persistence.accounts import list_accounts
 from financial_app.persistence.bond_data import load_series_terms
-from financial_app.persistence.bond_series import list_bond_series, series_instrument
+from financial_app.persistence.bond_series import list_bond_series, load_bond_data, series_instrument
 from financial_app.persistence.instruments import delete_instrument, get_instrument, list_instruments
 from financial_app.persistence.transactions import (
     add_transactions,
@@ -150,6 +154,9 @@ class TransactionsPage:
                             price = format_unit_price(transaction.price, instrument.quote_currency)
                             quantity = format_quantity(transaction.quantity)
                             ui.label(f"{quantity} × {price}").classes("text-xs text-gray-500")
+                            if transaction.withholding_tax:
+                                fee, tax = format_pln(transaction.commission), format_pln(transaction.withholding_tax)
+                                ui.label(f"opłata {fee} · podatek {tax}").classes("text-xs text-gray-500")
                         elif kind is TransactionType.SPLIT:
                             ui.label(f"split {transaction.split_ratio}").classes("text-xs text-gray-500")
                         elif kind is TransactionType.SECURITY_TRANSFER:
@@ -230,6 +237,9 @@ def open_transaction_dialog(
     currencies = {i.id: i.quote_currency for i in all_instruments}
     held_series = {series.name: series for series in list_bond_series(engine).values()}
     mf_terms = load_series_terms(engine)
+    bond_ids = {i.id for i in all_instruments if i.is_bond_series}
+    bond_data = load_bond_data(engine)
+    saved_transactions = list_transactions(engine)
     # An edited Buy of a Bond Series opens in the bond mode, with its type
     edited_series = next(
         (
@@ -305,6 +315,8 @@ def open_transaction_dialog(
             # A Dividend without an Instrument is interest, e.g. on the Account's cash
             instrument = ui.select(instruments, label="Instrument", value=instrument_id, clearable=True)
             instrument.classes("w-full").mark("transaction-instrument")
+            # An Early Redemption names the Lot it redeems (ADR-0007)
+            lot = ui.select({}, label="Partia").classes("w-full").mark("transaction-lot")
             if not instruments:
                 ui.label("Najpierw dodaj instrument w zakładce Ustawienia.").classes("text-gray-500")
             own_dividend_currency = (
@@ -358,6 +370,26 @@ def open_transaction_dialog(
                 return trade_currency()
             return paid_from.value if paid_from.visible and paid_from.value else PLN
 
+        def redeems_bonds() -> bool:
+            """A Sell of a Bond Series: an Early Redemption, which picks its Lot."""
+            return TransactionType(transaction_type.value) is TransactionType.SELL and instrument.value in bond_ids
+
+        def held_lots() -> dict[int, Lot]:
+            """The Lots of the chosen Bond Series the Account holds on the chosen day, by the Transaction that opened
+            them; the edited Sell's own units count as held."""
+            try:
+                day_value = parse_date(day.value or "")
+                held = open_lots(
+                    reversed(saved_transactions),  # in entry order, which settles same-day ties
+                    account.value,
+                    instrument.value,
+                    day_value,
+                    edited_id=None if transaction is None else transaction.id,
+                )
+            except ValueError, TransactionError:
+                return {}
+            return {held_lot.opened_by: held_lot for held_lot in held if held_lot.opened_by is not None}
+
         def bonds_chosen() -> bool:
             """A Buy in the bond mode: the type and date give the Instrument, a Bond Series in PLN."""
             return TransactionType(transaction_type.value) is TransactionType.BUY and bool(bond_mode.value)
@@ -385,7 +417,19 @@ def open_transaction_dialog(
             return PLN
 
         def show_net() -> None:
-            """A Dividend's gross amount less its withholding tax, once both read as numbers."""
+            """A Dividend's gross amount less its withholding tax, or what an Early Redemption pays out, once the
+            amounts read as numbers."""
+            if redeems_bonds():
+                try:
+                    paid = parse_number(quantity.value) * parse_number(price.value)
+                    deducted = [
+                        parse_number(text) for text in (commission.value, withholding_tax.value) if text.strip()
+                    ]
+                except ValueError:
+                    net.text = ""
+                    return
+                net.text = f"Wypłata netto: {format_pln(paid - sum(deducted, Decimal(0)))}"
+                return
             try:
                 tax_text = withholding_tax.value.strip()
                 value = parse_number(gross.value) - (parse_number(tax_text) if tax_text else Decimal(0))
@@ -450,10 +494,25 @@ def open_transaction_dialog(
             price.visible = trade
             commission.visible = trade
             show_series(bonds)
-            for dividend_field in (gross, withholding_tax, net):
-                dividend_field.visible = dividend_type
+            redemption = redeems_bonds()
+            lot.visible = redemption
+            if redemption:
+                lot_options = {
+                    lot_id: f"{format_date(held.date)} · {format_quantity(held.quantity)} szt. · "
+                    f"po {format_pln(held.cost / held.quantity)}"
+                    for lot_id, held in held_lots().items()
+                }
+                own_lot = transaction.lot_id if transaction is not None else None
+                chosen_lot = lot.value if lot.value in lot_options else own_lot if own_lot in lot_options else None
+                first_lot = next(iter(lot_options), None)
+                lot.set_options(lot_options, value=chosen_lot if chosen_lot is not None else first_lot)
+            gross.visible = dividend_type
+            for dividend_field in (withholding_tax, net):
+                dividend_field.visible = dividend_type or redemption
             gross.props(f'label="Kwota brutto ({currency_unit(currency)})"')
-            withholding_tax.props(f'label="Podatek u źródła ({currency_unit(currency)})"')
+            tax_label = "Podatek pobrany" if redemption else "Podatek u źródła"
+            withholding_tax.props(f'label="{tax_label} ({currency_unit(currency)})"')
+            prefill_redemption()
             show_net()
             price.props(f'label="Cena ({currency_unit(currency)})"')
             fx_rate.props(f'label="Kurs {currency}/PLN"')
@@ -519,6 +578,40 @@ def open_transaction_dialog(
             series_text.text = " · ".join(parts)
 
         set_price = [""]  # the price the bond mode set last, which it may set again
+        # What the Early Redemption prefill set last in each field, which it may set again; a value the user typed (or
+        # the edited Sell's own) stays
+        prefilled: dict[ui.input, str] = {}
+        prefilling = [False]
+
+        def prefill(field: ui.input, value: str) -> None:
+            if not field.value.strip() or field.value == prefilled.get(field):
+                prefilled[field] = value
+                field.value = value
+
+        def prefill_redemption() -> None:
+            """Fill an Early Redemption with the chosen Lot's bonds, one bond's gross value as the price, the fee as
+            the commission and the tax the Account's Tax Regime withholds (spec 3.4.1)."""
+            if prefilling[0] or not redeems_bonds():
+                return
+            prefilling[0] = True
+            try:
+                held = held_lots().get(lot.value) if lot.value is not None else None
+                if held is None:
+                    return
+                prefill(quantity, format_quantity(held.quantity))
+                bond_price = bond_data.price(instrument.value, parse_date(day.value))
+                units = parse_number(quantity.value)
+                tax_rate = tax_regime_for(accounts_by_id[account.value].account_type).withheld_tax_rate
+                redemption = None if bond_price is None else early_redemption(bond_price, held, units, tax_rate)
+                if redemption is None:
+                    return
+                prefill(price, format_exact(redemption.price))
+                prefill(commission, format_exact(redemption.fee))
+                prefill(withholding_tax, format_exact(redemption.tax))
+            except ValueError:
+                return  # a quantity or date that does not read yet
+            finally:
+                prefilling[0] = False
 
         def bond_price(rollover_changed: bool = False) -> None:
             """Price the bond mode's purchase: 100 zł, or the Rollover price of the Series. A price the user typed (or
@@ -557,8 +650,10 @@ def open_transaction_dialog(
             day,
         ):
             field.on_value_change(update)
-        for dividend_input in (gross, withholding_tax):
-            dividend_input.on_value_change(show_net)
+        for redemption_input in (lot, quantity):
+            redemption_input.on_value_change(prefill_redemption)
+        for net_input in (gross, withholding_tax, quantity, price, commission):
+            net_input.on_value_change(show_net)
         comment = ui.input("Komentarz", value=transaction.comment if transaction else "").classes("w-full")
         comment.mark("transaction-comment")
         error = ui.label().classes("text-negative").mark("transaction-error")
@@ -611,6 +706,7 @@ def open_transaction_dialog(
             nbp_rate = None if currency == PLN else stored_nbp_rate(currency, day_value)
             conversion = broker_conversion(kind)
             own_rate = fx_rate.value.strip() if nbp_rate and conversion is None else ""
+            tax_text = withholding_tax.value.strip() if redeems_bonds() else ""
             return buy_or_sell(
                 account.value,
                 day_value,
@@ -626,6 +722,10 @@ def open_transaction_dialog(
                 nbp_rate=nbp_rate,
                 cash_currency=settlement_currency(),
                 conversion=conversion,
+                withholding_tax=_read(parse_number, tax_text, "Podatek musi być liczbą, np. 15,00.")
+                if tax_text
+                else Decimal(0),
+                lot_id=lot.value if redeems_bonds() else None,
             )
 
         def read_units_only(kind: TransactionType, day_value: date) -> TransactionDraft:
@@ -808,6 +908,7 @@ def _field_texts(transaction: Transaction | None) -> _FieldTexts:
         price=format_exact(transaction.price),
         fx_rate="" if transaction.fx_rate is None else format_exact(transaction.fx_rate),
         commission=format_exact(transaction.commission),
+        withholding_tax=format_exact(transaction.withholding_tax),
         # What the broker charged for quantity × price, the commission aside
         charged=format_exact(transaction.converted_amount) if converted else "",
     )

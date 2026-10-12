@@ -93,7 +93,8 @@ class TransactionRow(Base):
     # Foreign-currency Buy and Sell paid in PLN only: the FX Conversion Fee % when the broker converted it; the fee in
     # PLN follows from it like the Tax Amount follows from the NBP Rate (issue #17)
     fx_conversion_fee_percent: Mapped[str | None] = mapped_column(String(20))
-    # Dividend and DRIP only: the gross amount and the withholding tax, in the Dividend's currency (issue #18)
+    # Dividend and DRIP only: the gross amount and the withholding tax, in the Dividend's currency (issue #18); an
+    # Early Redemption (a Sell) has the tax withheld from it too, in PLN (L-5)
     gross: Mapped[str | None] = mapped_column(String(30))
     withholding_tax: Mapped[str | None] = mapped_column(String(30))
     # Cash and Security Transfer only: the Account it goes to (issue #19)
@@ -104,6 +105,8 @@ class TransactionRow(Base):
     # Where it came from (spec 7): "manual" or "spreadsheet"; an imported one carries its row's fingerprint (issue #20)
     origin: Mapped[str] = mapped_column(String(20), server_default="manual")
     external_id: Mapped[str | None] = mapped_column(String(100), unique=True)
+    # A Sell only: the Transaction that opened the Lot it takes its units from, instead of FIFO (L-5, ADR-0007)
+    lot_id: Mapped[int | None] = mapped_column(ForeignKey("transactions.id"))
 
 
 class AssetClassRow(Base):

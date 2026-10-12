@@ -19,7 +19,7 @@ Decided in the grilling of 2026-10-12: `docs/spec.md` 3.4.1 and ADR-0007. Slices
 - [x] L-2 Bond Series with their rates (first-year rate, margin, each period's) from the MF file, correctable by hand; the "+" dialog's bond mode (type and date give the Series, price 100 or the Rollover price with "z rolowania"); a migration clearing the imported Manual Prices; the sheet import stops setting one. Branch `feat/bond-sources`.
 - [x] L-3 EDO valuation by the MF issue letters (per bond, MF rounding), with Estimated and Forecast Rates and their labels, in the Portfolio, Dashboard and History; unit tests on issue-letter examples and the parity test against the sheet's Obligacje tab (0.01 PLN per bond); drop the bond deviation of the Historia parity test. Branch `feat/bond-sources`.
 - [x] L-4 Obligacje tab: Series expanding to Lots, gross and net value (fee and the Account's Tax Regime), the after-tax toggle. Branch `feat/bond-sources`.
-- [ ] L-5 Early Redemption: a Sell of a Bond Series picks its Lot (ADR-0007), prefilled with the value, the fee (built-in fee table) and the tax.
+- [x] L-5 Early Redemption: a Sell of a Bond Series picks its Lot (ADR-0007), prefilled with the value, the fee (built-in fee table) and the tax. Branch `feat/bond-sources`.
 - [ ] L-6 Maturity and Rollover as Drafts: the "Do zatwierdzenia" list, the header count, "roluj do…".
 - [ ] L-7 ROS, ROD, TOS, OTS. An OTS redeemed early pays no fee but loses its interest, so its Net Value before maturity is the nominal (`domain/bond_redemption.py` lists its fee as 0).
 - [ ] L-8 COI, ROR, DOR: coupons as Drafts (interest Dividends with Belka withheld).

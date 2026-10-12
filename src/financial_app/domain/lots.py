@@ -5,13 +5,13 @@ Each Lot carries an Actual cost (what really left the Account) and a Tax cost (a
 """
 
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import date
 from decimal import Decimal
 from typing import Protocol
 
 from financial_app.domain.formatting import format_date, format_quantity
-from financial_app.domain.transactions import TransactionDraft, TransactionError, TransactionType
+from financial_app.domain.transactions import Transaction, TransactionDraft, TransactionError, TransactionType
 
 # Same-day order (spec 3.5) of the Transactions moving Lots: a Split first, then Buys before Sells, so a Sell may
 # use shares bought that day, and DRIPs after them. A Security Transfer comes between Buys and Sells, so units bought
@@ -49,6 +49,14 @@ class SplitBeforeFirstBuyError(TransactionError):
         self.day = day
 
 
+class LotNotHeldError(TransactionError):
+    """A Sell names a Lot the Account no longer (or never) held that day; saving it is blocked (ADR-0007)."""
+
+    def __init__(self, day: date) -> None:
+        super().__init__(f"Wybranej partii nie było już na koncie {format_date(day)}. Wybierz inną partię.")
+        self.day = day
+
+
 @dataclass(frozen=True)
 class FxBasis:
     """What a foreign-currency Lot cost: ``foreign`` in the Instrument's currency (quantity × price, a DRIP's net
@@ -68,7 +76,9 @@ class Lot:
     ``tax_cost`` its Tax cost, in PLN.
 
     Both include the commission. A Lot of a foreign-currency Instrument also has its ``fx_basis``, so its result
-    splits into a price and an FX effect (issue #89).
+    splits into a price and an FX effect (issue #89). ``opened_by`` is the id of the saved Transaction that opened it
+    (``None`` for a draft), which a Sell names to take its units from this Lot alone (ADR-0007); it is a name, not a
+    value, so Lots compare without it.
     """
 
     date: date
@@ -76,6 +86,7 @@ class Lot:
     cost: Decimal
     tax_cost: Decimal
     fx_basis: FxBasis | None = None
+    opened_by: int | None = field(default=None, kw_only=True, compare=False)
 
     def part(self, share: Decimal) -> Lot:
         """``share`` (a fraction) of the Lot: its units, costs and FX basis pro rata."""
@@ -86,6 +97,7 @@ class Lot:
             self.cost * share,
             self.tax_cost * share,
             None if basis is None else FxBasis(basis.foreign * share, basis.pln * share),
+            opened_by=self.opened_by,
         )
 
     def rest(self, taken: Lot) -> Lot:
@@ -97,6 +109,7 @@ class Lot:
             self.cost - taken.cost,
             self.tax_cost - taken.tax_cost,
             None if basis is None or used is None else FxBasis(basis.foreign - used.foreign, basis.pln - used.pln),
+            opened_by=self.opened_by,
         )
 
 
@@ -163,12 +176,30 @@ def open_positions(transactions: Iterable[TransactionDraft]) -> list[Position]:
     """The open Positions after all Buys, Sells, DRIPs, Splits and Security Transfers, keyed by Account and Instrument.
 
     A Split rescales the open Lots' units, keeping their costs; a Security Transfer moves the oldest Lots to the
-    target Account with their dates and costs, where they take their place by date. ``transactions`` come in entry
-    order, which settles same-day ties after the same-day order. Raises InsufficientQuantityError for the first Sell
-    or Security Transfer (by date) that is not covered, and SplitBeforeFirstBuyError for a Split before the Account
-    first held the Instrument.
+    target Account with their dates and costs, where they take their place by date. A Sell naming a Lot (an Early
+    Redemption, ADR-0007) takes its units from that Lot alone. ``transactions`` come in entry order, which settles
+    same-day ties after the same-day order. Raises InsufficientQuantityError for the first Sell or Security Transfer
+    (by date) that is not covered, LotNotHeldError for a Sell naming a Lot not held that day, and
+    SplitBeforeFirstBuyError for a Split before the Account first held the Instrument.
     """
     return replay(transactions).positions
+
+
+def open_lots(
+    transactions: Iterable[Transaction], account_id: int, instrument_id: int, day: date, edited_id: int | None = None
+) -> tuple[Lot, ...]:
+    """The Lots of the Instrument the Account holds at the end of ``day``, oldest first, leaving out the Transaction
+    ``edited_id`` (an edited Sell, so its own units count as held): what an Early Redemption that day may name.
+    ``transactions`` come in entry order, which settles same-day ties."""
+    held = [
+        t
+        for t in transactions
+        if t.instrument_id == instrument_id and t.date <= day and (edited_id is None or t.id != edited_id)
+    ]
+    for position in open_positions(held):
+        if (position.account_id, position.instrument_id) == (account_id, instrument_id):
+            return position.lots
+    return ()
 
 
 def realized_results(transactions: Iterable[TransactionDraft]) -> dict[int, Decimal]:
@@ -231,7 +262,8 @@ def _replay(
             continue
         assert t.quantity is not None
         if t.transaction_type.opens_lot:
-            lots.append(Lot(t.date, t.quantity, t.actual_amount, t.tax_amount, _fx_basis(t)))
+            opened_by = t.id if isinstance(t, Transaction) else None
+            lots.append(Lot(t.date, t.quantity, t.actual_amount, t.tax_amount, _fx_basis(t), opened_by=opened_by))
             ever_held.add(key)
         elif t.transaction_type is TransactionType.SECURITY_TRANSFER:
             assert t.target_account_id is not None
@@ -241,7 +273,10 @@ def _replay(
             positions[target_key] = sorted([*positions.get(target_key, []), *moved], key=lambda lot: lot.date)
             ever_held.add(target_key)
         else:
-            sold = _consume(lots, t.date, t.quantity, t.transaction_type)
+            if t.lot_id is None:
+                sold = _consume(lots, t.date, t.quantity, t.transaction_type)
+            else:
+                sold = [_consume_lot(lots, t.date, t.quantity, t.lot_id)]
             cost = sum((lot.cost for lot in sold), Decimal(0))
             realized[t.account_id] = realized.get(t.account_id, Decimal(0)) + t.actual_amount - cost
             sold_basis = _fx_basis(t)
@@ -409,3 +444,18 @@ def _consume(lots: list[Lot], day: date, quantity: Decimal, kind: TransactionTyp
             taken.append(oldest.rest(rest))
             quantity = Decimal(0)
     return taken
+
+
+def _consume_lot(lots: list[Lot], day: date, quantity: Decimal, lot_id: int) -> Lot:
+    """Take ``quantity`` units from the Lot ``lot_id`` opened alone and return them (ADR-0007)."""
+    index = next((i for i, lot in enumerate(lots) if lot.opened_by == lot_id), None)
+    if index is None:
+        raise LotNotHeldError(day)
+    named = lots[index]
+    if quantity > named.quantity:
+        raise InsufficientQuantityError(day, named.quantity, quantity)
+    if quantity == named.quantity:
+        return lots.pop(index)
+    rest = named.part((named.quantity - quantity) / named.quantity)
+    lots[index] = rest
+    return named.rest(rest)

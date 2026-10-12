@@ -69,3 +69,29 @@ def net_value(price: BondPrice, lot: Lot, tax_rate: Decimal) -> NetValue | None:
     profit = gross - fee - lot.tax_cost / lot.quantity
     tax = (tax_rate * max(profit, Decimal(0))).quantize(GROSZ, ROUND_HALF_UP)
     return NetValue(gross, fee, tax)
+
+
+@dataclass(frozen=True)
+class EarlyRedemption:
+    """What the "+" dialog prefills a Sell of a Bond Series with (spec 3.4.1): the gross value of one bond as the
+    ``price``, the early-redemption ``fee`` as the commission and the ``tax`` withheld, both for all the bonds redeemed,
+    in PLN."""
+
+    price: Decimal
+    fee: Decimal
+    tax: Decimal
+    quantity: Decimal
+
+    @property
+    def net(self) -> Decimal:
+        """What the redemption pays out: its Actual Amount."""
+        return self.quantity * self.price - self.fee - self.tax
+
+
+def early_redemption(price: BondPrice, lot: Lot, quantity: Decimal, tax_rate: Decimal) -> EarlyRedemption | None:
+    """Redeeming ``quantity`` bonds of ``lot`` on ``price``'s day, each as ``net_value`` gives it; ``None`` while the
+    Series has no value."""
+    per_bond = net_value(price, lot, tax_rate)
+    if per_bond is None:
+        return None
+    return EarlyRedemption(per_bond.gross, quantity * per_bond.fee, quantity * per_bond.tax, quantity)

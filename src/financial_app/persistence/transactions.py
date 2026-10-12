@@ -129,8 +129,10 @@ def _check_coverage(session: Session, draft: TransactionDraft | None, replacing:
     rows = session.scalars(
         select(TransactionRow).where(TransactionRow.instrument_id.in_(instruments)).order_by(TransactionRow.id)
     )
-    # The edited Transaction keeps its id, so its draft takes the row's place in entry order
-    transactions = [draft if row is replacing else _to_transaction(row) for row in rows]
+    # The edited Transaction keeps its id, so its draft takes the row's place in entry order and still opens the Lot a
+    # Sell may name
+    edited = None if draft is None or replacing is None else draft.with_id(replacing.id)
+    transactions: list[TransactionDraft | None] = [edited if row is replacing else _to_transaction(row) for row in rows]
     if replacing is None:
         transactions.append(draft)
     open_positions(t for t in transactions if t is not None)
@@ -156,13 +158,15 @@ def _fill(row: TransactionRow, draft: TransactionDraft) -> None:
     row.to_pln = draft.to_pln
     row.fx_conversion_fee_percent = _text(draft.fx_conversion_fee_percent)
     row.gross = _text(draft.gross)
-    row.withholding_tax = str(draft.withholding_tax) if draft.transaction_type.is_dividend else None
+    withheld = draft.transaction_type.is_dividend or draft.withholding_tax
+    row.withholding_tax = str(draft.withholding_tax) if withheld else None
     row.target_account_id = draft.target_account_id
     ratio = draft.split_ratio
     row.split_new = None if ratio is None else ratio.new
     row.split_old = None if ratio is None else ratio.old
     row.origin = draft.origin.value
     row.external_id = draft.external_id
+    row.lot_id = draft.lot_id
 
 
 def _text(value: Decimal | None) -> str | None:
@@ -196,6 +200,7 @@ def _to_transaction(row: TransactionRow) -> Transaction:
         split_ratio=_split_ratio(row),
         origin=Origin(row.origin),
         external_id=row.external_id,
+        lot_id=row.lot_id,
     )
 
 

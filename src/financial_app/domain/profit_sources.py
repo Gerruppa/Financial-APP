@@ -3,10 +3,11 @@ Transaction split into the price effect, the FX effect, Dividends, interest, com
 
 The result is the unrealised and realised result of the Positions with the FX result of the foreign cash (unless the
 Account excludes it), as ``dashboard`` sums them, plus the net Dividends and interest, less the Costs. Dividends and
-interest count gross, their withholding tax under taxes; commissions and FX Conversion Fees count under costs, so the
-price effect is what the Positions gained before them. The FX effect comes from ``dashboard`` too: the foreign
-cash's FX result and, for a foreign Position, how much more (or less) its cost in the Instrument's currency is worth
-in PLN today, or was worth at the Sell's rate, than it cost (``lots.FxBasis``); the price effect is the rest.
+interest count gross, their withholding tax under taxes, as does the tax withheld at an Early Redemption;
+commissions and FX Conversion Fees count under costs, so the price effect is what the Positions gained before them.
+The FX effect comes from ``dashboard`` too: the foreign cash's FX result and, for a foreign Position, how much more (or
+less) its cost in the Instrument's currency is worth in PLN today, or was worth at the Sell's rate, than it cost
+(``lots.FxBasis``); the price effect is the rest.
 """
 
 from collections.abc import Collection, Sequence
@@ -49,6 +50,8 @@ def profit_sources(
     for t in (t for t in transactions if t.account_id in account_ids):
         if t.transaction_type is TransactionType.COST:
             total -= t.actual_amount
+        elif t.transaction_type is TransactionType.SELL:
+            taxes -= t.withholding_tax
         elif t.transaction_type.is_dividend:
             total += t.actual_amount
             gross, withheld = _gross_and_tax(t)
