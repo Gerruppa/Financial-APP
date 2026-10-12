@@ -60,6 +60,7 @@ from financial_app.persistence.transactions import (
 from financial_app.sources.export import FileFormat, export_transactions
 from financial_app.sources.nbp import NbpRates
 from financial_app.ui.dialogs import movable_dialog
+from financial_app.ui.view_scope import ViewScope, breadcrumbs
 
 # Offered for buying a foreign currency in a Currency Exchange, so the first exchange needs no setup
 SUGGESTED_EXCHANGE_CURRENCIES = ("USD", "EUR")
@@ -71,10 +72,12 @@ COLUMNS = "grid-template-columns: 7rem minmax(8rem, 1fr) 6rem minmax(9rem, 1fr) 
 
 @dataclass
 class TransactionsPage:
-    """The Transakcje tab; clicking a Transaction opens it for editing or deleting."""
+    """The Transakcje tab; clicking a Transaction opens it for editing or deleting. In an Account's View Scope it lists
+    only that Account's Transactions, Cash and Security Transfers to it included."""
 
     engine: Engine
     rates: NbpRates
+    scope: ViewScope
 
     def refresh(self) -> None:
         """Redraw the list if it is on screen (e.g. after a save)."""
@@ -90,13 +93,14 @@ class TransactionsPage:
             self.rows()
 
     def export(self, file_format: FileFormat) -> None:
-        """Hands every saved Transaction to the browser as a file, in the list's order."""
-        name, data = export_transactions(self.engine, file_format)
+        """Hands the listed Transactions (those of the View Scope) to the browser as a file, in the list's order."""
+        name, data = export_transactions(self.engine, file_format, self.scope.account_id)
         ui.download(data, name)
 
     @ui.refreshable_method
     def rows(self) -> None:
-        transactions = list_transactions(self.engine)
+        breadcrumbs(self.scope)
+        transactions = [t for t in list_transactions(self.engine) if self.scope.includes(t)]
         if not transactions:
             ui.label("Brak transakcji. Dodaj pierwszą przyciskiem „+”.").classes("text-gray-500")
             return

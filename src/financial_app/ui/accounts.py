@@ -1,5 +1,6 @@
 """Ustawienia > Konta: the managed list of Accounts with an add/edit dialog (spec 3.1)."""
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from decimal import Decimal
 
@@ -58,60 +59,70 @@ class AccountsSection:
 
     def open_dialog(self, account: Account | None) -> None:
         """Open a fresh form for a new Account (``None``) or for editing ``account``."""
-        dialog = movable_dialog()
-        dialog.on("hide", dialog.delete)
-        with dialog, ui.card().classes("w-[480px]"):
-            ui.label("Nowe konto" if account is None else "Edytuj konto").classes("text-lg font-bold")
-            name = ui.input("Nazwa", value=account.name if account else "").classes("w-full").mark("account-name")
-            broker = ui.input("Broker", value=account.broker if account else "").classes("w-full")
-            broker.mark("account-broker")
-            account_type = ui.select(
-                ACCOUNT_TYPE_OPTIONS,
-                label="Typ konta",
-                value=(account.account_type if account else AccountType.REGULAR).value,
-            ).classes("w-full")
-            account_type.mark("account-type")
-            regime = ui.label().classes("text-sm text-gray-600")
-            regime.bind_text_from(account_type, "value", lambda value: tax_regime_for(AccountType(value)).summary)
-            currencies = ui.input(
-                "Waluty rachunku", value=", ".join(account.cash_currencies) if account else "PLN"
-            ).props('hint="Kody walut oddzielone przecinkami, np. PLN, USD"')
-            currencies.classes("w-full").mark("account-currencies")
-            fee = account.fx_conversion_fee_percent if account else None
-            fee_input = ui.input("Opłata za przewalutowanie %", value=_fee_text(fee))
-            fee_input.props('hint="Zostaw puste, jeśli broker nie pobiera opłaty"').classes("w-full")
-            fee_input.mark("account-fee")
-            exclude_fx = ui.checkbox(
-                "Wyklucz wynik walutowy z wyniku na Dashboardzie", value=account.exclude_fx_result if account else False
-            ).mark("account-exclude-fx")
-            active = ui.switch("Aktywne", value=account.active if account else True).mark("account-active")
-            error = ui.label().classes("text-negative").mark("account-error")
+        open_account_dialog(self.engine, account, on_saved=lambda _: self.account_list.refresh())
 
-            def save() -> None:
-                try:
-                    draft = AccountDraft(
-                        name=name.value,
-                        broker=broker.value,
-                        account_type=AccountType(account_type.value),
-                        cash_currencies=tuple(code for code in currencies.value.split(",") if code.strip()),
-                        fx_conversion_fee_percent=_parse_percent(fee_input.value),
-                        exclude_fx_result=exclude_fx.value,
-                        active=active.value,
-                    )
-                    if account is None:
-                        add_account(self.engine, draft)
-                    else:
-                        update_account(self.engine, account.id, draft)
-                except AccountError as exc:
-                    error.text = str(exc)
-                    return
-                dialog.close()
-                self.account_list.refresh()
 
-            with ui.row().classes("w-full justify-end"):
-                ui.button("Anuluj", on_click=dialog.close).props("flat")
-                ui.button("Zapisz", on_click=save)
-        dialog.open()
+def open_account_dialog(
+    engine: Engine,
+    account: Account | None,
+    on_saved: Callable[[Account], object],
+    *,
+    name: str = "",
+    cash_currencies: tuple[str, ...] = ("PLN",),
+) -> None:
+    """Open the Account form for a new Account (``None``), prefilled with ``name`` and ``cash_currencies``, or for
+    editing ``account``; ``on_saved`` gets the saved Account. Closing it without saving calls nothing."""
+    dialog = movable_dialog()
+    dialog.on("hide", dialog.delete)
+    with dialog, ui.card().classes("w-[480px]"):
+        ui.label("Nowe konto" if account is None else "Edytuj konto").classes("text-lg font-bold")
+        name_input = ui.input("Nazwa", value=account.name if account else name).classes("w-full").mark("account-name")
+        broker = ui.input("Broker", value=account.broker if account else "").classes("w-full")
+        broker.mark("account-broker")
+        account_type = ui.select(
+            ACCOUNT_TYPE_OPTIONS,
+            label="Typ konta",
+            value=(account.account_type if account else AccountType.REGULAR).value,
+        ).classes("w-full")
+        account_type.mark("account-type")
+        regime = ui.label().classes("text-sm text-gray-600")
+        regime.bind_text_from(account_type, "value", lambda value: tax_regime_for(AccountType(value)).summary)
+        currencies = ui.input(
+            "Waluty rachunku", value=", ".join(account.cash_currencies if account else cash_currencies)
+        ).props('hint="Kody walut oddzielone przecinkami, np. PLN, USD"')
+        currencies.classes("w-full").mark("account-currencies")
+        fee = account.fx_conversion_fee_percent if account else None
+        fee_input = ui.input("Opłata za przewalutowanie %", value=_fee_text(fee))
+        fee_input.props('hint="Zostaw puste, jeśli broker nie pobiera opłaty"').classes("w-full")
+        fee_input.mark("account-fee")
+        exclude_fx = ui.checkbox(
+            "Wyklucz wynik walutowy z wyniku na Dashboardzie", value=account.exclude_fx_result if account else False
+        ).mark("account-exclude-fx")
+        active = ui.switch("Aktywne", value=account.active if account else True).mark("account-active")
+        error = ui.label().classes("text-negative").mark("account-error")
+
+        def save() -> None:
+            try:
+                draft = AccountDraft(
+                    name=name_input.value,
+                    broker=broker.value,
+                    account_type=AccountType(account_type.value),
+                    cash_currencies=tuple(code for code in currencies.value.split(",") if code.strip()),
+                    fx_conversion_fee_percent=_parse_percent(fee_input.value),
+                    exclude_fx_result=exclude_fx.value,
+                    active=active.value,
+                )
+                saved = add_account(engine, draft) if account is None else update_account(engine, account.id, draft)
+            except AccountError as exc:
+                error.text = str(exc)
+                return
+            dialog.close()
+            on_saved(saved)
+
+        with ui.row().classes("w-full justify-end"):
+            ui.button("Anuluj", on_click=dialog.close).props("flat")
+            ui.button("Zapisz", on_click=save)
+    dialog.open()
 
 
 def _fee_text(fee: Decimal | None) -> str:

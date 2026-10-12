@@ -191,6 +191,18 @@ def _date(value: object) -> date:
     return parse_date(_text(value))
 
 
+def cash_currencies_of(lines: Iterable[SheetLine], account: str) -> tuple[str, ...]:
+    """The Cash Currencies a new Account for the sheet Konto ``account`` starts with: PLN, then the currencies its rows
+    hold as foreign cash (``Waluty_<CUR>``), alphabetically. Buying a foreign Instrument does not add one, as the
+    broker may convert from PLN."""
+    foreign = {
+        ticker.name
+        for line in lines
+        if line.account == account and (ticker := classify_ticker(line.ticker)).kind is TickerKind.FOREIGN_CASH
+    }
+    return (PLN, *sorted(foreign - {PLN}))
+
+
 def fingerprints(lines: Sequence[SheetLine]) -> list[str]:
     """A stable id per row, so importing the file again recognises the rows already saved.
 

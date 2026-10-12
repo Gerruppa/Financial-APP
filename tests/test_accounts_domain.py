@@ -15,8 +15,18 @@ def test_every_account_type_has_a_tax_regime(account_type: AccountType) -> None:
     assert regime.summary
 
 
-def test_account_types_are_the_seven_from_the_spec() -> None:
-    assert [t.label for t in AccountType] == ["Regular", "IKE", "IKZE", "OIPE", "PPK", "OKI", "Lokata / oszczędności"]
+def test_account_types_are_the_nine_from_the_spec() -> None:
+    assert [t.label for t in AccountType] == [
+        "Regular",
+        "IKE",
+        "IKZE",
+        "OIPE",
+        "PPK",
+        "OKI",
+        "Lokata / oszczędności",
+        "Obligacje",
+        "Inne",
+    ]
 
 
 def test_oki_tax_regime_is_a_placeholder_until_the_law_is_final() -> None:
@@ -33,6 +43,22 @@ def test_other_tax_regimes_are_not_placeholders(account_type: AccountType) -> No
 
 def test_regular_account_is_taxed_with_belka_in_pit38() -> None:
     assert "19%" in tax_regime_for(AccountType.REGULAR).summary
+
+
+def test_bonds_account_has_belka_withheld_by_the_issuer_outside_pit38() -> None:
+    summary = tax_regime_for(AccountType.BONDS).summary
+
+    assert "19%" in summary
+    assert "emitenta" in summary
+    assert "bez rozliczenia w PIT-38" in summary
+
+
+def test_other_account_describes_the_six_month_rule_for_selling_things() -> None:
+    summary = tax_regime_for(AccountType.OTHER).summary
+
+    assert "Bez podatku Belki" in summary
+    assert "6 miesięcy" in summary
+    assert "zwolniona" in summary
 
 
 def _draft(**overrides: object) -> AccountDraft:

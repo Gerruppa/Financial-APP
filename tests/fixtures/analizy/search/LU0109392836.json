@@ -1,0 +1,16 @@
+{
+ "page": 0,
+ "limit": "20",
+ "total": 1,
+ "products": [
+  {
+   "kod": "FTI022_A_USD",
+   "nazwa": "Franklin Technology Fund A (Acc) (USD",
+   "nazwaParasola": "Franklin Templeton Investment Funds",
+   "kodRodzaju": "FZG",
+   "isin": null,
+   "nazwaDawniej": null,
+   "type": "fundusz"
+  }
+ ]
+}

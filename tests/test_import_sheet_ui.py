@@ -14,10 +14,11 @@ from sqlalchemy import Engine
 from financial_app.domain.accounts import AccountDraft, AccountType
 from financial_app.domain.currencies import NbpRate
 from financial_app.domain.spreadsheet_import import COLUMNS
-from financial_app.persistence.accounts import add_account
+from financial_app.persistence.accounts import add_account, list_accounts
 from financial_app.persistence.db import init_db
 from financial_app.persistence.transactions import list_transactions
 from financial_app.sources.nbp import NbpRates
+from financial_app.ui.import_sheet import NEW_ACCOUNT
 from financial_app.ui.reset import CONFIRMATION_PHRASE
 from financial_app.ui.shell import build_shell
 
@@ -121,3 +122,53 @@ async def test_clearing_the_data_drops_an_open_preview(engine: Engine, workbook:
 
     await user.should_see("Wyczyszczono dane")
     await user.should_not_see(marker="import-save")
+
+
+def _new_account_from_the_preview(user: User, workbook: Path) -> None:
+    """Preview the sheet, whose Konto "IKE" has no Account, and pick "+ Nowe konto…" for it."""
+    user.find(marker="import-path").type(str(workbook))
+    user.find(marker="import-preview").click()
+    user.find(marker="import-account-IKE", kind=ui.select).elements.pop().set_value(NEW_ACCOUNT)
+
+
+async def test_an_account_created_from_the_preview_is_chosen_and_the_rows_import(
+    engine: Engine, workbook: Path, user: User
+) -> None:
+    _new_account_from_the_preview(user, workbook)
+
+    assert user.find(marker="account-name", kind=ui.input).elements.pop().value == "IKE"
+    assert user.find(marker="account-currencies", kind=ui.input).elements.pop().value == "PLN"
+    user.find(marker="account-broker").type("XTB")
+    user.find("Zapisz").click()
+
+    [account] = list_accounts(engine)
+    assert (account.name, account.broker, account.account_type) == ("IKE", "XTB", AccountType.REGULAR)
+    with user.scope(marker="accounts"):
+        await user.should_see("IKE")
+    await user.should_not_see(marker="import-account-IKE")
+    user.find(marker="import-save").click()
+    assert [transaction.account_id for transaction in list_transactions(engine)] == [account.id]
+
+
+async def test_closing_the_new_account_dialog_creates_nothing_and_leaves_the_konto_unmatched(
+    engine: Engine, workbook: Path, user: User
+) -> None:
+    _new_account_from_the_preview(user, workbook)
+
+    user.find("Anuluj").click()
+
+    assert list_accounts(engine) == []
+    assert user.find(marker="import-account-IKE", kind=ui.select).elements.pop().value is None
+    assert user.find(marker="import-save", kind=ui.button).elements.pop().enabled is False
+
+
+async def test_a_taken_name_in_the_new_account_dialog_is_reported(engine: Engine, workbook: Path, user: User) -> None:
+    add_account(engine, AccountDraft("XTB", "XTB", AccountType.REGULAR, ("PLN",)))
+    _new_account_from_the_preview(user, workbook)
+
+    user.find(marker="account-name").clear().type("xtb")
+    user.find("Zapisz").click()
+
+    await user.should_see("XTB")
+    assert user.find(marker="account-error", kind=ui.label).elements.pop().text
+    assert [account.name for account in list_accounts(engine)] == ["XTB"]

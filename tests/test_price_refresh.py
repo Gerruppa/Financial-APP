@@ -9,7 +9,7 @@ from sqlalchemy import Engine
 
 from financial_app.domain.accounts import AccountDraft, AccountType
 from financial_app.domain.instruments import Instrument, InstrumentDraft
-from financial_app.domain.prices import BOSSA, YAHOO, PriceSourceError, Quote
+from financial_app.domain.prices import ANALIZY, BANKIER, BOSSA, YAHOO, PriceSourceError, Quote
 from financial_app.domain.transactions import TransactionDraft, TransactionType, buy_or_sell
 from financial_app.persistence.accounts import add_account
 from financial_app.persistence.db import init_db
@@ -228,3 +228,24 @@ def test_a_refresh_with_nothing_to_fetch_is_a_success(engine: Engine) -> None:
     refresh_prices(engine, {YAHOO: FakeSource(YAHOO, {})}, lambda: NOW)
 
     assert last_successful_refresh(engine) == NOW
+
+
+def test_bankier_gets_the_fund_code_when_analizy_fails(engine: Engine) -> None:
+    fund = _held(engine, "PZU PPK 2060", {ANALIZY: "PZU60"})
+    set_fallback_order(engine, AKCJE_POLSKIE, [ANALIZY, BANKIER])
+    bankier = FakeSource(BANKIER, {"PZU60": "15.31"})
+
+    refresh_prices(engine, {ANALIZY: FakeSource(ANALIZY, {}), BANKIER: bankier}, lambda: NOW)
+
+    assert bankier.asked == ["PZU60"]
+    assert latest_quotes(engine) == {fund.id: Quote(Decimal("15.31"), "PLN", FRIDAY, BANKIER)}
+
+
+def test_a_bankier_symbol_of_its_own_wins_over_the_fund_code(engine: Engine) -> None:
+    _held(engine, "PCS", {ANALIZY: "PCS08", BANKIER: "PCS08A2"})
+    set_fallback_order(engine, AKCJE_POLSKIE, [ANALIZY, BANKIER])
+    bankier = FakeSource(BANKIER, {"PCS08A2": "120"})
+
+    refresh_prices(engine, {ANALIZY: FakeSource(ANALIZY, {}), BANKIER: bankier}, lambda: NOW)
+
+    assert bankier.asked == ["PCS08A2"]

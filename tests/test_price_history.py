@@ -9,8 +9,9 @@ import pytest
 from sqlalchemy import Engine
 
 from financial_app.domain.instruments import InstrumentDraft
-from financial_app.domain.prices import BOSSA, STOOQ, PriceSourceError, Quote
+from financial_app.domain.prices import BOSSA, STOOQ, YAHOO, YAHOO_HISTORY, PriceSourceError, Quote
 from financial_app.persistence.db import init_db
+from financial_app.persistence.history import quotes_between
 from financial_app.persistence.instruments import (
     add_asset_class,
     add_instrument,
@@ -219,3 +220,55 @@ def test_clearing_the_portfolio_removes_the_history_too(engine: Engine) -> None:
     assert again == wig
     assert len(_history(engine, stooq).between(again, JAN_2, JAN_9)) == 5
     assert len(stooq.requests) == 2
+
+
+YAHOO_FIXTURES = Path(__file__).parent / "fixtures" / "yahoo" / "history"
+
+
+def _saved_yahoo(url: str) -> str | None:
+    symbol = url.split("/chart/")[1].split("?")[0]
+    path = YAHOO_FIXTURES / f"{symbol}.json"
+    return path.read_text(encoding="utf-8") if path.is_file() else None
+
+
+def _stock(engine: Engine, symbols: dict[str, str], currency: str = "GBP") -> int:
+    shares = add_asset_class(engine, "Akcje")
+    return add_instrument(engine, InstrumentDraft("BP", shares.id, currency, "LSE", source_symbols=symbols)).id
+
+
+def test_yahoo_history_comes_first_and_never_becomes_the_current_price(engine: Engine) -> None:
+    bp = _stock(engine, {YAHOO: "BP.L", STOOQ: "bp.uk"})
+    stooq = SavedStooq()
+    history = QuoteHistory(
+        engine, fetch=stooq, today=lambda: date(2026, 1, 10), now=lambda: NOW, yahoo_fetch=_saved_yahoo
+    )
+
+    quotes = history.between(bp, JAN_2, JAN_9)
+
+    assert quotes == [
+        Quote(Decimal("5.805"), "GBP", JAN_2, YAHOO_HISTORY),
+        Quote(Decimal("5.9"), "GBP", date(2026, 1, 6), YAHOO_HISTORY),
+    ]
+    assert stooq.requests == []
+    assert bp not in latest_quotes(engine)
+
+
+def test_stooq_is_asked_when_yahoo_fails(engine: Engine) -> None:
+    wig = _stock(engine, {YAHOO: "UNKNOWN", STOOQ: "wig"}, "PLN")
+    history = QuoteHistory(
+        engine, fetch=SavedStooq(), today=lambda: date(2026, 1, 10), now=lambda: NOW, yahoo_fetch=_saved_yahoo
+    )
+
+    assert [q.source for q in history.between(wig, JAN_2, JAN_9)] == [STOOQ] * 5
+
+
+def test_a_new_yahoo_symbol_drops_the_fetched_history(engine: Engine) -> None:
+    bp = _stock(engine, {YAHOO: "BP.L"})
+    QuoteHistory(engine, today=lambda: date(2026, 1, 10), now=lambda: NOW, yahoo_fetch=_saved_yahoo).between(
+        bp, JAN_2, JAN_9
+    )
+    shares = list_instruments(engine)[0].asset_class_id
+
+    update_instrument(engine, bp, InstrumentDraft("BP", shares, "GBP", "LSE", source_symbols={YAHOO: "BP2.L"}))
+
+    assert quotes_between(engine, bp, JAN_2, JAN_9) == []

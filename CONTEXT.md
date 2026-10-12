@@ -9,11 +9,11 @@ A place where the user holds cash and positions, e.g. an IKE at a broker or a ba
 _Avoid_: wallet, portfolio, platform, broker
 
 **Account Type** (Typ konta):
-The legal wrapper of an Account — Regular, IKE, IKZE, OIPE, PPK, OKI or Deposit — which determines its Tax Regime.
+The legal wrapper of an Account — Regular, IKE, IKZE, OIPE, PPK, OKI, Deposit, Bonds (a retail treasury bond register) or Other (assets held outside a financial institution, e.g. physical metals) — which determines its Tax Regime.
 _Avoid_: account kind, wrapper
 
 **Tax Regime** (Sposób opodatkowania):
-The rules by which gains on an Account are taxed (e.g. 19% Belka per sale for Regular, exemption for IKE, not yet defined for OKI).
+The rules by which gains on an Account are taxed (e.g. 19% Belka per sale for Regular, exemption for IKE, Belka withheld by the issuer for Bonds, the 6-month rule for selling things for Other, not yet defined for OKI).
 _Avoid_: tax mode, tax strategy
 
 **Cash Currency** (Waluta rachunku):
@@ -31,6 +31,10 @@ _Avoid_: ticker, security, asset, symbol
 **Source Symbol** (Symbol w źródle):
 The identifier of an Instrument in one Price Source (e.g. `PZU.WA` in Yahoo, `pzu` in Stooq).
 _Avoid_: ticker
+
+**Fund Code** (Kod funduszu):
+The code of a Polish fund or PPK shared by analizy.pl and bankier.pl (e.g. `PZU60`, `QRS32`), stored as the Instrument's analizy.pl Source Symbol. bankier.pl uses it whenever the Instrument has no bankier.pl Source Symbol of its own (needed only when the codes differ, e.g. a unit category). Foreign fund series (e.g. `FTI068_AH_EUR`) exist only in analizy.pl.
+_Avoid_: fund ID, fund symbol
 
 **Asset Class** (Klasa aktywów):
 A user-editable category used for allocation, e.g. Akcje zagraniczne, Obligacje skarbowe polskie, Metale i surowce.
@@ -123,7 +127,7 @@ The price of an Instrument on one day, in its quote currency, as given by one Pr
 _Avoid_: price point, tick, rate
 
 **Fallback Order** (Kolejność źródeł):
-The ordered list of Price Sources tried for an Asset Class. An Instrument uses only the sources it has a Source Symbol for, in that order; with none it has no automatic valuation.
+The ordered list of Price Sources tried for an Asset Class. An Instrument uses only the sources it has a Source Symbol for (bankier.pl also through the Fund Code), in that order; with none it has no automatic valuation. The Instrument dialog shows the symbol fields in this order and folds the other sources away.
 _Avoid_: priority, source chain
 
 **Stale Price** (Nieaktualna cena):

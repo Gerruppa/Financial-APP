@@ -7,8 +7,9 @@ from pathlib import Path as FilePath
 from nicegui import ui
 from sqlalchemy import Engine
 
+from financial_app.domain.accounts import Account
 from financial_app.domain.formatting import format_date, format_pln, format_quantity
-from financial_app.domain.spreadsheet_import import SheetError, SheetLine
+from financial_app.domain.spreadsheet_import import SheetError, SheetLine, cash_currencies_of
 from financial_app.persistence.accounts import list_accounts
 from financial_app.persistence.instruments import list_instruments
 from financial_app.sources.spreadsheet import (
@@ -19,7 +20,9 @@ from financial_app.sources.spreadsheet import (
     read_sheet_lines,
     save_import,
 )
+from financial_app.ui.accounts import open_account_dialog
 
+NEW_ACCOUNT = "new"
 NEW_INSTRUMENT = "new"
 STATUS_LABELS = {
     "ok": "do zapisu",
@@ -33,19 +36,22 @@ STATUS_LABELS = {
 class SheetImportSection:
     """Reads the sheet, lets the user match its Konta and tickers, shows the preview, and saves on approval.
 
-    ``on_saved`` lets the other tabs redraw the newly imported Transactions.
+    ``on_saved`` lets the other tabs redraw the newly imported Transactions, and ``on_account_added`` the Konta list
+    after an Account is created from the preview (issue #63).
     """
 
     engine: Engine
     rates: NbpLookup
     on_saved: Callable[[], None] | None = None
+    on_account_added: Callable[[], object] | None = None
     lines: list[SheetLine] = field(default_factory=list)
     accounts: dict[str, int] = field(default_factory=dict)
     instruments: dict[str, int | None] = field(default_factory=dict)
     keep_similar: set[str] = field(default_factory=set)
 
     def build(self) -> None:
-        with ui.card().classes("w-full max-w-4xl"):
+        self.card = ui.card().classes("w-full max-w-4xl")
+        with self.card:
             ui.label("Import z arkusza Inwestomat").classes("text-xl font-bold")
             ui.label(
                 "Wskaż kopię arkusza (.xlsx). Transakcje trafiają do bazy dopiero po zatwierdzeniu podglądu. "
@@ -107,7 +113,8 @@ class SheetImportSection:
     def _matching(self, preview: Preview) -> None:
         if preview.unmatched_accounts:
             ui.label("Konta z arkusza, których nie ma w aplikacji:").classes("font-bold")
-            accounts = {account.id: account.name for account in list_accounts(self.engine)}
+            accounts: dict[int | str, str] = {NEW_ACCOUNT: "+ Nowe konto…"}
+            accounts.update({account.id: account.name for account in list_accounts(self.engine)})
             for sheet_name in preview.unmatched_accounts:
                 ui.select(
                     accounts,
@@ -171,8 +178,26 @@ class SheetImportSection:
         ]
         ui.table(columns=columns, rows=rows, row_key="row").classes("w-full").mark("import-table")
 
-    def _choose_account(self, sheet_name: str, account_id: int) -> None:
-        self.accounts[sheet_name] = account_id
+    def _choose_account(self, sheet_name: str, choice: int | str) -> None:
+        if choice == NEW_ACCOUNT:
+            # In the card, not the preview, which the render below clears
+            with self.card:
+                open_account_dialog(
+                    self.engine,
+                    None,
+                    on_saved=lambda account: self._account_created(sheet_name, account),
+                    name=sheet_name,
+                    cash_currencies=cash_currencies_of(self.lines, sheet_name),
+                )
+            self.render()  # clears the choice, so closing the dialog without saving leaves the Konto unmatched
+            return
+        self.accounts[sheet_name] = int(choice)
+        self.render()
+
+    def _account_created(self, sheet_name: str, account: Account) -> None:
+        self.accounts[sheet_name] = account.id
+        if self.on_account_added is not None:
+            self.on_account_added()
         self.render()
 
     def _choose_instrument(self, ticker: str, choice: int | str) -> None:

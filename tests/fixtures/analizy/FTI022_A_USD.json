@@ -1,0 +1,40 @@
+{
+ "id": "FTI022_A_USD",
+ "label": "Franklin Technology Fund A (Acc) (USD)",
+ "currency": "USD",
+ "isRegular": true,
+ "isDividend": false,
+ "periods": [
+  {
+   "period": "1M",
+   "label": "1M",
+   "start": "2026-09-09",
+   "end": "2026-10-09"
+  }
+ ],
+ "events": [],
+ "dividends": [],
+ "series": [
+  {
+   "id": "fund_FTI022_A_USD",
+   "label": "Fundusz",
+   "currency": "USD",
+   "price": [
+    {
+     "date": "2026-10-08",
+     "value": 80.18
+    },
+    {
+     "date": "2026-10-09",
+     "value": 80.86
+    }
+   ]
+  },
+  {
+   "id": "fund_with_dividend_FTI022_A_USD",
+   "label": "Fundusz z dywidendą",
+   "currency": "USD",
+   "price": []
+  }
+ ]
+}
