@@ -60,6 +60,7 @@ from financial_app.persistence.instruments import (
 from financial_app.sources.prices import PriceSource, SymbolCheck, check_symbol
 from financial_app.ui.dialogs import movable_dialog
 from financial_app.ui.fund_details import fund_details
+from financial_app.ui.multi_asset import is_multi_asset_class, split_editor
 
 
 @dataclass
@@ -395,6 +396,15 @@ class InstrumentsSection:
             domicile = ui.input("Siedziba funduszu", value=instrument.domicile if instrument else "")
             domicile.props('hint="Np. Irlandia, Luksemburg; może zostać puste"').classes("w-full")
             domicile.mark("instrument-domicile")
+            # Only a Multi-asset Instrument is split across classes; one moved to another class loses its split
+            with ui.column().classes("w-full") as split_section:
+                typed_split = split_editor(asset_classes, instrument.multi_asset_split if instrument else {})
+
+            def show_split() -> None:
+                split_section.visible = is_multi_asset_class(class_options.get(asset_class.value))
+
+            asset_class.on_value_change(show_split)
+            show_split()
             error = ui.label().classes("text-negative").mark("instrument-error")
 
             def choose(result: SearchResult) -> None:
@@ -470,6 +480,7 @@ class InstrumentsSection:
                         ter_percent=ter_percent,
                         distribution_policy=policy.value,
                         domicile=domicile.value,
+                        multi_asset_split=typed_split() if split_section.visible else {},
                     )
                     if instrument is None:
                         add_instrument(self.engine, draft)

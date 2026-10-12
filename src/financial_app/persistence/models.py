@@ -142,6 +142,7 @@ class InstrumentRow(Base):
 
     asset_class: Mapped[AssetClassRow] = relationship()
     source_symbols: Mapped[list[SourceSymbolRow]] = relationship(cascade="all, delete-orphan")
+    multi_asset_split: Mapped[list[MultiAssetShareRow]] = relationship(cascade="all, delete-orphan")
 
 
 class SourceSymbolRow(Base):
@@ -152,6 +153,19 @@ class SourceSymbolRow(Base):
     instrument_id: Mapped[int] = mapped_column(ForeignKey("instruments.id"), primary_key=True)
     source: Mapped[str] = mapped_column(String(20), primary_key=True)
     symbol: Mapped[str] = mapped_column(String(100))
+
+
+class MultiAssetShareRow(Base):
+    """One Asset Class's share of an Instrument's Multi-asset Split (issue #75); an Instrument's rows sum to 100."""
+
+    __tablename__ = "multi_asset_shares"
+
+    instrument_id: Mapped[int] = mapped_column(ForeignKey("instruments.id"), primary_key=True)
+    asset_class_id: Mapped[int] = mapped_column(ForeignKey("asset_classes.id"), primary_key=True, index=True)
+    # Percent, as exact decimal text
+    percent: Mapped[str] = mapped_column(String(20))
+
+    asset_class: Mapped[AssetClassRow] = relationship()
 
 
 class QuoteRow(Base):

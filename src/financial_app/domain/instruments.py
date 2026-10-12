@@ -7,6 +7,7 @@ from decimal import Decimal
 from enum import StrEnum
 
 from financial_app.domain.currencies import is_currency_code
+from financial_app.domain.formatting import format_quantity
 
 # The sheet's Asset Classes in its order (spec 3.2): migration 0004 seeds them and clearing the portfolio restores them
 DEFAULT_ASSET_CLASSES = [
@@ -23,6 +24,10 @@ DEFAULT_ASSET_CLASSES = [
     "Inne",
     "Multi-asset",
 ]
+
+# The class of Instruments spread across several others by a Multi-asset Split (spec 3.2); matched by name, ignoring
+# the case, so a renamed class no longer offers the split
+MULTI_ASSET_CLASS = "Multi-asset"
 
 # Two letters of the issuer's country, nine letters or digits and a check digit
 ISIN_PATTERN = re.compile(r"[A-Z]{2}[A-Z0-9]{9}[0-9]")
@@ -80,6 +85,9 @@ class InstrumentDraft:
     a unit less the ``buyback_spread_percent`` a dealer takes when buying it back (spec 4.1).
 
     A fund's ``ter_percent``, ``distribution_policy`` and ``domicile`` are optional details the user enters (issue #42).
+
+    ``multi_asset_split`` is the Multi-asset Split (issue #75): percent of the value by Asset Class id, summing to
+    100, or empty to count the Instrument whole in its own class. A zero share is left out.
     """
 
     name: str
@@ -94,6 +102,7 @@ class InstrumentDraft:
     ter_percent: Decimal | None = None
     distribution_policy: DistributionPolicy | None = None
     domicile: str = ""
+    multi_asset_split: Mapping[int, Decimal] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         name = self.name.strip()
@@ -129,6 +138,7 @@ class InstrumentDraft:
         # A blank symbol means none in that source
         symbols = {source: symbol.strip() for source, symbol in self.source_symbols.items() if symbol.strip()}
         object.__setattr__(self, "source_symbols", symbols)
+        object.__setattr__(self, "multi_asset_split", _validated_split(self.multi_asset_split))
 
     def unit_price(self, price: Decimal) -> Decimal:
         """The value of one unit at ``price``: for a physical metal, ``price`` is the spot of a troy ounce, scaled to
@@ -144,10 +154,37 @@ class InstrumentDraft:
         return price * self.metal_grams / GRAMS_PER_TROY_OUNCE
 
 
+def _validated_split(split: Mapping[int, Decimal]) -> dict[int, Decimal]:
+    if any(not 0 <= share <= 100 for share in split.values()):
+        raise InstrumentError("Udział klasy w podziale Multi-asset musi wynosić od 0 do 100%.")
+    shares = {class_id: share for class_id, share in split.items() if share}
+    total = sum(shares.values(), Decimal(0))
+    if shares and total != 100:
+        raise InstrumentError(f"Podział Multi-asset musi sumować się do 100% (teraz {format_quantity(total)}%).")
+    return shares
+
+
 @dataclass(frozen=True)
 class Instrument(InstrumentDraft):
-    """A saved Instrument with the current name and Fallback Order of its Asset Class."""
+    """A saved Instrument with the current name and Fallback Order of its Asset Class, and the current names of the
+    classes in its Multi-asset Split (``split_class_names``, by id)."""
 
     id: int = field(kw_only=True)
     asset_class_name: str = field(kw_only=True)
     fallback_order: tuple[str, ...] = field(kw_only=True)
+    split_class_names: Mapping[int, str] = field(kw_only=True, default_factory=dict)
+
+    @property
+    def is_multi_asset(self) -> bool:
+        """In the Multi-asset class, or spread across classes by a Multi-asset Split."""
+        return bool(self.multi_asset_split) or self.asset_class_name.casefold() == MULTI_ASSET_CLASS.casefold()
+
+    def class_parts(self, value: Decimal) -> list[tuple[str, Decimal]]:
+        """``value`` by the name of the Asset Class it counts in: split by the Multi-asset Split, else whole in the
+        Instrument's own class (spec 6.1). The last part takes what the others leave, so the parts add up exactly."""
+        if not self.multi_asset_split:
+            return [(self.asset_class_name, value)]
+        parts = [(self.split_class_names[i], value * share / 100) for i, share in self.multi_asset_split.items()]
+        name, _ = parts[-1]
+        parts[-1] = (name, value - sum((part for _, part in parts[:-1]), Decimal(0)))
+        return parts

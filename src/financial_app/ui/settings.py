@@ -1,7 +1,7 @@
 """The Ustawienia tab: Accounts, Asset Classes, Instruments, the price sources' settings, the sheet import (spec
 section 5, issue #20), the Instruments without an automatic price (issue #40) and clearing the data."""
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 
 from nicegui import ui
 from sqlalchemy import Engine
@@ -23,13 +23,15 @@ def build_settings_page(
     search: InstrumentSearch,
     sources: Mapping[str, PriceSource],
     unpriced: UnpricedSection,
+    on_instruments_changed: Callable[[], None],
 ) -> None:
-    """``unpriced`` is kept by the shell, which redraws it after a price refresh; ``sources`` check the Source Symbols
-    typed in the Instrument dialog."""
+    """``unpriced`` is kept by the shell, which redraws it after a price refresh and on ``on_instruments_changed``,
+    called after an Instrument or Asset Class is saved; ``sources`` check the Source Symbols typed in the Instrument
+    dialog."""
     ui.label("Ustawienia").classes("text-2xl font-bold")
     accounts = AccountsSection(engine)
     accounts.build()
-    instruments = InstrumentsSection(engine, search, sources, on_changed=unpriced.refresh)
+    instruments = InstrumentsSection(engine, search, sources, on_changed=on_instruments_changed)
     asset_classes = AssetClassesSection(engine, on_changed=instruments.refresh)
     asset_classes.build()
     instruments.build()

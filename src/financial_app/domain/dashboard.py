@@ -1,5 +1,5 @@
-"""The Dashboard's totals (issue #72, spec section 5) and allocation (issue #73), from the Transactions and
-today's prices and NBP Rates.
+"""The Dashboard's totals (issue #72, spec section 5) and allocation (issue #73, with the Multi-asset Splits of
+#75), from the Transactions and today's prices and NBP Rates.
 
 Like the sheet's Dashboard, "Gotówka" is the PLN Cash Balance and "Otwarte pozycje" the Positions plus the foreign
 cash; a Position without a PLN price counts at cost and adds nothing to the result, as in the Portfolio. Net Deposits
@@ -109,10 +109,13 @@ def dashboard(
     exposure: dict[str, Decimal] = {}
     allocation: dict[str, Decimal] = {}
 
-    def count_held(currency: str, asset_class: str, amount: Decimal) -> Decimal:
-        """Add ``amount`` held in ``currency`` and ``asset_class`` to the exposure and the allocation and return it."""
+    def count_held(currency: str, asset_class: str | Instrument, amount: Decimal) -> Decimal:
+        """Add ``amount`` held in ``currency`` and ``asset_class`` (an Instrument's: split by its Multi-asset Split)
+        to the exposure and the allocation and return it."""
         exposure[currency] = exposure.get(currency, Decimal(0)) + amount
-        allocation[asset_class] = allocation.get(asset_class, Decimal(0)) + amount
+        parts = asset_class.class_parts(amount) if isinstance(asset_class, Instrument) else [(asset_class, amount)]
+        for name, part in parts:
+            allocation[name] = allocation.get(name, Decimal(0)) + part
         return amount
 
     for account in (a for a in accounts if account_id in (None, a.id)):
@@ -123,7 +126,7 @@ def dashboard(
             price = prices.get(position.instrument_id)
             instrument = instruments[position.instrument_id]
             value = position.cost if price is None else position.value(price)
-            positions_value += count_held(instrument.quote_currency, instrument.asset_class_name, value)
+            positions_value += count_held(instrument.quote_currency, instrument, value)
             if price is not None:
                 unrealized += position.result(price)
         for balance in (c for c in foreign if c.account_id == account.id):

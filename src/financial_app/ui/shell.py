@@ -23,6 +23,7 @@ from financial_app.sources.yahoo import YahooSearch, YahooSource
 from financial_app.ui.dashboard import DashboardPage
 from financial_app.ui.dialogs import install_movable_dialogs
 from financial_app.ui.history import history_status, shared_history
+from financial_app.ui.multi_asset import MultiAssetPage
 from financial_app.ui.periods import PeriodChoice
 from financial_app.ui.portfolio import PortfolioPage
 from financial_app.ui.results import ResultsPage
@@ -48,6 +49,7 @@ TABS = [
     Tab("Transakcje", "/transakcje", "receipt_long"),
     Tab("Strategie inwestycyjne", "/strategie", "flag"),
     Tab("Obligacje", "/obligacje", "savings"),
+    Tab("Multi-asset", "/multi-asset", "pie_chart"),
     Tab("Benchmarki", "/benchmarki", "compare_arrows"),
     Tab("Ustawienia", "/ustawienia", "settings"),
 ]
@@ -90,6 +92,8 @@ def build_shell(
     transactions_page = TransactionsPage(engine, rates, scope)
     portfolio_page = PortfolioPage(engine, rates, scope)
     unpriced = UnpricedSection(engine)
+    # A Multi-asset Split changes the value History counts in each Asset Class
+    multi_asset_page = MultiAssetPage(engine, rates, scope, on_split_saved=lambda: history_outdated())
 
     async def load_history() -> None:
         """Compute History (or take it already computed) and show it in the switcher."""
@@ -121,6 +125,12 @@ def build_shell(
         # Only the tab on screen has something to redraw; the others rebuild from the database when opened
         transactions_page.refresh()
         portfolio_page.refresh()
+        multi_asset_page.refresh()
+        unpriced.refresh()
+        history_outdated()
+
+    def instruments_changed() -> None:
+        # A class or Multi-asset Split changed in Ustawienia moves value between the Asset Classes
         unpriced.refresh()
         history_outdated()
 
@@ -128,6 +138,7 @@ def build_shell(
         switcher.refresh()
         transactions_page.refresh()
         portfolio_page.refresh()
+        multi_asset_page.refresh()
         dashboard_page.refresh()
         results_page.refresh()
         scope_pages.refresh()
@@ -155,6 +166,7 @@ def build_shell(
         if result is None:  # the app is shutting down
             return
         portfolio_page.refresh()
+        multi_asset_page.refresh()
         unpriced.refresh()
         history_outdated()
         ui.notify(_refresh_message(result), type="warning" if result.failures else "positive")
@@ -202,7 +214,8 @@ def build_shell(
     pages["/portfolio"] = portfolio_page.build
     pages["/"] = lambda: scope_pages(dashboard_page.build)
     pages["/wyniki"] = lambda: scope_pages(results_page.build)
-    pages["/ustawienia"] = lambda: build_settings_page(engine, rates, search, sources, unpriced)
+    pages["/multi-asset"] = lambda: scope_pages(multi_asset_page.build)
+    pages["/ustawienia"] = lambda: build_settings_page(engine, rates, search, sources, unpriced, instruments_changed)
     ui.sub_pages(pages).classes("w-full").mark("page-content")
 
     # Once the window is up, so that it never waits for the sources or the computation

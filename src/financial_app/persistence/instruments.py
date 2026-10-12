@@ -1,6 +1,7 @@
 """Reading and saving Asset Classes and the Instrument catalog (spec 3.2)."""
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
+from dataclasses import replace
 from decimal import Decimal
 
 from sqlalchemy import Engine, delete, func, select
@@ -20,6 +21,7 @@ from financial_app.persistence.history import forget_quote_history
 from financial_app.persistence.models import (
     AssetClassRow,
     InstrumentRow,
+    MultiAssetShareRow,
     PriceFailureRow,
     QuoteRow,
     SourceSymbolRow,
@@ -102,6 +104,16 @@ def delete_asset_class(engine: Engine, class_id: int) -> None:
         row = session.get_one(AssetClassRow, class_id)
         if session.scalar(select(InstrumentRow.id).where(InstrumentRow.asset_class_id == class_id).limit(1)):
             raise InstrumentError(f"Nie można usunąć klasy „{row.name}”, bo są do niej przypisane instrumenty.")
+        split_by = session.scalar(
+            select(InstrumentRow.name)
+            .join(MultiAssetShareRow, MultiAssetShareRow.instrument_id == InstrumentRow.id)
+            .where(MultiAssetShareRow.asset_class_id == class_id)
+            .limit(1)
+        )
+        if split_by:
+            raise InstrumentError(
+                f"Nie można usunąć klasy „{row.name}”, bo jest w podziale Multi-asset instrumentu „{split_by}”."
+            )
         session.delete(row)
 
 
@@ -110,7 +122,9 @@ def list_instruments(engine: Engine) -> list[Instrument]:
     with Session(engine) as session:
         rows = session.scalars(
             select(InstrumentRow).options(
-                selectinload(InstrumentRow.asset_class), selectinload(InstrumentRow.source_symbols)
+                selectinload(InstrumentRow.asset_class),
+                selectinload(InstrumentRow.source_symbols),
+                selectinload(InstrumentRow.multi_asset_split).selectinload(MultiAssetShareRow.asset_class),
             )
         )
         return sorted((_to_instrument(row) for row in rows), key=lambda instrument: instrument.name.casefold())
@@ -151,6 +165,17 @@ def update_instrument(engine: Engine, instrument_id: int, draft: InstrumentDraft
             raise InstrumentError("Nie można zmienić waluty instrumentu, który ma już transakcje.")
         _fill(session, row, draft)
         _flush(session, f"Instrument o nazwie „{draft.name}” już istnieje.")
+        return _to_instrument(row)
+
+
+def set_multi_asset_split(engine: Engine, instrument_id: int, split: Mapping[int, Decimal]) -> Instrument:
+    """Replace only the Instrument's Multi-asset Split (percent by Asset Class id; empty for none)."""
+    with Session(engine) as session, session.begin():
+        row = session.get_one(InstrumentRow, instrument_id)
+        # Replacing it validates the split like a draft's
+        validated = replace(_to_instrument(row), multi_asset_split=split)
+        _fill_split(session, row, validated.multi_asset_split)
+        session.flush()
         return _to_instrument(row)
 
 
@@ -205,6 +230,20 @@ def _fill(session: Session, row: InstrumentRow, draft: InstrumentDraft) -> None:
     row.source_symbols = [
         SourceSymbolRow(source=source, symbol=symbol) for source, symbol in draft.source_symbols.items()
     ]
+    _fill_split(session, row, draft.multi_asset_split)
+
+
+def _fill_split(session: Session, row: InstrumentRow, split: Mapping[int, Decimal]) -> None:
+    shares = []
+    for class_id, percent in split.items():
+        asset_class = session.get(AssetClassRow, class_id)
+        if asset_class is None:
+            raise InstrumentError("Klasa aktywów z podziału Multi-asset nie istnieje.")
+        shares.append(MultiAssetShareRow(asset_class=asset_class, percent=str(percent)))
+    # The old rows go first, so a share of the same class is inserted anew rather than clashing with its old row
+    row.multi_asset_split = []
+    session.flush()
+    row.multi_asset_split = shares
 
 
 def _text(number: Decimal | None) -> str | None:
@@ -229,6 +268,8 @@ def _to_asset_class(row: AssetClassRow) -> AssetClass:
 
 
 def _to_instrument(row: InstrumentRow) -> Instrument:
+    # In the Asset Classes' order, like everywhere else they are listed
+    shares = sorted(row.multi_asset_split, key=lambda share: share.asset_class.position)
     return Instrument(
         id=row.id,
         name=row.name,
@@ -245,4 +286,6 @@ def _to_instrument(row: InstrumentRow) -> Instrument:
         ter_percent=_decimal(row.ter_percent),
         distribution_policy=None if row.distribution_policy is None else DistributionPolicy(row.distribution_policy),
         domicile=row.domicile,
+        multi_asset_split={share.asset_class_id: Decimal(share.percent) for share in shares},
+        split_class_names={share.asset_class_id: share.asset_class.name for share in shares},
     )

@@ -54,9 +54,10 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `formatting.py`: Polish number, amount and date formatting and parsing of typed input; the single formatter every screen uses.
 - `history.py`: Tracks which days of Quote and NBP Rate history are cached, and computes the missing days to fetch.
 - `instrument_search.py`: Instrument search result types, the swappable search protocol, and filling empty form fields from a chosen result.
-- `instruments.py`: Instrument and Asset Class models, their validation, default Asset Classes, ISIN pattern, metal and distribution policy rules.
+- `instruments.py`: Instrument and Asset Class models, their validation, default Asset Classes, ISIN, metal, distribution policy and Multi-asset Split rules.
 - `lots.py`: The single FIFO engine that opens and consumes Lots for Positions and foreign cash, raising uncovered-sale errors.
 - `metrics.py`: Pure History metrics: XIRR, TWR, drawdowns, max drawdown, volatility and daily change per Total or Account
+- `multi_asset.py`: Multi-asset Instruments held in the View Scope, with their PLN value and split value per Asset Class, largest first
 - `periods.py`: Period presets and custom ranges for charts and results, with date calculation and text persistence
 - `portfolio_history.py`: Computes daily Portfolio value and Net Deposits per Account and Asset Class from transactions and cached prices
 - `prices.py`: Quote model, Price Source keys and names, and the per-Asset-Class Fallback Order deciding which sources to try.
@@ -107,6 +108,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `0016_instrument_isin.py`: Migration adding the optional ISIN column to Instruments
 - `0017_fund_details.py`: Migration adding fund TER, Distribution Policy and domicile columns
 - `0018_fallback_orders.py`: Migration giving each Asset Class its own Fallback Order column, filled with the spec 4.1 defaults.
+- `0019_multi_asset_splits.py`: Migration 0019 creates the multi_asset_shares table holding each Instrument's Multi-asset Split
 
 ## src/financial_app/sources/
 
@@ -135,6 +137,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `history.py`: Shared per-database History window state: background fetch, progress and failure status, cached days
 - `import_sheet.py`: Ustawienia import section that previews the Transakcje spreadsheet and saves it only after user decisions
 - `instruments.py`: Ustawienia Klasy aktywów and Instrumenty cards: editable Asset Classes and the Instrument catalog with its dialog
+- `multi_asset.py`: Multi-asset tab and split editor: edits an Instrument's Multi-asset Split and lists held Multi-asset Instruments by Asset Class
 - `periods.py`: Period selector UI: preset buttons and custom range inputs, remembered per user and redrawing listeners
 - `portfolio.py`: Read-only Portfolio tab: per-Account cards with cash balances, valued Positions, Lots, FX result and dividends
 - `price_sources.py`: Ustawienia Źródła wycen card where the user stores the personal Stooq API key
@@ -190,6 +193,9 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_instruments_ui.py`: Tests the Klasy aktywów and Instrumenty sections of Ustawienia, run without a browser.
 - `test_lots_domain.py`: Tests the FIFO Lot engine and the Positions it produces from Transactions.
 - `test_metrics_domain.py`: Unit tests for History metrics: XIRR, TWR, drawdown and volatility per Total or Account
+- `test_multi_asset_domain.py`: Tests Multi-asset Split rules in the domain: validation, class parts, History, Dashboard allocation and holdings
+- `test_multi_asset_repository.py`: Tests saving Multi-asset Splits with their Instruments, Asset Class rules, and their removal on reset
+- `test_multi_asset_ui.py`: UI tests for the Multi-asset split in the Instrument dialog, the split dialog after a buy, and the Multi-asset tab
 - `test_nbp_rates.py`: Tests fetching and caching NBP D-1 rates from saved API responses, without the network.
 - `test_paths.py`: Tests that the default data directory lies outside the repository and respects the override.
 - `test_periods_domain.py`: Unit tests for period presets, custom ranges and period text persistence
