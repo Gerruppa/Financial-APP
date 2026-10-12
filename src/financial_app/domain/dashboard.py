@@ -45,6 +45,8 @@ class Totals:
 
 @dataclass(frozen=True)
 class AccountRow:
+    """An Account's line in the Dashboard's Account table."""
+
     account: Account
     totals: Totals
 
@@ -86,49 +88,52 @@ def dashboard(
     the Dashboard shows it (with Manual Prices), not as History has it.
     """
     positions = open_positions(transactions)
-    cash = foreign_cash(transactions)
+    foreign = foreign_cash(transactions)
     balances = cash_balances(transactions)
     realized = realized_results(transactions)
     dividends = dividends_by_account(transactions)
     costs = costs_by_account(transactions)
-    today = history[-1] if history else None
+    last_day = history[-1] if history else None
     rows = []
     exposure: dict[str, Decimal] = {}
 
-    def hold(currency: str, amount: Decimal) -> Decimal:
+    def count_exposure(currency: str, amount: Decimal) -> Decimal:
+        """Add ``amount`` to the currency exposure and return it."""
         exposure[currency] = exposure.get(currency, Decimal(0)) + amount
         return amount
 
     for account in (a for a in accounts if account_id in (None, a.id)):
-        value = Decimal(0)
+        positions_value = Decimal(0)
         unrealized = Decimal(0)
         account_realized = realized.get(account.id, Decimal(0))
         for position in (p for p in positions if p.account_id == account.id):
             price = prices.get(position.instrument_id)
             currency = instruments[position.instrument_id].quote_currency
             if price is None:
-                value += hold(currency, position.cost)
+                positions_value += count_exposure(currency, position.cost)
             else:
-                value += hold(currency, position.value(price))
+                positions_value += count_exposure(currency, position.value(price))
                 unrealized += position.result(price)
-        for balance in (c for c in cash if c.account_id == account.id):
+        for balance in (c for c in foreign if c.account_id == account.id):
             if not account.exclude_fx_result:
                 account_realized += balance.realized_result
             rate = rates.get(balance.currency)
             if rate is None:
-                value += hold(balance.currency, balance.cost)
+                positions_value += count_exposure(balance.currency, balance.cost)
                 continue
-            value += hold(balance.currency, balance.value(rate))
+            positions_value += count_exposure(balance.currency, balance.value(rate))
             if not account.exclude_fx_result:
                 unrealized += balance.result(rate)
-        hold(PLN, balances.get(account.id, Decimal(0)))
+        count_exposure(PLN, balances.get(account.id, Decimal(0)))
         rows.append(
             AccountRow(
                 account,
                 Totals(
-                    net_deposits=None if today is None else today.account_net_deposits.get(account.id, Decimal(0)),
+                    net_deposits=None
+                    if last_day is None
+                    else last_day.account_net_deposits.get(account.id, Decimal(0)),
                     cash=balances.get(account.id, Decimal(0)),
-                    open_positions=value,
+                    open_positions=positions_value,
                     unrealized=unrealized,
                     realized=account_realized,
                     dividends=dividends.get(account.id, Decimal(0)),
@@ -137,10 +142,10 @@ def dashboard(
             )
         )
     scoped = [row.totals for row in rows]
-    if today is None:
+    if last_day is None:
         net_deposits = None
     else:
-        net_deposits = today.net_deposits if account_id is None else scoped[0].net_deposits
+        net_deposits = last_day.net_deposits if account_id is None else scoped[0].net_deposits
     xirr_rate = None
     if history and period is not None:
         # Today's values as the Dashboard has them; an Account outside the scope keeps History's

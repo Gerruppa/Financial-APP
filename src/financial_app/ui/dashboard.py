@@ -6,23 +6,19 @@ day before today); Net Deposits come from History, "—" while it is computed.
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from decimal import Decimal
 
 from nicegui import ui
 from sqlalchemy import Engine
 
-from financial_app.domain.currencies import MissingNbpRateError
 from financial_app.domain.dashboard import AccountRow, CurrencyShare, Totals, dashboard
-from financial_app.domain.formatting import format_count, format_datetime, format_percent, format_pln
+from financial_app.domain.formatting import format_count, format_percent, format_pln
 from financial_app.domain.portfolio_history import DayValue
-from financial_app.domain.transactions import PLN
-from financial_app.domain.valuation import instrument_price
 from financial_app.persistence.accounts import list_accounts
 from financial_app.persistence.instruments import list_instruments
-from financial_app.persistence.quotes import latest_quotes
 from financial_app.persistence.transactions import list_transactions
+from financial_app.sources.current_prices import TodaysRates, current_prices
 from financial_app.sources.nbp import NbpRates
-from financial_app.sources.prices import RefreshStatus, last_refresh, unpriced_instruments
+from financial_app.sources.prices import RefreshStatus, last_refresh, refresh_summary, unpriced_instruments
 from financial_app.ui.periods import PeriodChoice, period_selector
 from financial_app.ui.view_scope import ViewScope
 
@@ -31,6 +27,9 @@ DASH = "—"
 
 @dataclass
 class DashboardPage:
+    """The Dashboard tab of the View Scope, under the period selector; ``history`` gives History's days once
+    computed. It never offers editing controls."""
+
     engine: Engine
     rates: NbpRates
     scope: ViewScope
@@ -55,40 +54,28 @@ class DashboardPage:
         # list_transactions is newest first; the FIFO engine wants entry order
         transactions = list(reversed(list_transactions(self.engine)))
         instruments = {i.id: i for i in list_instruments(self.engine)}
-        quotes = latest_quotes(self.engine)
         refresh = last_refresh(self.engine)
-        stale = {failure.instrument_id for failure in refresh.failures} if refresh else set()
-        rates: dict[str, Decimal | None] = {PLN: Decimal(1)}
+        rates = TodaysRates(self.rates)
         prices = {
-            i.id: instrument_price(i, quotes.get(i.id), lambda currency: self._rate(currency, rates), i.id in stale).pln
-            for i in instruments.values()
+            i: price.pln for i, price in current_prices(self.engine, instruments.values(), rates, refresh).items()
         }
         for currency in {t.cash_currency for t in transactions}:
-            self._rate(currency, rates)
+            rates(currency)
         days = self.history()
         board = dashboard(
             transactions,
             list_accounts(self.engine),
             instruments,
             prices,
-            {currency: rate for currency, rate in rates.items() if rate is not None},
+            rates.known(),
             days,
             self.scope.account_id,
             self.period.dates(),
         )
-        _price_status(refresh, len(unpriced_instruments(self.engine)))
+        _prices_line(refresh, len(unpriced_instruments(self.engine)))
         _totals(board.totals)
         _account_table(board.accounts)
         _currency_exposure(board.currencies)
-
-    def _rate(self, currency: str, rates: dict[str, Decimal | None]) -> Decimal | None:
-        """The NBP Rate from the last business day before today, fetched once per currency into ``rates``."""
-        if currency not in rates:
-            try:
-                rates[currency] = self.rates.latest(currency).rate
-            except MissingNbpRateError:
-                rates[currency] = None
-        return rates[currency]
 
 
 def _totals(totals: Totals) -> None:
@@ -175,12 +162,11 @@ def _currency_exposure(currencies: tuple[CurrencyShare, ...]) -> None:
                 ui.label(format_percent(currency.share * 100)).classes("text-right")
 
 
-def _price_status(refresh: RefreshStatus | None, unpriced: int) -> None:
-    """When prices were last refreshed and how many Instruments failed; the unpriced ones lead to Ustawienia."""
+def _prices_line(refresh: RefreshStatus | None, unpriced: int) -> None:
+    """When prices were last refreshed and how many Instruments failed, as in the header; the Instruments without a
+    price lead to their list in Ustawienia."""
     with ui.row().classes("w-full items-center gap-4 text-sm").mark("dashboard-prices"):
-        text = f"Wyceny: {format_datetime(refresh.refreshed_at) if refresh else 'brak'}"
-        if refresh and refresh.failures:
-            text += f" · {format_count(len(refresh.failures), 'błąd', 'błędy', 'błędów')}"
-        ui.label(text).classes("text-negative" if refresh and refresh.failures else "text-gray-600")
+        ui.label(refresh_summary(refresh)).classes("text-negative" if refresh and refresh.failures else "text-gray-600")
         if unpriced:
-            ui.link(f"Instrumenty bez wyceny: {unpriced}", "/ustawienia")
+            text = format_count(unpriced, "instrument bez wyceny", "instrumenty bez wyceny", "instrumentów bez wyceny")
+            ui.link(text, "/ustawienia")

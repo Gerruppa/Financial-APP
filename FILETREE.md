@@ -112,6 +112,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `analizy.py`: Fund and PPK Quotes and fund search through the undocumented analizy.pl API, a price source and an Instrument lookup.
 - `bankier.py`: Fetches fund and PPK Quotes from bankier.pl pages as the fallback price source
 - `bossa.py`: Fetches GPW, NewConnect, ETF and bond Quotes in PLN from the Bossa JSON API
+- `current_prices.py`: Today's valuation inputs shared by the Portfolio and the Dashboard: Instrument prices and NBP Rates from the last business day before today, each currency fetched once
 - `export.py`: Writes the Transactions list to CSV and XLSX files for export
 - `history.py`: Returns an Instrument's Quotes in a date range, fetching missing days from Stooq into cache
 - `nbp.py`: Gets NBP exchange rates from the NBP API through the local cache

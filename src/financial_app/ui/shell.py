@@ -8,7 +8,7 @@ from datetime import datetime
 from nicegui import background_tasks, run, ui
 from sqlalchemy import Engine
 
-from financial_app.domain.formatting import format_count, format_datetime
+from financial_app.domain.formatting import format_datetime
 from financial_app.domain.instrument_search import CombinedSearch, InstrumentSearch
 from financial_app.domain.prices import ANALIZY, BANKIER, BOSSA, SOURCE_NAMES, YAHOO, refresh_due, source_reason
 from financial_app.persistence.quotes import last_successful_refresh
@@ -18,7 +18,7 @@ from financial_app.sources.bossa import BossaSource
 from financial_app.sources.history import QuoteHistory
 from financial_app.sources.nbp import NbpRates
 from financial_app.sources.portfolio_history import PortfolioHistory
-from financial_app.sources.prices import PriceSource, RefreshResult, last_refresh, refresh_prices
+from financial_app.sources.prices import PriceSource, RefreshResult, last_refresh, refresh_prices, refresh_summary
 from financial_app.sources.yahoo import YahooSearch, YahooSource
 from financial_app.ui.dashboard import DashboardPage
 from financial_app.ui.dialogs import install_movable_dialogs
@@ -217,12 +217,7 @@ def _price_status(engine: Engine, refreshing: bool) -> None:
     While a refresh runs it says so."""
     status = last_refresh(engine)
     failures = status.failures if status and not refreshing else []
-    if refreshing:
-        text = "Wyceny: odświeżanie…"
-    else:
-        text = f"Wyceny: {format_datetime(status.refreshed_at) if status else 'brak'}"
-    if failures:
-        text += f" · {format_count(len(failures), 'błąd', 'błędy', 'błędów')}"
+    text = "Wyceny: odświeżanie…" if refreshing else refresh_summary(status)
     button = ui.button(text, on_click=lambda: _price_errors_dialog(engine)).props("flat no-caps")
     button.props(f"color={'red-4' if failures else 'white'}").mark("price-status")
 

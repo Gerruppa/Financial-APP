@@ -196,6 +196,6 @@ async def test_the_price_status_shows_the_last_refresh_its_errors_and_the_unpric
 
         with user.scope(marker="dashboard-prices"):
             await user.should_see("Wyceny: 12.10.2026 08:00 · 1 błąd")
-            await user.should_see("Instrumenty bez wyceny: 1")
-            user.find("Instrumenty bez wyceny: 1").click()
+            await user.should_see("1 instrument bez wyceny")
+            user.find("1 instrument bez wyceny").click()
         await user.should_see("Klasy aktywów")
