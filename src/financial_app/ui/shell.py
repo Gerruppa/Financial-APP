@@ -20,6 +20,7 @@ from financial_app.sources.nbp import NbpRates
 from financial_app.sources.portfolio_history import PortfolioHistory
 from financial_app.sources.prices import PriceSource, RefreshResult, last_refresh, refresh_prices
 from financial_app.sources.yahoo import YahooSearch, YahooSource
+from financial_app.ui.dashboard import DashboardPage
 from financial_app.ui.dialogs import install_movable_dialogs
 from financial_app.ui.history import history_status, shared_history
 from financial_app.ui.periods import PeriodChoice, period_selector
@@ -55,7 +56,7 @@ TABS = [
 _running_refreshes: dict[Engine, asyncio.Future[RefreshResult | None]] = {}
 
 # The tabs showing the period selector until their charts and results arrive (spec section 5)
-PERIOD_TABS = {"/", "/wyniki"}
+PERIOD_TABS = {"/wyniki"}
 
 
 def build_shell(
@@ -86,6 +87,7 @@ def build_shell(
     )
     scope = ViewScope(engine)
     period = PeriodChoice(engine, lambda: now().date())
+    dashboard_page = DashboardPage(engine, rates, scope, period, lambda: shared.days)
     transactions_page = TransactionsPage(engine, rates, scope)
     portfolio_page = PortfolioPage(engine, rates, scope)
     unpriced = UnpricedSection(engine)
@@ -94,10 +96,12 @@ def build_shell(
         """Compute History (or take it already computed) and show it in the switcher."""
         await shared.values()
         switcher.refresh()
+        dashboard_page.refresh()
 
     def history_outdated() -> None:
         shared.invalidate()
         switcher.refresh()
+        dashboard_page.refresh()
         background_tasks.create(load_history(), name="history")
 
     async def fetch_history() -> None:
@@ -123,6 +127,7 @@ def build_shell(
         switcher.refresh()
         transactions_page.refresh()
         portfolio_page.refresh()
+        dashboard_page.refresh()
         scope_pages.refresh()
 
     scope.on_change(scope_changed)
@@ -198,6 +203,7 @@ def build_shell(
     pages: dict[str, Callable[[], None]] = {tab.path: placeholder(tab) for tab in TABS}
     pages["/transakcje"] = transactions_page.build
     pages["/portfolio"] = portfolio_page.build
+    pages["/"] = lambda: scope_pages(dashboard_page.build)
     pages["/ustawienia"] = lambda: build_settings_page(engine, rates, search, sources, unpriced)
     ui.sub_pages(pages).classes("w-full").mark("page-content")
 

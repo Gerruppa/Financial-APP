@@ -48,6 +48,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `__init__.py`: Docstring marking the domain package as pure-Python calculations with no UI or database imports.
 - `accounts.py`: Account Types, their Tax Regime descriptions and validation of Account fields with Polish error messages.
 - `currencies.py`: Currency code check and the NBP Rate value type, plus the error raised when a rate is missing.
+- `dashboard.py`: Dashboard totals, Account table and currency exposure from Transactions, prices, NBP Rates and History's Net Deposits
 - `export.py`: Builds the transaction export rows with columns, amounts, origin and comment, independent of file format.
 - `formatting.py`: Polish number, amount and date formatting and parsing of typed input; the single formatter every screen uses.
 - `history.py`: Tracks which days of Quote and NBP Rate history are cached, and computes the missing days to fetch.
@@ -124,6 +125,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 
 - `__init__.py`: Package marker for the NiceGUI user interface layer, a thin layer over domain and persistence
 - `accounts.py`: Ustawienia Konta card: lists Accounts and opens the add and edit dialog
+- `dashboard.py`: Dashboard tab UI: totals tiles, price status, Account table and currency exposure under the period selector
 - `dialogs.py`: Draggable dialog support with no backdrop, so the screen behind stays readable
 - `fund_details.py`: Builds the short fund detail texts (TER, Distribution Policy, domicile) shared by Instrument list and Portfolio
 - `history.py`: Shared per-database History window state: background fetch, progress and failure status, cached days
@@ -154,6 +156,8 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_clear_data_ui.py`: UI tests for the Wyczyść dane confirmation flow in Ustawienia
 - `test_conversion_fee_domain.py`: Domain tests for the broker FX Conversion Fee on foreign-currency Buys and Sells
 - `test_conversion_fee_ui.py`: UI tests for the FX Conversion Fee and payment source in the transaction dialog
+- `test_dashboard_domain.py`: Tests the Dashboard domain totals, Account table and currency exposure
+- `test_dashboard_ui.py`: UI tests for the Dashboard tab: totals, Account table, currency exposure and price status
 - `test_database.py`: Checks that the ORM models and Alembic migrations stay in sync
 - `test_dividends_domain.py`: Domain tests for Dividends, interest, Costs and DRIP calculations
 - `test_dividends_repository.py`: Tests saving Dividends, Costs and DRIPs to SQLite

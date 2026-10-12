@@ -6,8 +6,8 @@ from decimal import Decimal
 import pytest
 
 from financial_app.domain.currencies import NbpRate
-from financial_app.domain.lots import InsufficientQuantityError, open_positions
-from financial_app.domain.transactions import TransactionDraft, TransactionType, buy_or_sell
+from financial_app.domain.lots import InsufficientQuantityError, open_positions, realized_results
+from financial_app.domain.transactions import TransactionDraft, TransactionType, buy_or_sell, security_transfer
 
 IKE, XTB = 1, 2
 PZU, CDR = 10, 20
@@ -166,3 +166,22 @@ def test_partial_sell_keeps_both_costs_pro_rata() -> None:
 
     [lot] = position.lots
     assert lot.cost == lot.tax_cost == Decimal(303)
+
+
+def test_sell_realises_its_net_proceeds_less_the_fifo_cost_of_the_units_sold() -> None:
+    # 4 of 10 units costing 510 with the commission cost 204; the Sell brings 4 × 70 − 6 = 274
+    trades = [_buy("10", "50", fee="10"), _sell("4", "70", day=2, fee="6")]
+
+    assert realized_results(trades) == {IKE: Decimal(70)}
+
+
+def test_security_transfer_realises_nothing_and_the_target_sells_at_the_moved_cost() -> None:
+    # Lots of 50 and 60 move to XTB; selling 15 there at 80 consumes the first Lot and half of the second: 500 + 300
+    trades = [
+        _buy("10", "50", day=1),
+        _buy("10", "60", day=2),
+        security_transfer(IKE, date(2026, 1, 3), XTB, PZU, Decimal(20)),
+        _sell("15", "80", day=4, account=XTB),
+    ]
+
+    assert realized_results(trades) == {XTB: Decimal(400)}

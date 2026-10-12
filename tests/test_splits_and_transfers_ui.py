@@ -6,8 +6,7 @@ from pathlib import Path
 
 import pytest
 from nicegui import ui
-from nicegui.testing import User, user_simulation
-from nicegui.testing.user_interaction import UserInteraction
+from nicegui.testing import User, UserInteraction, user_simulation
 from sqlalchemy import Engine
 
 from financial_app.domain.accounts import AccountDraft, AccountType
@@ -57,7 +56,8 @@ def _shell(engine: Engine) -> None:
 
 def _choose(user: User, marker: str, option: str) -> None:
     user.find(marker=marker).click()
-    user.find(option).click()
+    # Only in that select: the page behind the dialog may show the same name (e.g. the Dashboard's Account table)
+    UserInteraction(user, set(user.find(marker=marker).elements), option).click()
 
 
 def _start(user: User, kind: str, account: str = "IKE") -> None:
