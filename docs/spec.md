@@ -144,12 +144,12 @@ Shell (UI prototype verdict, branch `prototype/ui-shell`, issue #1): **left navi
 - **Multi-asset Split**: one fixed split per Instrument (percent per Asset Class, summing to 100%), applied to all of History (documented simplification); an Instrument without one stays in Multi-asset.
 - **View Scope** is remembered in `app_settings` (`view_scope`: `total` or an Account id), falling back to Total if the Account is gone. Daily change = V_today − V_yesterday − today's flows, "—" while history loads.
 - **Allocation chart** shows current class shares (with Multi-asset Splits) until Investment Strategies add targets.
-- **Historia parity test**: skipped without `reference/`; compares total value, Net Deposits and value per class at each month end, tolerance 1% or 50 PLN, reporting only larger differences; each explained one goes to section 9.
+- **Historia parity test**: skipped without `reference/`; compares total value, Net Deposits and value per class at each month end, tolerance 1% or 50 PLN (whichever is larger), reporting only larger differences; each explained one goes to section 9. Until Stage 3 the bond class differs by the accrued interest, as Bond Series stay at cost (#70).
 
 ## 7. Import and verification (Q3, Q25, Q42, Q51–Q53)
 - Importer framework: parse file → preview with Instrument/Account mapping (unknown tickers resolved by the user; an unknown Konto is matched to an Account or creates one through the Account dialog, prefilled with its name and PLN plus the foreign cash its rows hold, #63) → duplicate detection → commit. Duplicates: same external id skipped; otherwise similar Transaction (Account, date, Instrument, quantity, ~amount) prompts the user.
 - Stage 1 importer: `reference/Newest portfolio.xlsx` (one-time). Ticker mapping from sheet formats (`EXCH:SYM`, Biznesradar, `EDO-DDMMYY` → Bond Series, `Waluty_<CUR>` → foreign cash).
-- **Parity tests**: the sheet's transactions with prices/FX frozen at export date; compare Portfolio, Dashboard totals, FIFO, XIRR and bonds within 0.01 PLN; each difference explained or recorded as a deviation. Stored Historia compared day by day for large discrepancies only. Fixtures stay in `reference/` (git-ignored).
+- **Parity tests**: the sheet's transactions with prices/FX frozen at export date; compare Portfolio, Dashboard totals, FIFO, XIRR and bonds within 0.01 PLN; each difference explained or recorded as a deviation. Stored Historia compared at each month end for large discrepancies only (6.1). Fixtures stay in `reference/` (git-ignored).
 - Stage 6: **XTB importer** (xStation account-history XLSX) and **Reconciliation** view: pair sheet vs XTB Transactions (Account, Instrument, type, quantity, date ±3 days); lists of differing pairs, sheet-only, XTB-only; per-pair or bulk "take XTB" / "keep mine"; XTB is the source of truth for XTB Accounts by default.
 
 ## 8. Tax and limits (Q18, Q47) — stage 6
@@ -174,6 +174,7 @@ Shell (UI prototype verdict, branch `prototype/ui-shell`, issue #1): **left navi
 14. Off-by-one in currency dropdown; name formula frozen; only first space removed from tickers.
 15. Multi-asset existence checked on raw instead of normalised ticker.
 16. Raw-value drawdown distorted by deposits (replaced by TWR-based drawdown).
+17. Historia rows are written once from the state of that moment, so a Transaction entered later with an earlier date never reaches the rows already written (Net Deposits and values stay short until the day it was entered); History is recomputed from the Transactions (ADR-0002). Found by the Historia parity test (#70).
 
 ## 10. Delivery plan (Q5, Q54)
 
