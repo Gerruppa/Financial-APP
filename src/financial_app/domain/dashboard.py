@@ -1,5 +1,6 @@
-"""The Dashboard's totals (issue #72, spec section 5) and allocation (issue #73, with the Multi-asset Splits of
-#75), from the Transactions and today's prices and NBP Rates.
+"""The Dashboard's totals (issue #72, spec section 5), allocation (issue #73, with the Multi-asset Splits of #75),
+the Account ranking's figures and the profit by source (issue #89), from the Transactions and today's prices and NBP
+Rates.
 
 Like the sheet's Dashboard, "Gotówka" is the PLN Cash Balance and "Otwarte pozycje" the Positions plus the foreign
 cash; a Position without a PLN price counts at cost and adds nothing to the result, as in the Portfolio. Net Deposits
@@ -11,11 +12,12 @@ from dataclasses import dataclass, field, replace
 from datetime import date
 from decimal import Decimal
 
-from financial_app.domain.accounts import Account
+from financial_app.domain.accounts import Account, tax_regime_for
 from financial_app.domain.instruments import Instrument
 from financial_app.domain.lots import foreign_cash, open_positions, realized_results
-from financial_app.domain.metrics import xirr
+from financial_app.domain.metrics import twr, xirr
 from financial_app.domain.portfolio_history import CASH_CLASS, FOREIGN_CASH_CLASS, DayValue
+from financial_app.domain.profit_sources import ProfitSources, profit_sources
 from financial_app.domain.transactions import (
     PLN,
     TransactionDraft,
@@ -28,7 +30,8 @@ from financial_app.domain.transactions import (
 @dataclass(frozen=True)
 class Totals:
     """Sums in PLN; ``net_deposits`` is ``None`` while History is not computed, ``xirr`` (a fraction) also without a
-    rate that settles the flows."""
+    rate that settles the flows, ``twr`` (a fraction) without a period. ``estimated_tax`` is the Belka a Regular
+    Account would pay on its unrealised gains at the Tax cost if it sold everything today (issue #89)."""
 
     net_deposits: Decimal | None
     cash: Decimal
@@ -38,10 +41,17 @@ class Totals:
     dividends: Decimal
     costs: Decimal
     xirr: Decimal | None = None
+    twr: Decimal | None = None
+    estimated_tax: Decimal = Decimal(0)
 
     @property
     def value(self) -> Decimal:
         return self.cash + self.open_positions
+
+    @property
+    def profit(self) -> Decimal | None:
+        """The value less the Net Deposits, as the sheet's "Zysk / strata"; ``None`` while History is computed."""
+        return None if self.net_deposits is None else self.value - self.net_deposits
 
 
 @dataclass(frozen=True)
@@ -75,7 +85,7 @@ class Dashboard:
     """The sums of the View Scope, a row per Account in it (an inactive one only while it holds something), its
     currency exposure and its allocation by Asset Class, largest first. For the Investment Strategy (issue #76),
     ``holdings`` is the value by Asset Class name and Instrument id and ``account_classes`` each Account's value by
-    Asset Class name, cash included."""
+    Asset Class name, cash included; ``sources`` is the scope's result by source (issue #89)."""
 
     totals: Totals
     accounts: tuple[AccountRow, ...]
@@ -83,6 +93,7 @@ class Dashboard:
     classes: tuple[ClassShare, ...] = ()
     holdings: Mapping[str, Mapping[int, Decimal]] = field(default_factory=dict)
     account_classes: Mapping[int, Mapping[str, Decimal]] = field(default_factory=dict)
+    sources: ProfitSources = ProfitSources(*(Decimal(0),) * 6)
 
 
 def dashboard(
@@ -114,6 +125,8 @@ def dashboard(
     allocation: dict[str, Decimal] = {}
     holdings: dict[str, dict[int, Decimal]] = {}
     account_classes: dict[int, dict[str, Decimal]] = {}
+    # Unrealised gains at the Tax cost by tax rate: PIT-38 is one return, so Total offsets the Accounts' gains
+    taxable: dict[Decimal, Decimal] = {}
 
     def count_held(
         currency: str, amount: Decimal, parts: Iterable[tuple[str, Decimal]], instrument_id: int | None = None
@@ -136,6 +149,7 @@ def dashboard(
     for account in (a for a in accounts if account_id in (None, a.id)):
         positions_value = Decimal(0)
         unrealized = Decimal(0)
+        taxable_gain = Decimal(0)
         account_realized = realized.get(account.id, Decimal(0))
         for position in (p for p in positions if p.account_id == account.id):
             price = prices.get(position.instrument_id)
@@ -145,6 +159,7 @@ def dashboard(
             positions_value += count_held(instrument.quote_currency, value, parts, position.instrument_id)
             if price is not None:
                 unrealized += position.result(price)
+                taxable_gain += position.value(price) - position.tax_cost
         for balance in (c for c in foreign if c.account_id == account.id):
             if not account.exclude_fx_result:
                 account_realized += balance.realized_result
@@ -156,6 +171,8 @@ def dashboard(
             if not account.exclude_fx_result:
                 unrealized += balance.result(rate)
         count_cash(PLN, CASH_CLASS, balances.get(account.id, Decimal(0)))
+        tax_rate = tax_regime_for(account.account_type).unrealized_tax_rate
+        taxable[tax_rate] = taxable.get(tax_rate, Decimal(0)) + taxable_gain
         rows.append(
             AccountRow(
                 account,
@@ -169,6 +186,7 @@ def dashboard(
                     realized=account_realized,
                     dividends=dividends.get(account.id, Decimal(0)),
                     costs=costs.get(account.id, Decimal(0)),
+                    estimated_tax=tax_rate * max(taxable_gain, Decimal(0)),
                 ),
             )
         )
@@ -177,13 +195,22 @@ def dashboard(
         net_deposits = None
     else:
         net_deposits = last_day.net_deposits if account_id is None else scoped[0].net_deposits
-    xirr_rate = None
+    xirr_rate = twr_rate = None
     if history and period is not None:
         # Today's values as the Dashboard has them; an Account outside the scope keeps History's
         values = dict(history[-1].accounts) | {row.account.id: row.totals.value for row in rows}
         ending = [*history[:-1], replace(history[-1], accounts=values)]
         xirr_rate = xirr(ending, *period, account_id)
-        rows = [replace(row, totals=replace(row.totals, xirr=xirr(ending, *period, row.account.id))) for row in rows]
+        twr_rate = twr(ending, *period, account_id)
+        rows = [
+            replace(
+                row,
+                totals=replace(
+                    row.totals, xirr=xirr(ending, *period, row.account.id), twr=twr(ending, *period, row.account.id)
+                ),
+            )
+            for row in rows
+        ]
     totals = Totals(
         net_deposits=net_deposits,
         cash=sum((row.cash for row in scoped), Decimal(0)),
@@ -193,13 +220,23 @@ def dashboard(
         dividends=sum((row.dividends for row in scoped), Decimal(0)),
         costs=sum((row.costs for row in scoped), Decimal(0)),
         xirr=xirr_rate,
+        twr=twr_rate,
+        estimated_tax=sum((rate * max(gain, Decimal(0)) for rate, gain in taxable.items()), Decimal(0)),
     )
     currencies = tuple(CurrencyShare(*share) for share in _shares(exposure))
     classes = tuple(ClassShare(*share) for share in _shares(allocation) if share[1])
     # An inactive Account stays in the totals (its past costs and Dividends) but leaves the table once emptied
     shown = tuple(row for row in rows if row.account.active or row.totals.value or row.account.id == account_id)
     held = {account: {name: v for name, v in values.items() if v} for account, values in account_classes.items()}
-    return Dashboard(totals, shown, currencies, classes, holdings, {a: values for a, values in held.items() if values})
+    return Dashboard(
+        totals,
+        shown,
+        currencies,
+        classes,
+        holdings,
+        {a: values for a, values in held.items() if values},
+        profit_sources(transactions, accounts, instruments, prices, rates, account_id),
+    )
 
 
 def _shares(values: Mapping[str, Decimal]) -> list[tuple[str, Decimal, Decimal]]:

@@ -218,3 +218,66 @@ def test_the_allocation_comes_by_account_and_by_instrument_for_the_investment_st
         IKE: {"Akcje": Decimal(600), "Gotówka": Decimal(500)},
         XTB: {"Gotówka": Decimal(300)},
     }
+
+
+def test_a_regular_account_estimates_belka_on_its_unrealised_gains_at_the_tax_cost() -> None:
+    # IKE is a real IKE here: no tax; on XTB 10 PZU bought for 505 zł are worth 600 zł, so 19% of 95 zł
+    ike = Account("IKE", "", AccountType.IKE, ("PLN",), id=IKE)
+    transactions = [_deposit("1000"), _buy("10", "50"), _deposit("1000", account=XTB)]
+    transactions.append(_buy("10", "50", fee="5", account=XTB))
+
+    board = dashboard(transactions, [ike, ACCOUNTS[1]], INSTRUMENTS, {PZU: Decimal(60)}, {}, None)
+
+    ike_row, xtb_row = board.accounts
+    assert ike_row.totals.estimated_tax == Decimal(0)
+    assert xtb_row.totals.estimated_tax == Decimal("18.05")
+    assert board.totals.estimated_tax == Decimal("18.05")
+
+
+def test_losses_on_one_regular_account_offset_gains_on_another_in_the_total() -> None:
+    # PIT-38 is one return: IKE (Regular here) gains 100 zł, XTB loses 60 zł, so Total estimates 19% of 40 zł
+    transactions = [_deposit("1000"), _buy("10", "50"), _deposit("1000", account=XTB), _buy("10", "66", account=XTB)]
+
+    board = dashboard(transactions, ACCOUNTS, INSTRUMENTS, {PZU: Decimal(60)}, {}, None)
+
+    ike_row, xtb_row = board.accounts
+    assert (ike_row.totals.estimated_tax, xtb_row.totals.estimated_tax) == (Decimal(19), Decimal(0))
+    assert board.totals.estimated_tax == Decimal("7.60")
+
+
+def test_the_profit_is_the_value_less_the_net_deposits_and_waits_for_history() -> None:
+    transactions = [_deposit("1000"), _buy("10", "50")]
+
+    with_history = dashboard(
+        transactions, ACCOUNTS, INSTRUMENTS, {PZU: Decimal(60)}, {}, [_today("1000", {IKE: "1000"})]
+    )
+    loading = dashboard(transactions, ACCOUNTS, INSTRUMENTS, {PZU: Decimal(60)}, {}, None)
+
+    assert with_history.totals.profit == Decimal(100)
+    assert with_history.accounts[0].totals.profit == Decimal(100)
+    assert loading.totals.profit is None
+
+
+def test_each_account_row_has_its_twr_over_the_period() -> None:
+    # IKE grows from 1000 to 1100 (today's value, 10 PZU at 60) with no flows in between: a TWR of 10%
+    history = [
+        DayValue(date(2026, 1, 1), {IKE: Decimal(1000)}, {}, Decimal(1000), {IKE: Decimal(1000)}, frozenset()),
+        DayValue(TODAY, {IKE: Decimal(1100)}, {}, Decimal(1000), {IKE: Decimal(1000)}, frozenset()),
+    ]
+
+    transactions = [_deposit("1000"), _buy("10", "50")]
+
+    board = dashboard(
+        transactions, ACCOUNTS, INSTRUMENTS, {PZU: Decimal(60)}, {}, history, period=(date(2026, 1, 1), TODAY)
+    )
+
+    assert board.accounts[0].totals.twr == Decimal("0.1")
+    assert board.totals.twr == Decimal("0.1")
+
+
+def test_the_dashboard_carries_the_profit_by_source() -> None:
+    transactions = [_deposit("1000"), _buy("10", "50", fee="5")]
+
+    board = dashboard(transactions, ACCOUNTS, INSTRUMENTS, {PZU: Decimal(60)}, {}, None)
+
+    assert (board.sources.price, board.sources.costs) == (Decimal(100), Decimal(-5))

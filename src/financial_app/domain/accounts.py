@@ -49,10 +49,18 @@ class TaxRegime:
     name: str
     summary: str
     is_placeholder: bool = False
+    # The tax the Dashboard's "po podatku" toggle estimates on unrealised gains, a fraction (issue #89)
+    unrealized_tax_rate: Decimal = Decimal(0)
 
+
+BELKA_RATE = Decimal("0.19")
 
 _TAX_REGIMES = {
-    AccountType.REGULAR: TaxRegime("Podatek Belki", "19% podatku od zysku przy każdej sprzedaży, rozliczany w PIT-38."),
+    AccountType.REGULAR: TaxRegime(
+        "Podatek Belki",
+        "19% podatku od zysku przy każdej sprzedaży, rozliczany w PIT-38.",
+        unrealized_tax_rate=BELKA_RATE,
+    ),
     AccountType.IKE: TaxRegime(
         "IKE", "Zwolnienie z podatku przy wypłacie spełniającej warunki ustawy; w przeciwnym razie podatek od zysku."
     ),

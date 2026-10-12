@@ -46,10 +46,11 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 ## src/financial_app/domain/
 
 - `__init__.py`: Docstring marking the domain package as pure-Python calculations with no UI or database imports.
+- `account_ranking.py`: Account ranking and treemap figures for the Total Dashboard: XIRR, TWR, P&L, Net Deposits and costs per Account, sorted with best and worst marked
 - `accounts.py`: Account Types, their Tax Regime descriptions and validation of Account fields with Polish error messages.
 - `charts.py`: Dashboard chart data from History and Transactions: value, profit, XIRR, class shares and dividends by year, per scope and period
 - `currencies.py`: Currency code check and the NBP Rate value type, plus the error raised when a rate is missing.
-- `dashboard.py`: Dashboard totals, Account table and currency exposure from Transactions, prices, NBP Rates and History's Net Deposits
+- `dashboard.py`: Dashboard totals, Account table, currency exposure and allocation from Transactions, prices, NBP Rates and History, plus estimated tax and profit by source
 - `export.py`: Builds the transaction export rows with columns, amounts, origin and comment, independent of file format.
 - `formatting.py`: Polish number, amount and date formatting and parsing of typed input; the single formatter every screen uses.
 - `history.py`: Tracks which days of Quote and NBP Rate history are cached, and computes the missing days to fetch.
@@ -61,6 +62,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `periods.py`: Period presets and custom ranges for charts and results, with date calculation and text persistence
 - `portfolio_history.py`: Computes daily Portfolio value and Net Deposits per Account and Asset Class from transactions and cached prices
 - `prices.py`: Quote model, Price Source keys and names, and the per-Asset-Class Fallback Order deciding which sources to try.
+- `profit_sources.py`: Splits the View Scope's result into price, FX, Dividends, interest, costs and taxes for the Dashboard waterfall
 - `results.py`: Wyniki tab figures: period XIRR, TWR, drawdown, volatility and fixed-period returns per Total and Account, from History
 - `spreadsheet_import.py`: Pure conversion of the user's Inwestomat Transakcje sheet rows into Transaction drafts, with fingerprints for re-import skipping.
 - `strategy.py`: Investment Strategy rules: Allocation Targets with tolerance bands, Instrument Targets, and the water-filling split of the Planned Deposit
@@ -134,9 +136,10 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 ## src/financial_app/ui/
 
 - `__init__.py`: Package marker for the NiceGUI user interface layer, a thin layer over domain and persistence
+- `account_ranking.py`: Total Dashboard's Accounts treemap and sortable Account ranking; clicking a tile switches the View Scope to that Account
 - `accounts.py`: Ustawienia Konta card: lists Accounts and opens the add and edit dialog
-- `charts.py`: Dashboard's nine ECharts charts (exposure, allocation, Account values, dividends, History series), following the View Scope and period
-- `dashboard.py`: Dashboard tab UI: totals tiles, price status, Account table, currency exposure and charts under the period selector
+- `charts.py`: Dashboard's nine ECharts charts plus the profit-by-source waterfall, following the View Scope and period
+- `dashboard.py`: Dashboard tab UI: totals, price status, Account table, exposure, charts, Account treemap and ranking, and the after-tax toggle
 - `dialogs.py`: Draggable dialog support with no backdrop, so the screen behind stays readable
 - `fund_details.py`: Builds the short fund detail texts (TER, Distribution Policy, domicile) shared by Instrument list and Portfolio
 - `history.py`: Shared per-database History window state: background fetch, progress and failure status, cached days
@@ -157,6 +160,8 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 
 ## tests/
 
+- `test_account_ranking_domain.py`: Tests Account ranking figures, sorting, best and worst marks and treemap tiles
+- `test_account_ranking_ui.py`: Tests the Dashboard's Account treemap and ranking, profit waterfall and after-tax toggle
 - `test_accounts_domain.py`: Tests Account Types, Tax Regime registry and AccountDraft validation rules
 - `test_accounts_repository.py`: Tests saving, listing and editing Accounts in SQLite, including unique names
 - `test_accounts_ui.py`: UI tests for Ustawienia Konta: adding, editing and deactivating Accounts without a browser
@@ -188,6 +193,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_foreign_trades_ui.py`: End-to-end UI tests for foreign-currency Buys and Sells using the NBP Rate
 - `test_formatting.py`: Tests the Polish number, date and count formatting and typed-input parsing helpers
 - `test_fund_details_ui.py`: UI tests for a fund's TER, Distribution Policy and domicile in the dialog and Portfolio
+- `test_fx_effect_domain.py`: Tests the FX part of foreign Positions' results from the PLN and foreign costs of FIFO Lots
 - `test_glossary.py`: Test that GLOSSARY.md lists exactly the terms defined in CONTEXT.md
 - `test_history_domain.py`: Tests which days of a price history still need fetching given cached days
 - `test_history_parity.py`: Parity test of History against the user's spreadsheet Historia tab at each month end, skipped without reference data
@@ -215,6 +221,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_prices_domain.py`: Tests the order of Price Sources per Instrument and when start-up price refresh is due.
 - `test_prices_repository.py`: Tests saving Source Symbols and Quotes in SQLite.
 - `test_prices_ui.py`: Tests Source Symbols in the Instrument dialog, Portfolio valuation from Quotes and refresh status badges.
+- `test_profit_sources_domain.py`: Tests the profit-by-source split adds up to the result the Dashboard tiles show
 - `test_results_domain.py`: Tests for the Wyniki tab's period results and fixed-period rows per Total and Account
 - `test_results_ui.py`: UI tests for the Wyniki tab: tiles, drawdown chart, results table and pending state
 - `test_shell.py`: Smoke tests of the app shell's tabs and navigation, run without a browser.
