@@ -4,7 +4,16 @@ from datetime import date
 from decimal import Decimal
 
 from financial_app.domain.instruments import Instrument
-from financial_app.domain.metrics import MaxDrawdown, daily_change, drawdowns, max_drawdown, twr, volatility, xirr
+from financial_app.domain.metrics import (
+    MaxDrawdown,
+    daily_change,
+    drawdowns,
+    max_drawdown,
+    twr,
+    volatility,
+    xirr,
+    xirr_to_each,
+)
 from financial_app.domain.portfolio_history import DayValue, HistoryPrice, daily_history
 from financial_app.domain.transactions import TransactionDraft, TransactionType, buy_or_sell, cash_transfer
 
@@ -190,3 +199,10 @@ def test_an_account_moving_cash_out_has_no_daily_change_from_the_transfer() -> N
     assert daily_change(history) == 0
     assert daily_change(history, IKE) == 0
     assert daily_change(history, XTB) == 0
+
+
+def test_xirr_to_each_day_matches_xirr_to_that_day() -> None:
+    history = _history(("1000", "1000"), ("1100", "1000"), ("2210", "2000"), ("2300", "2000"))
+    days = [_day(2), _day(3), _day(4)]
+
+    assert xirr_to_each(history, _day(1), days, IKE) == [xirr(history, _day(1), day, IKE) for day in days]

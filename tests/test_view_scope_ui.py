@@ -69,6 +69,8 @@ async def test_the_switcher_offers_total_then_accounts_by_value_with_their_daily
         await user.open("/")
         with user.scope(marker="header"):
             await user.should_see("Total")
+        # The menu shows "—" until History is computed
+        await user.should_see(marker="total-net-deposits", content=f"4{NBSP}000,00{NBSP}zł")
 
         user.find(marker="view-scope").click()
 

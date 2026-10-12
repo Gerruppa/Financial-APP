@@ -1,4 +1,4 @@
-"""The Dashboard tab (issue #72, spec section 5): the View Scope's totals.
+"""The Dashboard tab (issues #72 and #73, spec section 5): the View Scope's totals and charts.
 
 Positions are valued like in the Portfolio (``domain.valuation``, foreign ones at the NBP Rate from the last business
 day before today); Net Deposits come from History, "—" while it is computed.
@@ -19,6 +19,7 @@ from financial_app.persistence.transactions import list_transactions
 from financial_app.sources.current_prices import TodaysRates, current_prices
 from financial_app.sources.nbp import NbpRates
 from financial_app.sources.prices import RefreshStatus, last_refresh, refresh_summary, unpriced_instruments
+from financial_app.ui.charts import dashboard_charts
 from financial_app.ui.periods import PeriodChoice, period_selector
 from financial_app.ui.view_scope import ViewScope
 
@@ -62,20 +63,24 @@ class DashboardPage:
         for currency in {t.cash_currency for t in transactions}:
             rates(currency)
         days = self.history()
+        accounts = list_accounts(self.engine)
+        period = self.period.dates()
         board = dashboard(
             transactions,
-            list_accounts(self.engine),
+            accounts,
             instruments,
             prices,
             rates.known(),
             days,
             self.scope.account_id,
-            self.period.dates(),
+            period,
         )
         _prices_line(refresh, len(unpriced_instruments(self.engine)))
         _totals(board.totals)
         _account_table(board.accounts)
         _currency_exposure(board.currencies)
+        account_names = {account.id: account.name for account in accounts}
+        dashboard_charts(board, transactions, account_names, days, self.scope.account_id, period)
 
 
 def _totals(totals: Totals) -> None:

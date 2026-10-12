@@ -70,6 +70,22 @@ def test_each_day_from_first_to_last_has_its_value_per_account_and_class() -> No
     assert history[2].total == Decimal(1100)
 
 
+def test_each_account_has_its_own_value_per_class() -> None:
+    history = daily_history(
+        [_deposit("1000"), _deposit("300", account=XTB), _buy("10", "50", day=2)],
+        INSTRUMENTS,
+        {PZU: [_price(2, "60")]},
+        {},
+        _day(1),
+        _day(2),
+    )
+
+    assert history[1].account_classes == {
+        IKE: {CASH_CLASS: Decimal(500), SHARES: Decimal(600)},
+        XTB: {CASH_CLASS: Decimal(300)},
+    }
+
+
 def test_a_day_without_a_quote_carries_the_last_one_forward() -> None:
     history = daily_history([_buy("10", "50")], INSTRUMENTS, {PZU: [_price(1, "55")]}, {}, _day(1), _day(4))
 

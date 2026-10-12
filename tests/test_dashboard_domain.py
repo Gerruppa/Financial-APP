@@ -134,6 +134,23 @@ def test_currency_exposure_groups_positions_by_quote_currency_with_the_cash_of_e
     ]
 
 
+def test_allocation_gives_each_asset_class_share_with_pln_and_foreign_cash_in_their_own_classes() -> None:
+    # Gotówka: 300; Akcje: 10 PZU at 60 + 2 AAPL at 450 PLN; Waluty: 100 USD at 4.50; XTB is outside the scope
+    transactions = [_deposit("2000"), _buy("10", "50"), _exchange("100", "400"), _deposit("500", account=XTB)]
+    transactions.append(
+        buy_or_sell(IKE, date(2026, 1, 2), TransactionType.BUY, AAPL, Decimal(2), Decimal(100), nbp_rate=USD_RATE)
+    )
+    prices = {PZU: Decimal(60), AAPL: Decimal(450)}
+
+    board = dashboard(transactions, ACCOUNTS, INSTRUMENTS, prices, {"USD": Decimal("4.5")}, None, IKE)
+
+    assert [(c.asset_class, c.value, c.share) for c in board.classes] == [
+        ("Akcje", Decimal(1500), Decimal("0.6666666666666666666666666667")),
+        ("Waluty", Decimal(450), Decimal("0.2")),
+        ("Gotówka", Decimal(300), Decimal("0.1333333333333333333333333333")),
+    ]
+
+
 def test_xirr_ends_at_todays_dashboard_value_not_historys() -> None:
     # History values PZU at cost (no history price), the Dashboard at 60: 1000 paid in on 1.01 is worth 1100 on 31.01
     history = [
