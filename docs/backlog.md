@@ -54,3 +54,5 @@ Parked ideas: virtual portfolio, net worth with liabilities, tags, price alerts,
 ## Loose items
 
 Bugs and small ideas that belong to no stage go here.
+
+- [ ] L-25 History without Stooq: no Stooq API key can be had (2026-10-12), so History uses Yahoo only. Only if gaps hurt: add analizy.pl quotation history (funds, PPK) and/or the Bossa EOD archive `mstall.zip` (GPW, indices such as WIG) as keyless history sources (spec 4).

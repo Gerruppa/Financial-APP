@@ -103,7 +103,7 @@ Validation at save time (Q36):
 |---|---|
 | GPW current (shares, NewConnect, ETF, bonds) | Bossa JSON API (bulk per category) |
 | Foreign stocks/ETF, crypto, metals | Yahoo chart API (GBp → /100; crypto non-USD via USD cross) |
-| GPW history, indices (WIG, sWIG80TR) | Stooq |
+| GPW history, indices (WIG, sWIG80TR) | Yahoo history; Stooq only with an API key, which the user cannot get (see below) |
 | Funds, PPK | analizy.pl API, fallback bankier.pl |
 | Catalyst prices, accrued interest, nominal | gpwcatalyst.pl |
 | IZ indexed nominal | gov.pl "współczynniki indeksacji" |
@@ -112,6 +112,8 @@ Validation at save time (Q36):
 | Retail bond rates, rollover price | MF XLS linked from gov.pl/web/finanse/obligacje-detaliczne1 |
 
 Dropped: Google Finance, FT, Biznesradar scraping. Each source is a module with per-class fallback order configurable in settings. When all fail: last known price with its timestamp and a staleness warning; Manual Price always available. Historical prices and FX are cached locally (needed for History, ADR-0002).
+
+**No Stooq API key (2026-10-12).** The user cannot get a Stooq API key, so in practice History runs on Yahoo alone; the Stooq code stays as an unused fallback. Open-source libraries do not help: pandas-datareader's Stooq reader hits the same keyed endpoint, yfinance reads the same Yahoo data the app already uses, investpy is broken. The gaps are Instruments without a Yahoo symbol (funds and PPK, which keep only the Quotes saved by daily refreshes) and indices such as WIG as benchmarks. If they become a problem, the keyless candidates are the analizy.pl quotation history (probably the full series behind the API the fund prices already use) and the Bossa EOD archive (`mstall.zip`, MetaStock files for GPW shares, NewConnect, ETFs and indices); see backlog L-25.
 
 ### 4.1 Automatic valuation rules (grilling of #3 and #25)
 - **Manual Price wins while set**; the automatic Quote is still fetched and shown beside it. Clearing the Manual Price returns the Instrument to automatic valuation. A Bond Series is valued from MF data (3.4.1) as its type's slice of Stage 3 arrives, EDO first; a Manual Price still overrides it ("ręczna"), a type not valued yet stays at cost marked "do etapu 3" and a valued type without its first-year rate "brak oprocentowania".
