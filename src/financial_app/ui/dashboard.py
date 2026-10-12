@@ -5,22 +5,20 @@ day before today); Net Deposits come from History, "—" while it is computed.
 """
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from nicegui import ui
 from sqlalchemy import Engine
 
-from financial_app.domain.dashboard import AccountRow, CurrencyShare, Totals, dashboard
+from financial_app.domain.dashboard import AccountRow, CurrencyShare, Totals
 from financial_app.domain.formatting import format_count, format_percent, format_pln
 from financial_app.domain.portfolio_history import DayValue
-from financial_app.persistence.accounts import list_accounts
-from financial_app.persistence.instruments import list_instruments
-from financial_app.persistence.transactions import list_transactions
-from financial_app.sources.current_prices import TodaysRates, current_prices
+from financial_app.sources.dashboard import todays_dashboard
 from financial_app.sources.nbp import NbpRates
 from financial_app.sources.prices import RefreshStatus, last_refresh, refresh_summary, unpriced_instruments
 from financial_app.ui.charts import dashboard_charts
 from financial_app.ui.periods import PeriodChoice, period_selector
+from financial_app.ui.strategy import PlannedDeposit, strategy_section
 from financial_app.ui.view_scope import ViewScope
 
 DASH = "—"
@@ -36,6 +34,7 @@ class DashboardPage:
     scope: ViewScope
     period: PeriodChoice
     history: Callable[[], list[DayValue] | None]
+    planned: PlannedDeposit = field(default_factory=PlannedDeposit)
 
     def refresh(self) -> None:
         """Redraw the Dashboard if it is on screen (e.g. after a save, a price refresh or History computed)."""
@@ -52,35 +51,18 @@ class DashboardPage:
 
     @ui.refreshable_method
     def content(self) -> None:
-        # list_transactions is newest first; the FIFO engine wants entry order
-        transactions = list(reversed(list_transactions(self.engine)))
-        instruments = {i.id: i for i in list_instruments(self.engine)}
-        refresh = last_refresh(self.engine)
-        rates = TodaysRates(self.rates)
-        prices = {
-            i: price.pln for i, price in current_prices(self.engine, instruments.values(), rates, refresh).items()
-        }
-        for currency in {t.cash_currency for t in transactions}:
-            rates(currency)
         days = self.history()
-        accounts = list_accounts(self.engine)
         period = self.period.dates()
-        board = dashboard(
-            transactions,
-            accounts,
-            instruments,
-            prices,
-            rates.known(),
-            days,
-            self.scope.account_id,
-            period,
-        )
-        _prices_line(refresh, len(unpriced_instruments(self.engine)))
+        today = todays_dashboard(self.engine, self.rates, self.scope.account_id, days, period)
+        board = today.board
+        _prices_line(last_refresh(self.engine), len(unpriced_instruments(self.engine)))
         _totals(board.totals)
         _account_table(board.accounts)
         _currency_exposure(board.currencies)
-        account_names = {account.id: account.name for account in accounts}
-        dashboard_charts(board, transactions, account_names, days, self.scope.account_id, period)
+        strategy = strategy_section(self.engine, today, self.scope.account_id, self.planned)
+        targets = {row.asset_class: row.target.percent for row in strategy.view.rows if row.target is not None}
+        account_names = {account.id: account.name for account in today.accounts}
+        dashboard_charts(board, today.transactions, account_names, days, self.scope.account_id, period, targets)
 
 
 def _totals(totals: Totals) -> None:

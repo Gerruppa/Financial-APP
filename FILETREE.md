@@ -63,6 +63,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `prices.py`: Quote model, Price Source keys and names, and the per-Asset-Class Fallback Order deciding which sources to try.
 - `results.py`: Wyniki tab figures: period XIRR, TWR, drawdown, volatility and fixed-period returns per Total and Account, from History
 - `spreadsheet_import.py`: Pure conversion of the user's Inwestomat Transakcje sheet rows into Transaction drafts, with fingerprints for re-import skipping.
+- `strategy.py`: Investment Strategy rules: Allocation Targets with tolerance bands, Instrument Targets, and the water-filling split of the Planned Deposit
 - `transactions.py`: Transaction types, drafts and builders for every kind, plus cash balances and cost and dividend totals per Account.
 - `valuation.py`: Decides each Instrument's price and status from Manual Price or Quote, including metal spot conversion and badges.
 - `view_scope.py`: View Scope logic: Total or one Account, its remembered setting, switcher entries and transaction filtering
@@ -81,6 +82,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `quotes.py`: Saves and reads daily Instrument Quotes and the last price refresh status
 - `reset.py`: Clears all portfolio data after a backup and restores default Asset Classes
 - `settings.py`: Reads and writes text application settings by key in the app_settings table
+- `strategies.py`: Reads and saves Investment Strategies for Total and each Account, with their Allocation and Instrument Targets
 - `transactions.py`: Saves, edits, deletes and lists Transactions, replaying positions to block invalid changes
 
 ## src/financial_app/persistence/migrations/
@@ -110,6 +112,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `0018_fallback_orders.py`: Migration giving each Asset Class its own Fallback Order column, filled with the spec 4.1 defaults.
 - `0019_multi_asset_splits.py`: Migration 0019 creates the multi_asset_shares table holding each Instrument's Multi-asset Split
 - `0020_multi_asset_class.py`: Alembic revision adding the asset_classes multi_asset flag and marking the seeded Multi-asset class
+- `0021_investment_strategies.py`: Migration creating the strategy, class target and instrument target tables for Investment Strategies
 
 ## src/financial_app/sources/
 
@@ -118,6 +121,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `bankier.py`: Fetches fund and PPK Quotes from bankier.pl pages as the fallback price source
 - `bossa.py`: Fetches GPW, NewConnect, ETF and bond Quotes in PLN from the Bossa JSON API
 - `current_prices.py`: Today's valuation inputs shared by the Portfolio and the Dashboard: Instrument prices and NBP Rates from the last business day before today, each currency fetched once
+- `dashboard.py`: Computes today's Dashboard of a View Scope from the database, shared by the Dashboard and the Investment Strategy
 - `export.py`: Writes the Transactions list to CSV and XLSX files for export
 - `history.py`: Returns an Instrument's Quotes in a date range, fetching missing days from Stooq into cache
 - `nbp.py`: Gets NBP exchange rates from the NBP API through the local cache
@@ -146,6 +150,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `results.py`: Wyniki tab page: result tiles, drawdown chart and per-Account results table under the period selector
 - `settings.py`: Builds the Ustawienia page by assembling its sections: Accounts, Asset Classes, Instruments, sources, import, reset
 - `shell.py`: Main app window shell: left menu, header with refresh status and View Scope, and the transaction button
+- `strategy.py`: Strategie inwestycyjne tab, Dashboard strategy section and post-refresh notice for classes outside their tolerance band
 - `transactions.py`: Transakcje tab and transaction dialog for adding, editing and deleting all supported transaction types
 - `unpriced.py`: Ustawienia Instrumenty bez wyceny card listing held Instruments lacking an automatic price, with reasons
 - `view_scope.py`: View Scope header switcher and breadcrumbs, listing Accounts by value with share and daily change
@@ -220,6 +225,9 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_startup.py`: Smoke test of the real entry point: builds the database and shows the window.
 - `test_startup_refresh_ui.py`: Tests the background price refresh at start-up with fake sources and a fixed clock.
 - `test_stooq_source.py`: Tests the Stooq price history source on saved CSV and browser-challenge responses, without the network.
+- `test_strategies_repository.py`: Tests saving Investment Strategies for Total and per Account, and their removal on deletes and portfolio reset
+- `test_strategy_domain.py`: Tests Investment Strategy rules: tolerance bands, Instrument Targets and the Planned Deposit split
+- `test_strategy_ui.py`: UI tests for the Strategie inwestycyjne tab, the Dashboard strategy section and the out-of-band notice
 - `test_symbol_check.py`: Unit tests for the Sprawdź symbol check: quote, currency mismatch warning, and error cases on fake sources
 - `test_symbol_check_ui.py`: UI tests for the Sprawdź buttons in the Instrument dialog, on fake sources without network
 - `test_symbol_fields_ui.py`: UI tests for the Instrument dialog's Source Symbol fields, ordered by the Asset Class's Fallback Order.

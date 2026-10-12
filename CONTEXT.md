@@ -56,6 +56,10 @@ _Avoid_: model portfolio, plan
 The desired share of an Asset Class in the whole portfolio, used for rebalancing.
 _Avoid_: target weight
 
+**Tolerance Band** (Pasmo tolerancji):
+How far, in percentage points either way, an Asset Class may drift from its Allocation Target before it needs rebalancing. Within the band it shows green, up to twice the band yellow, beyond that red.
+_Avoid_: threshold, corridor
+
 **Instrument Target** (Cel w klasie):
 The desired share of an Instrument within its Asset Class; may name an Instrument not held yet.
 _Avoid_: sub-target, weight

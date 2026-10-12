@@ -52,8 +52,10 @@ def dashboard_charts(
     history: Sequence[DayValue] | None,
     account_id: int | None,
     period: tuple[date, date],
+    targets: Mapping[str, Decimal] | None = None,
 ) -> None:
-    """The charts in a grid of cards; those from History wait for it, ``None`` while it is computed."""
+    """The charts in a grid of cards; those from History wait for it, ``None`` while it is computed. ``targets`` are
+    the View Scope's Allocation Targets (percent by Asset Class name), shown beside the allocation."""
     first, last = period
     with (
         ui.element("div")
@@ -68,7 +70,7 @@ def dashboard_charts(
         )
         _card("Waluty w portfelu", "currencies", _currencies(board))
         _card("Wartość kont", "accounts", _accounts(board))
-        _card("Alokacja", "allocation", _allocation(board))
+        _card("Alokacja", "allocation", _allocation(board, targets or {}))
         if history is None:
             with ui.card().classes("w-full").mark("chart-history-pending"):
                 ui.label("Wykresy historii: wyliczanie historii…").classes("text-gray-500")
@@ -191,15 +193,22 @@ def _accounts(board: Dashboard) -> dict[str, Any]:
     }
 
 
-def _allocation(board: Dashboard) -> dict[str, Any]:
-    """Today's share of each Asset Class, the largest at the top (targets come with Investment Strategies)."""
-    classes = sorted(board.classes, key=lambda share: share.share)
+def _allocation(board: Dashboard, targets: Mapping[str, Decimal]) -> dict[str, Any]:
+    """Today's share of each Asset Class, the largest at the top, beside its Allocation Target if it has one."""
+    shares = {share.asset_class: share.share for share in board.classes}
+    names = sorted({*shares, *targets}, key=lambda name: shares.get(name, Decimal(0)))
+    series: list[dict[str, Any]] = [
+        {"name": "Udział", "type": "bar", "data": [_percent(shares.get(name, Decimal(0))) for name in names]}
+    ]
+    if targets:
+        target_data = [None if name not in targets else float(targets[name]) for name in names]
+        series.append({"name": "Cel", "type": "bar", "data": target_data})
     return {
         "tooltip": {"trigger": "axis", ":valueFormatter": _PERCENT},
         "grid": {"containLabel": True},
         "xAxis": {"type": "value", "axisLabel": {":formatter": _AXIS_PERCENT}},
-        "yAxis": {"type": "category", "data": [share.asset_class for share in classes]},
-        "series": [{"name": "Udział", "type": "bar", "data": [_percent(share.share) for share in classes]}],
+        "yAxis": {"type": "category", "data": names},
+        "series": series,
     }
 
 

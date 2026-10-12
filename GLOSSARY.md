@@ -25,6 +25,7 @@ The Polish UI labels with the English terms the code and the docs use, in Polish
 | Opłata za przewalutowanie | [FX Conversion Fee](CONTEXT.md#accounts-and-instruments) | Accounts and instruments |
 | Oprocentowanie szacunkowe | [Estimated Rate](CONTEXT.md#bonds) | Bonds |
 | Partia | [Lot](CONTEXT.md#transactions-and-holdings) | Transactions and holdings |
+| Pasmo tolerancji | [Tolerance Band](CONTEXT.md#accounts-and-instruments) | Accounts and instruments |
 | Planowana wpłata | [Planned Deposit](CONTEXT.md#accounts-and-instruments) | Accounts and instruments |
 | Pochodzenie | [Origin](CONTEXT.md#transactions-and-holdings) | Transactions and holdings |
 | Podział Multi-asset | [Multi-asset Split](CONTEXT.md#accounts-and-instruments) | Accounts and instruments |

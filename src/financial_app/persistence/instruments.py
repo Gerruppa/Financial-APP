@@ -20,7 +20,9 @@ from financial_app.domain.prices import HISTORY_SOURCES, OTHER, default_fallback
 from financial_app.persistence.history import forget_quote_history
 from financial_app.persistence.models import (
     AssetClassRow,
+    ClassTargetRow,
     InstrumentRow,
+    InstrumentTargetRow,
     MultiAssetShareRow,
     PriceFailureRow,
     QuoteRow,
@@ -99,7 +101,7 @@ def update_asset_class(engine: Engine, class_id: int, name: str, fallback_order:
 
 
 def delete_asset_class(engine: Engine, class_id: int) -> None:
-    """Remove an Asset Class that no Instrument uses; one that still has Instruments is kept."""
+    """Remove an Asset Class that no Instrument, Multi-asset Split or Allocation Target uses."""
     with Session(engine) as session, session.begin():
         row = session.get_one(AssetClassRow, class_id)
         if session.scalar(select(InstrumentRow.id).where(InstrumentRow.asset_class_id == class_id).limit(1)):
@@ -114,6 +116,8 @@ def delete_asset_class(engine: Engine, class_id: int) -> None:
             raise InstrumentError(
                 f"Nie można usunąć klasy „{row.name}”, bo jest w podziale Multi-asset instrumentu „{split_by}”."
             )
+        if session.scalar(select(ClassTargetRow.strategy_id).where(ClassTargetRow.asset_class_id == class_id).limit(1)):
+            raise InstrumentError(f"Nie można usunąć klasy „{row.name}”, bo ma cel w strategii inwestycyjnej.")
         session.delete(row)
 
 
@@ -180,7 +184,7 @@ def set_multi_asset_split(engine: Engine, instrument_id: int, split: Mapping[int
 
 
 def delete_instrument(engine: Engine, instrument_id: int) -> None:
-    """Remove an Instrument that no Transaction uses; one with Transactions is kept."""
+    """Remove an Instrument that no Transaction uses, with its Instrument Targets; one with Transactions is kept."""
     with Session(engine) as session, session.begin():
         row = session.get_one(InstrumentRow, instrument_id)
         if session.scalar(select(TransactionRow.id).where(TransactionRow.instrument_id == instrument_id).limit(1)):
@@ -188,6 +192,7 @@ def delete_instrument(engine: Engine, instrument_id: int) -> None:
         forget_quote_history(session, instrument_id)
         session.execute(delete(QuoteRow).where(QuoteRow.instrument_id == instrument_id))
         session.execute(delete(PriceFailureRow).where(PriceFailureRow.instrument_id == instrument_id))
+        session.execute(delete(InstrumentTargetRow).where(InstrumentTargetRow.instrument_id == instrument_id))
         session.delete(row)
 
 

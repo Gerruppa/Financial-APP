@@ -7,7 +7,7 @@ come from History's last day, so they match XIRR (spec 6.1).
 """
 
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import date
 from decimal import Decimal
 
@@ -73,12 +73,16 @@ class ClassShare:
 @dataclass(frozen=True)
 class Dashboard:
     """The sums of the View Scope, a row per Account in it (an inactive one only while it holds something), its
-    currency exposure and its allocation by Asset Class, largest first."""
+    currency exposure and its allocation by Asset Class, largest first. For the Investment Strategy (issue #76),
+    ``holdings`` is the value by Asset Class name and Instrument id and ``account_classes`` each Account's value by
+    Asset Class name, cash included."""
 
     totals: Totals
     accounts: tuple[AccountRow, ...]
     currencies: tuple[CurrencyShare, ...]
     classes: tuple[ClassShare, ...] = ()
+    holdings: Mapping[str, Mapping[int, Decimal]] = field(default_factory=dict)
+    account_classes: Mapping[int, Mapping[str, Decimal]] = field(default_factory=dict)
 
 
 def dashboard(
@@ -108,13 +112,22 @@ def dashboard(
     rows = []
     exposure: dict[str, Decimal] = {}
     allocation: dict[str, Decimal] = {}
+    holdings: dict[str, dict[int, Decimal]] = {}
+    account_classes: dict[int, dict[str, Decimal]] = {}
 
-    def count_held(currency: str, amount: Decimal, parts: Iterable[tuple[str, Decimal]]) -> Decimal:
-        """Add ``amount`` held in ``currency`` to the exposure and its ``parts`` by Asset Class to the allocation and
-        return it."""
+    def count_held(
+        currency: str, amount: Decimal, parts: Iterable[tuple[str, Decimal]], instrument_id: int | None = None
+    ) -> Decimal:
+        """Add ``amount`` held in ``currency`` to the exposure and its ``parts`` by Asset Class to the allocation (of
+        the scope and of the Account) and to the holdings of ``instrument_id``, and return it."""
         exposure[currency] = exposure.get(currency, Decimal(0)) + amount
+        by_class = account_classes.setdefault(account.id, {})
         for name, part in parts:
             allocation[name] = allocation.get(name, Decimal(0)) + part
+            by_class[name] = by_class.get(name, Decimal(0)) + part
+            if instrument_id is not None:
+                held = holdings.setdefault(name, {})
+                held[instrument_id] = held.get(instrument_id, Decimal(0)) + part
         return amount
 
     def count_cash(currency: str, asset_class: str, amount: Decimal) -> Decimal:
@@ -128,7 +141,8 @@ def dashboard(
             price = prices.get(position.instrument_id)
             instrument = instruments[position.instrument_id]
             value = position.value_or_cost(price)
-            positions_value += count_held(instrument.quote_currency, value, instrument.class_parts(value))
+            parts = instrument.class_parts(value)
+            positions_value += count_held(instrument.quote_currency, value, parts, position.instrument_id)
             if price is not None:
                 unrealized += position.result(price)
         for balance in (c for c in foreign if c.account_id == account.id):
@@ -184,7 +198,8 @@ def dashboard(
     classes = tuple(ClassShare(*share) for share in _shares(allocation) if share[1])
     # An inactive Account stays in the totals (its past costs and Dividends) but leaves the table once emptied
     shown = tuple(row for row in rows if row.account.active or row.totals.value or row.account.id == account_id)
-    return Dashboard(totals, shown, currencies, classes)
+    held = {account: {name: v for name, v in values.items() if v} for account, values in account_classes.items()}
+    return Dashboard(totals, shown, currencies, classes, holdings, {a: values for a, values in held.items() if values})
 
 
 def _shares(values: Mapping[str, Decimal]) -> list[tuple[str, Decimal, Decimal]]:

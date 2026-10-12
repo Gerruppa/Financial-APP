@@ -16,10 +16,12 @@ from sqlalchemy import Engine
 from financial_app.domain.accounts import AccountDraft, AccountType
 from financial_app.domain.instruments import InstrumentDraft
 from financial_app.domain.portfolio_history import DayValue
+from financial_app.domain.strategy import ClassTarget, Strategy
 from financial_app.domain.transactions import TransactionDraft, TransactionType, buy_or_sell, dividend
 from financial_app.persistence.accounts import add_account
 from financial_app.persistence.db import init_db
 from financial_app.persistence.instruments import add_instrument, list_asset_classes
+from financial_app.persistence.strategies import save_strategy
 from financial_app.persistence.transactions import add_transactions
 from financial_app.sources.history import QuoteHistory
 from financial_app.sources.nbp import NbpRates
@@ -117,6 +119,22 @@ async def test_the_currency_doughnut_and_the_allocation_show_todays_values(engin
         allocation = _options(user, "allocation")
         assert allocation["yAxis"]["data"] == ["Akcje polskie", "Gotówka"]
         assert allocation["series"][0]["data"] == [14.58, 85.42]
+
+
+async def test_with_allocation_targets_the_allocation_shows_each_class_target_beside_its_share(engine: Engine) -> None:
+    classes = {c.name: c.id for c in list_asset_classes(engine)}
+    targets = {"Akcje polskie": 20, "Akcje zagraniczne": 30, "Gotówka": 50}
+    save_strategy(engine, Strategy(None, {classes[n]: ClassTarget(Decimal(p)) for n, p in targets.items()}))
+    async with user_simulation(_shell(engine)) as user:
+        await user.open("/")
+        await _drawn(user)
+
+        allocation = _options(user, "allocation")
+        assert allocation["yAxis"]["data"] == ["Akcje zagraniczne", "Akcje polskie", "Gotówka"]
+        assert [(series["name"], series["data"]) for series in allocation["series"]] == [
+            ("Udział", [0.0, 14.58, 85.42]),
+            ("Cel", [30.0, 20.0, 50.0]),
+        ]
 
 
 async def test_dividends_are_stacked_by_year_per_account(engine: Engine) -> None:
