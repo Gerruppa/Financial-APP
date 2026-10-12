@@ -1,7 +1,7 @@
 {
   ".filetree.json": "f8768f99",
   ".gitignore": "36d25888",
-  "CLAUDE.md": "83ac38f1",
+  "CLAUDE.md": "ae3ab900",
   "CONTEXT.md": "0e7e263a",
   "GLOSSARY.md": "0aba137d",
   "README.md": "f0431ccb",
@@ -13,7 +13,7 @@
   "docs/adr/0005-structured-price-sources-only.md": "10484f61",
   "docs/adr/0006-history-quote-sources-and-split-unadjusting.md": "5846c28b",
   "docs/agents/domain.md": "35249041",
-  "docs/agents/issue-tracker.md": "b258aeb3",
+  "docs/agents/issue-tracker.md": "0314a314",
   "docs/agents/triage-labels.md": "b716855d",
   "docs/spec.md": "61b61171",
   "main.py": "b14fec79",
