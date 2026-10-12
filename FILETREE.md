@@ -50,6 +50,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `__init__.py`: Docstring marking the domain package as pure-Python calculations with no UI or database imports.
 - `account_ranking.py`: Account ranking and treemap figures for the Total Dashboard: XIRR, TWR, P&L, Net Deposits and costs per Account, sorted with best and worst marked
 - `accounts.py`: Account Types, their Tax Regime descriptions and validation of Account fields with Polish error messages.
+- `bond_valuation.py`: Values Bond Series by MF issue letters: yearly compounding with linear accrual, rates estimated from GUS CPI when MF has none
 - `bonds.py`: Polish retail treasury bond types, their terms, GUS CPI readings and NBP reference rates as pure-Python values
 - `charts.py`: Dashboard chart data from History and Transactions: value, profit, XIRR, class shares and dividends by year, per scope and period
 - `currencies.py`: Currency code check and the NBP Rate value type, plus the error raised when a rate is missing.
@@ -182,10 +183,13 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_bankier_source.py`: Tests the bankier.pl fund and PPK quote source against saved pages
 - `test_bond_data.py`: Tests for bond data parsers, SQLite persistence and daily refresh rules on saved fixtures
 - `test_bond_data_ui.py`: UI tests for the bond data header status and its error dialog
+- `test_bond_parity.py`: Parity test of bond valuation against the user's spreadsheet Obligacje tab, skipped without reference data
 - `test_bond_purchase_ui.py`: UI tests for buying retail treasury bonds in the transaction dialog's bond mode
 - `test_bond_rates_ui.py`: UI tests for correcting a Bond Series' MF rates in Ustawienia Instrumenty
 - `test_bond_series_domain.py`: Domain tests for Bond Series naming and corrected MF rates
 - `test_bond_series_repository.py`: Repository tests for Bond Series as Instruments with saved rate corrections
+- `test_bond_valuation.py`: Unit tests for bond valuation: MF and CPI-estimated rates, linear accrual within the year, grosz rounding
+- `test_bond_valuation_ui.py`: UI tests for Bond Series values in the Portfolio, with per-Lot rates and labels from MF or CPI
 - `test_bossa_source.py`: Tests the Bossa JSON API quote source against saved responses
 - `test_charts_domain.py`: Unit tests for the Dashboard chart data: value, profit, XIRR, class shares and dividends by year
 - `test_clear_data_repository.py`: Tests that clearing the portfolio removes user data and restores default Asset Classes

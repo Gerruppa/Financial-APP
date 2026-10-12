@@ -8,12 +8,14 @@ from datetime import date
 from nicegui import run
 from sqlalchemy import Engine
 
+from financial_app.domain.bond_valuation import BondData
 from financial_app.domain.currencies import MissingNbpRateError, NbpRate
 from financial_app.domain.history import ONE_DAY
 from financial_app.domain.instruments import Instrument
 from financial_app.domain.portfolio_history import DayValue, HistoryPrice, daily_history
 from financial_app.domain.prices import PriceSourceError
 from financial_app.domain.transactions import PLN, Transaction
+from financial_app.persistence.bond_series import load_bond_data
 from financial_app.persistence.history import history_prices, nbp_rates_between
 from financial_app.persistence.instruments import list_instruments
 from financial_app.persistence.transactions import list_transactions
@@ -33,6 +35,7 @@ class HistoryInputs:
     rates: dict[str, list[NbpRate]]
     first: date
     last: date
+    bonds: BondData = field(default_factory=BondData)
 
 
 @dataclass(frozen=True)
@@ -119,6 +122,7 @@ class PortfolioHistory:
             },
             first,
             last,
+            load_bond_data(self.engine),
         )
 
     async def values(self) -> list[DayValue]:
@@ -138,6 +142,7 @@ class PortfolioHistory:
                 inputs.rates,
                 inputs.first,
                 inputs.last,
+                inputs.bonds,
             )
         if generation == self._generation:
             self._cached = values

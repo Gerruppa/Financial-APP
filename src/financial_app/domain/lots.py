@@ -8,6 +8,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, replace
 from datetime import date
 from decimal import Decimal
+from typing import Protocol
 
 from financial_app.domain.formatting import format_date, format_quantity
 from financial_app.domain.transactions import TransactionDraft, TransactionError, TransactionType
@@ -99,6 +100,18 @@ class Lot:
         )
 
 
+class LotPrice(Protocol):
+    """A price that depends on the Lot: a Bond Series' bond earns from its own purchase day (spec 3.4.1)."""
+
+    def of(self, lot: Lot) -> Decimal:
+        """One unit of ``lot`` in PLN."""
+        ...
+
+
+# One unit's PLN price: the same for every Lot, or by Lot
+type UnitPrice = Decimal | LotPrice
+
+
 @dataclass(frozen=True)
 class Position:
     """All open Lots of one Instrument on one Account, oldest first."""
@@ -124,18 +137,20 @@ class Position:
         """Cost per unit, commissions included."""
         return self.cost / self.quantity
 
-    def value(self, price: Decimal) -> Decimal:
-        return self.quantity * price
+    def value(self, price: UnitPrice) -> Decimal:
+        if isinstance(price, Decimal):
+            return self.quantity * price
+        return sum((lot.quantity * price.of(lot) for lot in self.lots), Decimal(0))
 
-    def value_or_cost(self, price: Decimal | None) -> Decimal:
+    def value_or_cost(self, price: UnitPrice | None) -> Decimal:
         """The value at ``price``, or the cost without one."""
         return self.cost if price is None else self.value(price)
 
-    def result(self, price: Decimal) -> Decimal:
+    def result(self, price: UnitPrice) -> Decimal:
         """Unrealised profit (or loss, if negative) in PLN at ``price``."""
         return self.value(price) - self.cost
 
-    def result_percent(self, price: Decimal) -> Decimal:
+    def result_percent(self, price: UnitPrice) -> Decimal:
         return self.result(price) / self.cost * 100
 
     def fx_result(self, rate: Decimal) -> Decimal:

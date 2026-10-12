@@ -6,9 +6,10 @@ from decimal import Decimal
 from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session
 
+from financial_app.domain.bond_valuation import BondData
 from financial_app.domain.bonds import TREASURY_BOND_CLASS, BondSeries, RateCorrection
 from financial_app.domain.instruments import Instrument, InstrumentDraft, InstrumentError
-from financial_app.persistence.bond_data import load_series_terms
+from financial_app.persistence.bond_data import load_cpi, load_series_terms
 from financial_app.persistence.instruments import add_asset_class, add_instrument, list_asset_classes, list_instruments
 from financial_app.persistence.models import InstrumentRow, RateCorrectionRow
 
@@ -24,6 +25,11 @@ def list_bond_series(engine: Engine) -> dict[int, BondSeries]:
         for instrument in list_instruments(engine)
         if instrument.is_bond_series
     }
+
+
+def load_bond_data(engine: Engine) -> BondData:
+    """What the Bond Series are valued from: every Series and the saved GUS CPI."""
+    return BondData(list_bond_series(engine), load_cpi(engine))
 
 
 def save_rate_correction(engine: Engine, instrument_id: int, correction: RateCorrection) -> None:

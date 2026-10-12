@@ -161,8 +161,8 @@ async def test_a_failed_refresh_keeps_the_earlier_quote_marked_stale_until_a_ref
         await user.should_not_see("błąd")
 
 
-async def test_a_bond_series_waits_for_stage_3_and_is_not_an_error(engine: Engine) -> None:
-    _held(engine, InstrumentDraft("EDO0735", OBLIGACJE_SKARBOWE_POLSKIE, "PLN", manual_price=Decimal("104.5")))
+async def test_a_bond_series_not_valued_yet_waits_for_stage_3_and_is_not_an_error(engine: Engine) -> None:
+    _held(engine, InstrumentDraft("ROS0732", OBLIGACJE_SKARBOWE_POLSKIE, "PLN"))
 
     async with user_simulation(lambda: build_shell(engine, sources={YAHOO: FakeYahoo({})})) as user:
         await user.open("/portfolio")
@@ -170,7 +170,7 @@ async def test_a_bond_series_waits_for_stage_3_and_is_not_an_error(engine: Engin
 
         with user.scope(marker="portfolio"):
             await user.should_see("do etapu 3")
-            await user.should_see(f"1{NBSP}045,00{NBSP}zł")
+            await user.should_see(f"400,00{NBSP}zł")
         await user.should_see("Wyceny: ")
         await user.should_not_see("błąd")
 

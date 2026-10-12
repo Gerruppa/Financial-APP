@@ -14,7 +14,7 @@ from decimal import Decimal
 
 from financial_app.domain.accounts import Account, tax_regime_for
 from financial_app.domain.instruments import Instrument
-from financial_app.domain.lots import foreign_cash, replay
+from financial_app.domain.lots import UnitPrice, foreign_cash, replay
 from financial_app.domain.metrics import twr, xirr
 from financial_app.domain.portfolio_history import CASH_CLASS, FOREIGN_CASH_CLASS, DayValue
 from financial_app.domain.profit_sources import ProfitSources, profit_sources
@@ -110,7 +110,7 @@ def dashboard(
     transactions: Sequence[TransactionDraft],
     accounts: Sequence[Account],
     instruments: Mapping[int, Instrument],
-    prices: Mapping[int, Decimal | None],
+    prices: Mapping[int, UnitPrice | None],
     rates: Mapping[str, Decimal],
     history: Sequence[DayValue] | None,
     account_id: int | None = None,
