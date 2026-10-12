@@ -16,6 +16,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 
 ## docs/
 
+- `backlog.md`: Local stand-in for GitHub Issues: done and open stage items, with L-n ids for items not yet on GitHub
 - `spec.md`: Agreed product specification: goals, architecture, data model, transaction rules, valuation and feature scope.
 
 ## docs/adr/
@@ -26,6 +27,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `0004-fix-spreadsheet-bugs-document-deviations.md`: ADR to fix known spreadsheet bugs rather than replicate them, recording each number-changing fix as a documented deviation.
 - `0005-structured-price-sources-only.md`: ADR restricting automatic prices to structured sources, with MF data authoritative for retail bonds.
 - `0006-history-quote-sources-and-split-unadjusting.md`: ADR: History takes Yahoo then Stooq daily quotes and un-adjusts prices for recorded Splits
+- `0007-bond-redemption-picks-its-lot.md`: ADR: early bond redemption names its Lot instead of FIFO, other Instruments keep FIFO
 
 ## docs/agents/
 

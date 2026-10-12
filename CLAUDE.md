@@ -57,7 +57,7 @@ The app re-implements the inwestomat.eu "Portfolio tracker" Google Sheet. The ag
 
 Issues live in GitHub Issues on Gerruppa/Financial-APP (via the `gh` CLI). See `docs/agents/issue-tracker.md`.
 
-**Paused: the GitHub account is suspended (since 2026-10-12).** Until the user says it is restored, don't touch GitHub: no `gh` commands and no `git push`, `pull` or `fetch`. Work locally (branch, commit, merge into `main` with git alone) and ask the user for an issue's text instead of fetching it.
+**Paused: the GitHub account is suspended (since 2026-10-12).** Until the user says it is restored, don't touch GitHub: no `gh` commands and no `git push`, `pull` or `fetch`. Work locally (branch, commit, merge into `main` with git alone) and ask the user for an issue's text instead of fetching it. Meanwhile `docs/backlog.md` is the local backlog: what is done per stage and the open items (`L-n` ids) to move to GitHub once it is back.
 
 ### Triage labels
 

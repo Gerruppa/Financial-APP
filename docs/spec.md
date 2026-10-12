@@ -61,12 +61,31 @@ Validation at save time (Q36):
 - Warn only: insufficient cash (allows entering history in any order) (Q19).
 
 ### 3.4 Bonds (Q17, Q34, Q45)
-- Instrument = **Bond Series** in MF convention `TYPYMMRR` (type + maturity month + 2-digit maturity year, e.g. EDO bought 07.2025 → `EDO0735`). Each purchase is its own Lot with date, first-year rate, margin, quantity and Rollover flag/price.
-- Supported: TOS, COI, EDO, ROS, ROD (as in sheet) plus ROR, DOR valued automatically.
+- Instrument = **Bond Series** in MF convention `TYPYMMRR` (type + maturity month + 2-digit maturity year, e.g. EDO bought 07.2025 → `EDO0735`). A series is sold in one month only, so its first-year rate, margin and the rates of later periods belong to the Series; each purchase is its own Lot with its date (its anniversaries count from it), quantity and price (100, or the Rollover price).
+- Supported: OTS, TOS, COI, EDO, ROS, ROD, ROR, DOR, all valued automatically.
 - Rates: **MF-published rate is authoritative**; CPI(YoY, month = anniversary − 2) − 100 + margin, floored at 0, only for unpublished periods and flagged **Estimated**. Valuations show whether they rest on official or estimated rates.
-- Valuation as sheet: linear accrual within a year; EDO/ROS/ROD compound annually; COI coupons paid out (base stays nominal) and tracked net of 19%; TOS fixed rate compounding.
-- Extras: net value after early-redemption fee and Belka tax; calendar of coupon payments and maturities; sale picks a specific Lot (default oldest).
+- Valuation by the MF issue letters (3.4.1), not the sheet's whole-amount accrual: linear accrual within a period; EDO/ROS/ROD compound annually; COI coupons paid out (base stays nominal) and tracked net of 19%; TOS fixed rate compounding.
+- Extras: net value after early-redemption fee and Belka tax; calendar of coupon payments and maturities; sale picks a specific Lot (default oldest, ADR-0007).
 - Rollover price from the MF file (default 99.90).
+
+### 3.4.1 Stage 3 decisions (grilling of #4, 2026-10-12)
+- **Scope**: the retail treasury bonds OTS, TOS, COI, EDO, ROS, ROD, ROR and DOR, in slices: EDO end to end first, then ROS/ROD and TOS/OTS, then the coupon types COI/ROR/DOR. Catalyst prices and accrued interest (gpwcatalyst.pl) and the gov.pl IZ indexed nominal leave Stage 3 for a later item; until then Bossa gives Catalyst bonds as a percent of nominal.
+- **Rates on the Series**: first-year rate, margin and each period's rate are stored on the Bond Series, fetched from the MF file and correctable by hand.
+- **Valuation per bond, as MF**: the value of one bond is computed with the MF rounding to the grosz each period, then multiplied by the quantity; Belka is computed on the profit of one bond. The differences from the sheet are a documented deviation (section 9).
+- **Rate labels**: an MF-published rate has none. For a period MF has not published yet, "szacowana (CPI)" when GUS has published the CPI of the right month (or "szacowana (NBP)" for ROR/DOR from the NBP reference rate in force), "prognoza (ostatnie CPI)" or "prognoza (ostatnia stopa NBP)" when it has not and the last known one stands in. The label goes once MF publishes the rate.
+- **Value shown**: gross (nominal plus accrued interest) in the Portfolio, Dashboard and History, as other assets. The net value (after the early-redemption fee and the Tax Regime's tax) is shown in the Obligacje tab and feeds the after-tax toggle (#89).
+- **Tax by Account**: the net value, the Drafts and an early redemption take the tax from the Account's Tax Regime: Belka withheld at redemption on a Bonds or Regular Account, none on IKE/IKZE. The early-redemption fee applies everywhere, capped at the accrued interest as the issue letters say.
+- **Early-redemption fees**: a table built into the app (bond type, first issue it applies to, amount), updated with app releases, unless the MF file carries the fee.
+- **Entering a purchase**: the ordinary "+" dialog in a bond mode: type and purchase date give the Series (created on its first purchase), the price is 100 or, with "z rolowania", the MF Rollover price.
+- **Early redemption**: a Sell of a Bond Series picks the Lot (default the oldest, ADR-0007), prefilled with the gross value of one bond on that day as the price, the early-redemption fee as the commission and the tax as withheld tax; all editable to match the bank's statement, the Actual Amount being the net received.
+- **Drafts**: a matured Series and (for COI, ROR, DOR) a due coupon without a matching Transaction show as a Draft in the Obligacje tab's "Do zatwierdzenia" list, with a count in the header. Drafts are computed, never stored; confirming one saves an ordinary Transaction. A coupon is an interest Dividend (no Instrument) with Belka as withholding tax, into the PLN cash of the Account holding the Series. A Rollover is one action ("roluj do…") saving the redemption and the purchase of the new Series.
+- **History**: Bond Series are valued day by day with the same function as today, Estimated and forecast rates included; the bond deviation of the Historia parity test goes.
+- **Existing Series**: a migration clears the Manual Prices of retail treasury Bond Series (from the Stage 1 import) so automatic valuation takes over; a Manual Price can still be set as an override, and the sheet import stops setting one.
+- **Sources**: the MF file (gov.pl), GUS CPI and the NBP reference rate history, fetched with the price refresh at start-up and from the header button at most once a day, kept in SQLite; a failure shows in the header status like prices and the last copy is used.
+- **Obligacje tab** (follows the View Scope): the "Do zatwierdzenia" list when not empty; a table of Series expanding to Lots (Series, quantity, paid in, current period and its rate with its label, gross value, net value, next anniversary, maturity); a calendar of coupons, anniversaries with a new rate and maturities over the next 12 months, which later feeds the Stage 5 passive-income calendar.
+- **Real return**: once GUS CPI is in, Wyniki shows the TWR adjusted by the CPI over the period instead of "wynik realny — po dodaniu CPI".
+- **Testing**: unit tests on worked examples from the MF issue letters (several types, anniversaries, early redemption, Rollover), and a parity test against the sheet's Obligacje tab within 0.01 PLN per bond, skipped without `reference/`, each larger difference recorded in section 9.
+- **Slices**: (1) sources: MF file, GUS CPI, NBP reference rate; (2) Bond Series with rates, the dialog's bond mode, the Manual Price migration, the import without a Manual Price; (3) EDO valuation in the Portfolio, Dashboard and History with the parity test; (4) Obligacje tab with the net value and the after-tax toggle; (5) early redemption with the Lot choice and the fee table; (6) maturity and Rollover as Drafts with the header count; (7) ROS, ROD, TOS, OTS; (8) COI, ROR, DOR coupons as Drafts; (9) the calendar; (10) the real return in Wyniki.
 
 ### 3.5 FIFO and cash (Q20, Q31, Q32, ADR-0003)
 - One lot engine for Portfolio, Sell Summary and PIT-38. FIFO only.
@@ -180,6 +199,7 @@ Shell (UI prototype verdict, branch `prototype/ui-shell`, issue #1): **left navi
 15. Multi-asset existence checked on raw instead of normalised ticker.
 16. Raw-value drawdown distorted by deposits (replaced by TWR-based drawdown).
 17. Historia rows are written once from the state of that moment, so a Transaction entered later with an earlier date never reaches the rows already written (Net Deposits and values stay short until the day it was entered); History is recomputed from the Transactions (ADR-0002). Found by the Historia parity test (#70).
+18. Bond values accrue linearly on the whole invested amount, while the MF issue letters value one bond, rounded to the grosz each period, and tax the profit of one bond; the app follows MF (3.4.1), so the sheet's bond values differ by grosze.
 
 ## 10. Delivery plan (Q5, Q54)
 
@@ -188,7 +208,7 @@ Shell (UI prototype verdict, branch `prototype/ui-shell`, issue #1): **left navi
 | 0 Foundation | Project skeleton, NiceGUI shell with tabs, DB + migrations, backups, desktop shortcut | Empty app with tabs |
 | 1 Transactions & Portfolio | Accounts (incl. OKI, FX fee), Instruments, Asset Classes, all transaction types with forms and validation, NBP rates, FIFO engine, cash, Portfolio with Manual Prices, importer framework + spreadsheet import, parity tests, CSV/XLSX export | Replace the sheet for bookkeeping |
 | 2 Automatic prices | Slices (§4.1): 2a Price Source interface, Quotes, refresh, status and Yahoo; 2b Bossa; 2c analizy.pl and bankier.pl; 2d Stooq history and indices; 2e physical metals with Buyback Spread; ISIN lookup and fund details (#25) after 2a | Automatic valuation |
-| 3 Bonds | MF file, GUS CPI, gpwcatalyst.pl (Catalyst prices, accrued interest, nominal), gov.pl IZ indexed nominal, Bond Series and Lots, sheet-parity valuation, ROR/DOR, net value, calendar, sale and Rollover | Obligacje tab |
+| 3 Bonds | MF file, GUS CPI, NBP reference rate, Bond Series and Lots, valuation by the MF issue letters (OTS, TOS, COI, EDO, ROS, ROD, ROR, DOR), net value, early redemption, maturity and Rollover as Drafts, calendar, real return in Wyniki (3.4.1). Later, outside Stage 3: gpwcatalyst.pl (Catalyst prices, accrued interest, nominal) and gov.pl IZ indexed nominal | Obligacje tab |
 | 4 Dashboard, History, Results | View Scope switcher (Total / Accounts) across all tabs, period selector, recomputed History, 11 charts, treemap and Account ranking, profit-by-source waterfall, after-tax toggle, Investment Strategy for Total and Accounts with tolerance bands (Dashboard section + Strategie inwestycyjne tab), Multi-asset, currency exposure, XIRR/TWR/drawdown, Wyniki tab, Historia parity check | Full Dashboard |
 | 5 Reports | Benchmarks (with +pp offset, Account as benchmark), Sell Summary with closed-position statistics (win rate, holding time, best/worst), passive-income calendar (dividends and bond interest, received and forecast, monthly income goal) | Full parity with sheet v2.0.1 |
 | 6 Beyond the sheet | PIT-38 / PIT/ZG with year-end tax-loss optimiser, contribution limits, XTB importer + Reconciliation, investment goal / FIRE per scope, recurring transactions (drafts to confirm), Account comparison mode, .exe installer, OKI tax when law is final. Parked ideas: virtual portfolio, net worth with liabilities, tags, price alerts, portfolio health score | Extensions |
