@@ -62,7 +62,18 @@ def xirr(history: Sequence[DayValue], first: date, last: date, account_id: int |
 
     ``None`` when no rate settles them, e.g. with nothing invested.
     """
-    period = _period(history, first, last, account_id)
+    return _xirr(_period(history, first, last, account_id))
+
+
+def xirr_to_each(
+    history: Sequence[DayValue], first: date, lasts: Sequence[date], account_id: int | None = None
+) -> list[Decimal | None]:
+    """XIRR from ``first`` to each of ``lasts``, as ``xirr`` gives it, reading the scope's History once."""
+    days = _scope_days(history, account_id)
+    return [_xirr(_clip(days, first, last)) for last in lasts]
+
+
+def _xirr(period: _Period) -> Decimal | None:
     if not period.days:
         return None
     end = period.days[-1]
@@ -85,10 +96,14 @@ def xirr(history: Sequence[DayValue], first: date, last: date, account_id: int |
         if high >= _HIGHEST_RATE:
             return None
         high *= 10
+    at_low = future_value(low)
     for _ in range(200):
         middle = (low + high) / 2
-        if future_value(middle) * future_value(low) > 0:
-            low = middle
+        if middle in (low, high):  # the floats between them are used up
+            break
+        at_middle = future_value(middle)
+        if at_middle * at_low > 0:
+            low, at_low = middle, at_middle
         else:
             high = middle
     rate = Decimal(f"{(low + high) / 2:.10f}")
@@ -169,7 +184,10 @@ def _daily_returns(period: _Period) -> list[tuple[date, Decimal]]:
 
 
 def _period(history: Sequence[DayValue], first: date, last: date, account_id: int | None) -> _Period:
-    days = _scope_days(history, account_id)
+    return _clip(_scope_days(history, account_id), first, last)
+
+
+def _clip(days: list[_Day], first: date, last: date) -> _Period:
     within = [day for day in days if day.day <= last]
     if not within or first <= within[0].day:
         return _Period(None, within)

@@ -1,4 +1,5 @@
-"""The Dashboard's totals (issue #72, spec section 5), from the Transactions and today's prices and NBP Rates.
+"""The Dashboard's totals (issue #72, spec section 5) and allocation (issue #73), from the Transactions and
+today's prices and NBP Rates.
 
 Like the sheet's Dashboard, "Gotówka" is the PLN Cash Balance and "Otwarte pozycje" the Positions plus the foreign
 cash; a Position without a PLN price counts at cost and adds nothing to the result, as in the Portfolio. Net Deposits
@@ -14,7 +15,7 @@ from financial_app.domain.accounts import Account
 from financial_app.domain.instruments import Instrument
 from financial_app.domain.lots import foreign_cash, open_positions, realized_results
 from financial_app.domain.metrics import xirr
-from financial_app.domain.portfolio_history import DayValue
+from financial_app.domain.portfolio_history import CASH_CLASS, FOREIGN_CASH_CLASS, DayValue
 from financial_app.domain.transactions import (
     PLN,
     TransactionDraft,
@@ -61,13 +62,23 @@ class CurrencyShare:
 
 
 @dataclass(frozen=True)
+class ClassShare:
+    """The PLN value held in one Asset Class (PLN and foreign cash in classes of their own) and its ``share``."""
+
+    asset_class: str
+    value: Decimal
+    share: Decimal
+
+
+@dataclass(frozen=True)
 class Dashboard:
-    """The sums of the View Scope, a row per Account in it (an inactive one only while it holds something) and its
-    currency exposure, largest first."""
+    """The sums of the View Scope, a row per Account in it (an inactive one only while it holds something), its
+    currency exposure and its allocation by Asset Class, largest first."""
 
     totals: Totals
     accounts: tuple[AccountRow, ...]
     currencies: tuple[CurrencyShare, ...]
+    classes: tuple[ClassShare, ...] = ()
 
 
 def dashboard(
@@ -96,10 +107,12 @@ def dashboard(
     last_day = history[-1] if history else None
     rows = []
     exposure: dict[str, Decimal] = {}
+    allocation: dict[str, Decimal] = {}
 
-    def count_exposure(currency: str, amount: Decimal) -> Decimal:
-        """Add ``amount`` to the currency exposure and return it."""
+    def count_held(currency: str, asset_class: str, amount: Decimal) -> Decimal:
+        """Add ``amount`` held in ``currency`` and ``asset_class`` to the exposure and the allocation and return it."""
         exposure[currency] = exposure.get(currency, Decimal(0)) + amount
+        allocation[asset_class] = allocation.get(asset_class, Decimal(0)) + amount
         return amount
 
     for account in (a for a in accounts if account_id in (None, a.id)):
@@ -108,23 +121,22 @@ def dashboard(
         account_realized = realized.get(account.id, Decimal(0))
         for position in (p for p in positions if p.account_id == account.id):
             price = prices.get(position.instrument_id)
-            currency = instruments[position.instrument_id].quote_currency
-            if price is None:
-                positions_value += count_exposure(currency, position.cost)
-            else:
-                positions_value += count_exposure(currency, position.value(price))
+            instrument = instruments[position.instrument_id]
+            value = position.cost if price is None else position.value(price)
+            positions_value += count_held(instrument.quote_currency, instrument.asset_class_name, value)
+            if price is not None:
                 unrealized += position.result(price)
         for balance in (c for c in foreign if c.account_id == account.id):
             if not account.exclude_fx_result:
                 account_realized += balance.realized_result
             rate = rates.get(balance.currency)
             if rate is None:
-                positions_value += count_exposure(balance.currency, balance.cost)
+                positions_value += count_held(balance.currency, FOREIGN_CASH_CLASS, balance.cost)
                 continue
-            positions_value += count_exposure(balance.currency, balance.value(rate))
+            positions_value += count_held(balance.currency, FOREIGN_CASH_CLASS, balance.value(rate))
             if not account.exclude_fx_result:
                 unrealized += balance.result(rate)
-        count_exposure(PLN, balances.get(account.id, Decimal(0)))
+        count_held(PLN, CASH_CLASS, balances.get(account.id, Decimal(0)))
         rows.append(
             AccountRow(
                 account,
@@ -163,11 +175,17 @@ def dashboard(
         costs=sum((row.costs for row in scoped), Decimal(0)),
         xirr=xirr_rate,
     )
-    total = sum(exposure.values(), Decimal(0))
-    currencies = tuple(
-        CurrencyShare(currency, amount, amount / total if total else Decimal(0))
-        for currency, amount in sorted(exposure.items(), key=lambda item: item[1], reverse=True)
-    )
+    currencies = tuple(CurrencyShare(*share) for share in _shares(exposure))
+    classes = tuple(ClassShare(*share) for share in _shares(allocation) if share[1])
     # An inactive Account stays in the totals (its past costs and Dividends) but leaves the table once emptied
     shown = tuple(row for row in rows if row.account.active or row.totals.value or row.account.id == account_id)
-    return Dashboard(totals, shown, currencies)
+    return Dashboard(totals, shown, currencies, classes)
+
+
+def _shares(values: Mapping[str, Decimal]) -> list[tuple[str, Decimal, Decimal]]:
+    """Each name with its value and share of their sum, largest first."""
+    total = sum(values.values(), Decimal(0))
+    return [
+        (name, amount, amount / total if total else Decimal(0))
+        for name, amount in sorted(values.items(), key=lambda item: item[1], reverse=True)
+    ]

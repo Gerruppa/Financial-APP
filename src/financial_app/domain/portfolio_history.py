@@ -11,7 +11,7 @@ rescaled by the Splits recorded between the day its units refer to and the day i
 
 from bisect import bisect_right
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
 
@@ -52,7 +52,7 @@ class DayValue:
     ``account_net_deposits`` also count Cash and Security Transfers between Accounts, a Security Transfer at the moved
     units' value that day (their cost without a price); ``net_deposits`` only Deposits and Withdrawals. ``unpriced``
     are the Instruments valued at cost that day for want of a price or an NBP Rate, ``unpriced_currencies`` the
-    foreign cash valued at cost for want of an NBP Rate.
+    foreign cash valued at cost for want of an NBP Rate. ``account_classes`` splits each Account's value by class.
     """
 
     day: date
@@ -62,6 +62,7 @@ class DayValue:
     account_net_deposits: Mapping[int, Decimal]
     unpriced: frozenset[int]
     unpriced_currencies: frozenset[str] = frozenset()
+    account_classes: Mapping[int, Mapping[str, Decimal]] = field(default_factory=dict)
 
     @property
     def total(self) -> Decimal:
@@ -236,11 +237,14 @@ def _value(
 ) -> DayValue:
     accounts: dict[int, Decimal] = {}
     classes: dict[str, Decimal] = {}
+    account_classes: dict[int, dict[str, Decimal]] = {}
     unpriced: set[int] = set()
 
     def add(account_id: int, asset_class: str, value: Decimal) -> None:
         accounts[account_id] = accounts.get(account_id, Decimal(0)) + value
         classes[asset_class] = classes.get(asset_class, Decimal(0)) + value
+        held = account_classes.setdefault(account_id, {})
+        held[asset_class] = held.get(asset_class, Decimal(0)) + value
 
     for account_id, balance in state.cash.items():
         add(account_id, CASH_CLASS, balance)
@@ -260,5 +264,12 @@ def _value(
             value = position.quantity * unit
         add(position.account_id, pricing.instruments[position.instrument_id].asset_class_name, value)
     return DayValue(
-        day, accounts, classes, net_deposits, account_net_deposits, frozenset(unpriced), frozenset(unpriced_currencies)
+        day,
+        accounts,
+        classes,
+        net_deposits,
+        account_net_deposits,
+        frozenset(unpriced),
+        frozenset(unpriced_currencies),
+        account_classes,
     )
