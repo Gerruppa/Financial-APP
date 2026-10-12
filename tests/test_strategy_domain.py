@@ -217,3 +217,23 @@ def test_in_total_each_class_to_buy_suggests_the_accounts_whose_strategy_or_hold
         "Obligacje skarbowe polskie": (BANK,),
         "Metale i surowce": (XTB,),
     }
+
+
+def test_a_split_multi_asset_fund_counts_in_the_class_but_takes_none_of_its_deposit() -> None:
+    vanguard = Instrument(
+        "Vanguard",
+        GOLD,
+        "PLN",
+        multi_asset_split={STOCKS: Decimal(50), GOLD: Decimal(50)},
+        id=20,
+        asset_class_name="Metale i surowce",
+        fallback_order=(),
+        split_class_names={STOCKS: "Akcje zagraniczne", GOLD: "Metale i surowce"},
+    )
+    holdings = {"Akcje zagraniczne": {CSPX: Decimal(4000), 20: Decimal(2000)}}
+    view = strategy_view(
+        _strategy({STOCKS: 100}), CLASSES, INSTRUMENTS | {20: vanguard}, STOCKS_ONLY, holdings, Decimal(1500)
+    )
+    stocks = _row(view, "Akcje zagraniczne")
+    assert stocks.value == Decimal(6000)
+    assert [(row.instrument.name, row.from_deposit) for row in stocks.instruments] == [("CSPX", Decimal(1500))]

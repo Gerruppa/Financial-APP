@@ -164,7 +164,11 @@ def _with_instruments(
     targets: Mapping[int, Decimal] | None,
 ) -> ClassRow:
     """``row`` with a row per Instrument held in it or targeted, largest first, and the class's part of the deposit
-    split across them: toward their targets, else in proportion to their values."""
+    split across them: toward their targets, else in proportion to their values.
+
+    A Multi-asset Instrument with a Multi-asset Split counts in the class's value but gets no row: buying it would
+    also add to its other classes, which a split without selling must not overshoot."""
+    held = {i: value for i, value in held.items() if not instruments[i].multi_asset_split}
     values = {instrument_id: held.get(instrument_id, Decimal(0)) for instrument_id in {*held, *(targets or {})}}
     targets_sum = None if targets is None else sum(targets.values(), Decimal(0))
     deposits: dict[int, Decimal] | None = None

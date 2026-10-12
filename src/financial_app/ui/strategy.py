@@ -14,11 +14,10 @@ from nicegui import ui
 from sqlalchemy import Engine
 
 from financial_app.domain.formatting import (
-    NBSP,
     format_exact,
-    format_number,
     format_percent,
     format_pln,
+    format_points,
     format_quantity,
     parse_number,
 )
@@ -56,11 +55,11 @@ class PlannedDeposit:
 @dataclass(frozen=True)
 class ScopeStrategy:
     """The View Scope's Investment Strategy (``None``: Total without one or an Account without its own) and its
-    view today, with the Accounts each class to buy could be bought on (Total only) and the Asset Classes."""
+    view today, with the active Accounts each class to buy could be bought on (Total only) and the Asset Classes."""
 
     strategy: Strategy | None
     view: StrategyView
-    accounts: Mapping[str, tuple[int, ...]]
+    buy_on: Mapping[str, tuple[int, ...]]
     account_names: Mapping[int, str]
     asset_classes: list[AssetClass]
     instruments: Mapping[int, Instrument]
@@ -77,12 +76,14 @@ def scope_strategy(engine: Engine, today: TodaysDashboard, account_id: int | Non
     # Without Allocation Targets there is nothing to rebalance toward: only the structure shows
     targeted = strategy if strategy is not None and strategy.class_targets else None
     view = strategy_view(targeted, asset_classes, today.instruments, classes, board.holdings, planned)
-    accounts: Mapping[str, tuple[int, ...]] = {}
+    buy_on: Mapping[str, tuple[int, ...]] = {}
     if account_id is None and targeted is not None:
-        own = {a: s for a, s in strategies.items() if a is not None}
-        accounts = deposit_accounts(view, asset_classes, own, board.account_classes)
+        active = {account.id for account in today.accounts if account.active}
+        own = {a: s for a, s in strategies.items() if a in active}
+        held = {a: classes for a, classes in board.account_classes.items() if a in active}
+        buy_on = deposit_accounts(view, asset_classes, own, held)
     names = {account.id: account.name for account in today.accounts}
-    return ScopeStrategy(strategy, view, accounts, names, asset_classes, today.instruments, planned)
+    return ScopeStrategy(strategy, view, buy_on, names, asset_classes, today.instruments, planned)
 
 
 def out_of_band_notice(engine: Engine, rates: NbpRates) -> str | None:
@@ -228,12 +229,12 @@ def _rebalancing(view: StrategyView) -> None:
 
 
 def _class_rows(current: ScopeStrategy, details: bool, edit: EditInstruments | None) -> None:
-    ids = {asset_class.name: asset_class for asset_class in current.asset_classes}
+    by_name = {asset_class.name: asset_class for asset_class in current.asset_classes}
     with ui.element("div").classes("grid w-full gap-x-4 border-b py-1 text-sm font-medium").style(ROW_COLUMNS):
         for header in ROW_HEADERS:
             ui.label(header).classes("" if header in ("Klasa", "") else "text-right")
     for row in current.view.rows:
-        asset_class = ids.get(row.asset_class)
+        asset_class = by_name.get(row.asset_class)
         line = ui.element("div").classes("grid w-full gap-x-4 border-b py-1 text-sm items-center").style(ROW_COLUMNS)
         if row.status is not None:
             line.classes(STATUS_COLOURS[row.status])
@@ -242,15 +243,16 @@ def _class_rows(current: ScopeStrategy, details: bool, edit: EditInstruments | N
             ui.label(format_pln(row.value)).classes("text-right")
             ui.label(format_percent(row.share * 100)).classes("text-right")
             target = row.target
-            band = f"{format_percent(target.percent)} ± {format_quantity(target.band)}{NBSP}pp" if target else ""
+            band = f"{format_percent(target.percent)} ± {format_points(target.band, exact=True)}" if target else ""
             ui.label(band).classes("text-right")
             ui.label(_difference(row) if target else "").classes("text-right")
-            ui.label(_signed_pln(row.to_target) if row.to_target is not None else "").classes("text-right")
+            to_target = "" if row.to_target is None else format_pln(row.to_target, signed=True)
+            ui.label(to_target).classes("text-right")
             marker = f"deposit-{asset_class.id}" if asset_class else "deposit"
             shown = row.from_deposit is not None and current.planned > 0
             from_deposit = format_pln(row.from_deposit) if shown and row.from_deposit is not None else ""
             ui.label(from_deposit).classes("text-right").mark(marker)
-            names = [current.account_names.get(a, "") for a in current.accounts.get(row.asset_class, ())]
+            names = [current.account_names.get(a, "") for a in current.buy_on.get(row.asset_class, ())]
             accounts = ui.label(f"Kup na: {', '.join(names)}" if names else "").classes("text-gray-600")
             accounts.mark(f"accounts-{asset_class.id}" if asset_class else "accounts")
         if details and asset_class is not None:
@@ -275,9 +277,9 @@ def _instrument_rows(
                 ui.label(target).classes("w-24 text-right")
                 deposit = "" if not held.from_deposit else f"z wpłaty {format_pln(held.from_deposit)}"
                 ui.label(deposit).classes("w-40 text-right")
-        if row.split_blocked and row.instrument_targets_sum is not None:
+        if row.split_blocked:
             ui.label(
-                f"Cele instrumentów sumują się do {format_percent(row.instrument_targets_sum)}, a nie do 100%: "
+                f"Cele instrumentów sumują się do {format_percent(row.instrument_targets_sum or 0)}, a nie do 100%: "
                 "wpłata nie jest dzielona na instrumenty tej klasy."
             ).classes("text-sm text-warning").mark("instrument-split-blocked")
         if edit is not None and catalog:
@@ -407,9 +409,4 @@ def _instrument_targets_dialog(
 
 def _difference(row: ClassRow) -> str:
     """The difference from the target in percentage points, e.g. "+10,00 pp"."""
-    difference = row.difference or Decimal(0)
-    return f"{format_number(difference, signed=bool(difference.quantize(Decimal('0.01'))))}{NBSP}pp"
-
-
-def _signed_pln(amount: Decimal) -> str:
-    return format_pln(amount, signed=bool(amount.quantize(Decimal("0.01"))))
+    return format_points(row.difference or Decimal(0), signed=True)

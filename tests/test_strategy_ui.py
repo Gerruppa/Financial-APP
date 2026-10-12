@@ -2,6 +2,7 @@
 notice after a price refresh."""
 
 from collections.abc import Callable
+from dataclasses import replace
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -16,7 +17,7 @@ from financial_app.domain.instruments import InstrumentDraft
 from financial_app.domain.portfolio_history import DayValue
 from financial_app.domain.strategy import ClassTarget, Strategy
 from financial_app.domain.transactions import TransactionDraft, TransactionType, buy_or_sell
-from financial_app.persistence.accounts import add_account
+from financial_app.persistence.accounts import add_account, list_accounts, update_account
 from financial_app.persistence.db import init_db
 from financial_app.persistence.instruments import add_instrument, list_asset_classes, list_instruments
 from financial_app.persistence.strategies import list_strategies, save_strategy
@@ -126,8 +127,8 @@ async def test_targets_set_in_the_tab_show_each_class_against_its_target_and_ban
                 _pln("600,00"),
                 _percent("30,00"),
                 f"{_percent('30,00')} ± {_pp('5')}",
-                _pp("0,00"),
-                _pln("0,00"),
+                _pp("+0,00"),
+                _pln("+0,00"),
             ],
             [
                 "Akcje zagraniczne",
@@ -246,3 +247,16 @@ async def test_a_price_refresh_names_the_classes_outside_their_band(engine: Engi
         await user.should_see(
             f"Poza pasmem tolerancji: Total: Gotówka ({_pp('+10,00')}), Akcje zagraniczne ({_pp('-10,00')})."
         )
+
+
+async def test_an_inactive_account_is_not_suggested_for_a_planned_deposit(engine: Engine) -> None:
+    ike = next(a for a in list_accounts(engine) if a.id == IKE)
+    update_account(engine, IKE, replace(ike, active=False))
+    save_strategy(engine, _thirty_sixty_ten(engine))
+    async with user_simulation(_shell(engine)) as user:
+        await user.open("/strategie")
+        user.find(marker="planned-deposit").type("2000")
+
+        await user.should_see(marker=f"deposit-{_class_id(engine, 'Akcje polskie')}", content=_pln("600,00"))
+        await user.should_see(marker=f"accounts-{_class_id(engine, 'Akcje zagraniczne')}", content="Kup na: XTB")
+        await user.should_not_see("Kup na: IKE")
