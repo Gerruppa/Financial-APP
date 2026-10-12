@@ -23,7 +23,7 @@ Decided in the grilling of 2026-10-12: `docs/spec.md` 3.4.1 and ADR-0007. Slices
 - [x] L-6 Maturity and Rollover as Drafts: the "Do zatwierdzenia" list, the header count, "roluj do…".
 - [x] L-7 ROS, ROD, TOS, OTS. An OTS redeemed early pays no fee but loses its interest, so its Net Value before maturity is the nominal (the forfeited interest counts as its fee).
 - [x] L-8 COI, ROR, DOR: coupons as Drafts (interest Dividends with Belka withheld).
-- [ ] L-9 Calendar of coupons, anniversaries and maturities (next 12 months) in the Obligacje tab.
+- [x] L-9 Calendar of coupons, anniversaries and maturities (next 12 months) in the Obligacje tab.
 - [ ] L-10 Real return in Wyniki (TWR adjusted by GUS CPI).
 - [ ] L-11 Bond parity with the sheet across all held types (once L-7 and L-8 are in).
 

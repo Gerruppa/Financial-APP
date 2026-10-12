@@ -168,3 +168,29 @@ async def test_a_ror_takes_its_later_months_from_the_nbp_reference_rate(engine: 
         # Month 1's coupon was paid on 10.09
         with user.scope(marker="bond-drafts"):
             await user.should_see("Odsetki ROR0827")
+
+
+async def test_the_calendar_lists_the_next_twelve_months(engine: Engine) -> None:
+    _bought(engine, "Obligacje", AccountType.BONDS, "EDO0535", date(2025, 5, 22))
+    _bought(engine, "Drugie konto", AccountType.BONDS, "EDO0536", date(2026, 6, 3), quantity=5)
+
+    async with user_simulation(lambda: _shell(engine)) as user:
+        await user.open("/obligacje")
+
+        with user.scope(marker="bond-calendar"):
+            rows = user.find(marker="calendar-row").elements
+            assert len(rows) == 2
+            await user.should_see("03.06.2027")
+            await user.should_see("22.05.2027")
+            await user.should_see(f"Rocznica · nowe oprocentowanie 5,00{NBSP}% · rok 3")
+            await user.should_see("prognoza (ostatnie CPI)")
+            await user.should_see("Drugie konto")
+
+
+async def test_the_calendar_says_when_nothing_falls_due(engine: Engine) -> None:
+    _bought(engine, "Obligacje", AccountType.BONDS, "EDO0537", date(2025, 10, 8))  # no MF terms, so not valued
+
+    async with user_simulation(lambda: _shell(engine)) as user:
+        await user.open("/obligacje")
+
+        await user.should_see(marker="calendar-empty")

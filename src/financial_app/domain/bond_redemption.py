@@ -90,9 +90,14 @@ class EarlyRedemption:
     quantity: Decimal
 
     @property
+    def gross(self) -> Decimal:
+        """The gross value of all the bonds redeemed."""
+        return self.quantity * self.price
+
+    @property
     def net(self) -> Decimal:
         """What the redemption pays out: its Actual Amount."""
-        return self.quantity * self.price - self.fee - self.tax
+        return self.gross - self.fee - self.tax
 
 
 def early_redemption(price: BondPrice, lot: Lot, quantity: Decimal, tax_rate: Decimal) -> EarlyRedemption | None:

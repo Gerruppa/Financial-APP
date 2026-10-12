@@ -50,6 +50,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `__init__.py`: Docstring marking the domain package as pure-Python calculations with no UI or database imports.
 - `account_ranking.py`: Account ranking and treemap figures for the Total Dashboard: XIRR, TWR, P&L, Net Deposits and costs per Account, sorted with best and worst marked
 - `accounts.py`: Account Types, their Tax Regime descriptions and validation of Account fields with Polish error messages.
+- `bond_calendar.py`: Calendar of coupons, anniversaries and maturities of held Bond Series over the next 12 months, by View Scope
 - `bond_drafts.py`: Drafts for matured Bond Series Lots (redemption, Rollover) and coupons of COI, ROR and DOR Lots, with the Sell or interest Transaction each confirms
 - `bond_holdings.py`: Obligacje tab data: each Bond Series held in the View Scope with its Lots, gross and net values, rates and dates
 - `bond_redemption.py`: Net value of a retail treasury bond on redemption: gross value less early-redemption fee and withheld Belka tax
@@ -155,7 +156,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `bond_data.py`: Header status listing failing bond data sources with their reasons, shown only while one keeps failing
 - `bond_drafts.py`: Obligacje tab's "Do zatwierdzenia" list of maturities and unpaid coupons, and its count in the header
 - `bond_series.py`: Bond Series rate summary and dialog for correcting MF rates by hand in Ustawienia Instrumenty
-- `bonds.py`: Obligacje tab UI: expandable table of Bond Series and their Lots with gross and net values, and the list of matured Lots awaiting confirmation
+- `bonds.py`: Obligacje tab UI: expandable table of Bond Series and their Lots with gross and net values, the "Do zatwierdzenia" list of matured Lots, and the 12-month bond calendar
 - `charts.py`: Dashboard's nine ECharts charts plus the profit-by-source waterfall, following the View Scope and period
 - `dashboard.py`: Dashboard tab UI: totals, price status, Account table, exposure, charts, Account treemap and ranking, and the after-tax toggle
 - `dialogs.py`: Draggable dialog support with no backdrop, so the screen behind stays readable
@@ -188,6 +189,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_architecture.py`: Architecture test enforcing that the domain core does not import UI or database code
 - `test_backup.py`: Tests database backup copies and the retention of the newest backups
 - `test_bankier_source.py`: Tests the bankier.pl fund and PPK quote source against saved pages
+- `test_bond_calendar_domain.py`: Tests for the bond calendar domain: event kinds, amounts, View Scope filtering and day ordering
 - `test_bond_data.py`: Tests for bond data parsers, SQLite persistence and daily refresh rules on saved fixtures
 - `test_bond_data_ui.py`: UI tests for the bond data header status and its error dialog
 - `test_bond_drafts_domain.py`: Tests Draft rules for maturities, Rollovers and coupons: which Lots are Drafts and what they redeem, roll or pay

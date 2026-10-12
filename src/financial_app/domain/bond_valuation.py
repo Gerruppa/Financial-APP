@@ -272,11 +272,16 @@ def _rate(series: BondSeries, period: int, start: date, cpi: Cpi, reference: Ref
 def rate_text(value: BondValue) -> str:
     """The rate of the period ``value`` is in, with its number when the bond runs a year or more: "5,35% · rok 2",
     "4,00% · miesiąc 3"."""
-    rate = format_percent(value.rate.rate * 100)
-    if value.period is None:
-        return rate
-    unit = "miesiąc" if value.monthly else "rok"
-    return f"{rate} · {unit} {value.period}"
+    return period_rate_text(value.rate.rate, value.period, monthly=value.monthly)
+
+
+def period_rate_text(rate: Decimal, period: int | None, *, monthly: bool) -> str:
+    """``rate`` (a fraction) with its ``period``, a month when ``monthly``, else a year; no period without one."""
+    text = format_percent(rate * 100)
+    if period is None:
+        return text
+    unit = "miesiąc" if monthly else "rok"
+    return f"{text} · {unit} {period}"
 
 
 def _anniversary(purchase_day: date, years: int) -> date:

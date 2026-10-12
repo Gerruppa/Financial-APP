@@ -1,7 +1,8 @@
 """The Obligacje tab (spec 3.4.1, L-4): the Bond Series held in the View Scope, each expanding to its Lots, with what
 was paid in, the current period and its rate (labelled when MF has not published it), the gross value, the net value
 after the early-redemption fee and the tax the Account's Tax Regime withholds, the next anniversary and the maturity.
-Above them, the "Do zatwierdzenia" list of the Lots held past their maturity (L-6); the calendar comes in L-9."""
+Above them, the "Do zatwierdzenia" list of the Lots held past their maturity (L-6); below them, the calendar of the
+coupons, anniversaries and maturities over the next 12 months (L-9)."""
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -11,8 +12,10 @@ from decimal import Decimal
 from nicegui import ui
 from sqlalchemy import Engine
 
+from financial_app.domain.bond_calendar import CalendarEvent, EventKind, bond_calendar
 from financial_app.domain.bond_holdings import LotHolding, SeriesHolding, bond_holdings, bond_totals
 from financial_app.domain.bond_valuation import BondValue, RateLabel, rate_text
+from financial_app.domain.bonds import BondType
 from financial_app.domain.formatting import format_date, format_pln, format_quantity
 from financial_app.domain.lots import open_positions
 from financial_app.persistence.accounts import list_accounts
@@ -35,6 +38,10 @@ HEADERS = (
     "Wykup",
 )
 LOT_HEADERS = ("Data zakupu", *HEADERS[1:])
+CALENDAR_COLUMNS = (
+    "grid-template-columns: minmax(6rem, 1fr) minmax(8rem, 2fr) minmax(12rem, 3fr) repeat(2, minmax(6rem, 1fr))"
+)
+CALENDAR_HEADERS = ("Data", "Seria", "Zdarzenie", "Brutto", "Netto")
 
 
 @dataclass
@@ -64,14 +71,9 @@ class BondsPage:
         # list_transactions is newest first; the FIFO engine wants entry order
         positions = open_positions(reversed(list_transactions(self.engine)))
         instruments = {i.id: i for i in list_instruments(self.engine)}
-        holdings = bond_holdings(
-            positions,
-            instruments,
-            list_accounts(self.engine),
-            load_bond_data(self.engine),
-            today,
-            self.scope.account_id,
-        )
+        accounts = list_accounts(self.engine)
+        bonds = load_bond_data(self.engine)
+        holdings = bond_holdings(positions, instruments, accounts, bonds, today, self.scope.account_id)
         if not holdings:
             ui.label(
                 "Brak obligacji skarbowych w portfelu. Zakup obligacji dodasz przyciskiem „+” w trybie obligacji."
@@ -83,6 +85,7 @@ class BondsPage:
         for holding in holdings:
             self._series_row(holding)
         _totals(holdings)
+        self._calendar(bond_calendar(positions, instruments, accounts, bonds, today, self.scope.account_id))
 
     def _series_row(self, holding: SeriesHolding) -> None:
         row = ui.element("div").classes("grid w-full gap-x-4 border-b py-1 cursor-pointer hover:bg-gray-100")
@@ -106,6 +109,54 @@ class BondsPage:
                 _lot_row(held)
         lots.visible = False
         row.on("click", lambda: lots.set_visibility(not lots.visible))
+
+    def _calendar(self, events: list[CalendarEvent]) -> None:
+        ui.label("Kalendarz: najbliższe 12 miesięcy").classes("text-lg font-bold mt-6")
+        with ui.column().classes("w-full gap-0").mark("bond-calendar"):
+            if not events:
+                ui.label("W najbliższych 12 miesiącach nie przypadają odsetki, rocznice ani wykupy.").classes(
+                    "text-gray-500"
+                ).mark("calendar-empty")
+                return
+            with ui.element("div").classes("grid w-full gap-x-4 border-b py-1 font-medium").style(CALENDAR_COLUMNS):
+                for header in CALENDAR_HEADERS:
+                    ui.label(header).classes("text-right" if header in ("Brutto", "Netto") else "")
+            for event in events:
+                self._calendar_row(event)
+
+    def _calendar_row(self, event: CalendarEvent) -> None:
+        row = ui.element("div").classes("grid w-full gap-x-4 border-b py-1").style(CALENDAR_COLUMNS)
+        with row.mark("calendar-row"):
+            ui.label(format_date(event.day))
+            with ui.column().classes("gap-0"):
+                ui.label(event.instrument.name).classes("font-medium")
+                lot = f"zakup {format_date(event.lot.date)} · {format_quantity(event.quantity)} szt."
+                if self.scope.account_id is None:
+                    lot = f"{event.account.name} · {lot}"
+                ui.label(lot).classes("text-xs text-gray-500")
+            with ui.column().classes("gap-0"):
+                ui.label(_event_text(event))
+                if event.label is not None:
+                    ui.label(event.label.value).classes("text-xs text-orange-700").mark("calendar-rate-label")
+            _amount_cell(event.gross)
+            _amount_cell(event.net)
+
+
+def _event_text(event: CalendarEvent) -> str:
+    rate = event.rate_text
+    match event.kind:
+        case EventKind.COUPON:
+            return f"Odsetki · {rate}"
+        case EventKind.ANNIVERSARY if event.bond_type is BondType.TOS:
+            return f"Rocznica · kapitalizacja odsetek, {rate}"
+        case EventKind.ANNIVERSARY:
+            return f"Rocznica · nowe oprocentowanie {rate}"
+        case EventKind.MATURITY:
+            return "Wykup"
+
+
+def _amount_cell(amount: Decimal | None) -> None:
+    ui.label("—" if amount is None else format_pln(amount)).classes("text-right")
 
 
 def _lot_row(held: LotHolding) -> None:
