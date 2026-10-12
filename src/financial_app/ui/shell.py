@@ -23,8 +23,9 @@ from financial_app.sources.yahoo import YahooSearch, YahooSource
 from financial_app.ui.dashboard import DashboardPage
 from financial_app.ui.dialogs import install_movable_dialogs
 from financial_app.ui.history import history_status, shared_history
-from financial_app.ui.periods import PeriodChoice, period_selector
+from financial_app.ui.periods import PeriodChoice
 from financial_app.ui.portfolio import PortfolioPage
+from financial_app.ui.results import ResultsPage
 from financial_app.ui.settings import build_settings_page
 from financial_app.ui.transactions import TransactionsPage, open_transaction_dialog
 from financial_app.ui.unpriced import UnpricedSection
@@ -54,9 +55,6 @@ TABS = [
 # The refresh running on each database, shared by every window, so that a reloaded window joins it instead of starting
 # another; ``None`` from it means the app is shutting down
 _running_refreshes: dict[Engine, asyncio.Future[RefreshResult | None]] = {}
-
-# The tabs showing the period selector until their charts and results arrive (spec section 5)
-PERIOD_TABS = {"/wyniki"}
 
 
 def build_shell(
@@ -88,6 +86,7 @@ def build_shell(
     scope = ViewScope(engine)
     period = PeriodChoice(engine, lambda: now().date())
     dashboard_page = DashboardPage(engine, rates, scope, period, lambda: shared.days)
+    results_page = ResultsPage(engine, scope, period, lambda: shared.days)
     transactions_page = TransactionsPage(engine, rates, scope)
     portfolio_page = PortfolioPage(engine, rates, scope)
     unpriced = UnpricedSection(engine)
@@ -97,11 +96,13 @@ def build_shell(
         await shared.values()
         switcher.refresh()
         dashboard_page.refresh()
+        results_page.refresh()
 
     def history_outdated() -> None:
         shared.invalidate()
         switcher.refresh()
         dashboard_page.refresh()
+        results_page.refresh()
         background_tasks.create(load_history(), name="history")
 
     async def fetch_history() -> None:
@@ -128,6 +129,7 @@ def build_shell(
         transactions_page.refresh()
         portfolio_page.refresh()
         dashboard_page.refresh()
+        results_page.refresh()
         scope_pages.refresh()
 
     scope.on_change(scope_changed)
@@ -193,17 +195,13 @@ def build_shell(
         build()
 
     def placeholder(tab: Tab) -> Callable[[], None]:
-        def build() -> None:
-            _placeholder_page(tab.label)()
-            if tab.path in PERIOD_TABS:
-                period_selector(period)
-
-        return lambda: scope_pages(build)
+        return lambda: scope_pages(_placeholder_page(tab.label))
 
     pages: dict[str, Callable[[], None]] = {tab.path: placeholder(tab) for tab in TABS}
     pages["/transakcje"] = transactions_page.build
     pages["/portfolio"] = portfolio_page.build
     pages["/"] = lambda: scope_pages(dashboard_page.build)
+    pages["/wyniki"] = lambda: scope_pages(results_page.build)
     pages["/ustawienia"] = lambda: build_settings_page(engine, rates, search, sources, unpriced)
     ui.sub_pages(pages).classes("w-full").mark("page-content")
 
