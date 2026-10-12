@@ -1,12 +1,12 @@
-"""The Dashboard's totals (issue #72, spec section 5) and allocation (issue #73), from the Transactions and
-today's prices and NBP Rates.
+"""The Dashboard's totals (issue #72, spec section 5) and allocation (issue #73, with the Multi-asset Splits of
+#75), from the Transactions and today's prices and NBP Rates.
 
 Like the sheet's Dashboard, "Gotówka" is the PLN Cash Balance and "Otwarte pozycje" the Positions plus the foreign
 cash; a Position without a PLN price counts at cost and adds nothing to the result, as in the Portfolio. Net Deposits
 come from History's last day, so they match XIRR (spec 6.1).
 """
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import date
 from decimal import Decimal
@@ -109,11 +109,16 @@ def dashboard(
     exposure: dict[str, Decimal] = {}
     allocation: dict[str, Decimal] = {}
 
-    def count_held(currency: str, asset_class: str, amount: Decimal) -> Decimal:
-        """Add ``amount`` held in ``currency`` and ``asset_class`` to the exposure and the allocation and return it."""
+    def count_held(currency: str, amount: Decimal, parts: Iterable[tuple[str, Decimal]]) -> Decimal:
+        """Add ``amount`` held in ``currency`` to the exposure and its ``parts`` by Asset Class to the allocation and
+        return it."""
         exposure[currency] = exposure.get(currency, Decimal(0)) + amount
-        allocation[asset_class] = allocation.get(asset_class, Decimal(0)) + amount
+        for name, part in parts:
+            allocation[name] = allocation.get(name, Decimal(0)) + part
         return amount
+
+    def count_cash(currency: str, asset_class: str, amount: Decimal) -> Decimal:
+        return count_held(currency, amount, [(asset_class, amount)])
 
     for account in (a for a in accounts if account_id in (None, a.id)):
         positions_value = Decimal(0)
@@ -122,8 +127,8 @@ def dashboard(
         for position in (p for p in positions if p.account_id == account.id):
             price = prices.get(position.instrument_id)
             instrument = instruments[position.instrument_id]
-            value = position.cost if price is None else position.value(price)
-            positions_value += count_held(instrument.quote_currency, instrument.asset_class_name, value)
+            value = position.value_or_cost(price)
+            positions_value += count_held(instrument.quote_currency, value, instrument.class_parts(value))
             if price is not None:
                 unrealized += position.result(price)
         for balance in (c for c in foreign if c.account_id == account.id):
@@ -131,12 +136,12 @@ def dashboard(
                 account_realized += balance.realized_result
             rate = rates.get(balance.currency)
             if rate is None:
-                positions_value += count_held(balance.currency, FOREIGN_CASH_CLASS, balance.cost)
+                positions_value += count_cash(balance.currency, FOREIGN_CASH_CLASS, balance.cost)
                 continue
-            positions_value += count_held(balance.currency, FOREIGN_CASH_CLASS, balance.value(rate))
+            positions_value += count_cash(balance.currency, FOREIGN_CASH_CLASS, balance.value(rate))
             if not account.exclude_fx_result:
                 unrealized += balance.result(rate)
-        count_held(PLN, CASH_CLASS, balances.get(account.id, Decimal(0)))
+        count_cash(PLN, CASH_CLASS, balances.get(account.id, Decimal(0)))
         rows.append(
             AccountRow(
                 account,

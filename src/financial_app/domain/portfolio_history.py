@@ -52,7 +52,8 @@ class DayValue:
     ``account_net_deposits`` also count Cash and Security Transfers between Accounts, a Security Transfer at the moved
     units' value that day (their cost without a price); ``net_deposits`` only Deposits and Withdrawals. ``unpriced``
     are the Instruments valued at cost that day for want of a price or an NBP Rate, ``unpriced_currencies`` the
-    foreign cash valued at cost for want of an NBP Rate. ``account_classes`` splits each Account's value by class.
+    foreign cash valued at cost for want of an NBP Rate. ``account_classes`` splits each Account's value by class, a
+    Multi-asset Instrument's by its Multi-asset Split.
     """
 
     day: date
@@ -240,20 +241,23 @@ def _value(
     account_classes: dict[int, dict[str, Decimal]] = {}
     unpriced: set[int] = set()
 
-    def add(account_id: int, asset_class: str, value: Decimal) -> None:
+    def add(account_id: int, value: Decimal, parts: Iterable[tuple[str, Decimal]]) -> None:
+        """Add ``value`` to the Account, split into ``parts`` by Asset Class."""
         accounts[account_id] = accounts.get(account_id, Decimal(0)) + value
-        classes[asset_class] = classes.get(asset_class, Decimal(0)) + value
         held = account_classes.setdefault(account_id, {})
-        held[asset_class] = held.get(asset_class, Decimal(0)) + value
+        for asset_class, part in parts:
+            classes[asset_class] = classes.get(asset_class, Decimal(0)) + part
+            held[asset_class] = held.get(asset_class, Decimal(0)) + part
 
     for account_id, balance in state.cash.items():
-        add(account_id, CASH_CLASS, balance)
+        add(account_id, balance, [(CASH_CLASS, balance)])
     unpriced_currencies: set[str] = set()
     for cash in state.foreign_cash:
         rate = pricing.rate(cash.currency, day)
         if rate is None:
             unpriced_currencies.add(cash.currency)
-        add(cash.account_id, FOREIGN_CASH_CLASS, cash.cost if rate is None else cash.value(rate))
+        value = cash.cost if rate is None else cash.value(rate)
+        add(cash.account_id, value, [(FOREIGN_CASH_CLASS, value)])
     for position in state.positions:
         unit = pricing.unit_pln(position.instrument_id, day)
         if unit is None:
@@ -262,7 +266,8 @@ def _value(
                 unpriced.add(position.instrument_id)
         else:
             value = position.quantity * unit
-        add(position.account_id, pricing.instruments[position.instrument_id].asset_class_name, value)
+        # A Multi-asset Split spreads the value across its classes, the same split on every day (spec 6.1)
+        add(position.account_id, value, pricing.instruments[position.instrument_id].class_parts(value))
     return DayValue(
         day,
         accounts,

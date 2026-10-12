@@ -14,7 +14,6 @@ from financial_app.domain.formatting import (
     format_percent,
     format_quantity,
     format_unit_price,
-    parse_number,
 )
 from financial_app.domain.instrument_search import (
     FormFields,
@@ -30,6 +29,7 @@ from financial_app.domain.instruments import (
     Instrument,
     InstrumentDraft,
     InstrumentError,
+    parse_optional_number,
 )
 from financial_app.domain.prices import (
     ANALIZY,
@@ -60,6 +60,7 @@ from financial_app.persistence.instruments import (
 from financial_app.sources.prices import PriceSource, SymbolCheck, check_symbol
 from financial_app.ui.dialogs import movable_dialog
 from financial_app.ui.fund_details import fund_details
+from financial_app.ui.multi_asset import split_editor
 
 
 @dataclass
@@ -395,6 +396,16 @@ class InstrumentsSection:
             domicile = ui.input("Siedziba funduszu", value=instrument.domicile if instrument else "")
             domicile.props('hint="Np. Irlandia, Luksemburg; może zostać puste"').classes("w-full")
             domicile.mark("instrument-domicile")
+            # Only a Multi-asset Instrument is split across classes; one moved to another class loses its split
+            multi_asset_classes = {c.id for c in asset_classes if c.multi_asset}
+            with ui.column().classes("w-full") as split_section:
+                typed_split = split_editor(asset_classes, instrument.multi_asset_split if instrument else {})
+
+            def show_split() -> None:
+                split_section.visible = asset_class.value in multi_asset_classes
+
+            asset_class.on_value_change(show_split)
+            show_split()
             error = ui.label().classes("text-negative").mark("instrument-error")
 
             def choose(result: SearchResult) -> None:
@@ -450,10 +461,10 @@ class InstrumentsSection:
 
             def save() -> None:
                 try:
-                    manual_price = _parse_number(price_input.value, "Cena ręczna")
-                    metal_grams = _parse_number(grams_input.value, "Waga metalu")
-                    buyback_spread = _parse_number(spread_input.value, "Spread odkupu")
-                    ter_percent = _parse_number(ter_input.value, "TER")
+                    manual_price = parse_optional_number(price_input.value, "Cena ręczna")
+                    metal_grams = parse_optional_number(grams_input.value, "Waga metalu")
+                    buyback_spread = parse_optional_number(spread_input.value, "Spread odkupu")
+                    ter_percent = parse_optional_number(ter_input.value, "TER")
                     if asset_class.value is None:
                         raise InstrumentError("Wybierz klasę aktywów.")
                     draft = InstrumentDraft(
@@ -470,6 +481,7 @@ class InstrumentsSection:
                         ter_percent=ter_percent,
                         distribution_policy=policy.value,
                         domicile=domicile.value,
+                        multi_asset_split=typed_split() if split_section.visible else {},
                     )
                     if instrument is None:
                         add_instrument(self.engine, draft)
@@ -551,13 +563,3 @@ def _result_row(result: SearchResult, choose: Callable[[SearchResult], None]) ->
 
 def _exact_text(number: Decimal | None) -> str:
     return "" if number is None else format_exact(number)
-
-
-def _parse_number(text: str, field: str) -> Decimal | None:
-    """Read a number typed the Polish way ("12 850,5"); empty means none."""
-    if not text.strip():
-        return None
-    try:
-        return parse_number(text)
-    except ValueError:
-        raise InstrumentError(f"{field} musi być liczbą, a nie „{text.strip()}”.") from None

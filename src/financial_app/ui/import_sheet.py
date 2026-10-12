@@ -21,6 +21,7 @@ from financial_app.sources.spreadsheet import (
     save_import,
 )
 from financial_app.ui.accounts import open_account_dialog
+from financial_app.ui.multi_asset import warn_of_unsplit
 
 NEW_ACCOUNT = "new"
 NEW_INSTRUMENT = "new"
@@ -212,6 +213,7 @@ class SheetImportSection:
             self.render()
             return
         ui.notify(f"Zaimportowano transakcje: {saved.to_save}.", type="positive")
+        warn_of_unsplit(self.engine)
         if self.on_saved is not None:
             self.on_saved()
         self.render()

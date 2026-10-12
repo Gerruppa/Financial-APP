@@ -50,7 +50,7 @@ from financial_app.domain.transactions import (
     split,
 )
 from financial_app.persistence.accounts import list_accounts
-from financial_app.persistence.instruments import list_instruments
+from financial_app.persistence.instruments import get_instrument, list_instruments
 from financial_app.persistence.transactions import (
     add_transactions,
     delete_transaction,
@@ -60,6 +60,7 @@ from financial_app.persistence.transactions import (
 from financial_app.sources.export import FileFormat, export_transactions
 from financial_app.sources.nbp import NbpRates
 from financial_app.ui.dialogs import movable_dialog
+from financial_app.ui.multi_asset import open_split_dialog
 from financial_app.ui.view_scope import ViewScope, breadcrumbs
 
 # Offered for buying a foreign currency in a Currency Exchange, so the first exchange needs no setup
@@ -571,6 +572,7 @@ def open_transaction_dialog(
             # An edit may move the Transaction to another day or Account, so also check where it was
             _warn_if_cash_runs_out(engine, "Zapisano", account_names, draft, transaction)
             on_saved()
+            _ask_for_multi_asset_split(engine, draft, on_saved)
 
         def delete(confirmation: ui.dialog) -> None:
             assert transaction is not None
@@ -592,6 +594,15 @@ def open_transaction_dialog(
             ui.button("Anuluj", on_click=dialog.close).props("flat")
             ui.button("Zapisz" if transaction is None else "Zapisz zmiany", on_click=save)
     dialog.open()
+
+
+def _ask_for_multi_asset_split(engine: Engine, draft: TransactionDraft, on_saved: Callable[[], None]) -> None:
+    """After buying a Multi-asset Instrument that has no Multi-asset Split yet, open its split dialog (spec 3.2)."""
+    if draft.transaction_type not in (TransactionType.BUY, TransactionType.DRIP) or draft.instrument_id is None:
+        return
+    instrument = get_instrument(engine, draft.instrument_id)
+    if instrument.is_multi_asset and not instrument.multi_asset_split:
+        open_split_dialog(engine, instrument, on_saved)
 
 
 def _confirm_delete(delete: Callable[[ui.dialog], None]) -> None:

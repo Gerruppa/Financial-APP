@@ -7,7 +7,7 @@ from pathlib import Path
 from sqlalchemy import Engine, delete, func, insert, select
 from sqlalchemy.orm import Session
 
-from financial_app.domain.instruments import DEFAULT_ASSET_CLASSES
+from financial_app.domain.instruments import DEFAULT_ASSET_CLASSES, MULTI_ASSET_CLASS
 from financial_app.domain.prices import default_fallback_order
 from financial_app.persistence.backup import backup_database
 from financial_app.persistence.instruments import fallback_order_column
@@ -16,6 +16,7 @@ from financial_app.persistence.models import (
     AccountRow,
     AssetClassRow,
     InstrumentRow,
+    MultiAssetShareRow,
     PriceFailureRow,
     QuoteHistoryRow,
     QuoteRow,
@@ -50,9 +51,10 @@ def portfolio_counts(engine: Engine) -> PortfolioCounts:
 
 
 def clear_portfolio(engine: Engine) -> Path:
-    """Back the database up, then remove every Account, Instrument (with its Source Symbols, Quotes, price history
-    and refresh failures) and Transaction and restore the default Asset Classes with their Fallback Orders, all or
-    nothing. The NBP Rate caches and the app settings stay. Returns the backup's path.
+    """Back the database up, then remove every Account, Instrument (with its Source Symbols, Multi-asset Split,
+    Quotes, price history and refresh failures) and Transaction and restore the default Asset Classes with their
+    Fallback Orders (Multi-asset marked again), all or nothing. The NBP Rate caches and the app settings stay.
+    Returns the backup's path.
 
     The backup goes to the ``backups`` folder next to the database file, where the start-up backups are. Without a
     backup nothing is cleared: ``BackupError``.
@@ -75,6 +77,7 @@ def clear_portfolio(engine: Engine) -> Path:
             QuoteHistoryRow,
             PriceFailureRow,
             SourceSymbolRow,
+            MultiAssetShareRow,
             InstrumentRow,
             AssetClassRow,
         ):
@@ -82,7 +85,12 @@ def clear_portfolio(engine: Engine) -> Path:
         session.execute(
             insert(AssetClassRow),
             [
-                {"name": name, "position": i, "fallback_order": fallback_order_column(default_fallback_order(name))}
+                {
+                    "name": name,
+                    "position": i,
+                    "fallback_order": fallback_order_column(default_fallback_order(name)),
+                    "multi_asset": name == MULTI_ASSET_CLASS,
+                }
                 for i, name in enumerate(DEFAULT_ASSET_CLASSES)
             ],
         )
