@@ -86,7 +86,6 @@ class DashboardPage:
 
 def _totals(totals: Totals, after_tax: bool) -> None:
     """The tiles; ``after_tax`` adds the estimated Belka and takes it off the unrealised result."""
-    unrealized = totals.unrealized - totals.estimated_tax if after_tax else totals.unrealized
     tiles: list[tuple[str, str, str | None]] = [
         ("net-deposits", "Wpłaty netto", None if totals.net_deposits is None else format_pln(totals.net_deposits)),
         ("value", "Wartość konta", format_pln(totals.value)),
@@ -95,7 +94,7 @@ def _totals(totals: Totals, after_tax: bool) -> None:
         (
             "unrealized",
             "Niezrealizowany zysk po podatku" if after_tax else "Niezrealizowany zysk",
-            format_pln(unrealized, signed=True),
+            format_pln(totals.unrealized_after(after_tax), signed=True),
         ),
         ("realized", "Zrealizowany zysk", format_pln(totals.realized, signed=True)),
         ("dividends", "Dywidendy i odsetki", format_pln(totals.dividends)),
@@ -145,7 +144,7 @@ def _account_table(rows: tuple[AccountRow, ...], after_tax: bool) -> None:
                 format_pln(totals.value),
                 format_pln(totals.open_positions),
                 format_pln(totals.cash),
-                format_pln(totals.unrealized - (totals.estimated_tax if after_tax else 0), signed=True),
+                format_pln(totals.unrealized_after(after_tax), signed=True),
                 format_pln(totals.realized, signed=True),
                 DASH if totals.xirr is None else format_percent(totals.xirr * 100),
                 format_pln(totals.dividends),

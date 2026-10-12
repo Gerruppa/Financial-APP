@@ -68,7 +68,9 @@ def _chart(user: User, name: str) -> ui.echart:
 
 
 def _ranking(user: User) -> list[list[str]]:
-    rows = user.find(marker="ranking-row").elements
+    """The ranking's rows top to bottom, each as its cells' texts (``find`` gives a set, so walk the card)."""
+    [card] = user.find(marker="account-ranking").elements
+    rows = [element for element in card.descendants() if "ranking-row" in element._markers]
     return [[label.text for label in row.descendants() if isinstance(label, ui.label)] for row in rows]
 
 
@@ -132,10 +134,16 @@ async def test_the_ranking_sorts_by_a_clicked_column_and_back(engine: Engine) ->
     async with user_simulation(_shell(engine)) as user:
         await _opened(user)
 
+        def shown(label: str, order: list[str]) -> bool:
+            [button] = user.find(marker="ranking-sort-costs").elements
+            return button.props.get("label") == label and [row[0] for row in _ranking(user)] == order
+
+        # Each click redraws the table a moment later, so wait for its arrow before the next one
+        await _until(lambda: shown("Prowizje i koszty", ["XTB", "IKE"]))  # P&L, highest first
         user.find(marker="ranking-sort-costs").click()
-        await _until(lambda: [row[0] for row in _ranking(user)] == ["XTB", "IKE"])
+        await _until(lambda: shown("Prowizje i koszty ↓", ["XTB", "IKE"]))
         user.find(marker="ranking-sort-costs").click()
-        await _until(lambda: [row[0] for row in _ranking(user)] == ["IKE", "XTB"])
+        await _until(lambda: shown("Prowizje i koszty ↑", ["IKE", "XTB"]))
 
 
 async def test_the_waterfall_splits_the_result_by_source_in_every_scope(engine: Engine) -> None:

@@ -1,13 +1,14 @@
 """The Dashboard's profit-by-source waterfall (issue #89, spec 5): price effect, FX effect, Dividends, interest,
-commissions and costs, and taxes, adding up to the result the Dashboard's tiles show."""
+commissions and costs, and taxes, as the Dashboard of the View Scope gives them."""
 
 from datetime import date
 from decimal import Decimal
 
 from financial_app.domain.accounts import Account, AccountType
 from financial_app.domain.currencies import NbpRate
+from financial_app.domain.dashboard import dashboard
 from financial_app.domain.instruments import Instrument
-from financial_app.domain.profit_sources import ProfitSources, profit_sources
+from financial_app.domain.profit_sources import ProfitSources
 from financial_app.domain.transactions import (
     BrokerConversion,
     TransactionDraft,
@@ -31,6 +32,16 @@ INSTRUMENTS = {
 }
 
 
+def _sources(
+    transactions: list[TransactionDraft],
+    prices: dict[int, Decimal],
+    rates: dict[str, Decimal],
+    account_id: int | None = None,
+) -> ProfitSources:
+    """The result by source as the Dashboard of the scope gives it."""
+    return dashboard(transactions, ACCOUNTS, INSTRUMENTS, prices, rates, None, account_id).sources
+
+
 def _deposit(amount: str, account: int = XTB) -> TransactionDraft:
     return TransactionDraft(account, date(2026, 1, 1), TransactionType.DEPOSIT, Decimal(amount))
 
@@ -45,7 +56,7 @@ def test_a_pln_position_is_all_price_effect_once_its_commission_counts_as_a_cost
     # 10 × 40 zł with a 5 zł commission, now 50 zł: the result is 95 zł
     transactions = [_deposit("1000"), _buy_pzu("10", "40", "5")]
 
-    sources = profit_sources(transactions, ACCOUNTS, INSTRUMENTS, {PZU: Decimal(50)}, {})
+    sources = _sources(transactions, {PZU: Decimal(50)}, {})
 
     assert sources == ProfitSources(
         price=Decimal(100),
@@ -73,7 +84,7 @@ def test_a_foreign_position_splits_into_price_and_fx_and_the_conversion_fee_is_a
         conversion=BrokerConversion(Decimal(4020), Decimal("0.5")),
     )
 
-    sources = profit_sources([_deposit("5000"), buy], ACCOUNTS, INSTRUMENTS, {AAPL: Decimal(600)}, {"USD": Decimal(5)})
+    sources = _sources([_deposit("5000"), buy], {AAPL: Decimal(600)}, {"USD": Decimal(5)})
 
     assert sources.fx == Decimal(1000)  # 1000 USD worth 1 zł more each
     assert sources.price == Decimal(1000)  # 200 USD more at today's 5 zł
@@ -89,7 +100,7 @@ def test_dividends_and_interest_count_gross_with_the_withholding_tax_as_a_tax() 
         dividend(XTB, date(2026, 1, 11), Decimal(10), Decimal("1.90")),
     ]
 
-    sources = profit_sources(transactions, ACCOUNTS, INSTRUMENTS, {PZU: Decimal(40)}, {})
+    sources = _sources(transactions, {PZU: Decimal(40)}, {})
 
     assert sources.dividends == Decimal(100)
     assert sources.interest == Decimal(10)
@@ -101,7 +112,7 @@ def test_dividends_and_interest_count_gross_with_the_withholding_tax_as_a_tax() 
 def test_a_foreign_dividend_is_gross_at_the_rate_it_was_paid_at() -> None:
     paid = dividend(XTB, date(2026, 1, 10), Decimal(100), Decimal(15), instrument_id=AAPL, nbp_rate=USD_4)
 
-    sources = profit_sources([paid], ACCOUNTS, INSTRUMENTS, {}, {})
+    sources = _sources([paid], {}, {})
 
     assert sources.dividends == Decimal(400)
     assert sources.taxes == Decimal(-60)
@@ -115,7 +126,7 @@ def test_costs_count_with_commissions_and_foreign_cash_fx_goes_to_the_fx_effect(
         currency_exchange(XTB, date(2026, 1, 3), "USD", Decimal(100), Decimal(400)),
     ]
 
-    sources = profit_sources(transactions, ACCOUNTS, INSTRUMENTS, {}, {"USD": Decimal("4.5")})
+    sources = _sources(transactions, {}, {"USD": Decimal("4.5")})
 
     assert sources.costs == Decimal(-12)
     assert sources.fx == Decimal(50)
@@ -128,7 +139,7 @@ def test_an_account_excluding_its_fx_result_leaves_its_foreign_cash_out() -> Non
         currency_exchange(IKE, date(2026, 1, 3), "USD", Decimal(100), Decimal(400)),
     ]
 
-    sources = profit_sources(transactions, ACCOUNTS, INSTRUMENTS, {}, {"USD": Decimal("4.5")})
+    sources = _sources(transactions, {}, {"USD": Decimal("4.5")})
 
     assert sources.total == Decimal(0)
 
@@ -136,7 +147,7 @@ def test_an_account_excluding_its_fx_result_leaves_its_foreign_cash_out() -> Non
 def test_the_scope_takes_only_its_accounts() -> None:
     transactions = [_deposit("1000"), _buy_pzu("10", "40", "5"), _deposit("1000", IKE), _buy_pzu("1", "40", "1", IKE)]
 
-    sources = profit_sources(transactions, ACCOUNTS, INSTRUMENTS, {PZU: Decimal(50)}, {}, account_id=IKE)
+    sources = _sources(transactions, {PZU: Decimal(50)}, {}, account_id=IKE)
 
     assert sources.price == Decimal(10)
     assert sources.costs == Decimal(-1)

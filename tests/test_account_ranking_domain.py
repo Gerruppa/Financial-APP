@@ -111,7 +111,13 @@ def test_the_treemap_has_a_tile_per_account_holding_something_with_its_return_on
     ]
 
 
-def test_a_treemap_tile_has_no_return_without_net_deposits() -> None:
+def test_a_tile_of_an_account_that_took_out_more_than_it_paid_in_compares_profit_with_value() -> None:
     [tile] = treemap_tiles(ranking([_row(1, "IKE", value="100", net_deposits="-50")]))
+
+    assert tile.profit_share == Decimal("1.5")
+
+
+def test_a_treemap_tile_has_no_return_while_history_is_computed() -> None:
+    [tile] = treemap_tiles(ranking([_row(1, "IKE", value="100", net_deposits=None)]))
 
     assert tile.profit_share is None

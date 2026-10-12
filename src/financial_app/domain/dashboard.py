@@ -14,7 +14,7 @@ from decimal import Decimal
 
 from financial_app.domain.accounts import Account, tax_regime_for
 from financial_app.domain.instruments import Instrument
-from financial_app.domain.lots import foreign_cash, open_positions, realized_results
+from financial_app.domain.lots import foreign_cash, replay
 from financial_app.domain.metrics import twr, xirr
 from financial_app.domain.portfolio_history import CASH_CLASS, FOREIGN_CASH_CLASS, DayValue
 from financial_app.domain.profit_sources import ProfitSources, profit_sources
@@ -52,6 +52,16 @@ class Totals:
     def profit(self) -> Decimal | None:
         """The value less the Net Deposits, as the sheet's "Zysk / strata"; ``None`` while History is computed."""
         return None if self.net_deposits is None else self.value - self.net_deposits
+
+    def unrealized_after(self, after_tax: bool) -> Decimal:
+        """The unrealised result, less the estimated tax when ``after_tax``."""
+        return self.unrealized - self.estimated_tax if after_tax else self.unrealized
+
+    def profit_after(self, after_tax: bool) -> Decimal | None:
+        """The P&L, less the estimated tax when ``after_tax``."""
+        if self.profit is None:
+            return None
+        return self.profit - self.estimated_tax if after_tax else self.profit
 
 
 @dataclass(frozen=True)
@@ -93,7 +103,7 @@ class Dashboard:
     classes: tuple[ClassShare, ...] = ()
     holdings: Mapping[str, Mapping[int, Decimal]] = field(default_factory=dict)
     account_classes: Mapping[int, Mapping[str, Decimal]] = field(default_factory=dict)
-    sources: ProfitSources = ProfitSources(*(Decimal(0),) * 6)
+    sources: ProfitSources = ProfitSources()
 
 
 def dashboard(
@@ -113,10 +123,9 @@ def dashboard(
     ``None`` for Total) and ``period`` the "from" and "to" days of XIRR. Like the sheet, XIRR ends at today's value as
     the Dashboard shows it (with Manual Prices), not as History has it.
     """
-    positions = open_positions(transactions)
+    moves = replay(transactions)
     foreign = foreign_cash(transactions)
     balances = cash_balances(transactions)
-    realized = realized_results(transactions)
     dividends = dividends_by_account(transactions)
     costs = costs_by_account(transactions)
     last_day = history[-1] if history else None
@@ -127,6 +136,8 @@ def dashboard(
     account_classes: dict[int, dict[str, Decimal]] = {}
     # Unrealised gains at the Tax cost by tax rate: PIT-38 is one return, so Total offsets the Accounts' gains
     taxable: dict[Decimal, Decimal] = {}
+    # The FX part of the scope's unrealised and realised result, for the profit by source
+    fx = Decimal(0)
 
     def count_held(
         currency: str, amount: Decimal, parts: Iterable[tuple[str, Decimal]], instrument_id: int | None = None
@@ -150,8 +161,9 @@ def dashboard(
         positions_value = Decimal(0)
         unrealized = Decimal(0)
         taxable_gain = Decimal(0)
-        account_realized = realized.get(account.id, Decimal(0))
-        for position in (p for p in positions if p.account_id == account.id):
+        account_realized = moves.realized.get(account.id, Decimal(0))
+        fx += moves.realized_fx.get(account.id, Decimal(0))
+        for position in (p for p in moves.positions if p.account_id == account.id):
             price = prices.get(position.instrument_id)
             instrument = instruments[position.instrument_id]
             value = position.value_or_cost(price)
@@ -160,9 +172,13 @@ def dashboard(
             if price is not None:
                 unrealized += position.result(price)
                 taxable_gain += position.value(price) - position.tax_cost
+                rate = rates.get(instrument.quote_currency)
+                if rate is not None:
+                    fx += position.fx_result(rate)
         for balance in (c for c in foreign if c.account_id == account.id):
             if not account.exclude_fx_result:
                 account_realized += balance.realized_result
+                fx += balance.realized_result
             rate = rates.get(balance.currency)
             if rate is None:
                 positions_value += count_cash(balance.currency, FOREIGN_CASH_CLASS, balance.cost)
@@ -170,6 +186,7 @@ def dashboard(
             positions_value += count_cash(balance.currency, FOREIGN_CASH_CLASS, balance.value(rate))
             if not account.exclude_fx_result:
                 unrealized += balance.result(rate)
+                fx += balance.result(rate)
         count_cash(PLN, CASH_CLASS, balances.get(account.id, Decimal(0)))
         tax_rate = tax_regime_for(account.account_type).unrealized_tax_rate
         taxable[tax_rate] = taxable.get(tax_rate, Decimal(0)) + taxable_gain
@@ -186,7 +203,7 @@ def dashboard(
                     realized=account_realized,
                     dividends=dividends.get(account.id, Decimal(0)),
                     costs=costs.get(account.id, Decimal(0)),
-                    estimated_tax=tax_rate * max(taxable_gain, Decimal(0)),
+                    estimated_tax=_estimated_tax(tax_rate, taxable_gain),
                 ),
             )
         )
@@ -221,7 +238,7 @@ def dashboard(
         costs=sum((row.costs for row in scoped), Decimal(0)),
         xirr=xirr_rate,
         twr=twr_rate,
-        estimated_tax=sum((rate * max(gain, Decimal(0)) for rate, gain in taxable.items()), Decimal(0)),
+        estimated_tax=sum((_estimated_tax(rate, gain) for rate, gain in taxable.items()), Decimal(0)),
     )
     currencies = tuple(CurrencyShare(*share) for share in _shares(exposure))
     classes = tuple(ClassShare(*share) for share in _shares(allocation) if share[1])
@@ -235,8 +252,13 @@ def dashboard(
         classes,
         holdings,
         {a: values for a, values in held.items() if values},
-        profit_sources(transactions, accounts, instruments, prices, rates, account_id),
+        profit_sources(transactions, {row.account.id for row in rows}, totals.unrealized + totals.realized, fx),
     )
+
+
+def _estimated_tax(rate: Decimal, gain: Decimal) -> Decimal:
+    """The tax at ``rate`` on an unrealised ``gain``; nothing on a loss."""
+    return rate * max(gain, Decimal(0))
 
 
 def _shares(values: Mapping[str, Decimal]) -> list[tuple[str, Decimal, Decimal]]:

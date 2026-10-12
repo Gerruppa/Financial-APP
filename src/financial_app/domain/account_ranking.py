@@ -70,8 +70,8 @@ class RankingRow:
 
 @dataclass(frozen=True)
 class TreemapTile:
-    """An Account's tile: sized by ``value``, coloured by ``profit_share``, its P&L as a fraction of its Net Deposits
-    (``None`` without P&L or without positive Net Deposits)."""
+    """An Account's tile: sized by ``value``, coloured by ``profit_share``, its P&L as a fraction of its Net Deposits,
+    or of its value when it has taken out more than it paid in (``None`` without P&L)."""
 
     account: Account
     value: Decimal
@@ -83,19 +83,13 @@ def ranking(rows: Sequence[AccountRow], after_tax: bool = False) -> list[Ranking
     """A ranking row per Account row of the Dashboard, in their order; ``after_tax`` takes each Account's estimated
     Belka off its P&L."""
 
-    def profit(row: AccountRow) -> Decimal | None:
-        totals = row.totals
-        if totals.profit is None:
-            return None
-        return totals.profit - totals.estimated_tax if after_tax else totals.profit
-
     return [
         RankingRow(
             row.account,
             row.totals.value,
             row.totals.xirr,
             row.totals.twr,
-            profit(row),
+            row.totals.profit_after(after_tax),
             row.totals.net_deposits,
             row.totals.costs,
         )
@@ -125,13 +119,13 @@ def best_and_worst(rows: Sequence[RankingRow], column: RankingColumn) -> tuple[i
 def treemap_tiles(rows: Sequence[RankingRow]) -> list[TreemapTile]:
     """A tile per Account holding something (a positive value), in the rows' order."""
     return [
-        TreemapTile(row.account, row.value, row.profit, _share(row.profit, row.net_deposits))
+        TreemapTile(row.account, row.value, row.profit, _share(row.profit, row.net_deposits, row.value))
         for row in rows
         if row.value > 0
     ]
 
 
-def _share(profit: Decimal | None, net_deposits: Decimal | None) -> Decimal | None:
-    if profit is None or net_deposits is None or net_deposits <= 0:
+def _share(profit: Decimal | None, net_deposits: Decimal | None, value: Decimal) -> Decimal | None:
+    if profit is None or net_deposits is None:
         return None
-    return profit / net_deposits
+    return profit / (net_deposits if net_deposits > 0 else value)

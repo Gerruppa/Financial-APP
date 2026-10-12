@@ -153,27 +153,41 @@ def open_positions(transactions: Iterable[TransactionDraft]) -> list[Position]:
     or Security Transfer (by date) that is not covered, and SplitBeforeFirstBuyError for a Split before the Account
     first held the Instrument.
     """
-    positions, _, _ = _replay(transactions)
-    return [
-        Position(account_id, instrument_id, tuple(lots))
-        for (account_id, instrument_id), lots in positions.items()
-        if lots
-    ]
+    return replay(transactions).positions
 
 
 def realized_results(transactions: Iterable[TransactionDraft]) -> dict[int, Decimal]:
-    """The realised result of Sells in PLN per Account: each Sell's Actual Amount (net of its commission) less the
-    Actual cost of the Lots it consumed, FIFO as in ``open_positions``. Only Accounts with a Sell are keys."""
-    _, realized, _ = _replay(transactions)
-    return realized
+    """The realised result of Sells in PLN per Account (see ``Replay``)."""
+    return replay(transactions).realized
 
 
 def realized_fx_results(transactions: Iterable[TransactionDraft]) -> dict[int, Decimal]:
-    """The FX part of ``realized_results`` per Account: how much more (or less) in PLN the sold Lots' cost in the
-    Instrument's currency brought at the Sell's rate than it cost at theirs. Only Accounts with a foreign-currency Sell
-    are keys."""
-    _, _, realized_fx = _replay(transactions)
-    return realized_fx
+    """The FX part of ``realized_results`` per Account (see ``Replay``)."""
+    return replay(transactions).realized_fx
+
+
+@dataclass(frozen=True)
+class Replay:
+    """What one FIFO replay of the Transactions gives (see ``open_positions``): the open ``positions``; the
+    ``realized`` result of Sells in PLN per Account, each Sell's Actual Amount (net of its commission) less the Actual
+    cost of the Lots it consumed; and its FX part ``realized_fx``, how much more (or less) in PLN the sold Lots' cost
+    in the Instrument's currency brought at the Sell's rate than it cost at theirs. Only Accounts with a Sell (a
+    foreign-currency one for ``realized_fx``) are keys."""
+
+    positions: list[Position]
+    realized: dict[int, Decimal]
+    realized_fx: dict[int, Decimal]
+
+
+def replay(transactions: Iterable[TransactionDraft]) -> Replay:
+    """The Positions and realised results of ``transactions`` from one replay, for callers needing both."""
+    lots, realized, realized_fx = _replay(transactions)
+    positions = [
+        Position(account_id, instrument_id, tuple(open_lots))
+        for (account_id, instrument_id), open_lots in lots.items()
+        if open_lots
+    ]
+    return Replay(positions, realized, realized_fx)
 
 
 def _replay(
