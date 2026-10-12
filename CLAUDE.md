@@ -58,3 +58,20 @@ Default label names: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for
 ### Domain docs
 
 Single-context: one `CONTEXT.md` plus `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+
+## FILETREE.md
+
+`FILETREE.md` indexes every file with a one-line role summary, grouped by
+directory. Read it to find code by purpose before `ls`/`grep`/`find`: it
+turns "search the repo" into "look it up". Auto-maintained; don't hand-edit.
+
+```
+## (root)/
+
+- `main.py`: Entry point that starts the app in a native window
+
+## src/financial_app/domain/
+
+- `lots.py`: FIFO engine; builds open Positions and Lots from Transactions
+- `formatting.py`: Polish number and date formatting and parsing
+```
