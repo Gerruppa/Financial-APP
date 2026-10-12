@@ -8,6 +8,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `.gitignore`: Git ignore rules for the venv, caches, build output, the personal spreadsheet reference folder and graphify output.
 - `CLAUDE.md`: Guidance for Claude Code: project state, module layout, environment commands and the domain rules for this repo.
 - `CONTEXT.md`: Domain glossary defining the app's Polish-labelled terms (Accounts, Instruments, Transactions, Lots, Quotes) and terms to avoid.
+- `GLOSSARY.md`: Polish-to-English index of glossary terms, mapping UI labels to CONTEXT.md definitions and sections
 - `README.md`: User-facing setup guide: install steps, desktop shortcut creation, data location, backups and log file.
 - `alembic.ini`: Alembic CLI configuration pointing migrations at the persistence package; the app runs them itself at start-up.
 - `main.py`: Convenience script entry point that calls the app's main function to start the window.
@@ -24,6 +25,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `0003-single-fifo-engine-with-actual-and-tax-cost.md`: ADR for one FIFO lot engine carrying Actual and Tax costs per Lot, with FX cash held as Lots.
 - `0004-fix-spreadsheet-bugs-document-deviations.md`: ADR to fix known spreadsheet bugs rather than replicate them, recording each number-changing fix as a documented deviation.
 - `0005-structured-price-sources-only.md`: ADR restricting automatic prices to structured sources, with MF data authoritative for retail bonds.
+- `0006-history-quote-sources-and-split-unadjusting.md`: ADR: History takes Yahoo then Stooq daily quotes and un-adjusts prices for recorded Splits
 
 ## docs/agents/
 
@@ -52,10 +54,14 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `instrument_search.py`: Instrument search result types, the swappable search protocol, and filling empty form fields from a chosen result.
 - `instruments.py`: Instrument and Asset Class models, their validation, default Asset Classes, ISIN pattern, metal and distribution policy rules.
 - `lots.py`: The single FIFO engine that opens and consumes Lots for Positions and foreign cash, raising uncovered-sale errors.
+- `metrics.py`: Pure History metrics: XIRR, TWR, drawdowns, max drawdown, volatility and daily change per Total or Account
+- `periods.py`: Period presets and custom ranges for charts and results, with date calculation and text persistence
+- `portfolio_history.py`: Computes daily Portfolio value and Net Deposits per Account and Asset Class from transactions and cached prices
 - `prices.py`: Quote model, Price Source keys and names, and the per-Asset-Class Fallback Order deciding which sources to try.
 - `spreadsheet_import.py`: Pure conversion of the user's Inwestomat Transakcje sheet rows into Transaction drafts, with fingerprints for re-import skipping.
 - `transactions.py`: Transaction types, drafts and builders for every kind, plus cash balances and cost and dividend totals per Account.
 - `valuation.py`: Decides each Instrument's price and status from Manual Price or Quote, including metal spot conversion and badges.
+- `view_scope.py`: View Scope logic: Total or one Account, its remembered setting, switcher entries and transaction filtering
 
 ## src/financial_app/persistence/
 
@@ -102,12 +108,13 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 ## src/financial_app/sources/
 
 - `__init__.py`: Package marker describing the external price sources package
-- `analizy.py`: Fetches fund and PPK Quotes from the analizy.pl API as a price source
+- `analizy.py`: Fund and PPK Quotes and fund search through the undocumented analizy.pl API, a price source and an Instrument lookup.
 - `bankier.py`: Fetches fund and PPK Quotes from bankier.pl pages as the fallback price source
 - `bossa.py`: Fetches GPW, NewConnect, ETF and bond Quotes in PLN from the Bossa JSON API
 - `export.py`: Writes the Transactions list to CSV and XLSX files for export
 - `history.py`: Returns an Instrument's Quotes in a date range, fetching missing days from Stooq into cache
 - `nbp.py`: Gets NBP exchange rates from the NBP API through the local cache
+- `portfolio_history.py`: Fetches History prices and NBP Rates into cache and computes daily values, cached until invalidated
 - `prices.py`: Refreshes held Instruments' Quotes from price sources in fallback order and records failures
 - `spreadsheet.py`: Previews and imports Transactions and Instruments from the user's Inwestomat spreadsheet
 - `stooq.py`: Stooq history source for GPW stocks and indices; fetches daily closes via CSV with API key and browser proof-of-work check
@@ -119,8 +126,10 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `accounts.py`: Ustawienia Konta card: lists Accounts and opens the add and edit dialog
 - `dialogs.py`: Draggable dialog support with no backdrop, so the screen behind stays readable
 - `fund_details.py`: Builds the short fund detail texts (TER, Distribution Policy, domicile) shared by Instrument list and Portfolio
+- `history.py`: Shared per-database History window state: background fetch, progress and failure status, cached days
 - `import_sheet.py`: Ustawienia import section that previews the Transakcje spreadsheet and saves it only after user decisions
 - `instruments.py`: Ustawienia Klasy aktywów and Instrumenty cards: editable Asset Classes and the Instrument catalog with its dialog
+- `periods.py`: Period selector UI: preset buttons and custom range inputs, remembered per user and redrawing listeners
 - `portfolio.py`: Read-only Portfolio tab: per-Account cards with cash balances, valued Positions, Lots, FX result and dividends
 - `price_sources.py`: Ustawienia Źródła wycen card where the user stores the personal Stooq API key
 - `reset.py`: Ustawienia Wyczyść dane card that clears the whole portfolio after a warning and typed confirmation
@@ -128,12 +137,14 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `shell.py`: Main app window shell: left menu, header with refresh status and View Scope, and the transaction button
 - `transactions.py`: Transakcje tab and transaction dialog for adding, editing and deleting all supported transaction types
 - `unpriced.py`: Ustawienia Instrumenty bez wyceny card listing held Instruments lacking an automatic price, with reasons
+- `view_scope.py`: View Scope header switcher and breadcrumbs, listing Accounts by value with share and daily change
 
 ## tests/
 
 - `test_accounts_domain.py`: Tests Account Types, Tax Regime registry and AccountDraft validation rules
 - `test_accounts_repository.py`: Tests saving, listing and editing Accounts in SQLite, including unique names
 - `test_accounts_ui.py`: UI tests for Ustawienia Konta: adding, editing and deactivating Accounts without a browser
+- `test_analizy_search.py`: Tests for analizy.pl fund and PPK search on saved, trimmed responses without network
 - `test_analizy_source.py`: Tests the analizy.pl fund and PPK quote source against saved API responses
 - `test_architecture.py`: Architecture test enforcing that the domain core does not import UI or database code
 - `test_backup.py`: Tests database backup copies and the retention of the newest backups
@@ -157,7 +168,9 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_foreign_trades_ui.py`: End-to-end UI tests for foreign-currency Buys and Sells using the NBP Rate
 - `test_formatting.py`: Tests the Polish number, date and count formatting and typed-input parsing helpers
 - `test_fund_details_ui.py`: UI tests for a fund's TER, Distribution Policy and domicile in the dialog and Portfolio
+- `test_glossary.py`: Test that GLOSSARY.md lists exactly the terms defined in CONTEXT.md
 - `test_history_domain.py`: Tests which days of a price history still need fetching given cached days
+- `test_history_parity.py`: Parity test of History against the user's spreadsheet Historia tab at each month end, skipped without reference data
 - `test_import_sheet_ui.py`: UI tests for the Ustawienia spreadsheet import: preview first, then save, on a synthetic workbook
 - `test_instrument_search_domain.py`: Tests that a chosen Instrument search result fills only the empty Instrument form fields.
 - `test_instrument_search_ui.py`: Tests searching an Instrument by ISIN, name or symbol in the Instrument dialog on saved Yahoo responses.
@@ -165,9 +178,13 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_instruments_repository.py`: Tests saving Asset Classes and Instruments in SQLite, including uniqueness and updates.
 - `test_instruments_ui.py`: Tests the Klasy aktywów and Instrumenty sections of Ustawienia, run without a browser.
 - `test_lots_domain.py`: Tests the FIFO Lot engine and the Positions it produces from Transactions.
+- `test_metrics_domain.py`: Unit tests for History metrics: XIRR, TWR, drawdown and volatility per Total or Account
 - `test_nbp_rates.py`: Tests fetching and caching NBP D-1 rates from saved API responses, without the network.
 - `test_paths.py`: Tests that the default data directory lies outside the repository and respects the override.
+- `test_periods_domain.py`: Unit tests for period presets, custom ranges and period text persistence
 - `test_physical_metals_ui.py`: Tests physical metal Instruments with weight per unit and Buyback Spread in the dialog and Portfolio.
+- `test_portfolio_history_domain.py`: Unit tests for the History engine: daily value per Account and Asset Class and Net Deposits
+- `test_portfolio_history_service.py`: Tests the Portfolio history service: fetching prices into the cache, then computing history from it, on saved responses.
 - `test_portfolio_parity.py`: Tests that the app's Portfolio matches the user's spreadsheet Portfolio tab within 0.01 PLN, skipped without the workbook.
 - `test_price_history.py`: Tests an Instrument's Quotes in a date range, fetching missing days from Stooq once and caching them.
 - `test_price_history_ui.py`: Tests the Stooq Source Symbol in the Instrument dialog and the Stooq API key in Ustawienia.
@@ -185,6 +202,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_stooq_source.py`: Tests the Stooq price history source on saved CSV and browser-challenge responses, without the network.
 - `test_symbol_check.py`: Unit tests for the Sprawdź symbol check: quote, currency mismatch warning, and error cases on fake sources
 - `test_symbol_check_ui.py`: UI tests for the Sprawdź buttons in the Instrument dialog, on fake sources without network
+- `test_symbol_fields_ui.py`: UI tests for the Instrument dialog's Source Symbol fields, ordered by the Asset Class's Fallback Order.
 - `test_trades_ui.py`: Tests PLN Buys and Sells end to end through the transaction dialog, Transakcje list and Portfolio.
 - `test_transaction_edit_ui.py`: UI tests for editing and deleting a Transaction from the Transakcje list, including blocked edits
 - `test_transactions_domain.py`: Domain tests for Deposits, Withdrawals, trade amounts, validation and per-Account cash balances
@@ -193,14 +211,25 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_unpriced_domain.py`: Domain tests for the Instrumenty bez wyceny list: which held Instruments lack an automatic price and why
 - `test_unpriced_ui.py`: UI tests for the Instrumenty bez wyceny section in Ustawienia, including opening and fixing a symbol
 - `test_valuation_domain.py`: Domain tests for Instrument price selection, PLN conversion, staleness badges and metal spot valuation
+- `test_view_scope_domain.py`: Tests the View Scope domain: Total or one Account, its text setting, and the Accounts the switcher offers.
+- `test_view_scope_ui.py`: UI tests for the View Scope switcher, breadcrumbs, scope-following tabs and the period selector.
 - `test_windowless.py`: Tests that windowless launches redirect stdout and stderr to a log file while console launches stay untouched
 - `test_yahoo_search.py`: Tests Yahoo Instrument search by ISIN and name on saved responses, with error handling
 - `test_yahoo_source.py`: Tests Yahoo chart quotes on saved responses: currency, pence conversion, crypto rate and error messages
 
 ## tests/fixtures/analizy/
 
+- `FTI022_A_USD.json`: Saved analizy.pl fund quotation response for a USD Franklin Technology fund, used by tests
 - `FTI068_AH_EUR.json`: Saved analizy.pl API response for a EUR fund, used to test the analizy price source offline
+- `PZU01.json`: Saved analizy.pl quotation response for the PZU Akcji KRAKOWIAK fund, used by tests
 - `PZU60.json`: Saved analizy.pl API response for the PZU60 PPK fund in PLN, for offline price source tests
+
+## tests/fixtures/analizy/search/
+
+- `LU0109392836.json`: Saved analizy.pl search response for an ISIN query returning one Franklin fund
+- `PPK_2060_PZU.json`: Saved analizy.pl search response for a PPK query returning the PPK inPZU 2060 fund
+- `PZU_Akcji_Krakowiak.json`: Saved analizy.pl search response for PZU Akcji Krakowiak, including a former-name listing
+- `Quercus.json`: Saved analizy.pl search response for Quercus funds, used by search tests
 
 ## tests/fixtures/bankier/
 
@@ -245,8 +274,14 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `SSAC.SW.json`: Saved Yahoo chart API response for an iShares ACWI ETF on Zurich in CHF, used by Yahoo source tests
 - `USDPLN=X.json`: Saved Yahoo chart API response for the USD to PLN rate, used by Yahoo source tests
 
+## tests/fixtures/yahoo/history/
+
+- `BP.L.json`: Saved Yahoo chart response with daily closes for BP.L in GBp, used by history tests
+
 ## tests/fixtures/yahoo/search/
 
+- `GC=F.json`: Saved Yahoo search response for the Gold futures query, used by search tests
 - `IE00B6R52259.json`: Saved Yahoo search response for an ISIN query, used by instrument search tests
+- `bitcoin.json`: Saved Yahoo search response for the bitcoin query, used by search tests
 - `cd_projekt.json`: Saved Yahoo search response for the name query CD Projekt, used by instrument search tests
 - `iShares_MSCI_All_Country_World_UCITS_ETF_USD_Acc.json`: Saved Yahoo search response for an iShares ACWI ETF name query, used by instrument search tests
