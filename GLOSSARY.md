@@ -23,6 +23,7 @@ The Polish UI labels with the English terms the code and the docs use, in Polish
 | Nieaktualna cena | [Stale Price](CONTEXT.md#transactions-and-holdings) | Transactions and holdings |
 | Notowanie | [Quote](CONTEXT.md#transactions-and-holdings) | Transactions and holdings |
 | Opłata za przewalutowanie | [FX Conversion Fee](CONTEXT.md#accounts-and-instruments) | Accounts and instruments |
+| Oprocentowanie prognozowane | [Forecast Rate](CONTEXT.md#bonds) | Bonds |
 | Oprocentowanie szacunkowe | [Estimated Rate](CONTEXT.md#bonds) | Bonds |
 | Partia | [Lot](CONTEXT.md#transactions-and-holdings) | Transactions and holdings |
 | Pasmo tolerancji | [Tolerance Band](CONTEXT.md#accounts-and-instruments) | Accounts and instruments |
@@ -37,12 +38,14 @@ The Polish UI labels with the English terms the code and the docs use, in Polish
 | Spread odkupu | [Buyback Spread](CONTEXT.md#accounts-and-instruments) | Accounts and instruments |
 | Strategia inwestycyjna | [Investment Strategy](CONTEXT.md#accounts-and-instruments) | Accounts and instruments |
 | Symbol w źródle | [Source Symbol](CONTEXT.md#accounts-and-instruments) | Accounts and instruments |
+| Szkic | [Draft](CONTEXT.md#bonds) | Bonds |
 | Transakcja | [Transaction](CONTEXT.md#transactions-and-holdings) | Transactions and holdings |
 | TWR | [TWR](CONTEXT.md#results) | Results |
 | Typ konta | [Account Type](CONTEXT.md#accounts-and-instruments) | Accounts and instruments |
 | Udane odświeżenie | [Successful Refresh](CONTEXT.md#transactions-and-holdings) | Transactions and holdings |
 | Uzgadnianie | [Reconciliation](CONTEXT.md#results) | Results |
 | Waluta rachunku | [Cash Currency](CONTEXT.md#accounts-and-instruments) | Accounts and instruments |
+| Wcześniejszy wykup | [Early Redemption](CONTEXT.md#bonds) | Bonds |
 | Widok | [View Scope](CONTEXT.md#accounts-and-instruments) | Accounts and instruments |
 | Wpłaty netto | [Net Deposits](CONTEXT.md#results) | Results |
 | XIRR | [XIRR](CONTEXT.md#results) | Results |

@@ -149,12 +149,24 @@ _Avoid_: dividend type
 ## Bonds
 
 **Bond Series** (Seria obligacji):
-A Polish retail treasury bond issue identified by type, maturity month and year, e.g. `EDO0735`. It is an Instrument; each purchase of it is a separate Lot.
+A Polish retail treasury bond issue identified by type, maturity month and year, e.g. `EDO0735`. It is an Instrument and carries the rates (first-year rate, margin, each period's rate); each purchase of it is a separate Lot earning from its own date.
 _Avoid_: bond ticker, bond
 
 **Estimated Rate** (Oprocentowanie szacunkowe):
-A bond interest rate computed from CPI plus margin for a period the MF has not yet published. The MF-published rate always wins.
+A bond interest rate computed by the issue letter's rule (CPI of the right month plus margin, or the NBP reference rate for ROR/DOR) for a period the MF has not yet published, the input being already published. The MF-published rate always wins.
 _Avoid_: forecast rate
+
+**Forecast Rate** (Oprocentowanie prognozowane):
+A bond interest rate for a period whose input (CPI or NBP reference rate) is not published yet, so the last known one stands in. Becomes an Estimated Rate once the input is published.
+_Avoid_: Estimated Rate, guess
+
+**Early Redemption** (Wcześniejszy wykup):
+Selling a Bond Series back to the issuer before maturity: it names its Lot (ADR-0007) and pays the early-redemption fee, capped at the accrued interest.
+_Avoid_: sale, early sell
+
+**Draft** (Szkic):
+A Transaction the app proposes for confirmation (a maturity redemption, a Rollover or a bond coupon), computed from what is due and not yet recorded, never stored; confirming it saves an ordinary Transaction.
+_Avoid_: pending transaction, suggestion
 
 **Rollover** (Zamiana):
 Buying a new Bond Series with proceeds of a maturing one at the MF exchange price (e.g. 99.90 PLN).
