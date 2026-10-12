@@ -50,6 +50,8 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `__init__.py`: Docstring marking the domain package as pure-Python calculations with no UI or database imports.
 - `account_ranking.py`: Account ranking and treemap figures for the Total Dashboard: XIRR, TWR, P&L, Net Deposits and costs per Account, sorted with best and worst marked
 - `accounts.py`: Account Types, their Tax Regime descriptions and validation of Account fields with Polish error messages.
+- `bond_holdings.py`: Obligacje tab data: each Bond Series held in the View Scope with its Lots, gross and net values, rates and dates
+- `bond_redemption.py`: Net value of a retail treasury bond on redemption: gross value less early-redemption fee and withheld Belka tax
 - `bond_valuation.py`: Values Bond Series by MF issue letters: yearly compounding with linear accrual, rates estimated from GUS CPI when MF has none
 - `bonds.py`: Polish retail treasury bond types, their terms, GUS CPI readings and NBP reference rates as pure-Python values
 - `charts.py`: Dashboard chart data from History and Transactions: value, profit, XIRR, class shares and dividends by year, per scope and period
@@ -149,6 +151,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `accounts.py`: Ustawienia Konta card: lists Accounts and opens the add and edit dialog
 - `bond_data.py`: Header status listing failing bond data sources with their reasons, shown only while one keeps failing
 - `bond_series.py`: Bond Series rate summary and dialog for correcting MF rates by hand in Ustawienia Instrumenty
+- `bonds.py`: Obligacje tab UI: expandable table of Bond Series and their Lots with gross and net values
 - `charts.py`: Dashboard's nine ECharts charts plus the profit-by-source waterfall, following the View Scope and period
 - `dashboard.py`: Dashboard tab UI: totals, price status, Account table, exposure, charts, Account treemap and ranking, and the after-tax toggle
 - `dialogs.py`: Draggable dialog support with no backdrop, so the screen behind stays readable
@@ -183,13 +186,16 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_bankier_source.py`: Tests the bankier.pl fund and PPK quote source against saved pages
 - `test_bond_data.py`: Tests for bond data parsers, SQLite persistence and daily refresh rules on saved fixtures
 - `test_bond_data_ui.py`: UI tests for the bond data header status and its error dialog
+- `test_bond_holdings_domain.py`: Tests the Obligacje tab's Series holdings: Lot sums, rate labels, Tax Regime effect and scope filtering
 - `test_bond_parity.py`: Parity test of bond valuation against the user's spreadsheet Obligacje tab, skipped without reference data
 - `test_bond_purchase_ui.py`: UI tests for buying retail treasury bonds in the transaction dialog's bond mode
 - `test_bond_rates_ui.py`: UI tests for correcting a Bond Series' MF rates in Ustawienia Instrumenty
+- `test_bond_redemption_domain.py`: Tests bond early-redemption fees, Belka withholding, anniversaries and maturity dates
 - `test_bond_series_domain.py`: Domain tests for Bond Series naming and corrected MF rates
 - `test_bond_series_repository.py`: Repository tests for Bond Series as Instruments with saved rate corrections
 - `test_bond_valuation.py`: Unit tests for bond valuation: MF and CPI-estimated rates, linear accrual within the year, grosz rounding
 - `test_bond_valuation_ui.py`: UI tests for Bond Series values in the Portfolio, with per-Lot rates and labels from MF or CPI
+- `test_bonds_ui.py`: UI tests for the Obligacje tab and the Dashboard's after-tax bond deduction
 - `test_bossa_source.py`: Tests the Bossa JSON API quote source against saved responses
 - `test_charts_domain.py`: Unit tests for the Dashboard chart data: value, profit, XIRR, class shares and dividends by year
 - `test_clear_data_repository.py`: Tests that clearing the portfolio removes user data and restores default Asset Classes

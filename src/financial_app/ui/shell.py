@@ -23,6 +23,7 @@ from financial_app.sources.portfolio_history import PortfolioHistory
 from financial_app.sources.prices import PriceSource, RefreshResult, last_refresh, refresh_prices, refresh_summary
 from financial_app.sources.yahoo import YahooSearch, YahooSource
 from financial_app.ui.bond_data import bond_data_status
+from financial_app.ui.bonds import BondsPage
 from financial_app.ui.dashboard import DashboardPage
 from financial_app.ui.dialogs import install_movable_dialogs
 from financial_app.ui.history import history_status, shared_history
@@ -100,6 +101,7 @@ def build_shell(
     results_page = ResultsPage(engine, scope, period, lambda: shared.days)
     transactions_page = TransactionsPage(engine, rates, scope)
     portfolio_page = PortfolioPage(engine, rates, scope)
+    bonds_page = BondsPage(engine, rates, scope)
     unpriced = UnpricedSection(engine)
 
     async def load_history() -> None:
@@ -135,6 +137,7 @@ def build_shell(
         # Only the tab on screen has something to redraw; the others rebuild from the database when opened
         transactions_page.refresh()
         portfolio_page.refresh()
+        bonds_page.refresh()
         multi_asset_page.refresh()
         strategy_page.refresh()
         unpriced.refresh()
@@ -149,6 +152,7 @@ def build_shell(
         switcher.refresh()
         transactions_page.refresh()
         portfolio_page.refresh()
+        bonds_page.refresh()
         multi_asset_page.refresh()
         strategy_page.refresh()
         dashboard_page.refresh()
@@ -179,6 +183,7 @@ def build_shell(
         if result is None:  # the app is shutting down
             return
         portfolio_page.refresh()
+        bonds_page.refresh()
         multi_asset_page.refresh()
         strategy_page.refresh()
         unpriced.refresh()
@@ -190,6 +195,7 @@ def build_shell(
     async def refresh_bond_data_now(sources: BondDataSources) -> None:
         await run.io_bound(refresh_bond_data, engine, sources, now)
         bond_state.refresh()
+        bonds_page.refresh()
 
     async def start() -> None:
         if engine in _running_refreshes or (refresh_at_start and refresh_due(last_successful_refresh(engine), now())):
@@ -240,6 +246,7 @@ def build_shell(
     pages["/"] = lambda: scope_pages(dashboard_page.build)
     pages["/wyniki"] = lambda: scope_pages(results_page.build)
     pages["/multi-asset"] = lambda: scope_pages(multi_asset_page.build)
+    pages["/obligacje"] = lambda: scope_pages(bonds_page.build)
     pages["/strategie"] = lambda: scope_pages(strategy_page.build)
     pages["/ustawienia"] = lambda: build_settings_page(engine, rates, search, sources, unpriced, instruments_changed)
     ui.sub_pages(pages).classes("w-full").mark("page-content")

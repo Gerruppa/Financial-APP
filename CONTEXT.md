@@ -164,6 +164,10 @@ _Avoid_: Estimated Rate, guess
 Selling a Bond Series back to the issuer before maturity: it names its Lot (ADR-0007) and pays the early-redemption fee, capped at the accrued interest.
 _Avoid_: sale, early sell
 
+**Net Value** (Wartość netto):
+What redeeming one bond of a Bond Series' Lot today would pay, a Lot's being that times its bonds: the bond's gross value less the early-redemption fee (none at maturity) and the tax the Account's Tax Regime withholds on its profit. Shown in the Obligacje tab; the Dashboard's after-tax toggle takes it.
+_Avoid_: after-tax value, redemption value
+
 **Draft** (Szkic):
 A Transaction the app proposes for confirmation (a maturity redemption, a Rollover or a bond coupon), computed from what is due and not yet recorded, never stored; confirming it saves an ordinary Transaction.
 _Avoid_: pending transaction, suggestion

@@ -18,7 +18,15 @@ from decimal import ROUND_HALF_UP, Decimal
 from enum import StrEnum
 from functools import cached_property
 
-from financial_app.domain.bonds import ISSUE_PRICE, TERM_MONTHS, BondSeries, BondType, CpiReading
+from financial_app.domain.bonds import (
+    ISSUE_PRICE,
+    PERIODS,
+    TERM_MONTHS,
+    BondSeries,
+    BondType,
+    CpiReading,
+    add_months,
+)
 from financial_app.domain.lots import Lot
 
 # The bond types valued so far; any other Bond Series stays at cost until its slice (L-7, L-8)
@@ -127,11 +135,18 @@ def _rate(series: BondSeries, year: int, start: date, cpi: Cpi) -> PeriodRate | 
 
 def _anniversary(purchase_day: date, years: int) -> date:
     """The day ``years`` after the purchase; 28 February for a purchase on 29 February in a common year."""
-    year = purchase_day.year + years
-    try:
-        return purchase_day.replace(year=year)
-    except ValueError:
-        return date(year, 2, 28)
+    return add_months(purchase_day, 12 * years)
+
+
+def next_anniversary(bond_type: BondType, purchase_day: date, day: date) -> date | None:
+    """The first day after ``day`` a new interest period of a bond bought on ``purchase_day`` starts; ``None`` in the
+    last period, which ends at maturity."""
+    months = TERM_MONTHS[bond_type] // PERIODS[bond_type]
+    for period in range(1, PERIODS[bond_type]):
+        start = add_months(purchase_day, months * period)
+        if start > day:
+            return start
+    return None
 
 
 def _years_between(purchase_day: date, day: date) -> int:

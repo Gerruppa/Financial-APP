@@ -102,7 +102,7 @@ def _totals(totals: Totals, after_tax: bool) -> None:
         ("xirr", "XIRR", None if totals.xirr is None else format_percent(totals.xirr * 100)),
     ]
     if after_tax:
-        tiles.append(("estimated-tax", "Szacowany podatek Belki", format_pln(totals.estimated_tax)))
+        tiles.append(("estimated-tax", "Szacowany podatek i opłaty", format_pln(totals.estimated_tax)))
     with (
         ui.element("div")
         .classes("grid w-full gap-4")

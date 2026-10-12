@@ -4,6 +4,7 @@ and the NBP reference rate, which the valuation of Stage 3 rests on.
 Rates are fractions (0.0535 for 5.35%); CPI readings are GUS indices (103.4 when prices rose 3.4%).
 """
 
+import calendar
 import re
 from dataclasses import dataclass, field
 from datetime import date
@@ -75,6 +76,26 @@ def series_name(bond_type: BondType, purchase_day: date) -> str:
     type, named by the month and year it matures."""
     months = purchase_day.year * 12 + purchase_day.month - 1 + TERM_MONTHS[bond_type]
     return f"{bond_type}{months % 12 + 1:02}{months // 12 % 100:02}"
+
+
+def sale_month(name: str) -> date:
+    """The first day of the month the Series ``name`` was sold in: its term before the month it matures."""
+    match = SERIES_NAME.fullmatch(name)
+    assert match is not None, name
+    months = (2000 + int(match[3])) * 12 + int(match[2]) - 1 - TERM_MONTHS[BondType(match[1])]
+    return date(months // 12, months % 12 + 1, 1)
+
+
+def add_months(day: date, months: int) -> date:
+    """The day ``months`` after ``day``; the month's last day when it is shorter (29 February gives 28 February)."""
+    index = day.year * 12 + day.month - 1 + months
+    year, month = index // 12, index % 12 + 1
+    return date(year, month, min(day.day, calendar.monthrange(year, month)[1]))
+
+
+def maturity(bond_type: BondType, purchase_day: date) -> date:
+    """The day a bond of ``bond_type`` bought on ``purchase_day`` is redeemed: each purchase runs its own term."""
+    return add_months(purchase_day, TERM_MONTHS[bond_type])
 
 
 class BondDataError(Exception):

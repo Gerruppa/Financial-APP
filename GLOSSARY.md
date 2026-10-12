@@ -45,6 +45,7 @@ The Polish UI labels with the English terms the code and the docs use, in Polish
 | Udane odświeżenie | [Successful Refresh](CONTEXT.md#transactions-and-holdings) | Transactions and holdings |
 | Uzgadnianie | [Reconciliation](CONTEXT.md#results) | Results |
 | Waluta rachunku | [Cash Currency](CONTEXT.md#accounts-and-instruments) | Accounts and instruments |
+| Wartość netto | [Net Value](CONTEXT.md#bonds) | Bonds |
 | Wcześniejszy wykup | [Early Redemption](CONTEXT.md#bonds) | Bonds |
 | Widok | [View Scope](CONTEXT.md#accounts-and-instruments) | Accounts and instruments |
 | Wpłaty netto | [Net Deposits](CONTEXT.md#results) | Results |

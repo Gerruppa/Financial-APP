@@ -1,0 +1,155 @@
+"""The Obligacje tab (spec 3.4.1, L-4): the Bond Series held in the View Scope, each expanding to its Lots, with what
+was paid in, the current period and its rate (labelled when MF has not published it), the gross value, the net value
+after the early-redemption fee and the tax the Account's Tax Regime withholds, the next anniversary and the maturity.
+The "Do zatwierdzenia" list and the calendar come in later slices (L-6, L-9)."""
+
+from dataclasses import dataclass
+from datetime import date
+from decimal import Decimal
+
+from nicegui import ui
+from sqlalchemy import Engine
+
+from financial_app.domain.bond_holdings import LotHolding, SeriesHolding, bond_holdings, bond_totals
+from financial_app.domain.bond_valuation import BondValue, RateLabel
+from financial_app.domain.formatting import format_date, format_percent, format_pln, format_quantity
+from financial_app.domain.lots import open_positions
+from financial_app.persistence.accounts import list_accounts
+from financial_app.persistence.bond_series import load_bond_data
+from financial_app.persistence.instruments import list_instruments
+from financial_app.persistence.transactions import list_transactions
+from financial_app.sources.nbp import NbpRates
+from financial_app.ui.view_scope import ViewScope
+
+COLUMNS = "grid-template-columns: minmax(8rem, 2fr) repeat(7, minmax(6rem, 1fr))"
+HEADERS = (
+    "Seria",
+    "Liczba",
+    "Wpłacono",
+    "Oprocentowanie",
+    "Wartość brutto",
+    "Wartość netto",
+    "Następna rocznica",
+    "Wykup",
+)
+LOT_HEADERS = ("Data zakupu", *HEADERS[1:])
+
+
+@dataclass
+class BondsPage:
+    """The Obligacje tab of the View Scope; the bonds are valued at the end of the NBP Rates' today, as the
+    Portfolio values them."""
+
+    engine: Engine
+    rates: NbpRates
+    scope: ViewScope
+
+    def refresh(self) -> None:
+        """Redraw the tab if it is on screen (e.g. after a save, a price refresh or a scope change)."""
+        self.content.refresh()
+
+    def build(self) -> None:
+        ui.label("Obligacje").classes("text-2xl font-bold")
+        with ui.column().classes("w-full max-w-6xl gap-0").mark("bonds"):
+            self.content()
+
+    @ui.refreshable_method
+    def content(self) -> None:
+        # list_transactions is newest first; the FIFO engine wants entry order
+        positions = open_positions(reversed(list_transactions(self.engine)))
+        instruments = {i.id: i for i in list_instruments(self.engine)}
+        holdings = bond_holdings(
+            positions,
+            instruments,
+            list_accounts(self.engine),
+            load_bond_data(self.engine),
+            self.rates.today(),
+            self.scope.account_id,
+        )
+        if not holdings:
+            ui.label(
+                "Brak obligacji skarbowych w portfelu. Zakup obligacji dodasz przyciskiem „+” w trybie obligacji."
+            ).classes("text-gray-500").mark("bonds-empty")
+            return
+        with ui.element("div").classes("grid w-full gap-x-4 border-b py-1 font-medium").style(COLUMNS):
+            for header in HEADERS:
+                ui.label(header).classes("" if header == "Seria" else "text-right")
+        for holding in holdings:
+            self._series_row(holding)
+        _totals(holdings)
+
+    def _series_row(self, holding: SeriesHolding) -> None:
+        row = ui.element("div").classes("grid w-full gap-x-4 border-b py-1 cursor-pointer hover:bg-gray-100")
+        with row.style(COLUMNS).mark("bond-row"):
+            with ui.column().classes("gap-0"):
+                ui.label(holding.instrument.name).classes("font-medium")
+                if self.scope.account_id is None:
+                    ui.label(holding.account.name).classes("text-xs text-gray-500")
+            ui.label(format_quantity(holding.quantity)).classes("text-right")
+            ui.label(format_pln(holding.paid)).classes("text-right")
+            _rate_cell(holding.current, holding.label)
+            ui.label(format_pln(holding.gross)).classes("text-right")
+            _net_cell(holding.net)
+            _date_cell(holding.next_anniversary)
+            _date_cell(holding.maturity)
+        with ui.column().classes("w-full gap-0 pl-8 pb-2").mark("bond-lots") as lots:
+            with ui.element("div").classes("grid w-full gap-x-4 text-sm font-medium").style(COLUMNS):
+                for header in LOT_HEADERS:
+                    ui.label(header).classes("" if header == "Data zakupu" else "text-right")
+            for held in holding.lots:
+                _lot_row(held)
+        lots.visible = False
+        row.on("click", lambda: lots.set_visibility(not lots.visible))
+
+
+def _lot_row(held: LotHolding) -> None:
+    with ui.element("div").classes("grid w-full gap-x-4 text-sm").style(COLUMNS):
+        ui.label(format_date(held.lot.date))
+        ui.label(format_quantity(held.lot.quantity)).classes("text-right")
+        ui.label(format_pln(held.lot.cost)).classes("text-right")
+        _rate_cell(held.value, None if held.value is None else held.value.label)
+        ui.label(format_pln(held.gross)).classes("text-right")
+        with ui.column().classes("gap-0 items-end"):
+            if held.net is None:
+                ui.label("—").classes("text-gray-500")
+            else:
+                ui.label(format_pln(held.net))
+                ui.label(f"opłata {format_pln(held.fee)} · podatek {format_pln(held.tax)}").classes(
+                    "text-xs text-gray-500"
+                )
+        _date_cell(held.next_anniversary)
+        _date_cell(held.maturity)
+
+
+def _rate_cell(value: BondValue | None, label: RateLabel | None) -> None:
+    """The period's rate and number, with the label of the most uncertain rate the value rests on; "po koszcie" for a
+    Series not valued yet."""
+    with ui.column().classes("gap-0 items-end"):
+        if value is None:
+            ui.label("po koszcie").classes("text-gray-500")
+            return
+        ui.label(f"{format_percent(value.rate.rate * 100)} · rok {value.period}")
+        if label is not None:
+            ui.label(label.value).classes("text-xs text-orange-700").mark("bond-rate-label")
+
+
+def _net_cell(net: Decimal | None) -> None:
+    if net is None:
+        ui.label("—").classes("text-right text-gray-500").mark("bond-net")
+    else:
+        ui.label(format_pln(net)).classes("text-right font-medium").mark("bond-net")
+
+
+def _date_cell(day: date | None) -> None:
+    ui.label("—" if day is None else format_date(day)).classes("text-right")
+
+
+def _totals(holdings: list[SeriesHolding]) -> None:
+    totals = bond_totals(holdings)
+    with ui.element("div").classes("grid w-full gap-x-4 py-1 font-medium").style(COLUMNS).mark("bond-totals"):
+        ui.label("Razem")
+        ui.label("")
+        ui.label(format_pln(totals.paid)).classes("text-right")
+        ui.label("")
+        ui.label(format_pln(totals.gross)).classes("text-right")
+        ui.label(format_pln(totals.net)).classes("text-right")
