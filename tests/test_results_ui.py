@@ -134,3 +134,11 @@ async def test_the_results_wait_for_history(engine: Engine) -> None:
         await user.should_see(marker="results-pending")
         computed.set()
         await user.should_see(marker="results-twr", content=_percent("0,50"))
+
+
+async def test_without_transactions_there_are_no_results(tmp_path: Path) -> None:
+    async with user_simulation(_shell(init_db(tmp_path / "empty.sqlite3"))) as user:
+        await user.open("/wyniki")
+
+        await user.should_see(marker="results-empty")
+        await user.should_not_see(marker="results-twr")

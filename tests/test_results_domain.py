@@ -78,5 +78,23 @@ def test_an_account_scope_lists_only_its_account_over_the_ytd_1y_3y_and_since_in
     assert row.returns[PeriodPreset.THREE_YEARS] == row.returns[PeriodPreset.SINCE_INCEPTION]
 
 
+def test_an_inactive_account_leaves_the_table_once_emptied() -> None:
+    accounts = [*ACCOUNTS[:2], Account("Stare", "mBank", AccountType.REGULAR, ("PLN",), active=False, id=OLD)]
+
+    def on(day: date, old: str) -> DayValue:
+        values = {IKE: Decimal(1000), OLD: Decimal(old)}
+        return DayValue(day, values, {}, Decimal(1000), {IKE: Decimal(1000), OLD: Decimal(0)}, frozenset())
+
+    emptied = [on(date(2026, 1, 5), "500"), on(date(2026, 1, 6), "0")]
+    holding = [on(date(2026, 1, 5), "500"), on(date(2026, 1, 6), "500")]
+
+    assert [row.account for row in results_rows(emptied, accounts, None, date(2026, 1, 6))] == [None, accounts[0]]
+    assert [row.account for row in results_rows(holding, accounts, None, date(2026, 1, 6))] == [
+        None,
+        accounts[0],
+        accounts[2],
+    ]
+
+
 def test_no_history_gives_no_rows() -> None:
     assert results_rows([], ACCOUNTS, None, date(2026, 1, 6)) == []

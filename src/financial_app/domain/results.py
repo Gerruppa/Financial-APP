@@ -81,8 +81,9 @@ def period_results(
 def results_rows(
     history: Sequence[DayValue], accounts: Sequence[Account], account_id: int | None, today: date
 ) -> list[ResultsRow]:
-    """In the Total scope the Total, then each Account with something in History, highest value today first; in an
-    Account scope that Account alone. No History, no rows."""
+    """In the Total scope the Total, then each Account with something in History, highest value today first (an
+    inactive one only while it holds something, as in the Dashboard's table); in an Account scope that Account alone.
+    No History, no rows."""
     if not history:
         return []
     inception = history[0].day
@@ -95,8 +96,12 @@ def results_rows(
 
     if account_id is not None:
         return [row(account) for account in accounts if account.id == account_id]
-    held = [account for account in accounts if any(_holds(day, account.id) for day in history)]
     latest = history[-1].accounts
+    held = [
+        account
+        for account in accounts
+        if (account.active or latest.get(account.id)) and any(_holds(day, account.id) for day in history)
+    ]
     held.sort(key=lambda account: (-latest.get(account.id, Decimal(0)), account.name.casefold()))
     return [row(None), *(row(account) for account in held)]
 

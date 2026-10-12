@@ -52,6 +52,9 @@ class ResultsPage:
         if days is None:
             ui.label("Wyniki: wyliczanie historii…").classes("text-gray-500").mark("results-pending")
             return
+        if not days:
+            ui.label("Wyniki pojawią się po pierwszej transakcji.").classes("text-gray-500").mark("results-empty")
+            return
         first, last = self.period.dates()
         account_id = self.scope.account_id
         _tiles(period_results(days, first, last, account_id))
