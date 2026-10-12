@@ -1,0 +1,1 @@
+{"chart": {"result": [{"meta": {"currency": "GBp", "symbol": "BP.L", "instrumentType": "EQUITY", "gmtoffset": 0, "regularMarketTime": 1767686400, "regularMarketPrice": 590.0}, "timestamp": [1767340800, 1767600000, 1767686400], "indicators": {"quote": [{"close": [580.5, null, 590.0]}], "adjclose": [{"adjclose": [570.1, null, 580.2]}]}}], "error": null}}

@@ -5,15 +5,16 @@ import json
 import urllib.request
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 from urllib.error import HTTPError
 from urllib.parse import quote as url_quote
 
 from financial_app.domain.instrument_search import InstrumentSearchError, SearchResult, looks_like_isin
-from financial_app.domain.prices import BOSSA, YAHOO, CurrencyMismatchError, PriceSourceError, Quote
+from financial_app.domain.prices import BOSSA, YAHOO, YAHOO_HISTORY, CurrencyMismatchError, PriceSourceError, Quote
 
 API = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?range=5d&interval=1d"
+HISTORY_API = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?period1={start}&period2={end}&interval=1d"
 SEARCH_API = "https://query1.finance.yahoo.com/v1/finance/search?q={query}&quotesCount=10&newsCount=0&listsCount=0"
 # Yahoo quotes London listings in pence (GBp)
 MINOR_UNITS = {"GBp": ("GBP", 100)}
@@ -69,6 +70,40 @@ class YahooSource:
                 Quote(price, source_currency, day, YAHOO),
             )
         return Quote(price, currency, day, YAHOO)
+
+    def history(self, symbol: str, currency: str, first: date, last: date) -> list[Quote]:
+        """The daily closes of ``symbol`` from ``first`` to ``last``, oldest first, for History (ADR-0006).
+
+        ``close`` is split-adjusted only; ``adjclose`` would also take out the Dividends, which History counts from
+        the Transactions. A currency other than ``currency`` is an error; days without a close are left out.
+        """
+        start = int(datetime.combine(first, time(), UTC).timestamp())
+        end = int(datetime.combine(last + timedelta(days=1), time(), UTC).timestamp())
+        url = HISTORY_API.format(symbol=url_quote(symbol, safe=""), start=start, end=end)
+        body = _get(self.fetch, url, PriceSourceError, f" dla {symbol}")
+        if body is None:
+            raise PriceSourceError(f"Yahoo nie zna symbolu „{symbol}”.")
+        try:
+            result = json.loads(body, parse_float=Decimal)["chart"]["result"][0]
+            meta = result["meta"]
+            source_currency, offset = str(meta["currency"]), int(meta["gmtoffset"])
+            stamps = result.get("timestamp") or []
+            closes = result["indicators"]["quote"][0]["close"] if stamps else []
+        except ValueError, KeyError, IndexError, TypeError:
+            raise PriceSourceError(f"Nieprawidłowa odpowiedź Yahoo dla {symbol}.") from None
+        divisor = 1
+        if source_currency in MINOR_UNITS:
+            source_currency, divisor = MINOR_UNITS[source_currency]
+        if source_currency != currency:
+            raise PriceSourceError(
+                f"Yahoo podaje historię {symbol} w {source_currency}, a instrument jest notowany w {currency}."
+            )
+        quotes = {}
+        for stamp, close in zip(stamps, closes, strict=False):
+            day = datetime.fromtimestamp(stamp + offset, UTC).date()
+            if close is not None and first <= day <= last:
+                quotes[day] = Quote(Decimal(close) / divisor, currency, day, YAHOO_HISTORY)
+        return list(quotes.values())
 
 
 class YahooSearch:

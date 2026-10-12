@@ -13,7 +13,8 @@ from sqlalchemy.orm import Session
 
 from financial_app.domain.currencies import NbpRate
 from financial_app.domain.history import Cover
-from financial_app.domain.prices import STOOQ, Quote
+from financial_app.domain.portfolio_history import HistoryPrice
+from financial_app.domain.prices import HISTORY_ONLY_SOURCES, Quote
 from financial_app.persistence.models import NbpHistoryRow, NbpRateHistoryRow, QuoteHistoryRow, QuoteRow
 
 
@@ -48,9 +49,11 @@ def save_quote_history(
 
 
 def forget_quote_history(session: Session, instrument_id: int) -> None:
-    """Drop what was fetched from Stooq for the Instrument, e.g. when its Stooq Source Symbol changes."""
+    """Drop the price history fetched for the Instrument, e.g. when its Yahoo or Stooq Source Symbol changes."""
     session.execute(delete(QuoteHistoryRow).where(QuoteHistoryRow.instrument_id == instrument_id))
-    session.execute(delete(QuoteRow).where((QuoteRow.instrument_id == instrument_id) & (QuoteRow.source == STOOQ)))
+    session.execute(
+        delete(QuoteRow).where((QuoteRow.instrument_id == instrument_id) & QuoteRow.source.in_(HISTORY_ONLY_SOURCES))
+    )
 
 
 def quotes_between(engine: Engine, instrument_id: int, first: date, last: date) -> list[Quote]:
@@ -62,6 +65,22 @@ def quotes_between(engine: Engine, instrument_id: int, first: date, last: date) 
             .order_by(QuoteRow.day)
         )
         return [Quote(Decimal(row.price), row.currency, row.day, row.source) for row in rows]
+
+
+def history_prices(engine: Engine, instrument_id: int) -> list[HistoryPrice]:
+    """All the Instrument's saved Quotes as History prices, oldest first; those of a split-adjusting history source
+    are in the units of the day they were fetched (ADR-0006)."""
+    with Session(engine) as session:
+        rows = session.scalars(select(QuoteRow).where(QuoteRow.instrument_id == instrument_id).order_by(QuoteRow.day))
+        return [
+            HistoryPrice(
+                row.day,
+                Decimal(row.price),
+                row.currency,
+                row.fetched_at.date() if row.source in HISTORY_ONLY_SOURCES else None,
+            )
+            for row in rows
+        ]
 
 
 def nbp_history_cover(engine: Engine, currency: str) -> Cover | None:

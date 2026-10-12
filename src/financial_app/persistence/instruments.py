@@ -15,7 +15,7 @@ from financial_app.domain.instruments import (
     InstrumentError,
     validate_asset_class_name,
 )
-from financial_app.domain.prices import OTHER, STOOQ, default_fallback_order, validate_fallback_order
+from financial_app.domain.prices import HISTORY_SOURCES, OTHER, default_fallback_order, validate_fallback_order
 from financial_app.persistence.history import forget_quote_history
 from financial_app.persistence.models import (
     AssetClassRow,
@@ -137,10 +137,12 @@ def update_instrument(engine: Engine, instrument_id: int, draft: InstrumentDraft
     with Session(engine) as session, session.begin():
         row = session.get_one(InstrumentRow, instrument_id)
         _check_instrument_name_is_free(session, draft.name, instrument_id)
-        # History fetched for another Stooq symbol is not this one's; Stooq ignores the case
-        if (draft.source_symbols.get(STOOQ) or "").lower() != (
-            _to_instrument(row).source_symbols.get(STOOQ) or ""
-        ).lower():
+        # History fetched for another Yahoo or Stooq symbol is not this one's; both ignore the case
+        saved = _to_instrument(row).source_symbols
+        if any(
+            (draft.source_symbols.get(source) or "").lower() != (saved.get(source) or "").lower()
+            for source in HISTORY_SOURCES
+        ):
             forget_quote_history(session, instrument_id)
         # Its Transactions' prices and NBP Rates are in the old currency
         if draft.quote_currency != row.quote_currency and session.scalar(
