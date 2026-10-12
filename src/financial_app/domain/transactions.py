@@ -149,7 +149,8 @@ class TransactionDraft:
 
     A Sell of a Bond Series (an Early Redemption, spec 3.4.1, ADR-0007) may name in ``lot_id`` the Transaction that
     opened the Lot it redeems, and carry the ``withholding_tax`` taken from it at redemption (PLN only): its Actual
-    Amount is then quantity × price less the commission (the early-redemption fee) and that tax.
+    Amount is then quantity × price less the commission (the early-redemption fee) and that tax. An interest Dividend
+    may name the Lot of a Bond Series whose coupon it is (L-8).
     """
 
     account_id: int
@@ -173,7 +174,8 @@ class TransactionDraft:
     origin: Origin = field(default=Origin.MANUAL, kw_only=True)
     # Imported Transactions only: the fingerprint of their spreadsheet row, so importing the file again skips them
     external_id: str | None = field(default=None, kw_only=True)
-    # A Sell only: the id of the Transaction that opened the Lot it takes its units from, instead of FIFO (ADR-0007)
+    # A Sell: the id of the Transaction that opened the Lot it takes its units from, instead of FIFO (ADR-0007); an
+    # interest Dividend: that of the Lot whose coupon it is
     lot_id: int | None = field(default=None, kw_only=True)
 
     def __post_init__(self) -> None:
@@ -203,7 +205,10 @@ class TransactionDraft:
             _check_withheld_on_sale(self.withholding_tax, self.nbp_rate)
         elif not self.transaction_type.is_dividend and self.withholding_tax:
             raise TransactionError(f"{self.transaction_type.label} nie ma pobranego podatku.")
-        if self.lot_id is not None and self.transaction_type is not TransactionType.SELL:
+        names_lot = self.transaction_type is TransactionType.SELL or (
+            self.transaction_type is TransactionType.DIVIDEND and self.instrument_id is None
+        )
+        if self.lot_id is not None and not names_lot:
             raise TransactionError(f"{self.transaction_type.label} nie wskazuje partii.")
         if self.transaction_type.is_buy_or_sell:
             if self.instrument_id is None:
@@ -561,12 +566,14 @@ def dividend(
     nbp_rate: NbpRate | None = None,
     cash_currency: str = PLN,
     conversion: BrokerConversion | None = None,
+    lot_id: int | None = None,
 ) -> TransactionDraft:
     """A Dividend or interest of ``gross`` less ``withholding_tax``, in the currency of ``nbp_rate`` (else PLN).
 
     Paid into PLN, its Actual Amount is the net amount at ``fx_rate`` or the NBP Rate, or, with a broker
     ``conversion``, the PLN the broker credited, recording its FX Conversion Fee; paid into foreign cash
-    (``cash_currency``), the net amount moves that cash and the Actual Amount values it at the same rate.
+    (``cash_currency``), the net amount moves that cash and the Actual Amount values it at the same rate. Interest
+    paid as a Bond Series' coupon names its Lot in ``lot_id``.
     """
     return _dividend_draft(
         TransactionType.DIVIDEND,
@@ -580,6 +587,7 @@ def dividend(
         nbp_rate=nbp_rate,
         cash_currency=cash_currency,
         conversion=conversion,
+        lot_id=lot_id,
     )
 
 
@@ -623,6 +631,7 @@ def _dividend_draft(
     nbp_rate: NbpRate | None,
     cash_currency: str = PLN,
     conversion: BrokerConversion | None = None,
+    lot_id: int | None = None,
 ) -> TransactionDraft:
     _check_dividend_amounts(gross, withholding_tax)
     _check_rates(fx_rate, nbp_rate)
@@ -651,6 +660,7 @@ def _dividend_draft(
         gross=gross,
         withholding_tax=withholding_tax,
         fx_conversion_fee_percent=fee_percent,
+        lot_id=lot_id,
     )
 
 

@@ -11,10 +11,10 @@ from nicegui.testing import User, user_simulation
 from sqlalchemy import Engine
 
 from financial_app.domain.accounts import AccountDraft, AccountType
-from financial_app.domain.bonds import CpiReading, SeriesTerms
+from financial_app.domain.bonds import CpiReading, ReferenceRate, SeriesTerms
 from financial_app.domain.transactions import TransactionDraft, TransactionType, buy_or_sell
 from financial_app.persistence.accounts import add_account
-from financial_app.persistence.bond_data import save_cpi, save_series_terms
+from financial_app.persistence.bond_data import save_cpi, save_reference_rates, save_series_terms
 from financial_app.persistence.bond_series import series_instrument
 from financial_app.persistence.db import init_db
 from financial_app.persistence.settings import VIEW_SCOPE, save_setting
@@ -146,3 +146,25 @@ async def test_the_dashboards_after_tax_toggle_takes_the_bonds_fee_and_tax(engin
         await _after_tax(user)
 
         await user.should_see(marker="total-estimated-tax", content=f"38,90{NBSP}zł")
+
+
+async def test_a_ror_takes_its_later_months_from_the_nbp_reference_rate(engine: Engine) -> None:
+    rates = (Decimal("0.04"),) + (None,) * 11
+    ror = SeriesTerms(
+        "ROR0827", "PL0000119145", date(2026, 8, 1), date(2026, 8, 31), *(Decimal(100),) * 2, Decimal(0), rates, ()
+    )
+    save_series_terms(engine, [ror])
+    save_reference_rates(engine, [ReferenceRate(date(2026, 3, 5), Decimal("0.0375"))])
+    _bought(engine, "Obligacje", AccountType.BONDS, "ROR0827", date(2026, 8, 10))
+
+    async with user_simulation(lambda: _shell(engine)) as user:
+        await user.open("/obligacje")
+
+        with user.scope(marker="bonds"):
+            # Month 2 (10.09-10.10) at 3.75%, 28 of its 30 days gone: 0.29 zł a bond
+            await user.should_see(f"1{NBSP}002,90{NBSP}zł")
+            await user.should_see(f"3,75{NBSP}% · miesiąc 2")
+            await user.should_see("szacowana (NBP)")
+        # Month 1's coupon was paid on 10.09
+        with user.scope(marker="bond-drafts"):
+            await user.should_see("Odsetki ROR0827")

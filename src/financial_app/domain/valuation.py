@@ -12,8 +12,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from enum import StrEnum
 
-from financial_app.domain.bond_valuation import VALUED_TYPES, BondPrice
-from financial_app.domain.bonds import bond_type_of
+from financial_app.domain.bond_valuation import BondPrice
 from financial_app.domain.instruments import Instrument
 from financial_app.domain.lots import UnitPrice
 from financial_app.domain.prices import STAGE_3_CLASSES, Quote, sources_to_try
@@ -33,7 +32,7 @@ class Badge(StrEnum):
     MANUAL = "ręczna"  # valued at the Manual Price
     STALE = "nieaktualna"  # the Quote's latest refresh failed in every Price Source
     NO_SOURCE = "bez źródła"  # no Source Symbol for any source of its Fallback Order
-    STAGE_3 = "do etapu 3"  # a bond not valued yet, waiting for its slice of Stage 3
+    STAGE_3 = "do etapu 3"  # a treasury bond that is no Bond Series (e.g. from Catalyst), not valued yet
     NO_BOND_RATE = "brak oprocentowania"  # a Bond Series without its first-year rate from MF or the user
 
 
@@ -97,8 +96,7 @@ def _badge(instrument: Instrument, quote: Quote | None, stale: bool, bond: BondP
     if instrument.asset_class_name in STAGE_3_CLASSES:
         if bond is not None:
             return None
-        valued = instrument.is_bond_series and bond_type_of(instrument.name) in VALUED_TYPES
-        return Badge.NO_BOND_RATE if valued else Badge.STAGE_3
+        return Badge.NO_BOND_RATE if instrument.is_bond_series else Badge.STAGE_3
     if not sources_to_try(instrument.fallback_order, instrument.source_symbols):
         return Badge.NO_SOURCE
     if quote is not None and stale:

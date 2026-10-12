@@ -750,6 +750,9 @@ def open_transaction_dialog(
             own_rate = fx_rate.value.strip() if nbp_rate and conversion is None else ""
             rate = _read(parse_number, own_rate, "Kurs musi być liczbą, np. 3,65.") if own_rate else None
             if kind is TransactionType.DIVIDEND:
+                # Interest edited as interest keeps naming the Lot whose coupon it is, so its Draft stays confirmed
+                was_interest = transaction is not None and transaction.transaction_type is TransactionType.DIVIDEND
+                coupon_lot = transaction.lot_id if transaction is not None and was_interest else None
                 return dividend(
                     account.value,
                     day_value,
@@ -761,6 +764,7 @@ def open_transaction_dialog(
                     nbp_rate=nbp_rate,
                     cash_currency=settlement_currency(),
                     conversion=conversion,
+                    lot_id=coupon_lot if instrument.value is None else None,
                 )
             if instrument.value is None:
                 raise TransactionError("Wybierz instrument.")

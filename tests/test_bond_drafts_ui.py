@@ -106,3 +106,46 @@ async def test_the_list_follows_the_view_scope_while_the_header_counts_every_acc
 
         await user.should_see(marker="drafts-count", content="Do zatwierdzenia: 1")
         await user.should_not_see(marker="bond-drafts")
+
+
+def _coi_bought(engine: Engine) -> None:
+    rates = (Decimal("0.0655"), Decimal("0.0615"), None, None)
+    terms = SeriesTerms(
+        "COI0528", "PL0000119145", date(2024, 5, 1), date(2024, 5, 31), Decimal(100), Decimal("99.9"),
+        Decimal("0.0125"), rates, (),
+    )  # fmt: skip
+    save_series_terms(engine, [terms])
+    account = add_account(engine, AccountDraft("Obligacje", "PKO BP", AccountType.BONDS, ("PLN",)))
+    instrument, _ = series_instrument(engine, "COI0528")
+    day = date(2024, 5, 20)
+    add_transaction(engine, TransactionDraft(account.id, day, TransactionType.DEPOSIT, Decimal(1000)))
+    add_transaction(engine, buy_or_sell(account.id, day, TransactionType.BUY, instrument.id, Decimal(10), Decimal(100)))
+
+
+async def test_each_coupon_paid_is_a_draft_confirmed_as_interest(engine: Engine) -> None:
+    _coi_bought(engine)
+
+    async with user_simulation(lambda: _shell(engine)) as user:
+        await _open(user)
+        await user.should_see(marker="drafts-count", content="Do zatwierdzenia: 2")
+        await user.should_see("Odsetki COI0528")
+        await user.should_see("okres 1 · 20.05.2025")
+        await user.should_see(f"Wypłata netto 53,10{NBSP}zł")
+        await user.should_see(f"Wypłata netto 49,80{NBSP}zł")
+
+        user.find(marker="confirm-coupon").click()
+
+        await user.should_see(marker="drafts-count", content="Do zatwierdzenia: 1")
+        await user.should_not_see("okres 1 · 20.05.2025")
+        await user.should_see("okres 2 · 20.05.2026")
+
+        # Matching the bank statement keeps the coupon entered
+        await user.open("/transakcje")
+        await user.should_see("Odsetki COI0528")
+        user.find(marker="transaction-row").click()  # the newest, the interest
+        user.find(marker="transaction-withholding-tax").clear().type("12,45")
+        user.find("Zapisz zmiany").click()
+        await user.should_see(marker="drafts-count", content="Do zatwierdzenia: 1")
+
+    [interest] = [t for t in list_transactions(engine) if t.transaction_type is TransactionType.DIVIDEND]
+    assert (interest.date, interest.withholding_tax, interest.lot_id) == (date(2025, 5, 20), Decimal("12.45"), 2)

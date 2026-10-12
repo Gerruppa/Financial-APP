@@ -79,7 +79,7 @@ One user-recorded event on an Account: Deposit, Withdrawal, Buy, Sell, Dividend,
 _Avoid_: operation, trade, entry
 
 **Dividend** (Dywidenda / odsetki):
-A payout of an Instrument, or interest (with or without an Instrument), recorded with its gross amount and the withholding tax taken at source, both in its own currency. The net amount goes into PLN cash (converted) or foreign cash of the same currency.
+A payout of an Instrument, or interest (with or without an Instrument), recorded with its gross amount and the withholding tax taken at source, both in its own currency. The net amount goes into PLN cash (converted) or foreign cash of the same currency. A Bond Series' coupon is recorded as interest naming the Lot it was paid on.
 _Avoid_: coupon, income
 
 **DRIP** (DRIP):

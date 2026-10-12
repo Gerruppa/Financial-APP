@@ -151,8 +151,8 @@ def test_a_bond_series_without_its_first_rate_says_so() -> None:
     assert (price.pln, price.status, price.badge) == (None, PriceStatus.NO_PRICE, Badge.NO_BOND_RATE)
 
 
-def test_a_bond_not_valued_yet_waits_for_its_slice_of_stage_3() -> None:
-    coi = Instrument("COI0530", 4, "PLN", id=1, asset_class_name="Obligacje skarbowe polskie", fallback_order=())
+def test_a_treasury_bond_that_is_no_bond_series_waits_for_a_later_stage() -> None:
+    coi = Instrument("Obligacja 2030", 4, "PLN", id=1, asset_class_name="Obligacje skarbowe polskie", fallback_order=())
 
     assert instrument_price(coi, None, lambda currency: Decimal(1)).badge is Badge.STAGE_3
 

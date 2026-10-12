@@ -1,18 +1,28 @@
-"""Maturity and Rollover as Drafts (L-6, spec 3.4.1): each Lot of a Bond Series still held on or after its maturity is a
-Draft, confirmed as its redemption or as a Rollover into a new Series."""
+"""Maturity, Rollover and coupons as Drafts (L-6, L-8, spec 3.4.1): each Lot of a Bond Series still held on or after its
+maturity is a Draft, confirmed as its redemption or as a Rollover into a new Series; so is each coupon of a COI, ROR or
+DOR paid by today without an interest Dividend naming its Lot."""
 
+from collections.abc import Mapping
 from datetime import date
 from decimal import Decimal
 
 import pytest
 
 from financial_app.domain.accounts import Account, AccountType
-from financial_app.domain.bond_drafts import ROLLOVER_TYPES, MaturityDraft, maturity_drafts
+from financial_app.domain.bond_drafts import (
+    ROLLOVER_TYPES,
+    CouponDraft,
+    MaturityDraft,
+    bond_drafts,
+    coupon_drafts,
+    coupons_entered,
+    maturity_drafts,
+)
 from financial_app.domain.bond_valuation import BondData
 from financial_app.domain.bonds import BondSeries, BondType, SeriesTerms
 from financial_app.domain.instruments import Instrument
 from financial_app.domain.lots import Lot, Position
-from financial_app.domain.transactions import TransactionError, TransactionType
+from financial_app.domain.transactions import TransactionError, TransactionType, buy_or_sell, dividend
 
 TODAY = date(2026, 10, 8)
 BONDS = Account("Obligacje", "PKO BP", AccountType.BONDS, ("PLN",), id=1)
@@ -64,7 +74,7 @@ def test_a_lot_held_past_its_maturity_is_a_draft_redeemed_at_its_maturity_value(
 def test_confirming_the_redemption_sells_the_lot_on_its_maturity_day() -> None:
     [draft] = _drafts([Position(1, 10, (_lot(date(2016, 6, 15), 10, opened_by=7),))])
 
-    sell = draft.redemption_transaction()
+    sell = draft.transaction()
 
     assert sell.transaction_type is TransactionType.SELL
     assert (sell.account_id, sell.instrument_id, sell.lot_id) == (1, 10, 7)
@@ -122,3 +132,94 @@ def test_a_series_not_valued_is_a_draft_without_a_redemption_and_offers_no_famil
     assert draft.bond_type is BondType.ROS
     assert BondType.ROS not in ROLLOVER_TYPES
     assert BondType.EDO in ROLLOVER_TYPES
+
+
+COI0528 = _instrument(13, "COI0528")
+COI_TERMS = SeriesTerms(
+    "COI0528", "PL0", date(2024, 5, 1), date(2024, 5, 31), Decimal(100), Decimal("99.9"), Decimal("0.0125"),
+    (Decimal("0.0655"), Decimal("0.0615"), None, None), (Decimal("6.55"), Decimal("6.15"), None, None),
+)  # fmt: skip
+COUPONS = BondData({13: BondSeries(13, "COI0528", COI_TERMS)})
+
+
+def _coupons(
+    positions: list[Position], entered: Mapping[int, int] | None = None, account_id: int | None = None
+) -> list[CouponDraft]:
+    instruments = {**INSTRUMENTS, 13: COI0528}
+    return coupon_drafts(positions, instruments, [BONDS, IKE], COUPONS, TODAY, account_id, entered or {})
+
+
+def test_each_coupon_paid_by_today_is_a_draft_of_an_interest_dividend_with_belka_withheld() -> None:
+    position = Position(1, 13, (_lot(date(2024, 5, 20), 10, opened_by=7),))
+
+    first, second = _coupons([position])
+
+    assert (first.due, first.period, second.due, second.period) == (date(2025, 5, 20), 1, date(2026, 5, 20), 2)
+    # 6.15 zł a bond, 19% of it 1.1685 zł rounded to 1.17 zł a bond
+    assert (second.gross, second.tax, second.net) == (Decimal("61.50"), Decimal("11.70"), Decimal("49.80"))
+    interest = second.transaction()
+    assert interest.transaction_type is TransactionType.DIVIDEND
+    assert (interest.account_id, interest.date, interest.instrument_id, interest.lot_id) == (
+        1,
+        date(2026, 5, 20),
+        None,
+        7,
+    )
+    assert (interest.gross, interest.withholding_tax, interest.actual_amount) == (
+        Decimal("61.50"),
+        Decimal("11.70"),
+        Decimal("49.80"),
+    )
+    assert "COI0528" in interest.comment
+
+
+def test_a_coupon_already_confirmed_for_its_lot_is_no_draft() -> None:
+    position = Position(1, 13, (_lot(date(2024, 5, 20), 10, opened_by=7),))
+
+    [draft] = _coupons([position], entered={7: 1})
+
+    assert draft.period == 2
+
+
+def test_an_ike_coupon_withholds_nothing_and_coupons_follow_the_view_scope() -> None:
+    lot = _lot(date(2024, 5, 20), 10, opened_by=7)
+    positions = [Position(1, 13, (lot,)), Position(2, 13, (lot,))]
+
+    drafts = _coupons(positions, account_id=2)
+
+    assert [d.account for d in drafts] == [IKE, IKE]
+    assert drafts[0].tax == Decimal(0) and drafts[0].net == Decimal("65.50")
+
+
+def test_drafts_list_maturities_and_coupons_by_their_day() -> None:
+    positions = [
+        Position(1, 10, (_lot(date(2016, 6, 15), 10, opened_by=3),)),
+        Position(1, 13, (_lot(date(2024, 5, 20), 10, opened_by=7),)),
+    ]
+    instruments = {**INSTRUMENTS, 13: COI0528}
+    data = BondData({**DATA.series, **COUPONS.series})
+
+    drafts = bond_drafts(positions, instruments, [BONDS, IKE], data, TODAY, None, {})
+
+    assert [d.due for d in drafts] == [date(2025, 5, 20), date(2026, 5, 20), date(2026, 6, 15)]
+
+
+def test_only_a_sell_or_interest_names_a_lot() -> None:
+    assert dividend(1, TODAY, Decimal(10), lot_id=7).lot_id == 7
+
+    with pytest.raises(TransactionError, match="nie wskazuje partii"):
+        dividend(1, TODAY, Decimal(10), instrument_id=13, lot_id=7)
+    with pytest.raises(TransactionError, match="nie wskazuje partii"):
+        buy_or_sell(1, TODAY, TransactionType.BUY, 13, Decimal(1), Decimal(100), lot_id=7)
+
+
+def test_interest_naming_a_lot_enters_its_oldest_coupons_whatever_its_day() -> None:
+    # The bank paid the first coupon a day late, and the Dividend was edited to match
+    late = dividend(1, date(2025, 5, 21), Decimal("65.50"), Decimal("12.40"), lot_id=7)
+    other = dividend(1, date(2025, 5, 20), Decimal(10), instrument_id=13)
+
+    entered = coupons_entered([late, other])
+
+    assert entered == {7: 1}
+    position = Position(1, 13, (_lot(date(2024, 5, 20), 10, opened_by=7),))
+    assert [d.period for d in _coupons([position], entered=entered)] == [2]

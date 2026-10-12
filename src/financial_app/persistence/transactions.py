@@ -72,9 +72,16 @@ def update_transaction(engine: Engine, transaction_id: int, draft: TransactionDr
 
 
 def delete_transaction(engine: Engine, transaction_id: int) -> None:
-    """Delete the Transaction; blocked with InsufficientQuantityError if a later Sell would lose its cover."""
+    """Delete the Transaction; blocked with InsufficientQuantityError if a later Sell would lose its cover, and with
+    TransactionError while a coupon (interest naming its Lot, L-8) names the Buy."""
     with Session(engine) as session, session.begin():
         row = _get(session, transaction_id)
+        coupons = select(TransactionRow.id).where(
+            TransactionRow.lot_id == transaction_id,
+            TransactionRow.transaction_type == TransactionType.DIVIDEND.value,
+        )
+        if session.scalar(coupons.limit(1)) is not None:
+            raise TransactionError("Od tej partii zapisano odsetki; usuń je najpierw.")
         _check_coverage(session, None, replacing=row)
         session.delete(row)
 

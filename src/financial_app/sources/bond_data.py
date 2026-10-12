@@ -24,6 +24,15 @@ from xlrd.biffh import XLRDError
 
 from financial_app.domain.bonds import BondDataError, BondType, CpiReading, ReferenceRate, SeriesTerms
 from financial_app.persistence.bond_data import (
+    GUS as GUS,
+)
+from financial_app.persistence.bond_data import (
+    MF as MF,
+)
+from financial_app.persistence.bond_data import (
+    NBP_REFERENCE as NBP_REFERENCE,
+)
+from financial_app.persistence.bond_data import (
     BondDataStatus,
     bond_data_statuses,
     mark_bond_data,
@@ -32,7 +41,6 @@ from financial_app.persistence.bond_data import (
     save_series_terms,
 )
 
-MF, GUS, NBP_REFERENCE = "mf", "gus", "nbp_reference"
 BOND_DATA_NAMES = {MF: "Plik MF (obligacje)", GUS: "Inflacja CPI (GUS)", NBP_REFERENCE: "Stopa referencyjna NBP"}
 
 MF_PAGE = "https://www.gov.pl/web/finanse/obligacje-detaliczne1"

@@ -1,5 +1,5 @@
-"""The value of a retail treasury bond by the MF issue letters (spec 3.4.1, L-3, L-7), so far for EDO, ROS, ROD, TOS
-and OTS.
+"""The value of a retail treasury bond by the MF issue letters (spec 3.4.1, L-3, L-7, L-8), and the coupons COI, ROR
+and DOR pay out.
 
 One bond is valued, then multiplied by the quantity: its nominal compounds yearly at each year's rate (TOS at its one
 fixed rate every year), and within the current year the interest accrues linearly over the days gone of the year's days;
@@ -8,40 +8,51 @@ three-month OTS earns its yearly rate over its days out of 365, as every OTS in 
 from its own day, so a Bond Series' price depends on its Lot's purchase day, and a Lot bought in a Rollover earns on the
 nominal like any other.
 
+The coupon types do not compound: each period (a year for COI, a month for ROR and DOR) pays out its coupon, 100 x the
+rate for the period's share of a year rounded to the grosz, as every coupon in the MF file is; within the period the
+bond is worth its nominal plus the coupon accrued linearly over the period's days gone. The last coupon comes with the
+nominal at maturity.
+
 A rate MF has not published (nor the user corrected) is estimated as GUS CPI year on year of the month two months
 before the year's anniversary, minus 100 and floored at 0 (deflation leaves the margin, as MF paid in 2015-16), plus the
-Series' margin; while GUS has not published that month
-the last reading forecasts it. Both are labelled, and so is a value resting on such a rate.
+Series' margin; while GUS has not published that month the last reading forecasts it. A ROR or DOR month's rate is the
+NBP reference rate (floored at 0) in force ten business days before the first day of the calendar month the period
+starts in, plus the margin, so every Lot of a Series gets the Series' rate for that month. All are labelled, and so is a
+value resting on such a rate.
 """
 
+from bisect import bisect_right
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from enum import StrEnum
 from functools import cached_property
 
 from financial_app.domain.bonds import (
+    COUPON_TYPES,
     FIXED_RATE_TYPES,
     ISSUE_PRICE,
+    MONTHLY_TYPES,
     PERIODS,
     TERM_MONTHS,
     BondSeries,
     BondType,
     CpiReading,
+    ReferenceRate,
     add_months,
     maturity,
 )
 from financial_app.domain.formatting import format_percent
 from financial_app.domain.lots import Lot
 
-# The bond types valued so far; any other Bond Series stays at cost until its slice (L-8)
-VALUED_TYPES = frozenset({BondType.EDO, BondType.ROS, BondType.ROD, BondType.TOS, BondType.OTS})
 # The types running less than a year, which earn their rate over their days out of DAYS_A_YEAR
 SHORT_TYPES = frozenset(bond_type for bond_type, months in TERM_MONTHS.items() if months < 12)
 DAYS_A_YEAR = 365
 # Months between a CPI reading and the anniversary whose rate it sets
 CPI_LAG_MONTHS = 2
+# Business days between the NBP reference rate a ROR or DOR month takes and the first day of its calendar month
+NBP_LAG_BUSINESS_DAYS = 10
 GROSZ = Decimal("0.01")
 
 
@@ -50,10 +61,18 @@ class RateLabel(StrEnum):
 
     ESTIMATED_CPI = "szacowana (CPI)"  # from the CPI of the right month
     FORECAST_CPI = "prognoza (ostatnie CPI)"  # GUS has not published that month, so the last reading stands in
+    ESTIMATED_NBP = "szacowana (NBP)"  # from the NBP reference rate in force on the right day
+    FORECAST_NBP = "prognoza (ostatnia stopa NBP)"  # the saved rates end before that day, so the last one stands in
 
 
 # The labels from the least to the most uncertain
-_UNCERTAINTY = (None, RateLabel.ESTIMATED_CPI, RateLabel.FORECAST_CPI)
+_UNCERTAINTY = (
+    None,
+    RateLabel.ESTIMATED_CPI,
+    RateLabel.ESTIMATED_NBP,
+    RateLabel.FORECAST_CPI,
+    RateLabel.FORECAST_NBP,
+)
 
 
 def most_uncertain(labels: Iterable[RateLabel | None]) -> RateLabel | None:
@@ -71,14 +90,26 @@ class PeriodRate:
 
 @dataclass(frozen=True)
 class BondValue:
-    """One bond on a day: ``value`` its nominal with the interest so far, to the grosz; ``period`` the year it is in
-    (from 1, the last one after maturity; ``None`` for a bond running less than a year) and ``rate`` that period's
-    rate; ``label`` the most uncertain label of the rates the value rests on."""
+    """One bond on a day: ``value`` its nominal with the interest so far, to the grosz; ``period`` the interest period
+    it is in (from 1, the last one after maturity; a month when ``monthly``, else a year; ``None`` for a bond running
+    less than a year) and ``rate`` that period's rate; ``label`` the most uncertain label of the rates the value rests
+    on."""
 
     value: Decimal
     period: int | None
     rate: PeriodRate
     label: RateLabel | None
+    monthly: bool = False
+
+
+@dataclass(frozen=True)
+class Coupon:
+    """The interest one bond of a coupon type is paid on ``day`` for its ``period`` (from 1), at ``rate``, in PLN."""
+
+    day: date
+    period: int
+    amount: Decimal
+    rate: PeriodRate
 
 
 class Cpi:
@@ -100,25 +131,62 @@ class Cpi:
         return PeriodRate(max(Decimal(0), (index - 100) / 100) + margin, label)
 
 
-def bond_value(series: BondSeries, purchase_day: date, day: date, cpi: Cpi) -> BondValue | None:
+class ReferenceRates:
+    """The NBP reference rate history, which sets the ROR and DOR months MF has not published, as known up to
+    ``known_until`` (the day it was fetched; ``None`` when unknown, taken as current)."""
+
+    def __init__(self, rates: Sequence[ReferenceRate], known_until: date | None = None) -> None:
+        ordered = sorted(rates, key=lambda rate: rate.valid_from)
+        self.days = [rate.valid_from for rate in ordered]
+        self.rates = [rate.rate for rate in ordered]
+        self.known_until = known_until
+
+    def rate(self, period_start: date, margin: Decimal) -> PeriodRate | None:
+        """The rate of a month starting on ``period_start``: the reference rate in force ten business days before the
+        first day of its calendar month, plus ``margin``, a forecast when the rates are known only up to an earlier
+        day; ``None`` without a rate in force then."""
+        fixed_on = _business_days_before(period_start.replace(day=1), NBP_LAG_BUSINESS_DAYS)
+        index = bisect_right(self.days, fixed_on)
+        if not index:
+            return None
+        known = self.known_until is None or fixed_on <= self.known_until
+        label = RateLabel.ESTIMATED_NBP if known else RateLabel.FORECAST_NBP
+        return PeriodRate(max(Decimal(0), self.rates[index - 1]) + margin, label)
+
+
+NO_REFERENCE_RATES = ReferenceRates(())
+
+
+def _business_days_before(day: date, count: int) -> date:
+    """The weekday ``count`` weekdays before ``day``; holidays are not known, as for the price refresh."""
+    while count:
+        day -= timedelta(days=1)
+        if day.weekday() < 5:
+            count -= 1
+    return day
+
+
+def bond_value(
+    series: BondSeries, purchase_day: date, day: date, cpi: Cpi, reference: ReferenceRates = NO_REFERENCE_RATES
+) -> BondValue | None:
     """One bond of ``series`` bought on ``purchase_day``, at the end of ``day`` (its nominal before the purchase).
 
-    ``None`` for a type not valued yet, or without a rate it needs: the first year's from MF or the user, or no CPI at
-    all for a later year MF has not published."""
+    ``None`` without a rate it needs: the first period's from MF or the user, or no CPI (no NBP reference rate for ROR
+    and DOR) at all for a later period MF has not published."""
     bond_type = series.bond_type
-    if bond_type not in VALUED_TYPES:
-        return None
     day = max(day, purchase_day)
     if bond_type in SHORT_TYPES:
         return _short_bond_value(series, purchase_day, day)
+    if bond_type in COUPON_TYPES:
+        return _coupon_bond_value(series, purchase_day, day, cpi, reference)
     years = TERM_MONTHS[bond_type] // 12
-    period = min(_years_between(purchase_day, day), years - 1)
+    period = min(_periods_between(purchase_day, day, 12), years - 1)
     factor = Decimal(1)
     labels: list[RateLabel | None] = []
     rate: PeriodRate | None = None
     for year in range(period + 1):
         start, end = _anniversary(purchase_day, year), _anniversary(purchase_day, year + 1)
-        rate = _rate(series, year, start, cpi)
+        rate = _rate(series, year, start, cpi, reference)
         if rate is None:
             return None
         labels.append(rate.label)
@@ -141,24 +209,74 @@ def _short_bond_value(series: BondSeries, purchase_day: date, day: date) -> Bond
     return BondValue(value, None, PeriodRate(rate), None)
 
 
-def _rate(series: BondSeries, year: int, start: date, cpi: Cpi) -> PeriodRate | None:
+def _coupon_bond_value(
+    series: BondSeries, purchase_day: date, day: date, cpi: Cpi, reference: ReferenceRates
+) -> BondValue | None:
+    """A coupon type: its nominal plus the coupon accrued in the period ``day`` is in, the earlier coupons paid out."""
+    months = _period_months(series.bond_type)
+    period = min(_periods_between(purchase_day, day, months), PERIODS[series.bond_type] - 1)
+    start, end = add_months(purchase_day, months * period), add_months(purchase_day, months * (period + 1))
+    rate = _rate(series, period, start, cpi, reference)
+    if rate is None:
+        return None
+    gone = min(day, end) - start
+    accrued = rate.rate * months / 12 * gone.days / (end - start).days
+    value = (ISSUE_PRICE * (1 + accrued)).quantize(GROSZ, ROUND_HALF_UP)
+    return BondValue(value, period + 1, rate, rate.label, monthly=months == 1)
+
+
+def coupons(
+    series: BondSeries, purchase_day: date, day: date, cpi: Cpi, reference: ReferenceRates
+) -> tuple[Coupon, ...]:
+    """The coupons one bond of ``series`` bought on ``purchase_day`` was paid by ``day``, oldest first: one at the end
+    of each period but the last, whose interest comes with the nominal at maturity. None for a type without coupons;
+    they stop at the first period without a rate."""
+    bond_type = series.bond_type
+    if bond_type not in COUPON_TYPES:
+        return ()
+    months = _period_months(bond_type)
+    paid = []
+    for period in range(1, PERIODS[bond_type]):
+        start, paid_on = add_months(purchase_day, months * (period - 1)), add_months(purchase_day, months * period)
+        if paid_on > day:
+            break
+        rate = _rate(series, period - 1, start, cpi, reference)
+        if rate is None:
+            break
+        amount = (ISSUE_PRICE * rate.rate * months / 12).quantize(GROSZ, ROUND_HALF_UP)
+        paid.append(Coupon(paid_on, period, amount, rate))
+    return tuple(paid)
+
+
+def _period_months(bond_type: BondType) -> int:
+    return TERM_MONTHS[bond_type] // PERIODS[bond_type]
+
+
+def _rate(series: BondSeries, period: int, start: date, cpi: Cpi, reference: ReferenceRates) -> PeriodRate | None:
+    """The rate of ``period`` (from 0), which starts on ``start``: MF's or the user's, else estimated."""
     rates = series.rates
     # A fixed rate holds every year; a TOS has one period in the MF file
-    period = 0 if series.bond_type in FIXED_RATE_TYPES else year
-    published = rates[period] if period < len(rates) else None
+    index = 0 if series.bond_type in FIXED_RATE_TYPES else period
+    published = rates[index] if index < len(rates) else None
     if published is not None:
         return PeriodRate(published)
     margin = series.margin
-    if year == 0 or margin is None:
+    if period == 0 or margin is None:
         return None
+    if series.bond_type in MONTHLY_TYPES:
+        return reference.rate(start, margin)
     months = start.year * 12 + start.month - 1 - CPI_LAG_MONTHS
     return cpi.rate(months // 12, months % 12 + 1, margin)
 
 
 def rate_text(value: BondValue) -> str:
-    """The rate of the period ``value`` is in, with its year when the bond runs years: "5,35% · rok 2"."""
+    """The rate of the period ``value`` is in, with its number when the bond runs a year or more: "5,35% · rok 2",
+    "4,00% · miesiąc 3"."""
     rate = format_percent(value.rate.rate * 100)
-    return rate if value.period is None else f"{rate} · rok {value.period}"
+    if value.period is None:
+        return rate
+    unit = "miesiąc" if value.monthly else "rok"
+    return f"{rate} · {unit} {value.period}"
 
 
 def _anniversary(purchase_day: date, years: int) -> date:
@@ -169,7 +287,7 @@ def _anniversary(purchase_day: date, years: int) -> date:
 def next_anniversary(bond_type: BondType, purchase_day: date, day: date) -> date | None:
     """The first day after ``day`` a new interest period of a bond bought on ``purchase_day`` starts; ``None`` in the
     last period, which ends at maturity."""
-    months = TERM_MONTHS[bond_type] // PERIODS[bond_type]
+    months = _period_months(bond_type)
     for period in range(1, PERIODS[bond_type]):
         start = add_months(purchase_day, months * period)
         if start > day:
@@ -177,9 +295,10 @@ def next_anniversary(bond_type: BondType, purchase_day: date, day: date) -> date
     return None
 
 
-def _years_between(purchase_day: date, day: date) -> int:
-    years = day.year - purchase_day.year
-    return years - 1 if day < _anniversary(purchase_day, years) else years
+def _periods_between(purchase_day: date, day: date, months: int) -> int:
+    """The whole periods of ``months`` from ``purchase_day`` to ``day``."""
+    periods = ((day.year - purchase_day.year) * 12 + day.month - purchase_day.month) // months
+    return periods - 1 if day < add_months(purchase_day, months * periods) else periods
 
 
 @dataclass(frozen=True)
@@ -189,9 +308,14 @@ class BondPrice:
     series: BondSeries
     day: date
     cpi: Cpi
+    reference: ReferenceRates = NO_REFERENCE_RATES
 
     def value(self, purchase_day: date) -> BondValue | None:
-        return bond_value(self.series, purchase_day, self.day, self.cpi)
+        return bond_value(self.series, purchase_day, self.day, self.cpi, self.reference)
+
+    def coupons(self, purchase_day: date) -> tuple[Coupon, ...]:
+        """The coupons a bond bought on ``purchase_day`` was paid by the day."""
+        return coupons(self.series, purchase_day, self.day, self.cpi, self.reference)
 
     def of(self, lot: Lot) -> Decimal:
         """One bond of ``lot`` in PLN; at its cost without a value."""
@@ -201,19 +325,26 @@ class BondPrice:
 
 @dataclass(frozen=True)
 class BondData:
-    """What Bond Series are valued from: each Series by its Instrument id, and GUS CPI."""
+    """What Bond Series are valued from: each Series by its Instrument id, GUS CPI and the NBP reference rate (known
+    up to ``reference_known_until``, the day it was fetched)."""
 
     series: Mapping[int, BondSeries] = field(default_factory=dict)
     readings: Sequence[CpiReading] = ()
+    reference_rates: Sequence[ReferenceRate] = ()
+    reference_known_until: date | None = None
 
     @cached_property
     def cpi(self) -> Cpi:
         return Cpi(self.readings)
 
+    @cached_property
+    def reference(self) -> ReferenceRates:
+        return ReferenceRates(self.reference_rates, self.reference_known_until)
+
     def price(self, instrument_id: int, day: date) -> BondPrice | None:
-        """The Series' price on ``day``; ``None`` for no Series, a type not valued yet or a Series without its first
-        rate, which stay at cost."""
+        """The Series' price on ``day``; ``None`` for no Series or a Series without its first rate, which stay at
+        cost."""
         series = self.series.get(instrument_id)
-        if series is None or series.bond_type not in VALUED_TYPES or series.first_rate is None:
+        if series is None or series.first_rate is None:
             return None
-        return BondPrice(series, day, self.cpi)
+        return BondPrice(series, day, self.cpi, self.reference)

@@ -9,7 +9,13 @@ from sqlalchemy.orm import Session
 from financial_app.domain.bond_valuation import BondData
 from financial_app.domain.bonds import TREASURY_BOND_CLASS, BondSeries, RateCorrection
 from financial_app.domain.instruments import Instrument, InstrumentDraft, InstrumentError
-from financial_app.persistence.bond_data import load_cpi, load_series_terms
+from financial_app.persistence.bond_data import (
+    NBP_REFERENCE,
+    bond_data_statuses,
+    load_cpi,
+    load_reference_rates,
+    load_series_terms,
+)
 from financial_app.persistence.instruments import (
     add_asset_class,
     add_instrument,
@@ -34,8 +40,11 @@ def list_bond_series(engine: Engine) -> dict[int, BondSeries]:
 
 
 def load_bond_data(engine: Engine) -> BondData:
-    """What the Bond Series are valued from: every Series and the saved GUS CPI."""
-    return BondData(list_bond_series(engine), load_cpi(engine))
+    """What the Bond Series are valued from: every Series, the saved GUS CPI and the NBP reference rate, known up to
+    the day it was last fetched."""
+    fetched = bond_data_statuses(engine).get(NBP_REFERENCE)
+    known_until = None if fetched is None or fetched.succeeded_at is None else fetched.succeeded_at.date()
+    return BondData(list_bond_series(engine), load_cpi(engine), load_reference_rates(engine), known_until)
 
 
 def save_rate_correction(engine: Engine, instrument_id: int, correction: RateCorrection) -> None:

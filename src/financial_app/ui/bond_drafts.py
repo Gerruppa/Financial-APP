@@ -1,5 +1,6 @@
-"""The "Do zatwierdzenia" list of the Obligacje tab and its count in the header (spec 3.4.1, L-6): each Lot of a Bond
-Series held past its maturity, confirmed as its redemption or as a Rollover ("roluj do…") into a new Series."""
+"""The "Do zatwierdzenia" list of the Obligacje tab and its count in the header (spec 3.4.1, L-6, L-8): each Lot of a
+Bond Series held past its maturity, confirmed as its redemption or as a Rollover ("roluj do…") into a new Series, and
+each coupon of a COI, ROR or DOR Lot paid but not entered, confirmed as interest."""
 
 from collections.abc import Callable
 from datetime import date
@@ -7,12 +8,12 @@ from datetime import date
 from nicegui import ui
 from sqlalchemy import Engine
 
-from financial_app.domain.bond_drafts import ROLLOVER_TYPES, MaturityDraft
+from financial_app.domain.bond_drafts import ROLLOVER_TYPES, CouponDraft, MaturityDraft
 from financial_app.domain.bonds import BondType
 from financial_app.domain.formatting import format_date, format_pln, format_quantity, parse_number
 from financial_app.domain.instruments import InstrumentError
 from financial_app.domain.transactions import TransactionError
-from financial_app.persistence.bond_drafts import confirm_redemption, confirm_rollover, pending_drafts, rollover_price
+from financial_app.persistence.bond_drafts import confirm_draft, confirm_rollover, pending_drafts, rollover_price
 
 
 def drafts_list(engine: Engine, today: date, account_id: int | None, on_saved: Callable[[], None]) -> None:
@@ -23,7 +24,35 @@ def drafts_list(engine: Engine, today: date, account_id: int | None, on_saved: C
     with ui.card().classes("w-full mb-4 bg-amber-50").mark("bond-drafts"):
         ui.label("Do zatwierdzenia").classes("text-lg font-bold")
         for draft in drafts:
-            _draft_row(engine, draft, account_id is None, on_saved)
+            if isinstance(draft, CouponDraft):
+                _coupon_row(engine, draft, account_id is None, on_saved)
+            else:
+                _draft_row(engine, draft, account_id is None, on_saved)
+
+
+def _coupon_row(engine: Engine, draft: CouponDraft, name_account: bool, on_saved: Callable[[], None]) -> None:
+    with ui.row().classes("w-full items-center border-b py-1 gap-4").mark("bond-draft"):
+        with ui.column().classes("gap-0 grow"):
+            title = f"Odsetki {draft.instrument.name}"
+            ui.label(f"{title} · {draft.account.name}" if name_account else title).classes("font-medium")
+            ui.label(
+                f"{format_quantity(draft.lot.quantity)} szt. · zakup {format_date(draft.lot.date)} · "
+                f"okres {draft.period} · {format_date(draft.due)}"
+            ).classes("text-sm text-gray-600")
+        with ui.column().classes("gap-0 items-end"):
+            ui.label(f"Wypłata netto {format_pln(draft.net)}").classes("font-medium")
+            ui.label(f"podatek {format_pln(draft.tax)}").classes("text-xs text-gray-500")
+
+        def confirm() -> None:
+            try:
+                confirm_draft(engine, draft)
+            except TransactionError as exc:
+                ui.notify(str(exc), type="negative")
+                return
+            ui.notify(f"Zapisano odsetki {draft.instrument.name}.", type="positive")
+            on_saved()
+
+        ui.button("Zatwierdź odsetki", on_click=confirm).props("flat").mark("confirm-coupon")
 
 
 def _draft_row(engine: Engine, draft: MaturityDraft, name_account: bool, on_saved: Callable[[], None]) -> None:
@@ -45,7 +74,7 @@ def _draft_row(engine: Engine, draft: MaturityDraft, name_account: bool, on_save
 
         def redeem() -> None:
             try:
-                confirm_redemption(engine, draft)
+                confirm_draft(engine, draft)
             except TransactionError as exc:
                 ui.notify(str(exc), type="negative")
                 return

@@ -12,6 +12,9 @@ from sqlalchemy.orm import Session
 from financial_app.domain.bonds import CpiReading, ReferenceRate, SeriesTerms
 from financial_app.persistence.models import BondDataStatusRow, CpiRow, MfBondSeriesRow, ReferenceRateRow
 
+# The bond data sources' keys, under which their fetches are recorded
+MF, GUS, NBP_REFERENCE = "mf", "gus", "nbp_reference"
+
 
 @dataclass(frozen=True)
 class BondDataStatus:

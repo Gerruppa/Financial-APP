@@ -54,6 +54,8 @@ PERIODS = {
 FIXED_RATE_TYPES = frozenset({BondType.OTS, BondType.TOS})
 # The types whose interest periods are months
 MONTHLY_TYPES = frozenset({BondType.ROR, BondType.DOR})
+# The types paying their interest out at the end of each period (coupons) instead of compounding it
+COUPON_TYPES = frozenset({BondType.COI, BondType.ROR, BondType.DOR})
 # The family bonds, bought only with the 800+ benefit and never in a Rollover
 FAMILY_TYPES = frozenset({BondType.ROS, BondType.ROD})
 # The price of one bond bought in a Rollover when the MF file does not give it (spec 3.4)
