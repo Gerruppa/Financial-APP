@@ -572,8 +572,7 @@ def open_transaction_dialog(
             # An edit may move the Transaction to another day or Account, so also check where it was
             _warn_if_cash_runs_out(engine, "Zapisano", account_names, draft, transaction)
             on_saved()
-            if transaction is None:
-                _ask_for_multi_asset_split(engine, draft, on_saved)
+            _ask_for_multi_asset_split(engine, draft, on_saved)
 
         def delete(confirmation: ui.dialog) -> None:
             assert transaction is not None

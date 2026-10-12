@@ -31,8 +31,7 @@ def multi_asset_holdings(
     for position in positions:
         if account_id not in (None, position.account_id) or not instruments[position.instrument_id].is_multi_asset:
             continue
-        price = prices.get(position.instrument_id)
-        value = position.cost if price is None else position.value(price)
+        value = position.value_or_cost(prices.get(position.instrument_id))
         values[position.instrument_id] = values.get(position.instrument_id, Decimal(0)) + value
     holdings = [
         MultiAssetHolding(instruments[i], value, prices.get(i) is not None, tuple(instruments[i].class_parts(value)))

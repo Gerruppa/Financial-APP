@@ -9,6 +9,7 @@ from sqlalchemy import Engine
 from financial_app.domain.instruments import AssetClass, Instrument, InstrumentDraft, InstrumentError
 from financial_app.persistence.db import init_db
 from financial_app.persistence.instruments import (
+    add_asset_class,
     add_instrument,
     delete_asset_class,
     delete_instrument,
@@ -67,6 +68,34 @@ def test_the_split_follows_the_order_of_the_asset_classes(engine: Engine) -> Non
     [saved] = list_instruments(engine)
 
     assert list(saved.multi_asset_split) == list(split)
+
+
+def test_the_multi_asset_class_stays_the_one_that_is_split_after_a_rename(engine: Engine) -> None:
+    multi = _class_named(engine, "Multi-asset").id
+    _vanguard(engine)
+
+    rename_asset_class(engine, multi, "Fundusze mieszane")
+
+    assert [c.multi_asset for c in list_asset_classes(engine) if c.id == multi] == [True]
+    assert [c.name for c in list_asset_classes(engine) if c.multi_asset] == ["Fundusze mieszane"]
+    assert list_instruments(engine)[0].is_multi_asset
+
+
+def test_a_class_named_multi_asset_by_the_user_is_not_the_multi_asset_class(engine: Engine) -> None:
+    multi = _class_named(engine, "Multi-asset").id
+    rename_asset_class(engine, multi, "Fundusze mieszane")
+
+    added = add_asset_class(engine, "Multi-asset")
+
+    assert not added.multi_asset
+
+
+def test_clearing_the_portfolio_restores_the_multi_asset_class(engine: Engine) -> None:
+    rename_asset_class(engine, _class_named(engine, "Multi-asset").id, "Fundusze mieszane")
+
+    clear_portfolio(engine)
+
+    assert [c.name for c in list_asset_classes(engine) if c.multi_asset] == ["Multi-asset"]
 
 
 def test_a_renamed_class_shows_in_the_split(engine: Engine) -> None:

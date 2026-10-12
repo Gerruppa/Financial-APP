@@ -90,6 +90,10 @@ class Position:
     def value(self, price: Decimal) -> Decimal:
         return self.quantity * price
 
+    def value_or_cost(self, price: Decimal | None) -> Decimal:
+        """The value at ``price``, or the cost without one."""
+        return self.cost if price is None else self.value(price)
+
     def result(self, price: Decimal) -> Decimal:
         """Unrealised profit (or loss, if negative) in PLN at ``price``."""
         return self.value(price) - self.cost

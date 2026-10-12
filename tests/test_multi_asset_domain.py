@@ -1,5 +1,6 @@
 """Multi-asset Splits: one fixed split of an Instrument's value across Asset Classes (issue #75, spec 3.2 and 6.1)."""
 
+from dataclasses import replace
 from datetime import date
 from decimal import Decimal
 
@@ -29,6 +30,7 @@ def _instrument(instrument_id: int, class_id: int, split: dict[int, Decimal] | N
         id=instrument_id,
         asset_class_name=NAMES[class_id],
         fallback_order=(),
+        in_multi_asset_class=class_id == MULTI,
         split_class_names={i: NAMES[i] for i in split or {}},
     )
 
@@ -45,7 +47,7 @@ def _buy(quantity: str, price: str, instrument: int = VANGUARD, account: int = I
 
 
 def test_a_split_must_sum_to_100_percent() -> None:
-    with pytest.raises(InstrumentError, match="100%.*teraz 90%"):
+    with pytest.raises(InstrumentError, match="100%.*teraz 90,00 %"):
         InstrumentDraft("V80A", MULTI, "EUR", multi_asset_split={STOCKS: Decimal(70), BONDS: Decimal(20)})
 
 
@@ -77,7 +79,10 @@ def test_an_instrument_without_a_split_counts_whole_in_its_own_class() -> None:
 
 
 def test_an_instrument_is_multi_asset_by_its_class_or_its_split() -> None:
+    renamed = replace(_instrument(VANGUARD, MULTI), asset_class_name="Fundusze mieszane")
+
     assert _instrument(VANGUARD, MULTI).is_multi_asset
+    assert renamed.is_multi_asset
     assert _instrument(VANGUARD, STOCKS, SPLIT).is_multi_asset
     assert not _instrument(PZU, STOCKS).is_multi_asset
 

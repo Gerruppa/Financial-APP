@@ -92,8 +92,6 @@ def build_shell(
     transactions_page = TransactionsPage(engine, rates, scope)
     portfolio_page = PortfolioPage(engine, rates, scope)
     unpriced = UnpricedSection(engine)
-    # A Multi-asset Split changes the value History counts in each Asset Class
-    multi_asset_page = MultiAssetPage(engine, rates, scope, on_split_saved=lambda: history_outdated())
 
     async def load_history() -> None:
         """Compute History (or take it already computed) and show it in the switcher."""
@@ -108,6 +106,9 @@ def build_shell(
         dashboard_page.refresh()
         results_page.refresh()
         background_tasks.create(load_history(), name="history")
+
+    # A Multi-asset Split changes the value History counts in each Asset Class
+    multi_asset_page = MultiAssetPage(engine, rates, scope, on_split_saved=history_outdated)
 
     async def fetch_history() -> None:
         # The status follows the fetch's progress, which a worker thread advances

@@ -241,23 +241,23 @@ def _value(
     account_classes: dict[int, dict[str, Decimal]] = {}
     unpriced: set[int] = set()
 
-    def add(account_id: int, asset_class: str, value: Decimal) -> None:
+    def add(account_id: int, value: Decimal, parts: Iterable[tuple[str, Decimal]]) -> None:
+        """Add ``value`` to the Account, split into ``parts`` by Asset Class."""
         accounts[account_id] = accounts.get(account_id, Decimal(0)) + value
-        add_to_class(account_id, asset_class, value)
-
-    def add_to_class(account_id: int, asset_class: str, value: Decimal) -> None:
-        classes[asset_class] = classes.get(asset_class, Decimal(0)) + value
         held = account_classes.setdefault(account_id, {})
-        held[asset_class] = held.get(asset_class, Decimal(0)) + value
+        for asset_class, part in parts:
+            classes[asset_class] = classes.get(asset_class, Decimal(0)) + part
+            held[asset_class] = held.get(asset_class, Decimal(0)) + part
 
     for account_id, balance in state.cash.items():
-        add(account_id, CASH_CLASS, balance)
+        add(account_id, balance, [(CASH_CLASS, balance)])
     unpriced_currencies: set[str] = set()
     for cash in state.foreign_cash:
         rate = pricing.rate(cash.currency, day)
         if rate is None:
             unpriced_currencies.add(cash.currency)
-        add(cash.account_id, FOREIGN_CASH_CLASS, cash.cost if rate is None else cash.value(rate))
+        value = cash.cost if rate is None else cash.value(rate)
+        add(cash.account_id, value, [(FOREIGN_CASH_CLASS, value)])
     for position in state.positions:
         unit = pricing.unit_pln(position.instrument_id, day)
         if unit is None:
@@ -267,9 +267,7 @@ def _value(
         else:
             value = position.quantity * unit
         # A Multi-asset Split spreads the value across its classes, the same split on every day (spec 6.1)
-        accounts[position.account_id] = accounts.get(position.account_id, Decimal(0)) + value
-        for asset_class, part in pricing.instruments[position.instrument_id].class_parts(value):
-            add_to_class(position.account_id, asset_class, part)
+        add(position.account_id, value, pricing.instruments[position.instrument_id].class_parts(value))
     return DayValue(
         day,
         accounts,

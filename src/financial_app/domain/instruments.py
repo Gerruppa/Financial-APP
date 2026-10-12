@@ -7,7 +7,7 @@ from decimal import Decimal
 from enum import StrEnum
 
 from financial_app.domain.currencies import is_currency_code
-from financial_app.domain.formatting import format_quantity
+from financial_app.domain.formatting import format_percent, parse_number
 
 # The sheet's Asset Classes in its order (spec 3.2): migration 0004 seeds them and clearing the portfolio restores them
 DEFAULT_ASSET_CLASSES = [
@@ -25,8 +25,8 @@ DEFAULT_ASSET_CLASSES = [
     "Multi-asset",
 ]
 
-# The class of Instruments spread across several others by a Multi-asset Split (spec 3.2); matched by name, ignoring
-# the case, so a renamed class no longer offers the split
+# The seeded class of Instruments spread across several others by a Multi-asset Split (spec 3.2); it is marked as such
+# (``AssetClass.multi_asset``), so it stays that class whatever the user renames it to
 MULTI_ASSET_CLASS = "Multi-asset"
 
 # Two letters of the issuer's country, nine letters or digits and a check digit
@@ -57,11 +57,13 @@ class InstrumentError(ValueError):
 @dataclass(frozen=True)
 class AssetClass:
     """A saved Asset Class. Instruments refer to it by ``id``, so renaming it changes no other data. Its
-    ``fallback_order`` is the Price Sources its Instruments are priced from, in order (spec 4.1)."""
+    ``fallback_order`` is the Price Sources its Instruments are priced from, in order (spec 4.1); ``multi_asset`` marks
+    the class whose Instruments get a Multi-asset Split (issue #75)."""
 
     id: int
     name: str
     fallback_order: tuple[str, ...]
+    multi_asset: bool = False
 
 
 def validate_asset_class_name(name: str) -> str:
@@ -160,24 +162,26 @@ def _validated_split(split: Mapping[int, Decimal]) -> dict[int, Decimal]:
     shares = {class_id: share for class_id, share in split.items() if share}
     total = sum(shares.values(), Decimal(0))
     if shares and total != 100:
-        raise InstrumentError(f"Podział Multi-asset musi sumować się do 100% (teraz {format_quantity(total)}%).")
+        raise InstrumentError(f"Podział Multi-asset musi sumować się do 100% (teraz {format_percent(total)}).")
     return shares
 
 
 @dataclass(frozen=True)
 class Instrument(InstrumentDraft):
-    """A saved Instrument with the current name and Fallback Order of its Asset Class, and the current names of the
-    classes in its Multi-asset Split (``split_class_names``, by id)."""
+    """A saved Instrument with the current name and Fallback Order of its Asset Class, whether that is the Multi-asset
+    class (``in_multi_asset_class``), and the current names of the classes in its Multi-asset Split
+    (``split_class_names``, by id)."""
 
     id: int = field(kw_only=True)
     asset_class_name: str = field(kw_only=True)
     fallback_order: tuple[str, ...] = field(kw_only=True)
+    in_multi_asset_class: bool = field(kw_only=True, default=False)
     split_class_names: Mapping[int, str] = field(kw_only=True, default_factory=dict)
 
     @property
     def is_multi_asset(self) -> bool:
         """In the Multi-asset class, or spread across classes by a Multi-asset Split."""
-        return bool(self.multi_asset_split) or self.asset_class_name.casefold() == MULTI_ASSET_CLASS.casefold()
+        return bool(self.multi_asset_split) or self.in_multi_asset_class
 
     def class_parts(self, value: Decimal) -> list[tuple[str, Decimal]]:
         """``value`` by the name of the Asset Class it counts in: split by the Multi-asset Split, else whole in the
@@ -188,3 +192,13 @@ class Instrument(InstrumentDraft):
         name, _ = parts[-1]
         parts[-1] = (name, value - sum((part for _, part in parts[:-1]), Decimal(0)))
         return parts
+
+
+def parse_optional_number(text: str | None, field: str) -> Decimal | None:
+    """A number typed the Polish way ("12 850,5") in the Instrument field named ``field``; empty means none."""
+    if not (text or "").strip():
+        return None
+    try:
+        return parse_number(text or "")
+    except ValueError:
+        raise InstrumentError(f"{field} musi być liczbą, a nie „{(text or '').strip()}”.") from None

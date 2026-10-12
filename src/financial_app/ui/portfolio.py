@@ -128,7 +128,7 @@ def _account_card(
 ) -> None:
     value = (
         cash
-        + sum((_value(p, prices[p.instrument_id].pln) for p in positions), Decimal(0))
+        + sum((p.value_or_cost(prices[p.instrument_id].pln) for p in positions), Decimal(0))
         + sum((_cash_value(c, known_rates.get(c.currency)) for c in foreign), Decimal(0))
     )
     fx = fx_result(foreign, account.id, known_rates)
@@ -277,10 +277,6 @@ def _lots_table(position: Position, instrument: Instrument) -> ui.element:
                 ui.label(format_pln(lot.tax_cost)).classes("text-right")
     details.visible = False
     return details
-
-
-def _value(position: Position, price: Decimal | None) -> Decimal:
-    return position.cost if price is None else position.value(price)
 
 
 def _result(position: Position, price: Decimal | None) -> Decimal:

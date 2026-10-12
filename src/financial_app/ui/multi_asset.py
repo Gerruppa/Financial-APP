@@ -8,8 +8,8 @@ from decimal import Decimal
 from nicegui import ui
 from sqlalchemy import Engine
 
-from financial_app.domain.formatting import format_percent, format_pln, format_quantity, parse_number
-from financial_app.domain.instruments import MULTI_ASSET_CLASS, AssetClass, Instrument, InstrumentError
+from financial_app.domain.formatting import format_exact, format_percent, format_pln
+from financial_app.domain.instruments import AssetClass, Instrument, InstrumentError, parse_optional_number
 from financial_app.domain.lots import open_positions
 from financial_app.domain.multi_asset import MultiAssetHolding, multi_asset_holdings
 from financial_app.persistence.instruments import list_asset_classes, list_instruments, set_multi_asset_split
@@ -19,11 +19,6 @@ from financial_app.sources.nbp import NbpRates
 from financial_app.sources.prices import last_refresh
 from financial_app.ui.dialogs import movable_dialog
 from financial_app.ui.view_scope import ViewScope
-
-
-def is_multi_asset_class(name: str | None) -> bool:
-    """Whether an Asset Class named ``name`` holds Instruments that a Multi-asset Split spreads across others."""
-    return name is not None and name.casefold() == MULTI_ASSET_CLASS.casefold()
 
 
 def split_editor(asset_classes: Sequence[AssetClass], split: Mapping[int, Decimal]) -> Callable[[], dict[int, Decimal]]:
@@ -40,10 +35,10 @@ def split_editor(asset_classes: Sequence[AssetClass], split: Mapping[int, Decima
         )
         with ui.grid(columns=2).classes("w-full gap-x-4 gap-y-0"):
             for asset_class in asset_classes:
-                if is_multi_asset_class(asset_class.name):
+                if asset_class.multi_asset:
                     continue
                 share = split.get(asset_class.id)
-                field = ui.input(asset_class.name, value="" if share is None else format_quantity(share))
+                field = ui.input(asset_class.name, value="" if share is None else format_exact(share))
                 field.props('dense suffix="%"').mark(f"split-share-{asset_class.id}")
                 fields[asset_class.id] = field
         total = ui.label().classes("text-sm").mark("split-total")
@@ -51,13 +46,9 @@ def split_editor(asset_classes: Sequence[AssetClass], split: Mapping[int, Decima
     def typed() -> dict[int, Decimal]:
         shares: dict[int, Decimal] = {}
         for class_id, field in fields.items():
-            text = (field.value or "").strip()
-            if not text:
-                continue
-            try:
-                shares[class_id] = parse_number(text)
-            except ValueError:
-                raise InstrumentError(f"Udział „{field.props['label']}” musi być liczbą, a nie „{text}”.") from None
+            share = parse_optional_number(field.value, f"Udział „{field.props['label']}”")
+            if share is not None:
+                shares[class_id] = share
         return shares
 
     def show_total() -> None:
@@ -66,13 +57,26 @@ def split_editor(asset_classes: Sequence[AssetClass], split: Mapping[int, Decima
         except InstrumentError:
             total.text = "Razem: —"
             return
-        total.text = f"Razem: {format_quantity(summed)}%"
+        total.text = f"Razem: {format_percent(summed)}"
         total.classes(replace="text-sm" if summed in (0, 100) else "text-sm text-negative")
 
     for field in fields.values():
         field.on_value_change(show_total)
     show_total()
     return typed
+
+
+def warn_of_unsplit(engine: Engine) -> None:
+    """Name the Multi-asset Instruments that have Transactions but no Multi-asset Split yet, e.g. after an import,
+    which never asks for one; the Multi-asset tab gives them their split."""
+    used = {t.instrument_id for t in list_transactions(engine)}
+    names = [i.name for i in list_instruments(engine) if i.id in used and i.is_multi_asset and not i.multi_asset_split]
+    if names:
+        ui.notify(
+            f"Instrumenty Multi-asset bez podziału na klasy: {', '.join(names)}. Podaj go w zakładce Multi-asset.",
+            type="warning",
+            multi_line=True,
+        )
 
 
 def open_split_dialog(engine: Engine, instrument: Instrument, on_saved: Callable[[], None]) -> None:
@@ -83,7 +87,7 @@ def open_split_dialog(engine: Engine, instrument: Instrument, on_saved: Callable
     with dialog, ui.card().classes("w-[480px]").mark("split-dialog"):
         ui.label(f"Podział Multi-asset: {instrument.name}").classes("text-lg font-bold")
         if not instrument.multi_asset_split:
-            ui.label("Bez podziału instrument liczy się w całości do klasy Multi-asset.").classes(
+            ui.label(f"Bez podziału instrument liczy się w całości do klasy {instrument.asset_class_name}.").classes(
                 "text-sm text-gray-500"
             )
         typed = split_editor(list_asset_classes(engine), instrument.multi_asset_split)
@@ -162,17 +166,18 @@ class MultiAssetPage:
             if instrument.multi_asset_split:
                 ui.label(_split_text(holding)).classes("text-sm text-gray-500")
             else:
-                ui.label("Brak podziału: liczy się w całości do klasy Multi-asset. Kliknij, aby go dodać.").classes(
-                    "text-sm text-warning"
-                ).mark("multi-asset-no-split")
+                ui.label(
+                    f"Brak podziału: liczy się w całości do klasy {instrument.asset_class_name}. Kliknij, aby go dodać."
+                ).classes("text-sm text-warning").mark("multi-asset-no-split")
 
 
 def _split_text(holding: MultiAssetHolding) -> str:
-    """Each class of the split with its percent and PLN value, e.g. "Akcje zagraniczne 80% · 480,00 zł"."""
-    shares = holding.instrument.multi_asset_split.values()
+    """Each class of the split with its percent and PLN value, e.g. "Akcje zagraniczne 80,00 %: 480,00 zł"."""
+    names = holding.instrument.split_class_names
+    values = dict(holding.parts)
     return " · ".join(
-        f"{name} {format_quantity(share)}%: {format_pln(value)}"
-        for (name, value), share in zip(holding.parts, shares, strict=True)
+        f"{names[i]} {format_percent(share)}: {format_pln(values[names[i]])}"
+        for i, share in holding.instrument.multi_asset_split.items()
     )
 
 

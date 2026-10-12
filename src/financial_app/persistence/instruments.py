@@ -264,7 +264,7 @@ def _fallback_order(row: AssetClassRow) -> tuple[str, ...]:
 
 
 def _to_asset_class(row: AssetClassRow) -> AssetClass:
-    return AssetClass(id=row.id, name=row.name, fallback_order=_fallback_order(row))
+    return AssetClass(id=row.id, name=row.name, fallback_order=_fallback_order(row), multi_asset=row.multi_asset)
 
 
 def _to_instrument(row: InstrumentRow) -> Instrument:
@@ -276,6 +276,7 @@ def _to_instrument(row: InstrumentRow) -> Instrument:
         asset_class_id=row.asset_class_id,
         asset_class_name=row.asset_class.name,
         fallback_order=_fallback_order(row.asset_class),
+        in_multi_asset_class=row.asset_class.multi_asset,
         quote_currency=row.quote_currency,
         market=row.market,
         isin=row.isin,

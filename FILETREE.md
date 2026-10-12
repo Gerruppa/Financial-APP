@@ -109,6 +109,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `0017_fund_details.py`: Migration adding fund TER, Distribution Policy and domicile columns
 - `0018_fallback_orders.py`: Migration giving each Asset Class its own Fallback Order column, filled with the spec 4.1 defaults.
 - `0019_multi_asset_splits.py`: Migration 0019 creates the multi_asset_shares table holding each Instrument's Multi-asset Split
+- `0020_multi_asset_class.py`: Alembic revision adding the asset_classes multi_asset flag and marking the seeded Multi-asset class
 
 ## src/financial_app/sources/
 

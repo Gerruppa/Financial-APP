@@ -116,6 +116,8 @@ class AssetClassRow(Base):
     name: Mapped[str] = mapped_column(String(100, collation="NOCASE"), unique=True)
     position: Mapped[int] = mapped_column(Integer)
     fallback_order: Mapped[str] = mapped_column(String(100), server_default="")
+    # The class whose Instruments get a Multi-asset Split (issue #75), so a rename keeps it
+    multi_asset: Mapped[bool] = mapped_column(Boolean, server_default=false())
 
 
 class InstrumentRow(Base):
