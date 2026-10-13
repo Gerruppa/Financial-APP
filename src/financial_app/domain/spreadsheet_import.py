@@ -41,6 +41,8 @@ COLUMNS = {
     "total": "Total PLN",
     "comment": "Komentarz",
 }
+# Read when the sheet has it: a Catalyst bond's nominal, its "Cena" being a percent of it
+OPTIONAL_COLUMNS = {"nominal": "Cena nominalna"}
 
 CASH_TICKERS = ("gotówka", "gotowka")
 SIMILAR_AMOUNT_TOLERANCE = Decimal("0.01")
@@ -126,6 +128,15 @@ class SheetLine:
     rate: Decimal
     total: Decimal
     comment: str
+    nominal: Decimal | None = None
+
+    @property
+    def unit_price(self) -> Decimal | None:
+        """The price of one unit: a Catalyst bond's percent of its nominal (a nominal over 1, as the sheet marks it)
+        becomes its price per bond (L-23)."""
+        if self.price is None or self.nominal is None or self.nominal <= 1:
+            return self.price
+        return self.price * self.nominal / 100
 
 
 def parse_lines(header: Sequence[object], rows: Iterable[Sequence[object]]) -> list[SheetLine]:
@@ -138,9 +149,11 @@ def parse_lines(header: Sequence[object], rows: Iterable[Sequence[object]]) -> l
     if missing:
         raise SheetError(f"W arkuszu brakuje kolumn: {', '.join(missing)}.")
     position = {key: names.index(label) for key, label in COLUMNS.items()}
+    position |= {key: names.index(label) for key, label in OPTIONAL_COLUMNS.items() if label in names}
     lines = []
     for number, row in enumerate(rows, start=2):
         cells = {key: row[index] if index < len(row) else None for key, index in position.items()}
+        cells.setdefault("nominal", None)
         if all(_text(cell) == "" for cell in cells.values()):
             continue
         lines.append(_line(number, cells))
@@ -164,6 +177,7 @@ def _line(number: int, cells: dict[str, object]) -> SheetLine:
             rate=_number(cells["rate"]) or Decimal(1),
             total=_number(cells["total"]) or Decimal(0),
             comment=_text(cells["comment"]),
+            nominal=_number(cells["nominal"]),
         )
     except (ValueError, TypeError) as error:
         raise SheetError(f"Wiersz {number}: nieprawidłowa wartość ({error}).") from None
@@ -276,7 +290,7 @@ def _draft(
         )
     if instrument_id is None:
         raise SheetError(f"Wybierz instrument dla „{line.ticker}”.")
-    if line.price is None:
+    if line.unit_price is None:
         raise SheetError(f"Brak ceny w wierszu dla „{line.ticker}”.")
     fx_rate = None
     if line.currency != PLN:
@@ -293,7 +307,7 @@ def _draft(
         transaction_type,
         instrument_id,
         line.quantity,
-        line.price,
+        line.unit_price,
         line.commission,
         line.comment,
         fx_rate=fx_rate,

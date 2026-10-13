@@ -39,7 +39,8 @@ def test_a_source_left_out_of_the_order_is_never_tried() -> None:
 def test_the_defaults_follow_the_spec() -> None:
     assert default_fallback_order("Akcje polskie") == (BOSSA, YAHOO)
     assert default_fallback_order("Inne") == (ANALIZY, BANKIER, YAHOO, BOSSA)
-    for asset_class in ("Gotówka", "Waluty", "Obligacje skarbowe polskie"):
+    assert default_fallback_order("Obligacje skarbowe polskie") == (BOSSA,)  # Catalyst; Bond Series from MF data
+    for asset_class in ("Gotówka", "Waluty"):
         assert default_fallback_order(asset_class) == ()
 
 

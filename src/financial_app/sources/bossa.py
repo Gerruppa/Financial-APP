@@ -1,23 +1,29 @@
 """Quotes from the Bossa JSON API (spec 4.1): GPW shares, NewConnect, ETFs and Catalyst bonds, in PLN.
 
 Bossa serves a whole category of listings in one response, so each category is requested at most once per refresh,
-however many Instruments it prices; ``new_refresh`` forgets them. Catalyst bond prices are a percent of nominal, as
-Bossa gives them; Stage 3 values bonds with their nominal.
+however many Instruments it prices; ``new_refresh`` forgets them. Bossa quotes a Catalyst bond as a percent of its
+nominal, so its Quote is that percent of the bond's nominal plus its accrued interest, a price per bond in PLN (backlog
+L-23); a bond whose nominal cannot be had gets no Quote rather than a percent.
 """
 
 import json
 import urllib.request
 from collections.abc import Callable
+from dataclasses import replace
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
 from urllib.error import HTTPError
 
+from financial_app.domain.catalyst import BondFactsSource, bond_price
 from financial_app.domain.prices import BOSSA, CurrencyMismatchError, PriceSourceError, Quote
+from financial_app.sources.catalyst import CatalystFacts
 
 API = "https://bossa.pl/fl_api/API/GPW/v2/Q/C/{category}"
 # Searched in this order, each only when the symbol is not in the ones before
 CATEGORIES = ("_cat_shares", "_cat_nConnect", "_cat_etf", "_cat_bonds")
+# The category quoting Catalyst bonds as a percent of nominal
+BONDS = "_cat_bonds"
 CURRENCY = "PLN"
 
 
@@ -31,18 +37,21 @@ def fetch_from_bossa(url: str) -> str:
 
 
 class BossaSource:
-    """The Bossa Price Source; ``fetch`` is injectable so tests run on saved responses."""
+    """The Bossa Price Source; ``fetch`` and the Catalyst ``bonds`` facts are injectable so tests run on saved
+    responses."""
 
     name = BOSSA
 
-    def __init__(self, fetch: Callable[[str], str] = fetch_from_bossa) -> None:
+    def __init__(self, fetch: Callable[[str], str] = fetch_from_bossa, bonds: BondFactsSource | None = None) -> None:
         self.fetch = fetch
+        self.bonds = CatalystFacts() if bonds is None else bonds
         # This refresh's categories: their Quotes by upper-case symbol, or why they could not be loaded
         self._loaded: dict[str, dict[str, Quote] | PriceSourceError] = {}
 
     def new_refresh(self) -> None:
-        """Forget the categories loaded so far, so that the next Quotes are fetched anew."""
+        """Forget the categories and bond facts loaded so far, so that the next Quotes are fetched anew."""
         self._loaded = {}
+        self.bonds.new_refresh()
 
     def quote(self, symbol: str, currency: str) -> Quote:
         """The newest Quote of ``symbol``: Bossa's short symbol (e.g. CDR) or full one (CDPROJEKT), with or without a
@@ -71,7 +80,10 @@ class BossaSource:
             if isinstance(quotes, PriceSourceError):
                 first_error = first_error or quotes
             elif key in quotes:
-                return quotes[key]
+                quote = quotes[key]
+                if category != BONDS:
+                    return quote
+                return replace(quote, price=bond_price(quote.price, self.bonds.of(key, quote.day)))
         if first_error is not None:
             raise first_error
         raise PriceSourceError(f"Bossa nie zna symbolu „{symbol}”.")

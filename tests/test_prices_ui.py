@@ -23,6 +23,7 @@ from financial_app.persistence.transactions import add_transaction
 from financial_app.sources.analizy import AnalizySource
 from financial_app.sources.bankier import BankierSource
 from financial_app.sources.bossa import BossaSource
+from financial_app.sources.catalyst import CATALYST_LISTING, INDEXATION_PAGE, CatalystFacts
 from financial_app.sources.prices import PriceSource
 from financial_app.ui.shell import build_shell
 
@@ -31,6 +32,10 @@ FRIDAY = date(2026, 10, 9)
 AKCJE_POLSKIE = 2
 OBLIGACJE_SKARBOWE_POLSKIE = 4
 INNE = 11
+CATALYST_PAGES = {
+    CATALYST_LISTING: Path(__file__).parent / "fixtures" / "catalyst" / "instrumenty-notowane.html",
+    INDEXATION_PAGE: Path(__file__).parent / "fixtures" / "indexation" / "wspolczynniki-indeksacji.html",
+}
 
 
 class FakeYahoo:
@@ -161,17 +166,17 @@ async def test_a_failed_refresh_keeps_the_earlier_quote_marked_stale_until_a_ref
         await user.should_not_see("błąd")
 
 
-async def test_a_treasury_bond_that_is_no_bond_series_waits_and_is_not_an_error(engine: Engine) -> None:
-    _held(engine, InstrumentDraft("Obligacja 2030", OBLIGACJE_SKARBOWE_POLSKIE, "PLN"))
+async def test_a_treasury_bond_on_catalyst_is_valued_per_bond_from_bossa_and_gpwcatalyst(engine: Engine) -> None:
+    _held(engine, InstrumentDraft("DS1030", OBLIGACJE_SKARBOWE_POLSKIE, "PLN", source_symbols={BOSSA: "DS1030"}))
+    facts = CatalystFacts(lambda url: CATALYST_PAGES[url].read_text(encoding="utf-8"))
 
-    async with user_simulation(lambda: build_shell(engine, sources={YAHOO: FakeYahoo({})})) as user:
+    async with user_simulation(lambda: build_shell(engine, sources={BOSSA: BossaSource(_saved_bossa, facts)})) as user:
         await user.open("/portfolio")
         user.find(marker="refresh-prices").click()
 
         with user.scope(marker="portfolio"):
-            await user.should_see("do etapu 3")
-            await user.should_see(f"400,00{NBSP}zł")
-        await user.should_see("Wyceny: ")
+            await user.should_see(f"8{NBSP}650,60{NBSP}zł")  # 10 × (85,29 % of 1000 zł + 12,16 zł accrued)
+            await user.should_not_see("do etapu 3")
         await user.should_not_see("błąd")
 
 

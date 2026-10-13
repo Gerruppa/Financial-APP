@@ -29,8 +29,8 @@ Decided in the grilling of 2026-10-12: `docs/spec.md` 3.4.1 and ADR-0007. Slices
 
 Outside Stage 3, later:
 
-- [ ] L-23 gpwcatalyst.pl: Catalyst prices, accrued interest and nominal; Bossa's percent of nominal becomes a price.
-- [ ] L-24 gov.pl IZ indexed nominal.
+- [x] L-23 gpwcatalyst.pl: Catalyst prices, accrued interest and nominal; Bossa's percent of nominal becomes a price (spec 4.2). Branch `feat/bond-sources`.
+- [x] L-24 gov.pl IZ indexed nominal (spec 4.2). Branch `feat/bond-sources`.
 
 ## Stage 5, Reports
 

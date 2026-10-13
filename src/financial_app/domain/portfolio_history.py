@@ -22,7 +22,6 @@ from financial_app.domain.currencies import NbpRate
 from financial_app.domain.history import ONE_DAY
 from financial_app.domain.instruments import Instrument
 from financial_app.domain.lots import ForeignCash, Position, UnitPrice, foreign_cash, open_positions
-from financial_app.domain.prices import STAGE_3_CLASSES
 from financial_app.domain.transactions import PLN, SplitRatio, TransactionDraft, TransactionType, cash_balances
 
 # The Asset Classes PLN and foreign cash are counted in
@@ -141,7 +140,7 @@ class _Pricing:
         """One unit's PLN value at the end of ``day``, in that day's units (a Bond Series' by Lot); ``None`` without a
         price or NBP Rate."""
         instrument = self.instruments[instrument_id]
-        if self.is_bond(instrument_id):
+        if self.is_bond_series(instrument_id):
             return self.bonds.price(instrument_id, day)
         price = _last_on(self.prices.get(instrument_id, ()), self.price_days.get(instrument_id, []), day)
         if price is None:
@@ -167,8 +166,8 @@ class _Pricing:
                 factor *= Decimal(ratio.old) / ratio.new
         return factor
 
-    def is_bond(self, instrument_id: int) -> bool:
-        return self.instruments[instrument_id].asset_class_name in STAGE_3_CLASSES
+    def is_bond_series(self, instrument_id: int) -> bool:
+        return self.instruments[instrument_id].is_bond_series
 
 
 def _last_on[T](values: Sequence[T], days: list[date], day: date) -> T | None:
@@ -270,7 +269,7 @@ def _value(
         unit = pricing.unit_pln(position.instrument_id, day)
         if unit is None:
             value = position.cost
-            if not pricing.is_bond(position.instrument_id):
+            if not pricing.is_bond_series(position.instrument_id):
                 unpriced.add(position.instrument_id)
         else:
             value = position.value(unit)

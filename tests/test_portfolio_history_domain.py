@@ -24,14 +24,14 @@ PZU, AAPL, EDO = 10, 20, 30
 SHARES, FOREIGN, BONDS = "Akcje polskie", "Akcje zagraniczne", "Obligacje skarbowe polskie"
 
 
-def _instrument(instrument_id: int, asset_class: str, currency: str = "PLN") -> Instrument:
-    return Instrument("X", 1, currency, id=instrument_id, asset_class_name=asset_class, fallback_order=())
+def _instrument(instrument_id: int, asset_class: str, currency: str = "PLN", name: str = "X") -> Instrument:
+    return Instrument(name, 1, currency, id=instrument_id, asset_class_name=asset_class, fallback_order=())
 
 
 INSTRUMENTS = {
     PZU: _instrument(PZU, SHARES),
     AAPL: _instrument(AAPL, FOREIGN, "USD"),
-    EDO: _instrument(EDO, BONDS),
+    EDO: _instrument(EDO, BONDS, name="EDO0836"),
 }
 
 

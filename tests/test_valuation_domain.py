@@ -151,10 +151,30 @@ def test_a_bond_series_without_its_first_rate_says_so() -> None:
     assert (price.pln, price.status, price.badge) == (None, PriceStatus.NO_PRICE, Badge.NO_BOND_RATE)
 
 
-def test_a_treasury_bond_that_is_no_bond_series_waits_for_a_later_stage() -> None:
-    coi = Instrument("Obligacja 2030", 4, "PLN", id=1, asset_class_name="Obligacje skarbowe polskie", fallback_order=())
+def _catalyst_treasury_bond(symbols: dict[str, str]) -> Instrument:
+    return Instrument(
+        "DS1030",
+        4,
+        "PLN",
+        source_symbols=symbols,
+        id=1,
+        asset_class_name="Obligacje skarbowe polskie",
+        fallback_order=default_fallback_order("Obligacje skarbowe polskie"),
+    )
 
-    assert instrument_price(coi, None, lambda currency: Decimal(1)).badge is Badge.STAGE_3
+
+def test_a_treasury_bond_on_catalyst_is_valued_at_its_bossa_quote_per_bond() -> None:
+    quote = Quote(Decimal("865.06"), "PLN", date(2026, 10, 2), BOSSA)
+
+    price = instrument_price(_catalyst_treasury_bond({BOSSA: "DS1030"}), quote, lambda currency: Decimal(1))
+
+    assert (price.pln, price.status, price.badge) == (Decimal("865.06"), PriceStatus.QUOTE, None)
+
+
+def test_a_treasury_bond_that_is_no_bond_series_without_a_bossa_symbol_has_no_source() -> None:
+    price = instrument_price(_catalyst_treasury_bond({}), None, lambda currency: Decimal(1))
+
+    assert (price.status, price.badge) == (PriceStatus.NO_PRICE, Badge.NO_SOURCE)
 
 
 def _metal(grams: str, spread: str | None, manual_price: str | None = None) -> Instrument:

@@ -37,8 +37,8 @@ DEFAULT_FALLBACK_ORDERS: dict[str, tuple[str, ...]] = {
     "Gotówka": (),
     "Akcje polskie": (BOSSA, YAHOO),
     "Akcje zagraniczne": (YAHOO, BOSSA),
-    # Valued from the MF data in Stage 3
-    "Obligacje skarbowe polskie": (),
+    # Bond Series are valued from the MF data (spec 3.4.1); other treasury bonds are quoted on Catalyst (L-23)
+    "Obligacje skarbowe polskie": (BOSSA,),
     "Obligacje skarbowe zagraniczne": (YAHOO,),
     "Obligacje korporacyjne polskie": (BOSSA,),
     "Obligacje korporacyjne zagraniczne": (YAHOO,),
@@ -48,7 +48,8 @@ DEFAULT_FALLBACK_ORDERS: dict[str, tuple[str, ...]] = {
     OTHER: (ANALIZY, BANKIER, YAHOO, BOSSA),
     "Multi-asset": (ANALIZY, BANKIER, YAHOO, BOSSA),
 }
-# Asset Classes of the Bond Series, which Stage 3 values from the MF data (no Price Source quotes them)
+# The Asset Class of the Bond Series, valued from the MF data (no Price Source quotes them); its other bonds, such as
+# DS or IZ on Catalyst, are quoted like any Instrument
 STAGE_3_CLASSES = frozenset({TREASURY_BOND_CLASS})
 # Seeded Asset Classes nothing quotes, priced only by a Manual Price
 MANUAL_PRICE_CLASSES = frozenset({"Gotówka", "Waluty"})

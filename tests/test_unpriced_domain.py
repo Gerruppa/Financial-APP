@@ -14,11 +14,12 @@ def _instrument(
     symbols: Mapping[str, str] | None = None,
     asset_class_name: str = AKCJE_POLSKIE,
     fallback_order: tuple[str, ...] | None = None,
+    name: str | None = None,
 ) -> Instrument:
     if fallback_order is None:
         fallback_order = default_fallback_order(asset_class_name)
     return Instrument(
-        f"I{id}",
+        name or f"I{id}",
         2,
         "PLN",
         "GPW",
@@ -79,9 +80,15 @@ def test_a_removed_symbol_counts_as_no_source_despite_an_old_failure() -> None:
 def test_unheld_quoted_and_bond_series_instruments_are_not_listed() -> None:
     unheld = _instrument(1)
     quoted = _instrument(2, {"yahoo": "PZU.WA"})
-    bond = _instrument(3, asset_class_name="Obligacje skarbowe polskie")
+    bond = _instrument(3, asset_class_name="Obligacje skarbowe polskie", name="EDO0836")
 
     assert instruments_without_price([unheld, quoted, bond], {2, 3}, {2}, {}) == []
+
+
+def test_a_treasury_bond_on_catalyst_without_a_bossa_symbol_is_listed() -> None:
+    bond = _instrument(1, asset_class_name="Obligacje skarbowe polskie", name="DS1030")
+
+    assert instruments_without_price([bond], {1}, set(), {}) == [Unpriced(bond, UnpricedReason.NO_SOURCE)]
 
 
 def test_the_list_keeps_the_instruments_order() -> None:

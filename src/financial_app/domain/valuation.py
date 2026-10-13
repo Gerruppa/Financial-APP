@@ -15,7 +15,7 @@ from enum import StrEnum
 from financial_app.domain.bond_valuation import BondPrice
 from financial_app.domain.instruments import Instrument
 from financial_app.domain.lots import UnitPrice
-from financial_app.domain.prices import STAGE_3_CLASSES, Quote, sources_to_try
+from financial_app.domain.prices import Quote, sources_to_try
 
 
 class PriceStatus(StrEnum):
@@ -32,7 +32,6 @@ class Badge(StrEnum):
     MANUAL = "ręczna"  # valued at the Manual Price
     STALE = "nieaktualna"  # the Quote's latest refresh failed in every Price Source
     NO_SOURCE = "bez źródła"  # no Source Symbol for any source of its Fallback Order
-    STAGE_3 = "do etapu 3"  # a treasury bond that is no Bond Series (e.g. from Catalyst), not valued yet
     NO_BOND_RATE = "brak oprocentowania"  # a Bond Series without its first-year rate from MF or the user
 
 
@@ -93,10 +92,8 @@ def instrument_price(
 def _badge(instrument: Instrument, quote: Quote | None, stale: bool, bond: BondPrice | None) -> Badge | None:
     if instrument.manual_price is not None:
         return Badge.MANUAL
-    if instrument.asset_class_name in STAGE_3_CLASSES:
-        if bond is not None:
-            return None
-        return Badge.NO_BOND_RATE if instrument.is_bond_series else Badge.STAGE_3
+    if instrument.is_bond_series:
+        return None if bond is not None else Badge.NO_BOND_RATE
     if not sources_to_try(instrument.fallback_order, instrument.source_symbols):
         return Badge.NO_SOURCE
     if quote is not None and stale:
@@ -130,11 +127,11 @@ def instruments_without_price(
     """The ``held`` Instruments (ids with an open Position) without an automatic price, in the order given.
 
     ``quoted`` are the ids of the Instruments with a Quote and ``failures`` the latest refresh's reasons by Instrument
-    id. A Bond Series waits for Stage 3, so it is never listed.
+    id. A Bond Series is valued from the MF data, so it is never listed.
     """
     listed = []
     for instrument in instruments:
-        if instrument.id not in held or instrument.asset_class_name in STAGE_3_CLASSES:
+        if instrument.id not in held or instrument.is_bond_series:
             continue
         if not sources_to_try(instrument.fallback_order, instrument.source_symbols):
             listed.append(Unpriced(instrument, UnpricedReason.NO_SOURCE))

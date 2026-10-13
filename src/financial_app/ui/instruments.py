@@ -550,7 +550,10 @@ def _no_sources_note(class_name: str | None) -> str:
     if class_name is None:
         return "Wybierz klasę aktywów, żeby zobaczyć źródła wycen."
     if class_name in STAGE_3_CLASSES:
-        return "Ta klasa będzie wyceniana automatycznie w etapie 3; do tego czasu podaj cenę ręczną."
+        return (
+            "Serie obligacji detalicznych są wyceniane z danych MF; inne obligacje skarbowe (Catalyst) wyceni Bossa, "
+            "gdy dodasz ją w Ustawienia > Klasy aktywów, albo cena ręczna."
+        )
     if class_name in MANUAL_PRICE_CLASSES:
         return "Ta klasa nie ma źródeł wycen: podaj cenę ręczną."
     return "Ta klasa nie ma źródeł wycen. Dodaj je w Ustawienia > Klasy aktywów albo podaj cenę ręczną."

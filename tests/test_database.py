@@ -80,3 +80,61 @@ def test_upgrading_clears_the_imported_manual_prices_of_bond_series_only(tmp_pat
     prices = {i.name: i.manual_price for i in list_instruments(init_db(db_file))}
 
     assert prices == {"EDO0836": None, "PKN0726": Decimal("103.5"), "TOS0729": Decimal("103.5")}
+
+
+def test_upgrading_quotes_polish_treasury_bonds_through_bossa_and_drops_bossas_percent_quotes(tmp_path: Path) -> None:
+    db_file = tmp_path / "app.sqlite3"
+    engine = open_engine(db_file)
+    config = Config()
+    config.set_main_option("script_location", str(MIGRATIONS_DIR))
+    with engine.begin() as connection:
+        config.attributes["connection"] = connection
+        command.upgrade(config, "0024")
+        for name, class_name, source in (
+            ("DS1030", "Obligacje skarbowe polskie", "bossa"),
+            ("ACH0427", "Obligacje korporacyjne polskie", "bossa"),
+            ("PZU", "Akcje polskie", "bossa"),
+            ("XYZ0130", "Obligacje korporacyjne polskie", "yahoo"),
+        ):
+            connection.execute(
+                text(
+                    "INSERT INTO instruments (name, asset_class_id, quote_currency, market)"
+                    " SELECT :name, id, 'PLN', '' FROM asset_classes WHERE name = :class_name"
+                ),
+                {"name": name, "class_name": class_name},
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO quotes (instrument_id, day, price, currency, source, fetched_at)"
+                    " SELECT id, '2026-10-02', '101.00', 'PLN', :source, '2026-10-02 18:00:00'"
+                    " FROM instruments WHERE name = :name"
+                ),
+                {"name": name, "source": source},
+            )
+
+    engine = init_db(db_file)
+
+    orders = {c.name: c.fallback_order for c in list_asset_classes(engine)}
+    assert orders["Obligacje skarbowe polskie"] == ("bossa",)
+    with engine.connect() as connection:
+        quoted = connection.execute(
+            text("SELECT name FROM quotes JOIN instruments ON instruments.id = quotes.instrument_id ORDER BY name")
+        ).scalars()
+        assert list(quoted) == ["PZU", "XYZ0130"]
+
+
+def test_upgrading_keeps_a_treasury_bond_order_the_user_chose(tmp_path: Path) -> None:
+    db_file = tmp_path / "app.sqlite3"
+    engine = open_engine(db_file)
+    config = Config()
+    config.set_main_option("script_location", str(MIGRATIONS_DIR))
+    with engine.begin() as connection:
+        config.attributes["connection"] = connection
+        command.upgrade(config, "0024")
+        connection.execute(
+            text("UPDATE asset_classes SET fallback_order = 'yahoo' WHERE name = 'Obligacje skarbowe polskie'")
+        )
+
+    orders = {c.name: c.fallback_order for c in list_asset_classes(init_db(db_file))}
+
+    assert orders["Obligacje skarbowe polskie"] == ("yahoo",)

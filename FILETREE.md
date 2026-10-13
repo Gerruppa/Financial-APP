@@ -56,6 +56,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `bond_redemption.py`: Net value of a retail treasury bond on redemption: gross value less early-redemption fee and withheld Belka tax
 - `bond_valuation.py`: Values Bond Series by MF letters and CPI or NBP estimates, including COI, ROR and DOR coupon accrual and the coupons they pay
 - `bonds.py`: Polish retail treasury bond types, their terms, GUS CPI readings and NBP reference rates as pure-Python values
+- `catalyst.py`: Price per Catalyst bond from its percent of nominal plus accrued interest, and the indexed nominal of IZ bonds
 - `charts.py`: Dashboard chart data from History and Transactions: value, profit, XIRR, class shares and dividends by year, per scope and period
 - `currencies.py`: Currency code check and the NBP Rate value type, plus the error raised when a rate is missing.
 - `dashboard.py`: Dashboard totals, Account table, currency exposure and allocation from Transactions, prices, NBP Rates and History, plus estimated tax and profit by source
@@ -130,6 +131,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `0022_bond_data.py`: Alembic migration adding the bond data tables: Bond Series, CPI, reference rates and fetch status
 - `0023_bond_rate_corrections.py`: Migration adding the bond rate corrections table and clearing imported Manual Prices on Bond Series
 - `0024_redeemed_lots.py`: Migration 0024 adds the nullable lot_id column to transactions, naming the Lot an Early Redemption Sell redeems
+- `0025_catalyst_bond_prices.py`: Migration 0025: moves treasury bonds to Bossa per-bond prices and drops the old percent-of-nominal Bossa Quotes
 
 ## src/financial_app/sources/
 
@@ -138,6 +140,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `bankier.py`: Fetches fund and PPK Quotes from bankier.pl pages as the fallback price source
 - `bond_data.py`: Fetches and parses the MF bond file, GUS CPI and NBP reference rates, refreshing their SQLite copies at most once a day
 - `bossa.py`: Fetches GPW, NewConnect, ETF and bond Quotes in PLN from the Bossa JSON API
+- `catalyst.py`: Fetches Catalyst bonds' nominal and accrued interest from gpwcatalyst.pl and IZ indexation coefficients from gov.pl
 - `current_prices.py`: Today's valuation inputs shared by the Portfolio and the Dashboard: Instrument prices and NBP Rates from the last business day before today, each currency fetched once
 - `dashboard.py`: Computes today's Dashboard of a View Scope from the database, shared by the Dashboard and the Investment Strategy
 - `export.py`: Writes the Transactions list to CSV and XLSX files for export
@@ -207,6 +210,8 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_bond_valuation_ui.py`: UI tests for Bond Series values in the Portfolio, with per-Lot rates and labels from MF or CPI
 - `test_bonds_ui.py`: UI tests for the Obligacje tab and the Dashboard's after-tax bond deduction
 - `test_bossa_source.py`: Tests the Bossa JSON API quote source against saved responses
+- `test_catalyst_domain.py`: Tests Catalyst bond price per bond and the IZ indexed nominal
+- `test_catalyst_source.py`: Tests Catalyst nominal and accrued interest parsing and IZ indexation on saved pages
 - `test_charts_domain.py`: Unit tests for the Dashboard chart data: value, profit, XIRR, class shares and dividends by year
 - `test_clear_data_repository.py`: Tests that clearing the portfolio removes user data and restores default Asset Classes
 - `test_clear_data_ui.py`: UI tests for the Wyczyść dane confirmation flow in Ustawienia
@@ -318,10 +323,18 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `_cat_nConnect.json`: Trimmed Bossa API response listing NewConnect quotes, for offline Bossa source tests
 - `_cat_shares.json`: Trimmed Bossa API response listing GPW shares and PDA quotes, for offline Bossa source tests
 
+## tests/fixtures/catalyst/
+
+- `instrumenty-notowane.html`: Trimmed gpwcatalyst.pl instrument listing page, for offline Catalyst source tests
+
 ## tests/fixtures/gus/
 
 - `cpi.csv`: Saved GUS consumer price index CSV fixture for the bond data parser tests
 - `page.html`: Saved stat.gov.pl page fixture linking to the GUS CPI CSV file
+
+## tests/fixtures/indexation/
+
+- `wspolczynniki-indeksacji.html`: Trimmed gov.pl MF indexation coefficients page, for offline Catalyst source tests
 
 ## tests/fixtures/mf/
 
