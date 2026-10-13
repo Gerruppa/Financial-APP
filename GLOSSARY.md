@@ -49,6 +49,7 @@ The Polish UI labels with the English terms the code and the docs use, in Polish
 | Wcześniejszy wykup | [Early Redemption](CONTEXT.md#bonds) | Bonds |
 | Widok | [View Scope](CONTEXT.md#accounts-and-instruments) | Accounts and instruments |
 | Wpłaty netto | [Net Deposits](CONTEXT.md#results) | Results |
+| Wynik realny | [Real Return](CONTEXT.md#results) | Results |
 | XIRR | [XIRR](CONTEXT.md#results) | Results |
 | Zamiana | [Rollover](CONTEXT.md#bonds) | Bonds |
 | Źródło wycen | [Price Source](CONTEXT.md#transactions-and-holdings) | Transactions and holdings |

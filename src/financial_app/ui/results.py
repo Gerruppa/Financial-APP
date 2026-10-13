@@ -2,7 +2,7 @@
 periods YTD, 1R, 3L and Od początku, all from History, so they wait until it is computed.
 
 Unlike the Dashboard's XIRR, which ends at today's value with Manual Prices, these end at History's value (spec 6.1).
-The real (CPI-adjusted) return waits for GUS CPI in Stage 3.
+The real return is the TWR after the GUS CPI's inflation over the period (L-10), from the saved bond data.
 """
 
 from collections.abc import Callable
@@ -12,16 +12,18 @@ from decimal import Decimal
 from nicegui import ui
 from sqlalchemy import Engine
 
-from financial_app.domain.formatting import format_count, format_date, format_percent
+from financial_app.domain.formatting import format_count, format_date, format_month, format_percent
+from financial_app.domain.inflation import Inflation
 from financial_app.domain.portfolio_history import DayValue
 from financial_app.domain.results import TABLE_PRESETS, PeriodResults, ResultsRow, period_results, results_rows
 from financial_app.persistence.accounts import list_accounts
+from financial_app.persistence.bond_data import load_cpi
 from financial_app.ui.charts import drawdown_chart
 from financial_app.ui.periods import PeriodChoice, period_selector
 from financial_app.ui.view_scope import ViewScope
 
 DASH = "—"
-REAL_RETURN_PENDING = "wynik realny — po dodaniu CPI"
+NO_CPI = "brak CPI GUS za ten okres"
 
 
 @dataclass
@@ -57,7 +59,7 @@ class ResultsPage:
             return
         first, last = self.period.dates()
         account_id = self.scope.account_id
-        _tiles(period_results(days, first, last, account_id))
+        _tiles(period_results(days, first, last, account_id, load_cpi(self.engine)))
         drawdown_chart(days, first, last, account_id, "results-drawdown")
         _table(results_rows(days, list_accounts(self.engine), account_id, self.period.today()))
 
@@ -81,7 +83,7 @@ def _tiles(results: PeriodResults) -> None:
         ("max-drawdown", "Maks. obsunięcie (TWR)", depth, fall),
         ("recovery", "Czas odrabiania", recovery, "od dołka do szczytu" if drawdown else ""),
         ("volatility", "Zmienność (rocznie)", _percent(results.volatility), "dzienne zwroty TWR, dni robocze"),
-        ("real", "Wynik realny", REAL_RETURN_PENDING, ""),
+        ("real", "Wynik realny (TWR po inflacji)", _percent(results.real_return), _inflation_note(results.inflation)),
     )
     with (
         ui.element("div")
@@ -94,6 +96,14 @@ def _tiles(results: PeriodResults) -> None:
                 ui.label(text).classes("text-xl font-medium").mark(f"results-{key}")
                 if note:
                     ui.label(note).classes("text-xs text-gray-500")
+
+
+def _inflation_note(inflation: Inflation | None) -> str:
+    """The period's inflation, and the month GUS has published up to when the period runs past it."""
+    if inflation is None:
+        return NO_CPI
+    note = f"inflacja (CPI) {_percent(inflation.rate)}"
+    return note if inflation.complete else f"{note} · CPI do {format_month(inflation.known_until)}"
 
 
 TABLE_COLUMNS = f"grid-template-columns: minmax(8rem, 2fr) repeat({2 * len(TABLE_PRESETS)}, minmax(5rem, 1fr))"

@@ -200,6 +200,7 @@ def build_shell(
         bond_state.refresh()
         bonds_page.refresh()
         drafts_state.refresh()
+        results_page.refresh()
 
     async def start() -> None:
         if engine in _running_refreshes or (refresh_at_start and refresh_due(last_successful_refresh(engine), now())):

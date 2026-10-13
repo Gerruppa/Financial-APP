@@ -10,6 +10,7 @@ from financial_app.domain.formatting import (
     format_datetime,
     format_exact,
     format_exact_percent,
+    format_month,
     format_percent,
     format_pln,
     format_points,
@@ -77,6 +78,7 @@ def test_parse_number_rejects_text_that_is_not_a_number(text: str) -> None:
 
 def test_date_is_shown_day_first_with_dots() -> None:
     assert format_date(date(2026, 3, 7)) == "07.03.2026"
+    assert format_month(date(2026, 9, 30)) == "09.2026"
 
 
 def test_parse_date_reads_day_first_dates() -> None:

@@ -191,6 +191,10 @@ Money-weighted annual return of the portfolio or an Account, based on Deposits a
 **TWR**:
 Time-weighted return, independent of the timing of Deposits and Withdrawals. Drawdown and benchmark comparison are based on it.
 
+**Real Return** (Wynik realny):
+The TWR over a period after the inflation of that period: (1 + TWR) / (1 + inflation) − 1, the inflation from the GUS month-on-month CPI spread evenly across each month's days.
+_Avoid_: inflation-adjusted XIRR, real value
+
 **Benchmark** (Benchmark):
 An Instrument or CPI into which every Deposit is hypothetically invested on its date, to compare with the real portfolio.
 

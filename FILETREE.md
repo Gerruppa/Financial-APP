@@ -62,6 +62,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `export.py`: Builds the transaction export rows with columns, amounts, origin and comment, independent of file format.
 - `formatting.py`: Polish number, amount and date formatting and parsing of typed input; the single formatter every screen uses.
 - `history.py`: Tracks which days of Quote and NBP Rate history are cached, and computes the missing days to fetch.
+- `inflation.py`: Inflation over a period from GUS monthly CPI, spread across days as the sheet's Benchmarki do, and the real return
 - `instrument_search.py`: Instrument search result types, the swappable search protocol, and filling empty form fields from a chosen result.
 - `instruments.py`: Instrument and Asset Class models, their validation, default Asset Classes, ISIN, metal, distribution policy and Multi-asset Split rules.
 - `lots.py`: The single FIFO engine that opens and consumes Lots for Positions and foreign cash, raising uncovered-sale errors.
@@ -236,6 +237,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_history_domain.py`: Tests which days of a price history still need fetching given cached days
 - `test_history_parity.py`: Parity test of History against the user's spreadsheet Historia tab at each month end, skipped without reference data
 - `test_import_sheet_ui.py`: UI tests for the Ustawienia spreadsheet import: preview first, then save, on a synthetic workbook
+- `test_inflation.py`: Tests inflation over periods from GUS monthly CPI readings and the real return it gives
 - `test_instrument_search_domain.py`: Tests that a chosen Instrument search result fills only the empty Instrument form fields.
 - `test_instrument_search_ui.py`: Tests searching an Instrument by ISIN, name or symbol in the Instrument dialog on saved Yahoo responses.
 - `test_instruments_domain.py`: Tests Instrument and Asset Class validation rules, including fund and distribution policy fields.
