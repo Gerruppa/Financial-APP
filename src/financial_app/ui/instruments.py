@@ -293,8 +293,15 @@ class InstrumentsSection:
 
         button.on_click(check)
 
-    def open_dialog(self, instrument: Instrument | None) -> None:
-        """Open a fresh form for a new Instrument (``None``) or for editing ``instrument``."""
+    def open_dialog(
+        self,
+        instrument: Instrument | None,
+        *,
+        query: str = "",
+        on_saved: Callable[[Instrument], None] | None = None,
+    ) -> None:
+        """Open a fresh form for a new Instrument (``None``) or for editing ``instrument``. A new one's search starts
+        from ``query`` (e.g. an imported ticker), and ``on_saved`` gets the saved Instrument."""
         dialog = movable_dialog()
         dialog.on("hide", dialog.delete)
         asset_classes = list_asset_classes(self.engine)
@@ -302,7 +309,7 @@ class InstrumentsSection:
         with dialog, ui.card().classes("w-[480px]").mark("instrument-dialog"):
             ui.label("Nowy instrument" if instrument is None else "Edytuj instrument").classes("text-lg font-bold")
             # An Instrument without Source Symbols (e.g. imported as "ISAC") is searched by its name
-            query = instrument.name if instrument and not instrument.source_symbols else ""
+            query = instrument.name if instrument and not instrument.source_symbols else query
             with ui.row().classes("w-full items-center no-wrap"):
                 search_input = ui.input("Szukaj (ISIN, nazwa lub symbol)", value=query).classes("grow")
                 search_input.mark("instrument-search")
@@ -495,14 +502,16 @@ class InstrumentsSection:
                         multi_asset_split=typed_split() if split_section.visible else {},
                     )
                     if instrument is None:
-                        add_instrument(self.engine, draft)
+                        saved = add_instrument(self.engine, draft)
                     else:
-                        update_instrument(self.engine, instrument.id, draft)
+                        saved = update_instrument(self.engine, instrument.id, draft)
                 except InstrumentError as exc:
                     error.text = str(exc)
                     return
                 dialog.close()
                 self.refresh()
+                if on_saved is not None:
+                    on_saved(saved)
 
             def delete() -> None:
                 if instrument is None:

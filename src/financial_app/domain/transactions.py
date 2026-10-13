@@ -91,10 +91,14 @@ class Origin(StrEnum):
 
     MANUAL = "manual"
     SPREADSHEET = "spreadsheet"
+    BROKER = "broker"
 
     @property
     def label(self) -> str:
-        return "import z arkusza" if self is Origin.SPREADSHEET else "ręczna"
+        return _ORIGIN_LABELS[self]
+
+
+_ORIGIN_LABELS = {Origin.MANUAL: "ręczna", Origin.SPREADSHEET: "import z arkusza", Origin.BROKER: "import od brokera"}
 
 
 @dataclass(frozen=True)

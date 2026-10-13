@@ -107,6 +107,19 @@ class TransactionRow(Base):
     external_id: Mapped[str | None] = mapped_column(String(100), unique=True)
     # A Sell only: the Transaction that opened the Lot it takes its units from, instead of FIFO (L-5, ADR-0007)
     lot_id: Mapped[int | None] = mapped_column(ForeignKey("transactions.id"))
+    # Reconciliation (L-17, spec 7): the broker's external id of the Transaction it was paired with, and the day the
+    # user resolved it; a reconciled Transaction is not offered for pairing again
+    broker_id: Mapped[str | None] = mapped_column(String(100), unique=True)
+    reconciled_on: Mapped[dt.date | None] = mapped_column(Date)
+
+
+class SkippedBrokerRow(Base):
+    """A broker's Transaction the user chose not to add in a Reconciliation (L-17), so it is not offered again."""
+
+    __tablename__ = "skipped_broker_rows"
+
+    external_id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    skipped_on: Mapped[dt.date] = mapped_column(Date)
 
 
 class AssetClassRow(Base):

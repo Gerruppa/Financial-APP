@@ -73,12 +73,14 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `portfolio_history.py`: Computes daily Portfolio value and Net Deposits per Account and Asset Class from transactions and cached prices
 - `prices.py`: Quote model, Price Source keys and names, and the per-Asset-Class Fallback Order deciding which sources to try.
 - `profit_sources.py`: Splits the View Scope's result into price, FX, Dividends, interest, costs and taxes for the Dashboard waterfall
+- `reconciliation.py`: Pairs broker Transactions with entered ones and classifies matches, broker-only and entered-only; resolves choices
 - `results.py`: Wyniki tab figures: period XIRR, TWR, drawdown, volatility and fixed-period returns per Total and Account, from History
 - `spreadsheet_import.py`: Pure conversion of the user's Inwestomat Transakcje sheet rows into Transaction drafts, with fingerprints for re-import skipping.
 - `strategy.py`: Investment Strategy rules: Allocation Targets with tolerance bands, Instrument Targets, and the water-filling split of the Planned Deposit
 - `transactions.py`: Transaction types, drafts and builders for every kind, plus cash balances and cost and dividend totals per Account.
 - `valuation.py`: Decides each Instrument's price and status from Manual Price or Quote, including metal spot conversion and badges.
 - `view_scope.py`: View Scope logic: Total or one Account, its remembered setting, switcher entries and transaction filtering
+- `xtb_import.py`: Reads XTB xStation statements into entries and broker Transaction drafts; pure, no file or UI access
 
 ## src/financial_app/persistence/
 
@@ -95,6 +97,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `nbp_rates.py`: SQLite cache of NBP Rates keyed by currency and day
 - `paths.py`: Resolves the user's data, backup and log folders, kept outside the repository
 - `quotes.py`: Saves and reads daily Instrument Quotes and the last price refresh status
+- `reconciliation.py`: Saves a broker Reconciliation's choices all or none and reads handled, unreconciled and incoming transfers
 - `reset.py`: Clears all portfolio data after a backup and restores default Asset Classes
 - `settings.py`: Reads and writes text application settings by key in the app_settings table
 - `strategies.py`: Reads and saves Investment Strategies for Total and each Account, with their Allocation and Instrument Targets
@@ -132,6 +135,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `0023_bond_rate_corrections.py`: Migration adding the bond rate corrections table and clearing imported Manual Prices on Bond Series
 - `0024_redeemed_lots.py`: Migration 0024 adds the nullable lot_id column to transactions, naming the Lot an Early Redemption Sell redeems
 - `0025_catalyst_bond_prices.py`: Migration 0025: moves treasury bonds to Bossa per-bond prices and drops the old percent-of-nominal Bossa Quotes
+- `0026_reconciliation.py`: Migration adding broker ids, reconciled dates and the skipped broker rows table for reconciliation
 
 ## src/financial_app/sources/
 
@@ -150,6 +154,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `prices.py`: Refreshes held Instruments' Quotes from price sources in fallback order and records failures
 - `spreadsheet.py`: Previews and imports Transactions and Instruments from the user's Inwestomat spreadsheet
 - `stooq.py`: Stooq history source for GPW stocks and indices; fetches daily closes via CSV with API key and browser proof-of-work check
+- `xtb.py`: Reads, previews and applies XTB statement imports, matching accounts and tickers and remembering matches
 - `yahoo.py`: Yahoo Finance source for current quotes and Instrument search; converts GBp pence and parses chart and search responses
 
 ## src/financial_app/ui/
@@ -180,6 +185,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `transactions.py`: Transakcje tab and transaction dialog for adding, editing and deleting all supported transaction types
 - `unpriced.py`: Ustawienia Instrumenty bez wyceny card listing held Instruments lacking an automatic price, with reasons
 - `view_scope.py`: View Scope header switcher and breadcrumbs, listing Accounts by value with share and daily change
+- `xtb_import.py`: Ustawienia card for importing XTB statements and resolving the Reconciliation before applying
 
 ## tests/
 
@@ -267,6 +273,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_prices_repository.py`: Tests saving Source Symbols and Quotes in SQLite.
 - `test_prices_ui.py`: Tests Source Symbols in the Instrument dialog, Portfolio valuation from Quotes and refresh status badges.
 - `test_profit_sources_domain.py`: Tests the profit-by-source split adds up to the result the Dashboard tiles show
+- `test_reconciliation_domain.py`: Tests pairing of broker and entered Transactions in the Reconciliation domain logic
 - `test_results_domain.py`: Tests for the Wyniki tab's period results and fixed-period rows per Total and Account
 - `test_results_ui.py`: UI tests for the Wyniki tab: tiles, drawdown chart, results table and pending state
 - `test_shell.py`: Smoke tests of the app shell's tabs and navigation, run without a browser.
@@ -294,8 +301,13 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_view_scope_domain.py`: Tests the View Scope domain: Total or one Account, its text setting, and the Accounts the switcher offers.
 - `test_view_scope_ui.py`: UI tests for the View Scope switcher, breadcrumbs, scope-following tabs and the period selector.
 - `test_windowless.py`: Tests that windowless launches redirect stdout and stderr to a log file while console launches stay untouched
+- `test_xtb_import_domain.py`: Tests reading XTB statements into entries and Transaction drafts
+- `test_xtb_import_ui.py`: Tests the XTB import card in Ustawienia: matching, resolving and applying without a browser
+- `test_xtb_parity.py`: Checks the user's XTB exports against XTB's own positions and cash; skipped without reference data
+- `test_xtb_reconciliation.py`: Tests the XTB import and Reconciliation against a database with synthetic statements
 - `test_yahoo_search.py`: Tests Yahoo Instrument search by ISIN and name on saved responses, with error handling
 - `test_yahoo_source.py`: Tests Yahoo chart quotes on saved responses: currency, pence conversion, crypto rate and error messages
+- `xtb_rows.py`: Builds synthetic XTB statement workbooks in xStation's layout for tests
 
 ## tests/fixtures/analizy/
 

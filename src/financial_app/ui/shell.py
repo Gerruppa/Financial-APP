@@ -256,7 +256,9 @@ def build_shell(
     pages["/multi-asset"] = lambda: scope_pages(multi_asset_page.build)
     pages["/obligacje"] = lambda: scope_pages(bonds_page.build)
     pages["/strategie"] = lambda: scope_pages(strategy_page.build)
-    pages["/ustawienia"] = lambda: build_settings_page(engine, rates, search, sources, unpriced, instruments_changed)
+    pages["/ustawienia"] = lambda: build_settings_page(
+        engine, rates, search, sources, unpriced, instruments_changed, transactions_changed
+    )
     ui.sub_pages(pages).classes("w-full").mark("page-content")
 
     # Once the window is up, so that it never waits for the sources or the computation

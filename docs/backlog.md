@@ -42,7 +42,7 @@ Outside Stage 3, later:
 
 - [ ] L-15 PIT-38 and PIT/ZG summary with a year-end tax-loss optimiser (spec 8).
 - [ ] L-16 IKE/IKZE/OIPE contribution limits with progress and an over-limit warning (spec 8).
-- [ ] L-17 XTB importer and the Reconciliation view (spec 7).
+- [x] L-17 XTB importer and the Reconciliation view (spec 7). Branch `feat/bond-sources`.
 - [ ] L-18 Investment goal / FIRE per scope.
 - [ ] L-19 Recurring transactions as drafts to confirm.
 - [ ] L-20 Account comparison mode.

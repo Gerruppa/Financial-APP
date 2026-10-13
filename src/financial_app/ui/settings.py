@@ -15,6 +15,7 @@ from financial_app.ui.instruments import AssetClassesSection, InstrumentsSection
 from financial_app.ui.price_sources import PriceSourcesSection
 from financial_app.ui.reset import ClearDataSection
 from financial_app.ui.unpriced import UnpricedSection
+from financial_app.ui.xtb_import import XtbImportSection
 
 
 def build_settings_page(
@@ -24,10 +25,11 @@ def build_settings_page(
     sources: Mapping[str, PriceSource],
     unpriced: UnpricedSection,
     on_instruments_changed: Callable[[], None],
+    on_transactions_changed: Callable[[], None] | None = None,
 ) -> None:
     """``unpriced`` is kept by the shell, which redraws it after a price refresh and on ``on_instruments_changed``,
     called after an Instrument or Asset Class is saved; ``sources`` check the Source Symbols typed in the Instrument
-    dialog."""
+    dialog. ``on_transactions_changed`` redraws the other tabs after an XTB Reconciliation is applied."""
     ui.label("Ustawienia").classes("text-2xl font-bold")
     accounts = AccountsSection(engine)
     accounts.build()
@@ -39,11 +41,20 @@ def build_settings_page(
     PriceSourcesSection(engine).build()
     sheet_import = SheetImportSection(engine, rates, on_account_added=accounts.account_list.refresh)
     sheet_import.build()
+    xtb_import = XtbImportSection(
+        engine,
+        rates,
+        instruments.open_dialog,
+        on_saved=on_transactions_changed,
+        on_account_added=accounts.account_list.refresh,
+    )
+    xtb_import.build()
 
     def redraw() -> None:
         accounts.account_list.refresh()
         asset_classes.class_list.refresh()
         instruments.refresh()  # also redraws the Instruments without a price
         sheet_import.reset()
+        xtb_import.reset()
 
     ClearDataSection(engine, on_cleared=redraw).build()
