@@ -374,3 +374,14 @@ class BenchmarkRow(Base):
     offset: Mapped[str] = mapped_column(String(20))
     shown: Mapped[bool] = mapped_column(Boolean)
     position: Mapped[int] = mapped_column(Integer)
+
+
+class ContributionLimitRow(Base):
+    """A Contribution Limit (issue #95): one per year and limited Account Type, its PLN amount (Decimal as text) or
+    ``None`` while the year's row has none entered."""
+
+    __tablename__ = "contribution_limits"
+
+    year: Mapped[int] = mapped_column(Integer, primary_key=True)
+    account_type: Mapped[str] = mapped_column(String(20), primary_key=True)
+    amount: Mapped[str | None] = mapped_column(String(20))

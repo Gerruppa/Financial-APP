@@ -10,6 +10,7 @@ from financial_app.domain.instrument_search import InstrumentSearch
 from financial_app.sources.nbp import NbpRates
 from financial_app.sources.prices import PriceSource
 from financial_app.ui.accounts import AccountsSection
+from financial_app.ui.contribution_limits import ContributionLimitsSection
 from financial_app.ui.import_sheet import SheetImportSection
 from financial_app.ui.instruments import AssetClassesSection, InstrumentsSection
 from financial_app.ui.price_sources import PriceSourcesSection
@@ -33,21 +34,25 @@ def build_settings_page(
     dialog. ``on_transactions_changed`` redraws the other tabs after an XTB Reconciliation is applied;
     ``on_account_deleted`` gets the id of an Account deleted in Konta."""
     ui.label("Ustawienia").classes("text-2xl font-bold")
-    accounts = AccountsSection(engine, on_deleted=on_account_deleted)
+    limits = ContributionLimitsSection(engine)
+    accounts = AccountsSection(engine, on_deleted=on_account_deleted, on_changed=limits.refresh)
     accounts.build()
+    limits.build()
     instruments = InstrumentsSection(engine, search, sources, on_changed=on_instruments_changed)
     asset_classes = AssetClassesSection(engine, on_changed=instruments.refresh)
     asset_classes.build()
     instruments.build()
     unpriced.build(open_instrument=instruments.open_dialog)
     PriceSourcesSection(engine).build()
-    sheet_import = SheetImportSection(engine, rates, on_account_added=accounts.account_list.refresh)
+    sheet_import = SheetImportSection(
+        engine, rates, on_saved=limits.refresh, on_account_added=accounts.account_list.refresh
+    )
     sheet_import.build()
     xtb_import = XtbImportSection(
         engine,
         rates,
         instruments.open_dialog,
-        on_saved=on_transactions_changed,
+        on_saved=lambda: _all(limits.refresh, on_transactions_changed),
         on_account_added=accounts.account_list.refresh,
     )
     xtb_import.build()
@@ -58,5 +63,12 @@ def build_settings_page(
         instruments.refresh()  # also redraws the Instruments without a price
         sheet_import.reset()
         xtb_import.reset()
+        limits.refresh()
 
     ClearDataSection(engine, on_cleared=redraw).build()
+
+
+def _all(*callbacks: Callable[[], None] | None) -> None:
+    for callback in callbacks:
+        if callback is not None:
+            callback()

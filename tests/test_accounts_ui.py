@@ -32,10 +32,10 @@ def _fill_form(user: User, **fields: str) -> None:
 
 
 def _choose_account_type(user: User, label: str) -> None:
-    """Pick from the Typ konta select; call it before typing text containing ``label`` into the inputs above it,
-    because ``find`` by text clicks the first (lowest-id) element whose content matches."""
-    user.find(marker="account-type").click()
-    user.find(label).click()
+    """Pick ``label`` from the Typ konta select's own options, since other fields on the page (e.g. the Contribution
+    Limits' "IKE") carry the same text."""
+    select = user.find(marker="account-type", kind=ui.select).elements.pop()
+    select.set_value(next(value for value, text in select.options.items() if text == label))  # type: ignore[union-attr]
 
 
 async def test_settings_list_shows_saved_accounts(engine: Engine) -> None:

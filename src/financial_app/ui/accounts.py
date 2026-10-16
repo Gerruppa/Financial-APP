@@ -24,10 +24,12 @@ ACCOUNT_TYPE_OPTIONS = {account_type.value: account_type.label for account_type 
 
 @dataclass
 class AccountsSection:
-    """The Konta card; ``refresh`` redraws the list after a save. ``on_deleted`` gets a deleted Account's id."""
+    """The Konta card; ``refresh`` redraws the list after a save. ``on_deleted`` gets a deleted Account's id;
+    ``on_changed`` runs after an Account is saved or deleted here."""
 
     engine: Engine
     on_deleted: Callable[[int], object] | None = None
+    on_changed: Callable[[], object] | None = None
 
     def build(self) -> None:
         with ui.card().classes("w-full max-w-4xl"):
@@ -67,12 +69,15 @@ class AccountsSection:
 
     def open_dialog(self, account: Account | None) -> None:
         """Open a fresh form for a new Account (``None``) or for editing ``account``."""
-        open_account_dialog(
-            self.engine, account, on_saved=lambda _: self.account_list.refresh(), on_deleted=self._deleted
-        )
+        open_account_dialog(self.engine, account, on_saved=lambda _: self._saved(), on_deleted=self._deleted)
+
+    def _saved(self) -> None:
+        self.account_list.refresh()
+        if self.on_changed is not None:
+            self.on_changed()
 
     def _deleted(self, account_id: int) -> None:
-        self.account_list.refresh()
+        self._saved()
         if self.on_deleted is not None:
             self.on_deleted(account_id)
 
