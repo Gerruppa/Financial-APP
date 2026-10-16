@@ -205,3 +205,35 @@ def test_tax_cash_change_has_the_sign_of_the_cash_change() -> None:
     buy = _apple_buy(1, 2)
 
     assert buy.tax_cash_change == -buy.tax_amount
+
+
+async def test_the_amount_to_spend_proposes_the_quantity_until_the_user_types_one(
+    engine: Engine, ike: int, apple: int
+) -> None:
+    async with user_simulation(lambda: _shell(engine)) as user:
+        await user.open("/transakcje")
+        user.find(marker="add-transaction").click()
+        user.find(marker="transaction-type").click()
+        user.find("Zakup").click()
+        user.find(marker="transaction-instrument").click()
+        user.find("Apple").click()
+        user.find(marker="transaction-date").clear().type("07.01.2026")
+        user.find(marker="transaction-price").type("150")
+        user.find(marker="transaction-spend").type("10000")
+        # 10 000 zł ÷ 3,6045 ÷ 150 = 18,49…, whole units
+        assert _quantity(user) == "18"
+
+        user.find(marker="transaction-fx-rate").type("3")
+        assert _quantity(user) == "22"
+
+        user.find(marker="transaction-quantity").clear().type("20")
+        user.find(marker="transaction-commission").type("5")
+        assert _quantity(user) == "20"
+        user.find("Zapisz").click()
+
+    [buy] = list_transactions(engine)
+    assert buy.quantity == Decimal(20)
+
+
+def _quantity(user: User) -> str:
+    return str(user.find(marker="transaction-quantity", kind=ui.input).elements.pop().value)

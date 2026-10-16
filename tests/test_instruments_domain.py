@@ -139,3 +139,14 @@ def test_distribution_policies_have_polish_labels() -> None:
 
 def test_a_stored_distribution_policy_value_becomes_the_policy() -> None:
     assert _draft(distribution_policy="distributing").distribution_policy is DistributionPolicy.DISTRIBUTING
+
+
+def test_quantity_decimals_default_to_whole_units_and_go_up_to_eight() -> None:
+    assert InstrumentDraft("CD Projekt", 1, "PLN").quantity_decimals == 0
+    assert InstrumentDraft("Bitcoin", 1, "USD", quantity_decimals=8).quantity_decimals == 8
+
+
+@pytest.mark.parametrize("decimals", [-1, 9])
+def test_quantity_decimals_outside_zero_to_eight_are_rejected(decimals: int) -> None:
+    with pytest.raises(InstrumentError, match="od 0 do 8"):
+        InstrumentDraft("Bitcoin", 1, "USD", quantity_decimals=decimals)

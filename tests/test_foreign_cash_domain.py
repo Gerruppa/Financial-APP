@@ -15,6 +15,7 @@ from financial_app.domain.transactions import (
     cash_balances,
     covering_exchange,
     currency_exchange,
+    deposit_or_withdrawal,
 )
 
 IKE = 1
@@ -163,9 +164,74 @@ def test_usd_cash_pays_only_for_a_usd_instrument() -> None:
         buy_or_sell(IKE, date(2026, 1, 1), TransactionType.BUY, APPLE, Decimal(1), Decimal(10), cash_currency="USD")
 
 
-def test_a_deposit_is_in_pln_only_for_now() -> None:
-    with pytest.raises(TransactionError, match="tylko w PLN"):
-        TransactionDraft(IKE, date(2026, 1, 1), TransactionType.DEPOSIT, Decimal(100), cash_currency="USD")
+def _usd_flow(
+    kind: TransactionType, amount: str, *, day: int, fx_rate: str | None = None, nbp: str = "3.80"
+) -> TransactionDraft:
+    return deposit_or_withdrawal(
+        IKE,
+        date(2026, 1, day),
+        kind,
+        Decimal(amount),
+        cash_currency="USD",
+        fx_rate=None if fx_rate is None else Decimal(fx_rate),
+        nbp_rate=_usd_rate(nbp),
+    )
+
+
+def test_a_usd_deposit_counts_in_pln_at_the_users_rate_and_opens_a_usd_lot() -> None:
+    deposit = _usd_flow(TransactionType.DEPOSIT, "1000", day=5, fx_rate="3.70")
+
+    # Net Deposits and Contribution Limits count the Actual Amount: the dollars at the user's rate
+    assert deposit.actual_amount == Decimal("3700.00")
+    assert deposit.tax_amount == Decimal("3800.00")
+    assert deposit.cash_change == 0
+    assert cash_balances([deposit], currency="USD") == {IKE: Decimal(1000)}
+    [usd] = foreign_cash([deposit])
+    [lot] = usd.lots
+    assert (lot.quantity, lot.cost, lot.tax_cost) == (Decimal(1000), Decimal("3700.00"), Decimal("3800.00"))
+
+
+def test_a_usd_deposit_without_a_rate_of_its_own_counts_at_the_nbp_rate() -> None:
+    deposit = _usd_flow(TransactionType.DEPOSIT, "100.50", day=5)
+
+    assert deposit.actual_amount == deposit.tax_amount == Decimal("381.90")
+
+
+def test_a_usd_withdrawal_closes_the_oldest_lots_and_realises_the_fx_result() -> None:
+    deposits = [_usd_flow(TransactionType.DEPOSIT, "1000", day=1, nbp="3.60"), _exchange("1000", "4000", day=2)]
+    withdrawal = _usd_flow(TransactionType.WITHDRAWAL, "1500", day=3, fx_rate="3.90")
+
+    # Net Deposits fall by the dollars at the Withdrawal's rate, not by what they had cost
+    assert withdrawal.actual_amount == Decimal("5850.00")
+    [usd] = foreign_cash([*deposits, withdrawal])
+    [lot] = usd.lots
+    assert (lot.quantity, lot.cost) == (Decimal(500), Decimal(2000))
+    # 1500 USD worth 5850 zł, which had cost 3600 + 500 × 4 zł
+    assert usd.realized_result == Decimal(250)
+
+
+@pytest.mark.parametrize(
+    ("amount", "nbp", "message"),
+    [("10.001", "3.80", "z dokładnością do setnych"), ("0", "3.80", "większa od zera")],
+)
+def test_foreign_deposit_validation(amount: str, nbp: str, message: str) -> None:
+    with pytest.raises(TransactionError, match=message):
+        _usd_flow(TransactionType.DEPOSIT, amount, day=1, nbp=nbp)
+
+
+def test_a_foreign_deposit_needs_the_nbp_rate_of_its_currency() -> None:
+    with pytest.raises(TransactionError, match="Brak kursu NBP USD"):
+        deposit_or_withdrawal(IKE, date(2026, 1, 1), TransactionType.DEPOSIT, Decimal(100), cash_currency="USD")
+    with pytest.raises(TransactionError, match="Kwota wpłaty w PLN musi wynikać z kursu"):
+        TransactionDraft(
+            IKE,
+            date(2026, 1, 1),
+            TransactionType.DEPOSIT,
+            Decimal(100),
+            quantity=Decimal(100),
+            nbp_rate=_usd_rate(),
+            cash_currency="USD",
+        )
 
 
 def test_fx_result_of_an_account_adds_realised_and_unrealised_results_of_each_currency() -> None:
