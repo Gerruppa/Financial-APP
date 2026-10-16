@@ -7,6 +7,7 @@ the prices and the value of an Account are the same on each of them."""
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
+from functools import cached_property
 
 from sqlalchemy import Engine
 
@@ -42,7 +43,7 @@ class TodaysView:
     rates: dict[str, Decimal]
     bonds: BondData
 
-    @property
+    @cached_property
     def pln_prices(self) -> dict[int, UnitPrice | None]:
         """Each held Instrument's PLN price per unit, ``None`` without one."""
         return {instrument_id: price.pln for instrument_id, price in self.prices.items()}
