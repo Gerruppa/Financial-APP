@@ -6,8 +6,9 @@ Rates are fractions (0.0535 for 5.35%); CPI readings are GUS indices (103.4 when
 
 import calendar
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from enum import StrEnum
 
@@ -98,6 +99,11 @@ def add_months(day: date, months: int) -> date:
 def maturity(bond_type: BondType, purchase_day: date) -> date:
     """The day a bond of ``bond_type`` bought on ``purchase_day`` is redeemed: each purchase runs its own term."""
     return add_months(purchase_day, TERM_MONTHS[bond_type])
+
+
+# How many days after a Series' sale ends a Rollover purchase of it may still be dated (L-26): the old bonds are
+# redeemed and the new ones bought around the maturity day
+ROLLOVER_GRACE = timedelta(days=7)
 
 
 class BondDataError(Exception):
@@ -228,3 +234,15 @@ def correction_of(mf: SeriesTerms | None, margin: Decimal | None, rates: tuple[D
         kept.pop()
     mf_margin = None if mf is None else mf.margin
     return RateCorrection(None if margin == mf_margin else margin, tuple(kept))
+
+
+def series_of_type(terms: Iterable[SeriesTerms], bond_type: BondType) -> list[SeriesTerms]:
+    """The MF Series of ``bond_type``, the newest sold first (L-26)."""
+    return sorted((t for t in terms if t.bond_type is bond_type), key=lambda t: t.sale_start, reverse=True)
+
+
+def sold_on(terms: SeriesTerms, purchase_day: date, rollover: bool) -> bool:
+    """Whether ``terms``' Series was on sale on ``purchase_day``; a Rollover purchase may fall up to
+    ``ROLLOVER_GRACE`` after its sale ended (L-26)."""
+    last = terms.sale_end + (ROLLOVER_GRACE if rollover else timedelta())
+    return terms.sale_start <= purchase_day <= last

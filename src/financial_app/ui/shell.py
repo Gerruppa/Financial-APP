@@ -48,6 +48,8 @@ class Tab:
     icon: str
 
 
+# The tab without the "+" transaction button (L-28)
+SETTINGS_PATH = "/ustawienia"
 TABS = [
     Tab("Dashboard", "/", "dashboard"),
     Tab("Wyniki", "/wyniki", "insights"),
@@ -57,7 +59,7 @@ TABS = [
     Tab("Obligacje", "/obligacje", "savings"),
     Tab("Multi-asset", "/multi-asset", "pie_chart"),
     Tab("Benchmarki", "/benchmarki", "compare_arrows"),
-    Tab("Ustawienia", "/ustawienia", "settings"),
+    Tab("Ustawienia", SETTINGS_PATH, "settings"),
 ]
 
 # The refresh running on each database, shared by every window, so that a reloaded window joins it instead of starting
@@ -163,6 +165,13 @@ def build_shell(
 
     scope.on_change(scope_changed)
 
+    def account_deleted(account_id: int) -> None:
+        # A View Scope on the deleted Account goes back to Total; otherwise only the switcher lists one less
+        if scope.account_id == account_id:
+            scope.switch(None)
+        else:
+            switcher.refresh()
+
     async def refresh_now() -> None:
         running = _running_refreshes.get(engine)
         if running is None:
@@ -236,9 +245,19 @@ def build_shell(
             ).classes("w-full")
 
     with ui.page_sticky(position="bottom-right", x_offset=24, y_offset=24):
-        ui.button(icon="add", on_click=lambda: open_transaction_dialog(engine, rates, transactions_changed)).props(
-            'fab color=indigo aria-label="Dodaj transakcję"'
-        ).mark("add-transaction")
+        add_button = ui.button(
+            icon="add", on_click=lambda: open_transaction_dialog(engine, rates, transactions_changed)
+        )
+        add_button.props('fab color=indigo aria-label="Dodaj transakcję"').mark("add-transaction")
+
+    def showing_add_button(build: Callable[[], None], shown: bool) -> Callable[[], None]:
+        """``build`` a tab, with the "+" shown on it or not (L-28: not on Ustawienia)."""
+
+        def build_tab() -> None:
+            add_button.visible = shown
+            build()
+
+        return build_tab
 
     @ui.refreshable
     def scope_pages(build: Callable[[], None]) -> None:
@@ -256,9 +275,10 @@ def build_shell(
     pages["/multi-asset"] = lambda: scope_pages(multi_asset_page.build)
     pages["/obligacje"] = lambda: scope_pages(bonds_page.build)
     pages["/strategie"] = lambda: scope_pages(strategy_page.build)
-    pages["/ustawienia"] = lambda: build_settings_page(
-        engine, rates, search, sources, unpriced, instruments_changed, transactions_changed
+    pages[SETTINGS_PATH] = lambda: build_settings_page(
+        engine, rates, search, sources, unpriced, instruments_changed, transactions_changed, account_deleted
     )
+    pages = {path: showing_add_button(build, path != SETTINGS_PATH) for path, build in pages.items()}
     ui.sub_pages(pages).classes("w-full").mark("page-content")
 
     # Once the window is up, so that it never waits for the sources or the computation

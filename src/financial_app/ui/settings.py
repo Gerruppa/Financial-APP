@@ -26,12 +26,14 @@ def build_settings_page(
     unpriced: UnpricedSection,
     on_instruments_changed: Callable[[], None],
     on_transactions_changed: Callable[[], None] | None = None,
+    on_account_deleted: Callable[[int], None] | None = None,
 ) -> None:
     """``unpriced`` is kept by the shell, which redraws it after a price refresh and on ``on_instruments_changed``,
     called after an Instrument or Asset Class is saved; ``sources`` check the Source Symbols typed in the Instrument
-    dialog. ``on_transactions_changed`` redraws the other tabs after an XTB Reconciliation is applied."""
+    dialog. ``on_transactions_changed`` redraws the other tabs after an XTB Reconciliation is applied;
+    ``on_account_deleted`` gets the id of an Account deleted in Konta."""
     ui.label("Ustawienia").classes("text-2xl font-bold")
-    accounts = AccountsSection(engine)
+    accounts = AccountsSection(engine, on_deleted=on_account_deleted)
     accounts.build()
     instruments = InstrumentsSection(engine, search, sources, on_changed=on_instruments_changed)
     asset_classes = AssetClassesSection(engine, on_changed=instruments.refresh)

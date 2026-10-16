@@ -155,7 +155,7 @@ def update_instrument(engine: Engine, instrument_id: int, draft: InstrumentDraft
     with Session(engine) as session, session.begin():
         row = session.get_one(InstrumentRow, instrument_id)
         _check_instrument_name_is_free(session, draft.name, instrument_id)
-        # History fetched for another Yahoo or Stooq symbol is not this one's; both ignore the case
+        # History fetched for another Yahoo, analizy.pl or Stooq symbol is not this one's; they ignore the case
         saved = _to_instrument(row).source_symbols
         if any(
             (draft.source_symbols.get(source) or "").lower() != (saved.get(source) or "").lower()

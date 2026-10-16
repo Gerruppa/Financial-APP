@@ -245,3 +245,67 @@ async def test_an_instrument_of_another_class_with_the_series_name_is_not_bought
 
         await user.should_see("nie jest serią obligacji skarbowych")
     assert list_transactions(engine) == []
+
+
+def _past_terms(series: str, first: date, last: date) -> SeriesTerms:
+    return SeriesTerms(
+        series, "PL0000110151", first, last, Decimal(100), Decimal("99.9"), Decimal("0.0075"), (Decimal("0.027"),), ()
+    )
+
+
+async def test_an_older_purchase_picks_its_series_from_the_mf_list(engine: Engine, bonds: int) -> None:
+    save_series_terms(engine, [_past_terms("EDO0827", date(2017, 8, 1), date(2017, 8, 31))])
+    async with user_simulation(lambda: build_shell(engine)) as user:
+        await user.open("/transakcje")
+        _open_bond_purchase(user, day="14.08.2017")
+
+        # The type and date give the Series by themselves
+        await user.should_see("Seria EDO0827")
+        user.find(marker="transaction-date").clear().type("12.10.2026")
+        await user.should_see("Seria EDO1036")
+        user.find(marker="transaction-bond-series-choice").click()
+        user.find("EDO0827 · sprzedaż 08.2017").click()
+
+        await user.should_see("Seria EDO0827")
+        await user.should_see("data zakupu poza sprzedażą serii (01.08.2017–31.08.2017)")
+        user.find(marker="transaction-date").clear().type("14.08.2017")
+        await user.should_not_see("poza sprzedażą serii")
+        user.find(marker="transaction-quantity").type("10")
+        user.find("Zapisz").click()
+
+        with user.scope(marker="transactions"):
+            await user.should_see("EDO0827")
+    [purchase] = list_transactions(engine)
+    assert purchase.instrument_id is not None
+    edo = get_instrument(engine, purchase.instrument_id)
+    assert (edo.name, edo.isin, purchase.price) == ("EDO0827", "PL0000110151", Decimal(100))
+
+
+async def test_a_rollover_may_be_dated_a_few_days_after_the_sale(engine: Engine, bonds: int) -> None:
+    save_series_terms(engine, [_past_terms("EDO0827", date(2017, 8, 1), date(2017, 8, 31))])
+    async with user_simulation(lambda: build_shell(engine)) as user:
+        await user.open("/transakcje")
+        _open_bond_purchase(user, day="04.09.2017")
+        user.find(marker="transaction-bond-series-choice").click()
+        user.find("EDO0827 · sprzedaż 08.2017").click()
+
+        await user.should_see("poza sprzedażą serii")
+        user.find(marker="transaction-rollover").click()
+
+        await user.should_not_see("poza sprzedażą serii")
+        [price] = user.find(marker="transaction-price").elements
+        assert isinstance(price, ui.input) and price.value == "99,90"
+
+
+async def test_another_type_drops_the_picked_series(engine: Engine, bonds: int) -> None:
+    save_series_terms(engine, [_past_terms("EDO0827", date(2017, 8, 1), date(2017, 8, 31))])
+    async with user_simulation(lambda: build_shell(engine)) as user:
+        await user.open("/transakcje")
+        _open_bond_purchase(user)
+        user.find(marker="transaction-bond-series-choice").click()
+        user.find("EDO0827 · sprzedaż 08.2017").click()
+        await user.should_see("Seria EDO0827")
+        user.find(marker="transaction-bond-type").click()
+        user.find("ROS · 6 lat").click()
+
+        await user.should_see("Seria ROS1032")

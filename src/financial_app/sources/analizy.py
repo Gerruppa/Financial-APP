@@ -1,5 +1,5 @@
 """Fund and PPK Quotes from the analizy.pl API (spec 4.1), the first source for Multi-asset, Inne and added classes;
-and the fund search (issue #60).
+their valuation history for History (#101); and the fund search (issue #60).
 
 The API is undocumented (the sheet uses it too). Funds are valued once a day, so the Quote's day is often the day
 before.
@@ -17,7 +17,7 @@ from urllib.error import HTTPError
 from urllib.parse import quote as url_quote
 
 from financial_app.domain.instrument_search import InstrumentSearchError, SearchResult, looks_like_isin
-from financial_app.domain.prices import ANALIZY, CurrencyMismatchError, PriceSourceError, Quote
+from financial_app.domain.prices import ANALIZY, ANALIZY_HISTORY, CurrencyMismatchError, PriceSourceError, Quote
 
 # The fund type in the path does not change the answer, so every fund is asked for as "fio"
 API = "https://www.analizy.pl/api/quotation/fio/{symbol}"
@@ -71,6 +71,21 @@ class AnalizySource:
                 f"analizy.pl wycenia {key} w {quote.currency}, a instrument jest notowany w {currency}.", quote
             )
         return quote
+
+    def history(self, symbol: str, currency: str, first: date, last: date) -> list[Quote]:
+        """The fund's daily valuations from ``first`` to ``last``, oldest first, for History (#101). The API gives the
+        whole history at once; a currency other than ``currency`` is an error."""
+        key = symbol.strip().upper()
+        source_currency, valuations = _valuations(self.fetch, key)
+        if source_currency != currency:
+            raise PriceSourceError(
+                f"analizy.pl wycenia {key} w {source_currency}, a instrument jest notowany w {currency}."
+            )
+        return [
+            Quote(price, currency, day, ANALIZY_HISTORY)
+            for day, price in sorted(valuations)
+            if first <= day <= last and price > 0
+        ]
 
 
 class AnalizySearch:
@@ -138,6 +153,16 @@ def _plain(name: str) -> str:
 
 def _newest(fetch: Callable[[str], str | None], key: str) -> Quote:
     """The newest valuation of the fund ``key``, in the fund's own currency."""
+    currency, valuations = _valuations(fetch, key)
+    # The newest valuation, whatever order they come in; a fund without a positive one has no Quote
+    day, price = max(valuations, default=(date.min, Decimal(0)))
+    if price <= 0:
+        raise PriceSourceError(f"analizy.pl nie ma wyceny funduszu „{key}”.")
+    return Quote(price, currency, day, ANALIZY)
+
+
+def _valuations(fetch: Callable[[str], str | None], key: str) -> tuple[str, list[tuple[date, Decimal]]]:
+    """The currency and every valuation (day, price) of the fund ``key``, in the order the API gives them."""
     try:
         body = fetch(API.format(symbol=url_quote(key, safe="")))
     except HTTPError as exc:
@@ -151,11 +176,6 @@ def _newest(fetch: Callable[[str], str | None], key: str) -> Quote:
         # The first series is the fund's own valuation; the second, when filled, adds back paid dividends
         series = data["series"][0]
         currency = str(series["currency"])
-        valuations = [(date.fromisoformat(p["date"]), Decimal(p["value"])) for p in series["price"]]
-        # The newest valuation, whatever order they come in; a fund without a positive one has no Quote
-        day, price = max(valuations, default=(date.min, Decimal(0)))
-        if price <= 0:
-            raise PriceSourceError(f"analizy.pl nie ma wyceny funduszu „{key}”.")
+        return currency, [(date.fromisoformat(p["date"]), Decimal(p["value"])) for p in series["price"]]
     except ValueError, KeyError, IndexError, TypeError:
         raise PriceSourceError("Nieprawidłowa odpowiedź analizy.pl.") from None
-    return Quote(price, currency, day, ANALIZY)

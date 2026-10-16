@@ -5,6 +5,7 @@ from decimal import Decimal
 from enum import StrEnum
 
 from financial_app.domain.currencies import is_currency_code
+from financial_app.domain.formatting import format_count
 
 
 class AccountError(ValueError):
@@ -141,3 +142,30 @@ class Account(AccountDraft):
     """A saved Account."""
 
     id: int = field(kw_only=True)
+
+
+@dataclass(frozen=True)
+class AccountHolders:
+    """What still names an Account, so it cannot be deleted (L-28): its own Transactions, the Transfers into it, its
+    own Investment Strategy and the XTB account numbers mapped to it."""
+
+    transactions: int = 0
+    transfers_in: int = 0
+    strategy: bool = False
+    xtb_accounts: tuple[str, ...] = ()
+
+    def refusal(self, name: str) -> str | None:
+        """Why the Account ``name`` cannot be deleted, in Polish, or ``None`` when nothing holds it."""
+        reasons = []
+        if self.transactions:
+            reasons.append(f"ma {format_count(self.transactions, 'transakcję', 'transakcje', 'transakcji')}")
+        if self.transfers_in:
+            reasons.append(f"jest celem {format_count(self.transfers_in, 'przelewu', 'przelewów', 'przelewów')}")
+        if self.strategy:
+            reasons.append("ma własną strategię inwestycyjną")
+        if self.xtb_accounts:
+            numbers = ", ".join(self.xtb_accounts)
+            reasons.append(f"jest przypisane do rachunku XTB {numbers} w imporcie")
+        if not reasons:
+            return None
+        return f"Nie można usunąć konta „{name}”: {', '.join(reasons)}. Aby je ukryć, wyłącz „Aktywne”."

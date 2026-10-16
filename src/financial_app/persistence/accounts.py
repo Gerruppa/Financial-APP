@@ -2,12 +2,14 @@
 
 from decimal import Decimal
 
-from sqlalchemy import Engine, select
+from sqlalchemy import Engine, delete, func, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import InstrumentedAttribute, Session, selectinload
 
-from financial_app.domain.accounts import Account, AccountDraft, AccountError, AccountType
-from financial_app.persistence.models import AccountCashCurrency, AccountRow
+from financial_app.domain.accounts import Account, AccountDraft, AccountError, AccountHolders, AccountType
+from financial_app.domain.view_scope import scope_setting
+from financial_app.persistence.models import AccountCashCurrency, AccountRow, AppSetting, StrategyRow, TransactionRow
+from financial_app.persistence.settings import VIEW_SCOPE, XTB_ACCOUNT
 
 
 def list_accounts(engine: Engine) -> list[Account]:
@@ -35,6 +37,45 @@ def update_account(engine: Engine, account_id: int, draft: AccountDraft) -> Acco
         _fill(row, draft)
         _flush(session, draft.name)
         return _to_account(row)
+
+
+def account_holders(engine: Engine, account_id: int) -> AccountHolders:
+    """What still names the Account, so it cannot be deleted (L-28)."""
+    with Session(engine) as session:
+        return _holders(session, account_id)
+
+
+def delete_account(engine: Engine, account_id: int) -> None:
+    """Delete an Account nothing names any more, else raise ``AccountError`` saying what holds it (L-28). A View
+    Scope remembered on it goes back to Total. An Account already gone (deleted in another window) is left so."""
+    with Session(engine) as session, session.begin():
+        row = session.get(AccountRow, account_id)
+        if row is None:
+            return
+        refusal = _holders(session, account_id).refusal(row.name)
+        if refusal is not None:
+            raise AccountError(refusal)
+        session.delete(row)
+        session.execute(
+            delete(AppSetting).where(AppSetting.key == VIEW_SCOPE, AppSetting.value == scope_setting(account_id))
+        )
+
+
+def _holders(session: Session, account_id: int) -> AccountHolders:
+    def count(column: InstrumentedAttribute[int] | InstrumentedAttribute[int | None]) -> int:
+        return session.scalar(select(func.count()).select_from(TransactionRow).where(column == account_id)) or 0
+
+    xtb = session.scalars(
+        select(AppSetting.key).where(
+            AppSetting.key.startswith(XTB_ACCOUNT, autoescape=True), AppSetting.value == str(account_id)
+        )
+    )
+    return AccountHolders(
+        transactions=count(TransactionRow.account_id),
+        transfers_in=count(TransactionRow.target_account_id),
+        strategy=session.scalar(select(StrategyRow.id).where(StrategyRow.account_id == account_id)) is not None,
+        xtb_accounts=tuple(sorted(key.removeprefix(XTB_ACCOUNT) for key in xtb)),
+    )
 
 
 def _flush(session: Session, name: str) -> None:
