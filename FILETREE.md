@@ -151,6 +151,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `0027_benchmarks.py`: Migration 0027 creates the benchmarks table (kind, Instrument or Account, offset, shown, position).
 - `0028_polish_benchmark_etfs.py`: Migration 0028 drops the WSE:WIG and WSE:SWIG80TR default benchmarks left on Stooq so the Beta ETF defaults come in.
 - `0029_contribution_limits.py`: Migration creating the contribution_limits table and seeding 2026 limits
+- `0030_quantity_decimals.py`: Migration adding Instrument quantity_decimals, filled from existing Transaction quantities and set to 8 for crypto
 
 ## src/financial_app/sources/
 

@@ -5,7 +5,7 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
-from nicegui.testing import User, user_simulation
+from nicegui.testing import User, UserInteraction, user_simulation
 from sqlalchemy import Engine
 
 from financial_app.domain.instruments import AssetClass, InstrumentDraft
@@ -130,3 +130,17 @@ async def test_invalid_manual_price_is_reported_and_not_saved(user: User, engine
 
     await user.should_see("Cena ręczna musi być liczbą")
     assert list_instruments(engine) == []
+
+
+async def test_user_sets_the_decimal_places_of_a_quantity(engine: Engine) -> None:
+    add_instrument(engine, InstrumentDraft("Bitcoin", _class_named(engine, "Kryptowaluty").id, "USD"))
+
+    async with user_simulation(lambda: build_shell(engine)) as user:
+        await user.open("/ustawienia")
+        user.find(marker="edit-instrument").click()
+        user.find(marker="instrument-quantity-decimals").click()
+        UserInteraction(user, set(user.find(marker="instrument-quantity-decimals").elements), "8").click()
+        user.find("Zapisz").click()
+
+    [saved] = list_instruments(engine)
+    assert saved.quantity_decimals == 8

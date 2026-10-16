@@ -331,3 +331,14 @@ def test_a_class_is_renamed_and_given_a_new_order_at_once(engine: Engine) -> Non
     update_asset_class(engine, stocks.id, "Akcje GPW", [YAHOO])
 
     assert _class_named(engine, "Akcje GPW").fallback_order == (YAHOO,)
+
+
+def test_quantity_decimals_are_saved_and_changed(engine: Engine) -> None:
+    crypto = _class_named(engine, "Kryptowaluty").id
+    added = add_instrument(engine, InstrumentDraft("Bitcoin", crypto, "USD", quantity_decimals=8))
+    assert added.quantity_decimals == 8
+
+    update_instrument(engine, added.id, replace(added, quantity_decimals=4))
+
+    [saved] = list_instruments(engine)
+    assert saved.quantity_decimals == 4

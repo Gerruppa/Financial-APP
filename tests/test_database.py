@@ -8,13 +8,12 @@ from alembic.migration import MigrationContext
 from sqlalchemy import inspect, text
 
 from financial_app.domain.benchmarks import Benchmark, BenchmarkKind
-from financial_app.domain.instruments import InstrumentDraft
 from financial_app.domain.prices import STOOQ
-from financial_app.persistence.benchmarks import add_benchmark, ensure_default_benchmarks, list_benchmarks
+from financial_app.persistence.benchmarks import ensure_default_benchmarks, list_benchmarks
 from financial_app.persistence.db import MIGRATIONS_DIR, init_db, open_engine
-from financial_app.persistence.instruments import add_instrument, list_asset_classes, list_instruments
+from financial_app.persistence.instruments import list_asset_classes, list_instruments
 from financial_app.persistence.models import Base
-from financial_app.persistence.settings import BENCHMARKS_SEEDED, load_setting, save_setting
+from financial_app.persistence.settings import BENCHMARKS_SEEDED, load_setting
 
 
 def test_init_db_creates_database_file_and_schema_from_scratch(tmp_path: Path) -> None:
@@ -154,12 +153,29 @@ def test_upgrading_drops_the_first_gpw_benchmarks_left_on_stooq_so_the_etfs_come
     with engine.begin() as connection:
         config.attributes["connection"] = connection
         command.upgrade(config, "0027")
-    other = next(c.id for c in list_asset_classes(engine) if c.name == "Inne")
-    for name, symbol in (("WSE:WIG", "wig"), ("WSE:SWIG80TR", "swig80tr")):
-        instrument = add_instrument(engine, InstrumentDraft(name, other, "PLN", source_symbols={STOOQ: symbol}))
-        add_benchmark(engine, Benchmark(BenchmarkKind.INSTRUMENT, instrument_id=instrument.id))
-    add_benchmark(engine, Benchmark(BenchmarkKind.CPI))
-    save_setting(engine, BENCHMARKS_SEEDED, "1")
+        # In SQL, as the models already have the columns of later revisions
+        other = connection.execute(text("SELECT id FROM asset_classes WHERE name = 'Inne'")).scalar_one()
+        for position, (name, symbol) in enumerate((("WSE:WIG", "wig"), ("WSE:SWIG80TR", "swig80tr"))):
+            instrument = connection.execute(
+                text(
+                    "INSERT INTO instruments (name, asset_class_id, quote_currency, market, isin, domicile)"
+                    " VALUES (:name, :class_id, 'PLN', '', '', '') RETURNING id"
+                ),
+                {"name": name, "class_id": other},
+            ).scalar_one()
+            connection.execute(
+                text("INSERT INTO source_symbols (instrument_id, source, symbol) VALUES (:id, :source, :symbol)"),
+                {"id": instrument, "source": STOOQ, "symbol": symbol},
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO benchmarks (kind, instrument_id, offset, shown, position)"
+                    " VALUES ('instrument', :id, '0', 1, :position)"
+                ),
+                {"id": instrument, "position": position},
+            )
+        connection.execute(text("INSERT INTO benchmarks (kind, offset, shown, position) VALUES ('cpi', '0', 1, 2)"))
+        connection.execute(text("INSERT INTO app_settings (key, value) VALUES (:key, '1')"), {"key": BENCHMARKS_SEEDED})
     engine.dispose()
 
     upgraded = init_db(db_file)
@@ -171,3 +187,48 @@ def test_upgrading_drops_the_first_gpw_benchmarks_left_on_stooq_so_the_etfs_come
     names = {i.name for i in list_instruments(upgraded)}
     assert {"WSE:ETFBW20TR", "WSE:ETFBM40TR", "WSE:ETFBS80TR"} <= names
     assert len(list_benchmarks(upgraded)) == 7
+
+
+def test_upgrading_gives_each_instrument_the_decimals_its_quantities_use_and_crypto_eight(tmp_path: Path) -> None:
+    db_file = tmp_path / "app.sqlite3"
+    engine = open_engine(db_file)
+    config = Config()
+    config.set_main_option("script_location", str(MIGRATIONS_DIR))
+    with engine.begin() as connection:
+        config.attributes["connection"] = connection
+        command.upgrade(config, "0029")
+        classes: dict[str, int] = dict(connection.execute(text("SELECT name, id FROM asset_classes")).all())
+        connection.execute(
+            text(
+                "INSERT INTO accounts (id, name, broker, account_type, exclude_fx_result, active)"
+                " VALUES (1, 'XTB', '', 'regular', 0, 1)"
+            )
+        )
+        for instrument_id, name, class_name in (
+            (1, "CD Projekt", "Akcje polskie"),
+            (2, "Fundusz", "Inne"),
+            (3, "Bitcoin", "Kryptowaluty"),
+            (4, "Bez transakcji", "Inne"),
+        ):
+            connection.execute(
+                text(
+                    "INSERT INTO instruments (id, name, asset_class_id, quote_currency, market, isin, domicile)"
+                    " VALUES (:id, :name, :class_id, 'PLN', '', '', '')"
+                ),
+                {"id": instrument_id, "name": name, "class_id": classes[class_name]},
+            )
+        for instrument_id, quantity in ((1, "10"), (1, "2.50"), (2, "1.125"), (2, "3.5"), (3, "0.1")):
+            connection.execute(
+                text(
+                    "INSERT INTO transactions (account_id, date, transaction_type, actual_amount, comment,"
+                    " instrument_id, quantity) VALUES (1, '2026-01-02', 'buy', '100', '', :instrument, :quantity)"
+                ),
+                {"instrument": instrument_id, "quantity": quantity},
+            )
+    engine.dispose()
+
+    upgraded = init_db(db_file)
+
+    decimals = {i.name: i.quantity_decimals for i in list_instruments(upgraded)}
+    # Trailing zeros are no decimals the user needed: 2.50 is 2.5
+    assert decimals == {"CD Projekt": 1, "Fundusz": 3, "Bitcoin": 8, "Bez transakcji": 0}

@@ -191,7 +191,7 @@ The value and Net Deposits of Total and of each Account as the Dashboard showed 
 _Avoid_: History, checkpoint, last update
 
 **Net Deposits** (Wpłaty netto):
-Deposits minus Withdrawals up to a date.
+Deposits minus Withdrawals up to a date, in PLN; a foreign-currency one at its own rate (the user's, else the NBP Rate D-1), not at the cost of the foreign cash it moves.
 
 **XIRR**:
 Money-weighted annual return of the portfolio or an Account, based on Deposits and Withdrawals.

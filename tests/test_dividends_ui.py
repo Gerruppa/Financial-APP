@@ -279,7 +279,7 @@ async def test_cost_paid_from_foreign_cash_counts_at_the_nbp_rate(engine: Engine
     async with user_simulation(lambda: _shell(engine)) as user:
         await user.open("/transakcje")
         _start(user, "Koszty", "IBKR")
-        _choose(user, "transaction-cost-currency", "USD")
+        _choose(user, "transaction-cash-currency", "USD")
         user.find(marker="transaction-amount").type("10")
         user.find("Zapisz").click()
 

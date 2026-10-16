@@ -2,7 +2,7 @@
 the fields to show with their options and labels (``FormLayout``) and the ``TransactionDraft`` they describe, or the
 error of the field that does not read (``FormError``). The dialog in ``ui/transactions.py`` only binds widgets to it.
 
-For now: PLN Deposits and Withdrawals, Costs (in PLN or foreign cash), Currency Exchanges, Buys and Sells
+For now: Deposits, Withdrawals and Costs (in PLN or foreign cash), Currency Exchanges, Buys and Sells
 (foreign-currency ones paid from foreign cash or in PLN, converted at the user's rate, the NBP Rate (D-1) or by the
 broker for its FX Conversion Fee), Dividends and interest (paid into PLN or foreign cash the same way), DRIPs,
 Splits, and PLN Cash Transfers and Security Transfers to another Account. A Buy of retail treasury bonds has its bond
@@ -14,7 +14,7 @@ value of one bond, the early-redemption fee and the tax withheld (ADR-0007).
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date
-from decimal import Decimal
+from decimal import ROUND_DOWN, Decimal
 
 from financial_app.domain.accounts import Account, AccountType, tax_regime_for
 from financial_app.domain.bond_redemption import EarlyRedemption, early_redemption
@@ -29,7 +29,7 @@ from financial_app.domain.bonds import (
     series_of_type,
     sold_on,
 )
-from financial_app.domain.currencies import NbpRate
+from financial_app.domain.currencies import MissingNbpRateError, NbpRate
 from financial_app.domain.formatting import (
     currency_unit,
     format_amount,
@@ -56,6 +56,7 @@ from financial_app.domain.transactions import (
     cash_transfer,
     cost,
     currency_exchange,
+    deposit_or_withdrawal,
     dividend,
     drip,
     security_transfer,
@@ -114,6 +115,8 @@ class FormTexts:
     withholding_tax: str = ""
     ratio: str = ""
     comment: str = ""
+    # A Buy's amount to spend, which proposes its quantity and is not saved with it (#120)
+    spend: str = ""
 
     @classmethod
     def of(cls, transaction: Transaction | None) -> FormTexts:
@@ -147,8 +150,12 @@ class FormTexts:
         if kind is TransactionType.SECURITY_TRANSFER:
             assert transaction.quantity is not None
             return cls(quantity=format_quantity(transaction.quantity), comment=comment)
-        if kind is TransactionType.COST and transaction.quantity is not None:
-            return cls(amount=format_exact(transaction.quantity), comment=comment)  # paid from foreign cash
+        if kind.moves_cash_amount and transaction.quantity is not None:  # in foreign cash
+            return cls(
+                amount=format_exact(transaction.quantity),
+                fx_rate="" if transaction.fx_rate is None else format_exact(transaction.fx_rate),
+                comment=comment,
+            )
         if not kind.is_buy_or_sell:
             return cls(amount=format_exact(transaction.actual_amount), comment=comment)
         assert transaction.quantity is not None and transaction.price is not None
@@ -184,7 +191,7 @@ class FormState:
     lot_id: int | None = None
     direction: str = BUY_CURRENCY
     exchange_currency: str | None = None
-    cost_currency: str | None = None
+    cash_currency: str | None = None
     dividend_currency: str | None = None
     paid_from: str | None = None
     convert: bool = False
@@ -222,7 +229,7 @@ class FormLayout:
     direction: Choice[str]
     exchange_currency: Choice[str]
     foreign_amount: Shown
-    cost_currency: Choice[str]
+    cash_currency: Choice[str]
     dividend_currency: Choice[str]
     quantity: Shown
     bond_mode: bool
@@ -242,6 +249,7 @@ class FormLayout:
     convert: Shown
     charged: Shown
     auto_exchange: bool
+    spend: Shown
 
 
 @dataclass(frozen=True)
@@ -268,8 +276,8 @@ class TransactionForm:
         edited = self.edited = context.edited
         self._accounts = {a.id: a for a in context.accounts}
         self._instruments = {i.id: i for i in context.instruments}
-        # Deposits, Withdrawals and commissions are in PLN so far, so only Accounts holding PLN can take part; an
-        # edited Transaction keeps offering its own Account even if that has been deactivated since
+        # Commissions are in PLN and Accounts without PLN are not supported yet (#124), so only Accounts holding PLN
+        # can take part; an edited Transaction keeps offering its own Account even if that has been deactivated since
         self.accounts = {
             a.id: a.name
             for a in context.accounts
@@ -300,9 +308,7 @@ class TransactionForm:
         # The Series the edited Buy's own type and date give, which may differ from its own (an imported Buy dated on
         # the settlement day, say)
         self._own_name = series_name(own_type, edited.date) if own_type and edited else None
-        self._own_cost_currency = (
-            edited.cash_currency if edited and edited.transaction_type is TransactionType.COST else PLN
-        )
+        self._own_cash_currency = edited.cash_currency if edited and edited.transaction_type.moves_cash_amount else PLN
         self._own_dividend_currency = (
             edited.dividend_currency if edited and edited.transaction_type.is_dividend else None
         )
@@ -326,7 +332,7 @@ class TransactionForm:
             bond_type=self._own_type or BondType.EDO,
             rollover=self.edited_series is not None and edited is not None and edited.price != ISSUE_PRICE,
             direction=SELL_CURRENCY if edited is not None and edited.to_pln else BUY_CURRENCY,
-            cost_currency=self._own_cost_currency,
+            cash_currency=self._own_cash_currency,
             dividend_currency=self._own_dividend_currency,
             # Only on an Account with an FX Conversion Fee, unchecked unless the edited trade was converted (spec 3.3)
             convert=texts.charged != "",
@@ -432,16 +438,16 @@ class TransactionForm:
     def converted_by_broker(self, state: FormState) -> bool:
         return self._convert_shown(state) and state.convert
 
-    def _cost_currency(self, state: FormState) -> Choice[str]:
-        """A Cost on an Account holding a foreign currency may be paid from that cash."""
-        options = list(dict.fromkeys([*self._cash_currencies(state), self._own_cost_currency]))
-        visible = state.kind is TransactionType.COST and options != [PLN]
-        chosen = state.cost_currency if state.cost_currency in options else PLN
+    def _cash_currency(self, state: FormState) -> Choice[str]:
+        """A Deposit, Withdrawal or Cost on an Account holding a foreign currency may be in that cash."""
+        options = list(dict.fromkeys([*self._cash_currencies(state), self._own_cash_currency]))
+        visible = state.kind.moves_cash_amount and options != [PLN]
+        chosen = state.cash_currency if state.cash_currency in options else PLN
         return Choice(visible, {c: c for c in options}, chosen, "Waluta")
 
-    def cost_paid_in(self, state: FormState) -> str:
-        """The Cash Currency a Cost is paid from: PLN unless the user chose a foreign one."""
-        choice = self._cost_currency(state)
+    def cash_paid_in(self, state: FormState) -> str:
+        """The Cash Currency of a Deposit, Withdrawal or Cost: PLN unless the user chose a foreign one."""
+        choice = self._cash_currency(state)
         return choice.value if choice.visible and choice.value else PLN
 
     def _target(self, state: FormState) -> Choice[int]:
@@ -642,10 +648,11 @@ class TransactionForm:
             convert_text = f"Prowizja {account.broker or account.name} (przewalutowanie {format_percent(fee)})"
         exchange_currency = self._exchange_currency(state)
         shown = exchange_currency.value or "waluta"
+        paid_in = self.cash_paid_in(state)
+        # A foreign Deposit or Withdrawal takes a rate of the user's too; a foreign Cost counts at the NBP Rate
+        flow_rate = kind in (TransactionType.DEPOSIT, TransactionType.WITHDRAWAL) and paid_in != PLN
         return FormLayout(
-            amount=Shown(
-                not trade and not dividend_type and not units_only, f"Kwota ({currency_unit(self.cost_paid_in(state))})"
-            ),
+            amount=Shown(not trade and not dividend_type and not units_only, f"Kwota ({currency_unit(paid_in)})"),
             instrument_fields=trade or dividend_type or units_only,
             target=self._target(state),
             ratio=kind is TransactionType.SPLIT,
@@ -658,7 +665,7 @@ class TransactionForm:
             ),
             exchange_currency=exchange_currency,
             foreign_amount=Shown(True, f"Kwota ({shown})"),
-            cost_currency=self._cost_currency(state),
+            cash_currency=self._cash_currency(state),
             dividend_currency=self._dividend_currency(state),
             quantity=Shown(
                 trade or kind in (TransactionType.DRIP, TransactionType.SECURITY_TRANSFER),
@@ -682,8 +689,8 @@ class TransactionForm:
             # Interest paid into foreign cash takes a rate too: it values that cash in PLN, like a Buy paid from it; a
             # DRIP converts nothing, so it counts at the NBP Rate
             fx_rate=Shown(
-                (trade or kind is TransactionType.DIVIDEND) and currency != PLN and not converted,
-                f"Kurs {currency}/PLN",
+                flow_rate or ((trade or kind is TransactionType.DIVIDEND) and currency != PLN and not converted),
+                f"Kurs {paid_in if flow_rate else currency}/PLN",
                 "Puste = kurs NBP z dnia roboczego przed datą",
             ),
             convert=Shown(self._convert_shown(state), convert_text),
@@ -697,7 +704,46 @@ class TransactionForm:
             ),
             # Only a new Buy: an automatic Exchange is a Transaction of its own once saved
             auto_exchange=self.edited is None and kind is TransactionType.BUY and settled_in != PLN,
+            spend=Shown(kind is TransactionType.BUY, f"Kwota do wydania ({currency_unit(settled_in)})"),
         )
+
+    # The quantity proposed from the amount to spend (#120)
+
+    def proposed_quantity(self, state: FormState) -> str | None:
+        """The units a Buy's amount to spend buys: the amount (less the commission when both are PLN) at the rate it
+        is paid at, divided by the price and rounded down to the Instrument's decimal places. ``None`` until the
+        amount and price read, without the NBP Rate, or when it buys nothing."""
+        if state.kind is not TransactionType.BUY:
+            return None
+        texts = state.texts
+        try:
+            amount = parse_number(texts.spend)
+            price = parse_number(texts.price)
+            commission = parse_number(texts.commission) if texts.commission.strip() else Decimal(0)
+            rate = self._spend_rate(state)
+        except ValueError, MissingNbpRateError:
+            return None
+        if self.settlement_currency(state) == PLN:
+            amount -= commission  # paid from PLN like the amount; from foreign cash, the commission is apart
+        if not (amount > 0 and price > 0 and rate > 0):
+            return None
+        instrument = None if self.bonds_chosen(state) or state.instrument_id is None else state.instrument_id
+        decimals = 0 if instrument is None else self._instruments[instrument].quantity_decimals
+        units = (amount / rate / price).quantize(Decimal(1).scaleb(-decimals), rounding=ROUND_DOWN)
+        return format_quantity(units) if units > 0 else None
+
+    def _spend_rate(self, state: FormState) -> Decimal:
+        """PLN per unit of the Instrument's currency the amount to spend converts at: 1 when no conversion is needed;
+        the NBP Rate raised by the FX Conversion Fee when the broker converts; else the user's rate or the NBP Rate."""
+        currency = self.trade_currency(state)
+        if currency == PLN or self.settlement_currency(state) != PLN:
+            return Decimal(1)
+        own = state.texts.fx_rate.strip()
+        if own and not self.converted_by_broker(state):
+            return parse_number(own)
+        nbp = self._rate(currency, parse_date(state.day)).rate
+        fee = self.fee_percent(state) if self.converted_by_broker(state) else None
+        return nbp if fee is None else nbp * (1 + fee / 100)
 
     def with_exchange(self, state: FormState) -> bool:
         """Whether the save adds the Exchange that buys the Buy's foreign cash first (spec 3.3)."""
@@ -758,11 +804,17 @@ class TransactionForm:
             return self._units_only(state, day)
         if not kind.is_buy_or_sell:
             value = _read(parse_number, texts.amount, "amount", AMOUNT_MESSAGE)
-            paid_in = self.cost_paid_in(state)
-            if kind is TransactionType.COST and paid_in != PLN:
-                nbp = self._rate(paid_in, day)
+            paid_in = self.cash_paid_in(state)
+            if paid_in == PLN:
+                return TransactionDraft(account, day, kind, value, texts.comment)
+            nbp = self._rate(paid_in, day)
+            if kind is TransactionType.COST:
                 return cost(account, day, value, texts.comment, cash_currency=paid_in, nbp_rate=nbp)
-            return TransactionDraft(account, day, kind, value, texts.comment)
+            own_rate = texts.fx_rate.strip()
+            rate = _read(parse_number, own_rate, "fx_rate", RATE_MESSAGE) if own_rate else None
+            return deposit_or_withdrawal(
+                account, day, kind, value, texts.comment, cash_currency=paid_in, fx_rate=rate, nbp_rate=nbp
+            )
         bought = state.instrument_id if series_id is None else series_id
         if bought is None:
             raise FormError("instrument", INSTRUMENT_MESSAGE)

@@ -412,8 +412,8 @@ def open_transaction_dialog(
             exchange_currency = ui.select([], label="Waluta").classes("w-full").mark("transaction-currency")
             foreign_amount = ui.input(value=texts.foreign_amount).classes("w-full")
             foreign_amount.mark("transaction-foreign-amount")
-        cost_currency = ui.select([start.cost_currency], label="Waluta", value=start.cost_currency).classes("w-full")
-        cost_currency.mark("transaction-cost-currency")
+        cash_currency = ui.select([start.cash_currency], label="Waluta", value=start.cash_currency).classes("w-full")
+        cash_currency.mark("transaction-cash-currency")
         amount = ui.input("Kwota (zł)", value=texts.amount).classes("w-full").mark("transaction-amount")
         with ui.column().classes("w-full gap-0") as instrument_fields:
             bond_mode = ui.checkbox("Obligacje skarbowe detaliczne", value=start.bond_mode)
@@ -438,6 +438,9 @@ def open_transaction_dialog(
             )
             dividend_currency.classes("w-full")
             dividend_currency.mark("transaction-dividend-currency")
+            # A Buy's amount to spend proposes the quantity (#120); it is not saved
+            spend = ui.input(value=texts.spend).classes("w-full").mark("transaction-spend")
+            spend.props('hint="Proponuje liczbę; nie jest zapisywana"')
             quantity = ui.input("Liczba", value=texts.quantity).classes("w-full").mark("transaction-quantity")
             ratio = ui.input("Split (X:Y)", value=texts.ratio).classes("w-full").mark("transaction-split-ratio")
             ratio.props('hint="X nowych jednostek za każde Y dotychczasowych, np. 2:1"')
@@ -446,15 +449,16 @@ def open_transaction_dialog(
             withholding_tax = ui.input(value=texts.withholding_tax).classes("w-full")
             withholding_tax.mark("transaction-withholding-tax")
             net = ui.label().classes("text-sm text-gray-600").mark("transaction-net")
-            paid_from = ui.select({}, label="Płatność").classes("w-full").mark("transaction-paid-from")
-            fx_rate = ui.input(value=texts.fx_rate)
-            fx_rate.classes("w-full").mark("transaction-fx-rate")
-            commission = ui.input("Prowizja (zł)", value=texts.commission).classes("w-full")
-            commission.mark("transaction-commission")
-            convert = ui.checkbox(value=start.convert).mark("transaction-conversion")
-            charged = ui.input("Kwota pobrana przez brokera (zł)", value=texts.charged).classes("w-full")
-            charged.props('hint="Za liczbę × cenę, bez prowizji"').mark("transaction-charged")
-            auto_exchange = ui.checkbox("Wymień walutę automatycznie").mark("transaction-auto-exchange")
+        # How it is paid; outside the Instrument fields, as a foreign Deposit or Withdrawal takes a rate too
+        paid_from = ui.select({}, label="Płatność").classes("w-full").mark("transaction-paid-from")
+        fx_rate = ui.input(value=texts.fx_rate)
+        fx_rate.classes("w-full").mark("transaction-fx-rate")
+        commission = ui.input("Prowizja (zł)", value=texts.commission).classes("w-full")
+        commission.mark("transaction-commission")
+        convert = ui.checkbox(value=start.convert).mark("transaction-conversion")
+        charged = ui.input("Kwota pobrana przez brokera (zł)", value=texts.charged).classes("w-full")
+        charged.props('hint="Za liczbę × cenę, bez prowizji"').mark("transaction-charged")
+        auto_exchange = ui.checkbox("Wymień walutę automatycznie").mark("transaction-auto-exchange")
         comment = ui.input("Komentarz", value=texts.comment).classes("w-full").mark("transaction-comment")
         error = ui.label().classes("text-negative").mark("transaction-error")
 
@@ -481,6 +485,7 @@ def open_transaction_dialog(
                     withholding_tax=withholding_tax.value or "",
                     ratio=ratio.value or "",
                     comment=comment.value or "",
+                    spend=spend.value or "",
                 ),
                 target_id=target.value,
                 instrument_id=instrument.value,
@@ -491,7 +496,7 @@ def open_transaction_dialog(
                 lot_id=lot.value,
                 direction=direction.value,
                 exchange_currency=exchange_currency.value,
-                cost_currency=cost_currency.value,
+                cash_currency=cash_currency.value,
                 dividend_currency=dividend_currency.value,
                 paid_from=paid_from.value,
                 convert=bool(convert.value),
@@ -525,6 +530,8 @@ def open_transaction_dialog(
             if layout.dividend_currency.visible:
                 currencies = list(layout.dividend_currency.options)
                 dividend_currency.set_options(currencies, value=layout.dividend_currency.value)
+            spend.visible = layout.spend.visible
+            spend.props(f'label="{layout.spend.label}"')
             quantity.visible = layout.quantity.visible
             quantity.props(f'label="{layout.quantity.label}"')
             bond_mode.visible = layout.bond_mode
@@ -547,6 +554,7 @@ def open_transaction_dialog(
             withholding_tax.props(f'label="{layout.withholding_tax.label}"')
             net.visible = layout.net.visible
             prefill_redemption()
+            propose_quantity()
             show_net()
             fx_rate.visible = layout.fx_rate.visible
             fx_rate.props(f'label="{layout.fx_rate.label}" hint="{layout.fx_rate.hint}"')
@@ -559,8 +567,8 @@ def open_transaction_dialog(
                 convert.text = layout.convert.label
             charged.visible = layout.charged.visible
             charged.props(f'label="{layout.charged.label}" hint="{layout.charged.hint}"')
-            cost_currency.visible = layout.cost_currency.visible
-            cost_currency.set_options(list(layout.cost_currency.options), value=layout.cost_currency.value)
+            cash_currency.visible = layout.cash_currency.visible
+            cash_currency.set_options(list(layout.cash_currency.options), value=layout.cash_currency.value)
             auto_exchange.visible = layout.auto_exchange
             exchange_currency.set_options(list(layout.exchange_currency.options), value=layout.exchange_currency.value)
             direction.set_options(dict(layout.direction.options), value=layout.direction.value)
@@ -622,6 +630,12 @@ def open_transaction_dialog(
             finally:
                 prefilling[0] = False
 
+        def propose_quantity() -> None:
+            """Fill the quantity the amount to spend buys, until the user types a quantity of their own (#120)."""
+            proposal = form.proposed_quantity(state())
+            if proposal is not None:
+                prefill(quantity, proposal)
+
         def bond_price(rollover_changed: bool = False) -> None:
             """Price the bond mode's purchase: 100 zł, or the Rollover price of the Series. A price the user typed (or
             the edited Buy's own) stays unless the Rollover is switched."""
@@ -653,6 +667,7 @@ def open_transaction_dialog(
             instrument,
             direction,
             exchange_currency,
+            cash_currency,
             dividend_currency,
             paid_from,
             convert,
@@ -665,6 +680,8 @@ def open_transaction_dialog(
             redemption_input.on_value_change(prefill_redemption)
         for net_input in (gross, withholding_tax, quantity, price, commission):
             net_input.on_value_change(show_net)
+        for proposal_input in (spend, price, commission, fx_rate):
+            proposal_input.on_value_change(propose_quantity)
 
         def save() -> None:
             form_state = state()

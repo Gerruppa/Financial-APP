@@ -1,7 +1,8 @@
 """Transactions and the Cash Balances they produce (spec 3.3, 3.5).
 
-For now: PLN Deposits, Withdrawals and Costs, Buys and Sells (paid in PLN, optionally converted by the broker for an
-FX Conversion Fee, or, on an Account holding the Instrument's currency, from that foreign cash), Currency Exchanges
+For now: Deposits, Withdrawals and Costs (in PLN or a foreign Cash Currency), Buys and Sells (paid in PLN, optionally
+converted by the broker for an FX Conversion Fee, or, on an Account holding the Instrument's currency, from that foreign
+cash), Currency Exchanges
 between PLN and a foreign Cash Currency, Dividends (and interest) paid into PLN or foreign cash, and DRIPs.
 """
 
@@ -70,6 +71,11 @@ class TransactionType(StrEnum):
         """A Cash or Security Transfer, from its Account to a target Account."""
         return self in (TransactionType.CASH_TRANSFER, TransactionType.SECURITY_TRANSFER)
 
+    @property
+    def moves_cash_amount(self) -> bool:
+        """A Deposit, Withdrawal or Cost: an amount of PLN, or of a foreign Cash Currency valued in PLN."""
+        return self in (TransactionType.DEPOSIT, TransactionType.WITHDRAWAL, TransactionType.COST)
+
 
 _LABELS = {
     TransactionType.DEPOSIT: "Wpłata",
@@ -97,6 +103,9 @@ class Origin(StrEnum):
     def label(self) -> str:
         return _ORIGIN_LABELS[self]
 
+
+# "Kwota ... w PLN": the genitive of the Transactions that move an amount of cash
+_AMOUNT_OF = {TransactionType.DEPOSIT: "wpłaty", TransactionType.WITHDRAWAL: "wypłaty", TransactionType.COST: "kosztów"}
 
 _ORIGIN_LABELS = {Origin.MANUAL: "ręczna", Origin.SPREADSHEET: "import z arkusza", Origin.BROKER: "import od brokera"}
 
@@ -144,7 +153,9 @@ class TransactionDraft:
     converted into the Actual Amount, or foreign cash of the same currency, worth the Actual Amount. A DRIP (build it
     with ``drip``) is a Dividend whose net amount buys ``quantity`` units of its Instrument instead: it leaves cash
     alone and opens a Lot costing that amount. A Cost (build it with ``cost``) is an amount the Account paid, like a
-    Withdrawal: in PLN, or ``quantity`` of a foreign ``cash_currency`` worth the Actual Amount at the NBP Rate.
+    Withdrawal: in PLN, or ``quantity`` of a foreign ``cash_currency`` worth the Actual Amount at the NBP Rate. A
+    Deposit or Withdrawal (``deposit_or_withdrawal``) in a foreign ``cash_currency`` is ``quantity`` of it worth the
+    Actual Amount at the user's ``fx_rate`` or else the NBP Rate; its Tax Amount is at the NBP Rate.
 
     A Split (build it with ``split``) rescales the open Lots of its Instrument on the Account by its ``split_ratio``.
     A Cash Transfer (``cash_transfer``) moves ``actual_amount`` PLN, a Security Transfer (``security_transfer``)
@@ -232,8 +243,8 @@ class TransactionDraft:
             self._check_dividend()
         elif not self.transaction_type.has_amount:
             self._check_units_only()
-        elif self.transaction_type is TransactionType.COST and self.cash_currency != PLN:
-            self._check_foreign_cost()
+        elif self.transaction_type.moves_cash_amount and self.cash_currency != PLN:
+            self._check_foreign_amount()
         elif any(value is not None for value in trade_fields) or self.commission:
             raise TransactionError(f"{self.transaction_type.label} nie dotyczy instrumentu.")
         elif self.cash_currency != PLN:
@@ -293,20 +304,23 @@ class TransactionDraft:
         elif self.quantity is not None:
             raise TransactionError(f"{label} nie ma liczby jednostek.")
 
-    def _check_foreign_cost(self) -> None:
-        """A Cost paid from foreign cash: ``quantity`` of it, worth the Actual Amount at the NBP Rate."""
+    def _check_foreign_amount(self) -> None:
+        """A Deposit, Withdrawal or Cost in foreign cash: ``quantity`` of it, worth the Actual Amount at the user's
+        ``fx_rate`` or else the NBP Rate; a Cost counts at the NBP Rate only."""
+        kind = self.transaction_type
         if self.instrument_id is not None or self.price is not None or self.commission:
-            raise TransactionError("Koszty nie dotyczą instrumentu.")
-        if self.fx_rate is not None or self.fx_conversion_fee_percent is not None:
+            raise TransactionError(f"{kind.label} nie dotyczy instrumentu.")
+        if self.fx_conversion_fee_percent is not None:
+            raise TransactionError(f"{kind.label} nie ma przewalutowania przez brokera.")
+        if kind is TransactionType.COST and self.fx_rate is not None:
             raise TransactionError("Koszty w walucie liczą się po kursie NBP.")
         if self.nbp_rate is None or self.nbp_rate.currency != self.cash_currency:
             raise TransactionError(f"Brak kursu NBP {self.cash_currency}. Zapis zablokowany.")
-        if self.quantity is None or not self.quantity > 0:
-            raise TransactionError("Kwota musi być większa od zera.")
-        if self.quantity != self.quantity.quantize(GROSZ):
-            raise TransactionError("Kwotę w walucie podaj z dokładnością do setnych.")
-        if self.actual_amount != _pln(self.quantity * self.nbp_rate.rate):
-            raise TransactionError("Kwota kosztów w PLN musi wynikać z kursu NBP.")
+        _check_rates(self.fx_rate, self.nbp_rate)
+        _check_foreign_quantity(self.quantity)
+        assert self.quantity is not None
+        if self.actual_amount != _pln(self.quantity * (self.fx_rate or self.nbp_rate.rate)):
+            raise TransactionError(f"Kwota {_AMOUNT_OF[kind]} w PLN musi wynikać z kursu.")
 
     def with_id(self, transaction_id: int) -> Transaction:
         """The Transaction saved from this draft under ``transaction_id``."""
@@ -336,8 +350,9 @@ class TransactionDraft:
             return self.actual_amount + self._withheld_on_sale
         if self.transaction_type.is_dividend:
             return _pln(self.net * self.nbp_rate.rate)
-        if self.transaction_type is TransactionType.COST:
-            return self.actual_amount  # already at the NBP Rate
+        if self.transaction_type.moves_cash_amount:
+            assert self.quantity is not None  # in foreign cash, checked on creation
+            return _pln(self.quantity * self.nbp_rate.rate)
         assert self.quantity is not None and self.price is not None  # a Buy or Sell, checked on creation
         costs = self.commission + (self.fx_conversion_fee or Decimal(0))
         return _with_commission(self.transaction_type, _pln(self._settled_value * self.nbp_rate.rate), costs)
@@ -403,8 +418,8 @@ class TransactionDraft:
 
     @property
     def is_paid_in_foreign_cash(self) -> bool:
-        """A Buy, Sell, Dividend or Cost paid from (or into) foreign cash rather than PLN."""
-        paid = self.transaction_type.settles_in_cash_currency or self.transaction_type is TransactionType.COST
+        """A Buy, Sell, Dividend, Deposit, Withdrawal or Cost paid from (or into) foreign cash rather than PLN."""
+        paid = self.transaction_type.settles_in_cash_currency or self.transaction_type.moves_cash_amount
         return paid and self.cash_currency != PLN
 
     @property
@@ -426,10 +441,10 @@ class TransactionDraft:
     @property
     def _settled_value(self) -> Decimal:
         """Quantity × price in the Instrument's currency, to the cent when paid from foreign cash; a Dividend's net;
-        a Cost's foreign amount."""
+        a Deposit's, Withdrawal's or Cost's foreign amount."""
         if self.transaction_type.is_dividend:
             return self.net
-        if self.transaction_type is TransactionType.COST:
+        if self.transaction_type.moves_cash_amount:
             assert self.quantity is not None  # checked on creation
             return self.quantity
         assert self.quantity is not None and self.price is not None
@@ -668,6 +683,41 @@ def _dividend_draft(
     )
 
 
+def deposit_or_withdrawal(
+    account_id: int,
+    day: date,
+    kind: TransactionType,
+    amount: Decimal,
+    comment: str = "",
+    *,
+    cash_currency: str = PLN,
+    fx_rate: Decimal | None = None,
+    nbp_rate: NbpRate | None = None,
+) -> TransactionDraft:
+    """A Deposit or Withdrawal of ``amount`` in ``cash_currency``: PLN, or foreign cash worth ``amount`` at the user's
+    ``fx_rate`` or else the NBP Rate, which ``nbp_rate`` must then carry. Its Actual Amount is what counts in Net
+    Deposits and Contribution Limits; like a foreign Cost, it opens (or closes) foreign-cash Lots."""
+    if kind not in (TransactionType.DEPOSIT, TransactionType.WITHDRAWAL):
+        raise TransactionError(f"{kind.label} nie jest wpłatą ani wypłatą.")
+    if cash_currency == PLN:
+        return TransactionDraft(account_id, day, kind, amount, comment)
+    if nbp_rate is None or nbp_rate.currency != cash_currency:
+        raise TransactionError(f"Brak kursu NBP {cash_currency}. Zapis zablokowany.")
+    _check_rates(fx_rate, nbp_rate)
+    _check_foreign_quantity(amount)
+    return TransactionDraft(
+        account_id,
+        day,
+        kind,
+        _pln(amount * (fx_rate or nbp_rate.rate)),
+        comment,
+        quantity=amount,
+        fx_rate=fx_rate,
+        nbp_rate=nbp_rate,
+        cash_currency=cash_currency,
+    )
+
+
 def cost(
     account_id: int,
     day: date,
@@ -793,6 +843,11 @@ def _check_conversion(
 def _check_exchange_fields(currency: str, quantity: Decimal | None) -> None:
     if currency == PLN or not is_currency_code(currency):
         raise TransactionError("Wybierz walutę obcą do wymiany.")
+    _check_foreign_quantity(quantity)
+
+
+def _check_foreign_quantity(quantity: Decimal | None) -> None:
+    """An amount of foreign cash: positive, to the cent."""
     if quantity is None or not quantity > 0:
         raise TransactionError("Kwota w walucie musi być większa od zera.")
     if quantity != quantity.quantize(GROSZ):

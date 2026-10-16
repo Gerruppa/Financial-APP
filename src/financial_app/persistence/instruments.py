@@ -235,6 +235,7 @@ def _fill(session: Session, row: InstrumentRow, draft: InstrumentDraft) -> None:
     row.ter_percent = _text(draft.ter_percent)
     row.distribution_policy = None if draft.distribution_policy is None else draft.distribution_policy.value
     row.domicile = draft.domicile
+    row.quantity_decimals = draft.quantity_decimals
     row.source_symbols = [
         SourceSymbolRow(source=source, symbol=symbol) for source, symbol in draft.source_symbols.items()
     ]
@@ -295,6 +296,7 @@ def _to_instrument(row: InstrumentRow) -> Instrument:
         ter_percent=_decimal(row.ter_percent),
         distribution_policy=None if row.distribution_policy is None else DistributionPolicy(row.distribution_policy),
         domicile=row.domicile,
+        quantity_decimals=row.quantity_decimals,
         multi_asset_split={share.asset_class_id: Decimal(share.percent) for share in shares},
         split_class_names={share.asset_class_id: share.asset_class.name for share in shares},
     )

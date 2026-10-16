@@ -175,6 +175,8 @@ class InstrumentRow(Base):
     ter_percent: Mapped[str | None] = mapped_column(String(20))
     distribution_policy: Mapped[str | None] = mapped_column(String(20))
     domicile: Mapped[str] = mapped_column(String(100), default="", server_default="")
+    # The decimal places a quantity may have, which round the quantity proposed from an amount (#120)
+    quantity_decimals: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
 
     asset_class: Mapped[AssetClassRow] = relationship()
     source_symbols: Mapped[list[SourceSymbolRow]] = relationship(cascade="all, delete-orphan")
