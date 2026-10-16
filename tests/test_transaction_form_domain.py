@@ -25,7 +25,7 @@ from financial_app.domain.transactions import PLN, Transaction, TransactionError
 
 TODAY = date(2026, 3, 10)
 IKE, XTB, OLD, BONDS = 1, 2, 3, 4
-CDR, AAPL, EDO, BTC = 10, 11, 12, 13
+CDR, AAPL, EDO, BTC, VWCE = 10, 11, 12, 13, 14
 ACCOUNTS = [
     Account("mBank IKE", "mBank", AccountType.IKE, (PLN,), id=IKE),
     Account("XTB", "XTB", AccountType.REGULAR, (PLN, "USD"), fx_conversion_fee_percent=Decimal("0.5"), id=XTB),
@@ -48,14 +48,17 @@ INSTRUMENTS = [
     _instrument(AAPL, "Apple", "USD", "Akcje zagraniczne"),
     _instrument(EDO, "EDO0336", PLN, "Obligacje skarbowe polskie"),
     _instrument(BTC, "Bitcoin", "USD", "Kryptowaluty", decimals=8),
+    _instrument(VWCE, "VWCE", "EUR", "Akcje zagraniczne"),
 ]
 USD_RATE = NbpRate("USD", Decimal("4.0000"), date(2026, 3, 9), "045/A/NBP/2026")
+EUR_RATE = NbpRate("EUR", Decimal("4.2000"), date(2026, 3, 9), "045/A/NBP/2026")
 
 
 def _rates(currency: str, day: date) -> NbpRate:
-    if currency != "USD":
+    rates = {"USD": USD_RATE, "EUR": EUR_RATE}
+    if currency not in rates:
         raise MissingNbpRateError(f"Brak kursu NBP {currency}.")
-    return USD_RATE
+    return rates[currency]
 
 
 def _form(transactions: list[Transaction] | None = None, edited: Transaction | None = None) -> TransactionForm:
@@ -306,6 +309,14 @@ def test_a_broker_conversion_raises_the_rate_by_the_accounts_fee() -> None:
 
     # 1000 zł ÷ (4,00 × 1,005) ÷ 100
     assert _form().proposed_quantity(state) == "2,48756218"
+
+
+def test_the_fee_raises_the_rate_of_any_currency_the_broker_converts_pln_into() -> None:
+    # XTB holds no EUR, so a EUR Instrument is paid in PLN, which the broker converts
+    state = _state(TransactionType.BUY, XTB, instrument_id=VWCE, convert=True, spend="10000", price="100")
+
+    # 10 000 zł ÷ (4,20 × 1,005) ÷ 100 = 23,69…
+    assert _form().proposed_quantity(state) == "23"
 
 
 def test_paid_from_foreign_cash_the_amount_is_in_that_currency_and_the_pln_commission_stays_apart() -> None:

@@ -346,7 +346,7 @@
   "tests/test_transaction_edit_ui.py": "c86b962c",
   "tests/test_transaction_filters_domain.py": "102699a1",
   "tests/test_transaction_filters_ui.py": "154773e8",
-  "tests/test_transaction_form_domain.py": "3cf12d7a",
+  "tests/test_transaction_form_domain.py": "ebc4145c",
   "tests/test_transaction_saving.py": "a3142dc6",
   "tests/test_transactions_domain.py": "625999fd",
   "tests/test_transactions_repository.py": "f405750d",
