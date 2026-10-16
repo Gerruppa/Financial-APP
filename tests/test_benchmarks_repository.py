@@ -82,12 +82,12 @@ def test_the_defaults_are_seeded_once_creating_the_missing_instruments(engine: E
     assert benchmarks[0] == Benchmark(BenchmarkKind.CPI)
     by_id = {i.id: i for i in list_instruments(engine)}
     names = [by_id[b.instrument_id].name for b in benchmarks[1:] if b.instrument_id is not None]
-    assert names == ["LON:ACWI", "iShares S&P 500", "AMS:V80A", "WSE:ETFBW20TR", "WSE:ETFBS80TR"]
+    assert names == ["LON:ACWI", "iShares S&P 500", "AMS:V80A", "WSE:ETFBW20TR", "WSE:ETFBM40TR", "WSE:ETFBS80TR"]
     assert benchmarks[2].instrument_id == cspx
     small = next(i for i in by_id.values() if i.name == "WSE:ETFBS80TR")
     assert (small.quote_currency, dict(small.source_symbols)) == ("PLN", {YAHOO: "ETFBS80TR.WA"})
     assert by_id[benchmarks[1].instrument_id or 0].quote_currency == "GBP"
-    assert len(DEFAULT_BENCHMARKS) == 5
+    assert len(DEFAULT_BENCHMARKS) == 6
 
     # The user's list stays as they leave it
     for benchmark in benchmarks:
@@ -116,7 +116,7 @@ def test_clearing_the_data_brings_the_defaults_back(engine: Engine) -> None:
 
     assert list_benchmarks(engine) == []
     assert ensure_default_benchmarks(engine)
-    assert len(list_benchmarks(engine)) == 6
+    assert len(list_benchmarks(engine)) == 7
 
 
 def _history(values: list[str]) -> list[DayValue]:
