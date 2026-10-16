@@ -5,6 +5,7 @@ The Polish UI labels with the English terms the code and the docs use, in Polish
 | Polski (UI) | English (code) | Section |
 |---|---|---|
 | Benchmark | [Benchmark](CONTEXT.md#results) | Results |
+| Cel inwestycyjny | [Investment Goal](CONTEXT.md#results) | Results |
 | Cel w klasie | [Instrument Target](CONTEXT.md#accounts-and-instruments) | Accounts and instruments |
 | Cel % | [Allocation Target](CONTEXT.md#accounts-and-instruments) | Accounts and instruments |
 | Cena ręczna | [Manual Price](CONTEXT.md#transactions-and-holdings) | Transactions and holdings |
@@ -23,6 +24,7 @@ The Polish UI labels with the English terms the code and the docs use, in Polish
 | Kwota rzeczywista | [Actual Amount](CONTEXT.md#transactions-and-holdings) | Transactions and holdings |
 | Limit wpłat | [Contribution Limit](CONTEXT.md#accounts-and-instruments) | Accounts and instruments |
 | Miesięczny cel dochodu | [Monthly Income Goal](CONTEXT.md#results) | Results |
+| Migawka wyceny | [Valuation Snapshot](CONTEXT.md#results) | Results |
 | Nieaktualna cena | [Stale Price](CONTEXT.md#transactions-and-holdings) | Transactions and holdings |
 | Notowanie | [Quote](CONTEXT.md#transactions-and-holdings) | Transactions and holdings |
 | Opłata za przewalutowanie | [FX Conversion Fee](CONTEXT.md#accounts-and-instruments) | Accounts and instruments |

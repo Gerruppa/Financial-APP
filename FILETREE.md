@@ -29,6 +29,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `0005-structured-price-sources-only.md`: ADR restricting automatic prices to structured sources, with MF data authoritative for retail bonds.
 - `0006-history-quote-sources-and-split-unadjusting.md`: ADR: History takes Yahoo then Stooq daily quotes and un-adjusts prices for recorded Splits
 - `0007-bond-redemption-picks-its-lot.md`: ADR: early bond redemption names its Lot instead of FIFO, other Instruments keep FIFO
+- `0008-valuation-snapshots-are-stored.md`: ADR explaining why Dashboard Valuation Snapshots are stored, unlike the recomputed History, and the trade-offs
 
 ## docs/agents/
 

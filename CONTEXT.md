@@ -184,7 +184,11 @@ _Avoid_: swap, conversion
 
 **History** (Historia):
 The daily series of portfolio value by Asset Class, recomputed from Transactions and historical prices — never stored snapshots.
-_Avoid_: snapshot, daily log
+_Avoid_: snapshot (a Valuation Snapshot is a different thing), daily log
+
+**Valuation Snapshot** (Migawka wyceny):
+The value and Net Deposits of Total and of each Account as the Dashboard showed them after a Successful Refresh, kept at most once a calendar day (a later refresh that day replaces it). The Dashboard compares today's figures with the newest Valuation Snapshot of an earlier day, splitting the change into the market change and the Deposits and Withdrawals in between.
+_Avoid_: History, checkpoint, last update
 
 **Net Deposits** (Wpłaty netto):
 Deposits minus Withdrawals up to a date, in PLN; a foreign-currency one at its own rate (the user's, else the NBP Rate D-1), not at the cost of the foreign cash it moves.
@@ -211,6 +215,10 @@ The net Dividends (DRIPs included) and interest received, with the bond coupons 
 
 **Monthly Income Goal** (Miesięczny cel dochodu):
 The Passive Income the user aims at each month, in PLN; each month shows its progress toward it.
+
+**Investment Goal** (Cel inwestycyjny):
+The value in PLN the user aims at for one View Scope, with an optional target date. Entered directly or worked out for FIRE from yearly expenses and a safe withdrawal rate (4% by default, i.e. 25 × the expenses). Total and each Account have their own; the Accounts' goals need not add up to the Total's.
+_Avoid_: target, FIRE number, Allocation Target
 
 **Reconciliation** (Uzgadnianie):
 Pairing Transactions from two Origins (e.g. spreadsheet vs XTB import) and resolving their differences.

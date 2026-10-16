@@ -12,26 +12,21 @@ from financial_app.domain.prices import default_fallback_order
 from financial_app.persistence.backup import backup_database
 from financial_app.persistence.instruments import fallback_order_column
 from financial_app.persistence.models import (
-    AccountCashCurrency,
     AccountRow,
     AppSetting,
     AssetClassRow,
-    BenchmarkRow,
-    ClassTargetRow,
+    Base,
     InstrumentRow,
-    InstrumentTargetRow,
-    MultiAssetShareRow,
-    PriceFailureRow,
-    QuoteHistoryRow,
-    QuoteRow,
-    RateCorrectionRow,
-    SkippedBrokerRow,
-    SourceSymbolRow,
-    StrategyRow,
+    OnClear,
     TransactionRow,
 )
 from financial_app.persistence.paths import BACKUPS_DIR
 from financial_app.persistence.settings import BENCHMARKS_SEEDED, XTB_PREFIX
+
+# The tables of the models that declare clearing removes them (``OnClear``)
+CLEARED_TABLES = frozenset(
+    mapper.local_table for mapper in Base.registry.mappers if mapper.class_.on_clear is OnClear.DELETE
+)
 
 NO_DATABASE_FILE = "Nie znaleziono pliku bazy, więc nie można zrobić kopii zapasowej."
 
@@ -59,11 +54,10 @@ def portfolio_counts(engine: Engine) -> PortfolioCounts:
 
 
 def clear_portfolio(engine: Engine) -> Path:
-    """Back the database up, then remove every Account, Instrument (with its Source Symbols, Multi-asset Split, rate
-    corrections, Quotes, price history and refresh failures), Transaction, Investment Strategy, Benchmark (the defaults
-    come back next time), skipped broker row and remembered XTB match and restore the default Asset Classes with their
-    Fallback Orders (Multi-asset marked again), all or nothing. The NBP Rate caches, the bond data and the other app
-    settings stay. Returns the backup's path.
+    """Back the database up, then remove the rows of every model declaring ``OnClear.DELETE`` (Accounts, Instruments,
+    Transactions and what hangs off them), the remembered XTB matches and the mark that the default Benchmarks were
+    added (they come back next time), and restore the default Asset Classes with their Fallback Orders (Multi-asset
+    marked again), all or nothing. The ``OnClear.KEEP`` models stay. Returns the backup's path.
 
     The backup goes to the ``backups`` folder next to the database file, where the start-up backups are. Without a
     backup nothing is cleared: ``BackupError``.
@@ -78,25 +72,9 @@ def clear_portfolio(engine: Engine) -> Path:
         raise BackupError(NO_DATABASE_FILE)
     with Session(engine) as session, session.begin():
         # Children first, so the foreign keys never point at a removed row
-        for model in (
-            SkippedBrokerRow,
-            BenchmarkRow,
-            ClassTargetRow,
-            InstrumentTargetRow,
-            StrategyRow,
-            TransactionRow,
-            AccountCashCurrency,
-            AccountRow,
-            QuoteRow,
-            QuoteHistoryRow,
-            PriceFailureRow,
-            SourceSymbolRow,
-            MultiAssetShareRow,
-            RateCorrectionRow,
-            InstrumentRow,
-            AssetClassRow,
-        ):
-            session.execute(delete(model))
+        for table in reversed(Base.metadata.sorted_tables):
+            if table in CLEARED_TABLES:
+                session.execute(delete(table))
         # The remembered XTB matches name Account and Instrument ids that new ones may take again
         session.execute(delete(AppSetting).where(AppSetting.key.startswith(XTB_PREFIX)))
         session.execute(delete(AppSetting).where(AppSetting.key == BENCHMARKS_SEEDED))
