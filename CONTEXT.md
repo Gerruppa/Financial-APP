@@ -29,7 +29,7 @@ A percentage a broker adds to the market rate when it converts currency for a fo
 _Avoid_: spread, FX commission
 
 **Instrument** (Instrument):
-Anything that can be held and priced: a stock, ETF, fund, bond series, metal, crypto pair or a manually priced asset. Has one Asset Class, a quote currency, an optional ISIN and a Source Symbol per Price Source. Each listing is its own Instrument: the same ISIN on two exchanges or in two currencies gives two Instruments.
+Anything that can be held and priced: a stock, ETF, fund, bond series, metal, crypto pair or a manually priced asset. Has one Asset Class, a quote currency, an optional ISIN, a Source Symbol per Price Source and the number of decimal places its quantity may have (0 for whole units, up to 8 for crypto or fractional shares). Each listing is its own Instrument: the same ISIN on two exchanges or in two currencies gives two Instruments.
 _Avoid_: ticker, security, asset, symbol
 
 **Source Symbol** (Symbol w źródle):
