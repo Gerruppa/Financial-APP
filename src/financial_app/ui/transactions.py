@@ -90,6 +90,7 @@ from financial_app.persistence.transactions import (
 )
 from financial_app.sources.export import FileFormat, export_transactions
 from financial_app.sources.nbp import NbpRates
+from financial_app.ui.contribution_limits import warn_over_limit
 from financial_app.ui.dialogs import movable_dialog
 from financial_app.ui.multi_asset import open_split_dialog
 from financial_app.ui.view_scope import ViewScope, breadcrumbs
@@ -1053,6 +1054,7 @@ def open_transaction_dialog(
             dialog.close()
             # An edit may move the Transaction to another day or Account, so also check where it was
             _warn_if_cash_runs_out(engine, "Zapisano", account_names, draft, transaction)
+            warn_over_limit(engine, [draft])
             on_saved()
             _ask_for_multi_asset_split(engine, draft, on_saved)
 

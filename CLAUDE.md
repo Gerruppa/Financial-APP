@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project state
 
-Stages 1 (transactions and Portfolio), 2 (automatic prices), 3 (Polish treasury bonds), 4 (Dashboard, History, Results) and 5 (reports: Benchmarks, Sell Summary, passive-income calendar) are done; Stage 6 (#7) has started (L-17 XTB import and Reconciliation, L-27 Transakcje filters). Open work is in GitHub Issues (Stage 6: #94–#100). The git remote `origin` is https://github.com/Gerruppa/Financial-APP.git, the default branch `main`; work goes on a feature branch and a PR.
+Stages 1 (transactions and Portfolio), 2 (automatic prices), 3 (Polish treasury bonds), 4 (Dashboard, History, Results) and 5 (reports: Benchmarks, Sell Summary, passive-income calendar) are done; Stage 6 (#7) has started (L-17 XTB import and Reconciliation, L-27 Transakcje filters, #95 Contribution Limits). Open work is in GitHub Issues (Stage 6: #94–#100). The git remote `origin` is https://github.com/Gerruppa/Financial-APP.git, the default branch `main`; work goes on a feature branch and a PR.
 
 ## Layout
 

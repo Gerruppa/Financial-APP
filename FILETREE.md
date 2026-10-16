@@ -60,6 +60,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `bonds.py`: Polish retail treasury bond types, their terms, GUS CPI readings and NBP reference rates as pure-Python values
 - `catalyst.py`: Price per Catalyst bond from its percent of nominal plus accrued interest, and the indexed nominal of IZ bonds
 - `charts.py`: Dashboard chart data from History and Transactions: value, profit, XIRR, class shares and dividends by year, per scope and period
+- `contribution_limits.py`: Contribution Limits rules: which transactions count towards each IKE, IKZE or OIPE yearly limit, bars and over-limit warnings
 - `currencies.py`: Currency code check and the NBP Rate value type, plus the error raised when a rate is missing.
 - `dashboard.py`: Dashboard totals, Account table, currency exposure and allocation from Transactions, prices, NBP Rates and History, plus estimated tax and profit by source
 - `export.py`: Builds the transaction export rows with columns, amounts, origin and comment, independent of file format.
@@ -96,6 +97,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `bond_data.py`: SQLite copy of the bond data sources (MF Bond Series, GUS CPI, NBP reference rates) and each source's fetch status
 - `bond_drafts.py`: Lists pending bond Drafts (maturities and unentered coupons) and saves them as Transactions, all or nothing
 - `bond_series.py`: Bond Series persistence: lists Series with their MF terms and rate corrections, saves corrections, finds or creates Series Instruments
+- `contribution_limits.py`: Reads and saves yearly Contribution Limits per Account Type in SQLite
 - `db.py`: Opens the SQLite engine and applies pending Alembic migrations at start-up.
 - `history.py`: Reads and writes cached Stooq Quote history and NBP Rate history, with the cover of fetched days.
 - `instruments.py`: Saves and reads Asset Classes and Instruments, and deletes Instrument data including its Quotes and failures.
@@ -144,6 +146,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `0026_reconciliation.py`: Migration adding broker ids, reconciled dates and the skipped broker rows table for reconciliation
 - `0027_benchmarks.py`: Migration 0027 creates the benchmarks table (kind, Instrument or Account, offset, shown, position).
 - `0028_polish_benchmark_etfs.py`: Migration 0028 drops the WSE:WIG and WSE:SWIG80TR default benchmarks left on Stooq so the Beta ETF defaults come in.
+- `0029_contribution_limits.py`: Migration creating the contribution_limits table and seeding 2026 limits
 
 ## src/financial_app/sources/
 
@@ -178,6 +181,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `bond_series.py`: Bond Series rate summary and dialog for correcting MF rates by hand in Ustawienia Instrumenty
 - `bonds.py`: Obligacje tab UI: expandable table of Bond Series and their Lots with gross and net values, the "Do zatwierdzenia" list of matured Lots, and the 12-month bond calendar
 - `charts.py`: Dashboard's nine ECharts charts, the profit waterfall, and shared PLN line and bar chart helpers for other tabs.
+- `contribution_limits.py`: Contribution Limits UI: yearly limits in Ustawienia, Dashboard bars and over-limit warnings after saves
 - `dashboard.py`: Dashboard tab UI: totals, price status, Account table, exposure, charts, Account treemap and ranking, and the after-tax toggle
 - `dialogs.py`: Draggable dialog support with no backdrop, so the screen behind stays readable
 - `fund_details.py`: Builds the short fund detail texts (TER, Distribution Policy, domicile) shared by Instrument list and Portfolio
@@ -241,6 +245,9 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_charts_domain.py`: Unit tests for the Dashboard chart data: value, profit, XIRR, class shares and dividends by year
 - `test_clear_data_repository.py`: Tests that clearing the portfolio removes user data and restores default Asset Classes
 - `test_clear_data_ui.py`: UI tests for the Wyczyść dane confirmation flow in Ustawienia
+- `test_contribution_limits_domain.py`: Tests which transactions count towards Contribution Limits, the bars and the over-limit warning
+- `test_contribution_limits_repository.py`: Tests saving, seeding and removing yearly Contribution Limits in the database
+- `test_contribution_limits_ui.py`: UI tests for Contribution Limits on the Dashboard, in Ustawienia and the warning after a save
 - `test_conversion_fee_domain.py`: Domain tests for the broker FX Conversion Fee on foreign-currency Buys and Sells
 - `test_conversion_fee_ui.py`: UI tests for the FX Conversion Fee and payment source in the transaction dialog
 - `test_dashboard_charts_ui.py`: UI tests that the Dashboard's nine charts follow the View Scope and the period

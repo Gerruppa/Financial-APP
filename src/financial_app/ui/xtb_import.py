@@ -21,9 +21,11 @@ from financial_app.domain.transactions import TransactionDraft, TransactionError
 from financial_app.domain.xtb_import import XtbStatement, yahoo_symbol
 from financial_app.persistence.accounts import list_accounts
 from financial_app.persistence.instruments import list_instruments
+from financial_app.persistence.reconciliation import AddBroker, TakeBroker
 from financial_app.sources.spreadsheet import NbpLookup
 from financial_app.sources.xtb import LEFT_OUT, XtbDecisions, XtbPreview, apply_xtb, preview_xtb, read_statements
 from financial_app.ui.accounts import open_account_dialog
+from financial_app.ui.contribution_limits import warn_over_limit
 
 NEW = "new"
 PAIR_OPTIONS = {Choice.BROKER: "Weź XTB", Choice.MINE: "Zostaw moje"}
@@ -265,6 +267,7 @@ class XtbImportSection:
             return
         count = format_count(len(applied.actions()), "pozycję", "pozycje", "pozycji")
         ui.notify(f"Uzgodniono z XTB {count}.", type="positive")
+        warn_over_limit(self.engine, [a.draft for a in applied.actions() if isinstance(a, AddBroker | TakeBroker)])
         self.choices = {}
         if self.on_saved is not None:
             self.on_saved()

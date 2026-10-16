@@ -21,6 +21,7 @@ The Polish UI labels with the English terms the code and the docs use, in Polish
 | Kurs NBP D-1 | [NBP Rate](CONTEXT.md#transactions-and-holdings) | Transactions and holdings |
 | Kwota podatkowa | [Tax Amount](CONTEXT.md#transactions-and-holdings) | Transactions and holdings |
 | Kwota rzeczywista | [Actual Amount](CONTEXT.md#transactions-and-holdings) | Transactions and holdings |
+| Limit wpłat | [Contribution Limit](CONTEXT.md#accounts-and-instruments) | Accounts and instruments |
 | Miesięczny cel dochodu | [Monthly Income Goal](CONTEXT.md#results) | Results |
 | Nieaktualna cena | [Stale Price](CONTEXT.md#transactions-and-holdings) | Transactions and holdings |
 | Notowanie | [Quote](CONTEXT.md#transactions-and-holdings) | Transactions and holdings |

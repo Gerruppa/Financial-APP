@@ -210,6 +210,12 @@ Shell (UI prototype verdict, branch `prototype/ui-shell`, issue #1): **left navi
 - IKE/IKZE/OIPE annual contribution limits (entered in settings, 2026 seeded) with progress bar and over-limit warning.
 - OKI Tax Regime implemented once the law is final.
 
+### 8.1 Contribution Limits (grilling of #95, 2026-10-16)
+- **What counts**: a Contribution Limit is one per Account Type (IKE, IKZE, OIPE) and calendar year, over all Accounts of that type, inactive ones too. It counts each Deposit into such an Account and each Cash Transfer into it from an Account of another type, by the Transaction's date, in PLN (the Actual Amount; the Tax Amount at the NBP Rate for a foreign-currency one). A Cash Transfer between two Accounts of the same type (moving an IKE to another institution), Withdrawals (a returned overpayment included: the bar stays over), Security Transfers and Dividends do not count. PPK, OKI and the other types have none.
+- **Limits**: entered in Ustawieniach, section "Limity wpłat": a row per year, a column per type with an editable amount and that year's contributions beside it; "Dodaj rok" adds an empty row, a row with no limits can be removed. One amount per type: the self-employed enter IKZE's higher limit themselves, its 2026 value given as a hint. Only 2026 is seeded: IKE 28 260 zł, IKZE 11 304 zł (16 956 zł self-employed), OIPE 28 260 zł (MRPiPS notices of November 2025).
+- **Dashboard**: a section "Limity wpłat {rok}" for the current year only, a bar per type with an active Account or a contribution this year: paid in, the limit, left and percent. Total shows every type; an Account scope shows its type's bar, the sum over all its type's Accounts ("łącznie na wszystkich kontach IKE"); a Regular Account none. A year without a limit shows "Brak limitu na {rok} — uzupełnij w Ustawieniach" instead of the bar.
+- **Warning**: over the limit the bar turns red with "Przekroczono limit o X zł". Saving a counted Transaction (added, edited, or applied by the XTB Reconciliation) that leaves its year over the limit shows one notification per type and year, never blocking the save.
+
 ## 9. Known spreadsheet bugs to fix (documented deviations)
 1. Yahoo FX backup stores the whole result array instead of the rate.
 2. Google Finance path never divides GBX by 100 (`toUpperCase` without `()`).

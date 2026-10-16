@@ -16,6 +16,10 @@ _Avoid_: account kind, wrapper
 The rules by which gains on an Account are taxed (e.g. 19% Belka per sale for Regular, exemption for IKE, Belka withheld by the issuer for Bonds, the 6-month rule for selling things for Other, not yet defined for OKI).
 _Avoid_: tax mode, tax strategy
 
+**Contribution Limit** (Limit wpłat):
+The most that may be paid in a calendar year into the Accounts of one Account Type — IKE, IKZE or OIPE — taken together. Deposits into such an Account and Cash Transfers into it from an Account of another type count towards it; Withdrawals do not free it up.
+_Avoid_: cap, allowance, quota
+
 **Cash Currency** (Waluta rachunku):
 A currency in which an Account can hold cash. An Account with only PLN converts every foreign-currency trade automatically.
 _Avoid_: sub-account, currency account

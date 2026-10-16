@@ -10,6 +10,7 @@ from financial_app.domain.instrument_search import InstrumentSearch
 from financial_app.sources.nbp import NbpRates
 from financial_app.sources.prices import PriceSource
 from financial_app.ui.accounts import AccountsSection
+from financial_app.ui.contribution_limits import ContributionLimitsSection
 from financial_app.ui.import_sheet import SheetImportSection
 from financial_app.ui.instruments import AssetClassesSection, InstrumentsSection
 from financial_app.ui.price_sources import PriceSourcesSection
@@ -35,6 +36,7 @@ def build_settings_page(
     ui.label("Ustawienia").classes("text-2xl font-bold")
     accounts = AccountsSection(engine, on_deleted=on_account_deleted)
     accounts.build()
+    ContributionLimitsSection(engine).build()
     instruments = InstrumentsSection(engine, search, sources, on_changed=on_instruments_changed)
     asset_classes = AssetClassesSection(engine, on_changed=instruments.refresh)
     asset_classes.build()

@@ -22,6 +22,7 @@ from financial_app.sources.nbp import NbpRates
 from financial_app.sources.prices import RefreshStatus, last_refresh, refresh_summary, unpriced_instruments
 from financial_app.ui.account_ranking import AccountRanking, accounts_treemap
 from financial_app.ui.charts import dashboard_charts
+from financial_app.ui.contribution_limits import limits_section
 from financial_app.ui.info import card_title
 from financial_app.ui.periods import PeriodChoice, period_selector
 from financial_app.ui.strategy import PlannedDeposit, strategy_section
@@ -92,6 +93,7 @@ class DashboardPage:
         ui.switch("Po podatku", value=self.after_tax, on_change=self._toggle_after_tax).mark("after-tax")
         _totals(board.totals, self.after_tax)
         _account_table(board.accounts, self.after_tax)
+        limits_section(self.engine, today.transactions, today.accounts, self.rates.today(), self.scope.account_id)
         if self.scope.account_id is None:
             rows = ranking(board.accounts, self.after_tax)
             accounts_treemap(rows, self.scope.switch)

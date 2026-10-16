@@ -14,6 +14,7 @@ from financial_app.domain.accounts import AccountDraft, AccountType
 from financial_app.domain.currencies import NbpRate
 from financial_app.domain.transactions import Origin, TransactionDraft, TransactionType
 from financial_app.persistence.accounts import add_account
+from financial_app.persistence.contribution_limits import set_limit
 from financial_app.persistence.db import init_db
 from financial_app.persistence.instruments import list_instruments
 from financial_app.persistence.transactions import add_transaction, list_transactions
@@ -110,3 +111,22 @@ async def test_keeping_an_entered_deposit_xtb_does_not_have(engine: Engine, stat
     assert mine in list_transactions(engine)
     assert len(list_transactions(engine)) == 3
     await user.should_see("tylko w aplikacji: 0")
+
+
+async def test_applying_deposits_over_the_contribution_limit_warns_once(
+    engine: Engine, statement: Path, user: User
+) -> None:
+    ike = add_account(engine, AccountDraft("IKE", "XTB", AccountType.IKE, ("PLN",)))
+    set_limit(engine, 2026, AccountType.IKE, Decimal(500))
+    load(user, statement)
+    await user.should_see(marker="xtb-instrument-XTB.PL")
+    user.find(marker="xtb-instrument-XTB.PL", kind=ui.select).elements.pop().set_value(NEW)
+    user.find(marker="instrument-name").type("XTB")
+    user.find(marker="instrument-class", kind=ui.select).elements.pop().set_value(1)
+    user.find("Zapisz").click()
+    await user.should_see(marker="xtb-apply")
+
+    user.find(marker="xtb-apply").click()
+
+    await user.should_see("IKE 2026: przekroczono limit wpłat o 500,00\N{NO-BREAK SPACE}zł.")
+    assert ike.id in {t.account_id for t in list_transactions(engine)}
