@@ -1,8 +1,8 @@
 # Backlog
 
-The local stand-in for GitHub Issues while the account is suspended (since 2026-10-12). Each stage follows `docs/spec.md` section 10; the details sit in the spec sections named beside each item. GitHub numbers (`#n`) refer to existing issues; local items get an `L-n` id until they can be moved to GitHub.
+The local stand-in for GitHub Issues while the account was suspended (2026-10-12 to 2026-10-16); its open items are now GitHub issues (#91–#103), the source of truth from here on. Each stage follows `docs/spec.md` section 10; the details sit in the spec sections named beside each item. GitHub numbers (`#n`) refer to issues; the `L-n` ids are the local ones from the suspension.
 
-Mark an item done with `[x]` and the merge commit or branch. When GitHub is back, open an issue for each open `L-n` item and replace the id with its number.
+Mark an item done with `[x]` and the merge commit or branch; new work goes to GitHub Issues.
 
 ## Done
 
@@ -34,20 +34,20 @@ Outside Stage 3, later:
 
 ## Stage 5, Reports
 
-- [ ] L-12 Benchmarks: any Instrument or CPI, Deposits and Withdrawals invested on their dates, a "+x pp/year" offset, an Account as a benchmark, the defaults (spec 6).
-- [ ] L-13 Sell Summary with closed-position statistics: win rate, holding time, best and worst (spec 10).
-- [ ] L-14 Passive-income calendar: Dividends and bond interest, received and forecast, monthly income goal (spec 10).
+- [ ] #91 (L-12) Benchmarks: any Instrument or CPI, Deposits and Withdrawals invested on their dates, a "+x pp/year" offset, an Account as a benchmark, the defaults (spec 6).
+- [ ] #92 (L-13) Sell Summary with closed-position statistics: win rate, holding time, best and worst (spec 10).
+- [ ] #93 (L-14) Passive-income calendar: Dividends and bond interest, received and forecast, monthly income goal (spec 10).
 
 ## Stage 6, Beyond the sheet
 
-- [ ] L-15 PIT-38 and PIT/ZG summary with a year-end tax-loss optimiser (spec 8).
-- [ ] L-16 IKE/IKZE/OIPE contribution limits with progress and an over-limit warning (spec 8).
+- [ ] #94 (L-15) PIT-38 and PIT/ZG summary with a year-end tax-loss optimiser (spec 8).
+- [ ] #95 (L-16) IKE/IKZE/OIPE contribution limits with progress and an over-limit warning (spec 8).
 - [x] L-17 XTB importer and the Reconciliation view (spec 7). Branch `feat/bond-sources`.
-- [ ] L-18 Investment goal / FIRE per scope.
-- [ ] L-19 Recurring transactions as drafts to confirm.
-- [ ] L-20 Account comparison mode.
-- [ ] L-21 .exe installer.
-- [ ] L-22 OKI Tax Regime once the law is final (spec 8).
+- [ ] #96 (L-18) Investment goal / FIRE per scope.
+- [ ] #97 (L-19) Recurring transactions as drafts to confirm.
+- [ ] #98 (L-20) Account comparison mode.
+- [ ] #99 (L-21) .exe installer.
+- [ ] #100 (L-22) OKI Tax Regime once the law is final (spec 8).
 
 Parked ideas: virtual portfolio, net worth with liabilities, tags, price alerts, portfolio health score.
 
@@ -55,6 +55,7 @@ Parked ideas: virtual portfolio, net worth with liabilities, tags, price alerts,
 
 Bugs and small ideas that belong to no stage go here.
 
-- [ ] L-25 History without Stooq: no Stooq API key can be had (2026-10-12), so History uses Yahoo only. Only if gaps hurt: add analizy.pl quotation history (funds, PPK) and/or the Bossa EOD archive `mstall.zip` (GPW, indices such as WIG) as keyless history sources (spec 4).
-- [ ] L-26 Past retail treasury bonds by Series name: in the "+" dialog's bond mode, let the user type or pick a Series (e.g. `EDO0827`, `COI1125`) instead of only the one the type and purchase date give, so older purchases can be entered. The MF file already holds the past Series (EDO from EDO1014, COI from COI1003, OTS, ROS, ROD, TOS, ROR, DOR all theirs), so valuation needs no new data: list the type's Series from the MF copy (searchable, newest first), check the purchase date against the Series' sale window (`SeriesTerms.sale_start`/`sale_end`; outside it a warning, a Rollover purchase may fall a few days later) and take the price from it (100 zł or its Rollover price). Check whether the MF file has the types no longer sold (e.g. DOS, TZ, CZL); without their terms such a Series is created with no rate and shows "brak oprocentowania" until corrected by hand (spec 3.4.1).
-- [ ] L-27 Excel-like filters and sorting in the Transakcje tab: each column header sorts (date newest or oldest first by its arrow, the default newest) and filters: Account, Transaction Type and Instrument as multi-choice lists of the values present, the amount as a range (od–do, on the Actual Amount, read with `parse_number`), the date as a range, and the comment by contained text (ignoring case). Filters combine with the View Scope, show as active on their headers with one "wyczyść filtry", and the export buttons export the filtered list.
+- [ ] #101 (L-25) History without Stooq: no Stooq API key can be had (2026-10-12), so History uses Yahoo only. Only if gaps hurt: add analizy.pl quotation history (funds, PPK) and/or the Bossa EOD archive `mstall.zip` (GPW, indices such as WIG) as keyless history sources (spec 4).
+- [ ] #102 (L-26) Past retail treasury bonds by Series name: in the "+" dialog's bond mode, let the user type or pick a Series (e.g. `EDO0827`, `COI1125`) instead of only the one the type and purchase date give, so older purchases can be entered. The MF file already holds the past Series (EDO from EDO1014, COI from COI1003, OTS, ROS, ROD, TOS, ROR, DOR all theirs), so valuation needs no new data: list the type's Series from the MF copy (searchable, newest first), check the purchase date against the Series' sale window (`SeriesTerms.sale_start`/`sale_end`; outside it a warning, a Rollover purchase may fall a few days later) and take the price from it (100 zł or its Rollover price). Check whether the MF file has the types no longer sold (e.g. DOS, TZ, CZL); without their terms such a Series is created with no rate and shows "brak oprocentowania" until corrected by hand (spec 3.4.1).
+- [x] L-27 Excel-like filters and sorting in the Transakcje tab: each column header sorts (date newest or oldest first by its arrow, the default newest) and filters: Account, Transaction Type and Instrument as multi-choice lists of the values present, the amount as a range (od–do, on the Actual Amount, read with `parse_number`), the date as a range, and the comment by contained text (ignoring case). Filters combine with the View Scope, show as active on their headers with one "wyczyść filtry", and the export buttons export the filtered list.
+- [ ] #103 (L-28) Deleting an Account and no "+" in Ustawienia: the Account dialog in Ustawienia > Konta gets a "Usuń konto" button (editing only, with a confirmation naming the Account) that deletes it; an Account still named by Transactions (its own or as a Transfer's target), a Strategy or the XTB account mapping is refused with a Polish message saying what holds it (deactivating stays the way to hide it). The floating "+" (`add-transaction`) is not shown on the Ustawienia tab.
