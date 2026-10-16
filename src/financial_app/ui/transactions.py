@@ -1,15 +1,10 @@
 """The Transakcje tab and the transaction dialog for adding, editing and deleting (spec 3.3).
 
-For now: PLN Deposits and Withdrawals, Costs (in PLN or foreign cash), Currency Exchanges, Buys and Sells
-(foreign-currency ones paid from foreign cash or in PLN, converted at the user's rate, the NBP Rate (D-1) or by the
-broker for its FX Conversion Fee), Dividends and interest (paid into PLN or foreign cash the same way), DRIPs,
-Splits, and PLN Cash Transfers and Security Transfers to another Account. A Buy of retail treasury bonds has its bond
-mode: the type and the purchase date give the Bond Series, created on its first purchase (spec 3.4.1). A Sell of a
-Bond Series is an Early Redemption: it picks its Lot, the oldest by default, and is prefilled with the gross value of
-one bond, the early-redemption fee and the tax withheld (ADR-0007).
+The dialog binds its widgets to the form model in ``domain/transaction_form.py`` (#111), which holds what each
+Transaction Type shows and how its fields read, and saves through ``sources/transaction_saving.py`` (#110).
 """
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import date
 from decimal import Decimal
@@ -18,34 +13,20 @@ from typing import Any
 from nicegui import ui
 from sqlalchemy import Engine
 
-from financial_app.domain.accounts import AccountType, tax_regime_for
-from financial_app.domain.bond_redemption import early_redemption
-from financial_app.domain.bonds import (
-    ISSUE_PRICE,
-    BondSeries,
-    BondType,
-    bond_type_of,
-    series_name,
-    series_of_type,
-    sold_on,
-)
-from financial_app.domain.currencies import MissingNbpRateError, NbpRate
+from financial_app.domain.bonds import BondType
+from financial_app.domain.currencies import MissingNbpRateError
 from financial_app.domain.formatting import (
-    currency_unit,
     format_amount,
     format_date,
     format_exact,
-    format_percent,
     format_pln,
     format_quantity,
     format_rate,
     format_unit_price,
     parse_date,
     parse_number,
-    parse_ratio,
 )
 from financial_app.domain.instruments import InstrumentError
-from financial_app.domain.lots import Lot, open_lots
 from financial_app.domain.transaction_filters import (
     CHOICE_COLUMNS,
     NEWEST_FIRST,
@@ -58,61 +39,32 @@ from financial_app.domain.transaction_filters import (
     type_options,
     view,
 )
-from financial_app.domain.transactions import (
-    PLN,
-    BrokerConversion,
-    Origin,
-    SplitRatio,
-    Transaction,
-    TransactionDraft,
-    TransactionError,
-    TransactionType,
-    buy_or_sell,
-    cash_transfer,
-    cost,
-    covering_exchange,
-    currency_exchange,
-    dividend,
-    drip,
-    lowest_cash_balance,
-    security_transfer,
-    split,
+from financial_app.domain.transaction_form import (
+    BOND_TYPE_OPTIONS,
+    BUY_CURRENCY,
+    SELL_CURRENCY,
+    TRANSACTION_TYPE_OPTIONS,
+    FormContext,
+    FormLayout,
+    FormState,
+    FormTexts,
+    TransactionForm,
 )
+from financial_app.domain.transactions import Origin, Transaction, TransactionError, TransactionType
 from financial_app.persistence.accounts import list_accounts
 from financial_app.persistence.bond_data import load_series_terms
-from financial_app.persistence.bond_series import drop_if_unused, list_bond_series, load_bond_data, series_instrument
-from financial_app.persistence.instruments import get_instrument, list_instruments
-from financial_app.persistence.transactions import (
-    add_transactions,
-    delete_transaction,
-    list_transactions,
-    transactions_in_entry_order,
-    update_transaction,
-)
+from financial_app.persistence.bond_series import list_bond_series, load_bond_data
+from financial_app.persistence.instruments import list_instruments
+from financial_app.persistence.transactions import list_transactions, transactions_in_entry_order
 from financial_app.sources.export import FileFormat, export_transactions
 from financial_app.sources.nbp import NbpRates
+from financial_app.sources.transaction_saving import delete_saved, save_transaction
 from financial_app.ui.changes import Change
-from financial_app.ui.contribution_limits import LimitCheck
 from financial_app.ui.dialogs import movable_dialog
 from financial_app.ui.multi_asset import open_split_dialog
+from financial_app.ui.save_warnings import show_warnings
 from financial_app.ui.view_scope import ViewScope, breadcrumbs
 
-# Offered for buying a foreign currency in a Currency Exchange, so the first exchange needs no setup
-SUGGESTED_EXCHANGE_CURRENCIES = ("USD", "EUR")
-# Currency Exchange directions in the dialog: buying the foreign currency for PLN, or selling it for PLN
-_BUY, _SELL = "buy", "sell"
-TRANSACTION_TYPE_OPTIONS = {transaction_type.value: transaction_type.label for transaction_type in TransactionType}
-# The bond types in the order the dialog offers them, the most bought first, with their terms
-BOND_TYPE_OPTIONS = {
-    BondType.EDO.value: "EDO · 10 lat",
-    BondType.COI.value: "COI · 4 lata",
-    BondType.TOS.value: "TOS · 3 lata",
-    BondType.OTS.value: "OTS · 3 miesiące",
-    BondType.ROR.value: "ROR · 1 rok",
-    BondType.DOR.value: "DOR · 2 lata",
-    BondType.ROS.value: "ROS · 6 lat",
-    BondType.ROD.value: "ROD · 12 lat",
-}
 COLUMNS = "grid-template-columns: 7rem minmax(8rem, 1fr) 6rem minmax(9rem, 1fr) 9rem minmax(8rem, 2fr)"
 
 
@@ -411,115 +363,76 @@ def open_transaction_dialog(
 ) -> None:
     """Open a fresh dialog for a new Transaction (``None``) or for editing or deleting ``transaction``.
 
-    It is built on demand and removed when closed; ``on_saved`` runs after a save or a delete.
+    It is built on demand and removed when closed; ``on_saved`` runs after a save or a delete. Its rules live in
+    ``domain/transaction_form.py``; the dialog only binds its widgets to them.
     """
     dialog = movable_dialog()
     dialog.on("hide", dialog.delete)
-    all_accounts = list_accounts(engine)
-    account_names = {a.id: a.name for a in all_accounts}
-    # Deposits, Withdrawals and commissions are in PLN so far, so only Accounts holding PLN can take part;
-    # an edited Transaction keeps offering its own Account even if that has been deactivated since
-    accounts = {
-        a.id: a.name
-        for a in all_accounts
-        if (a.active and PLN in a.cash_currencies) or (transaction is not None and a.id == transaction.account_id)
-    }
-    cash_currencies = {a.id: a.cash_currencies for a in all_accounts}
-    accounts_by_id = {a.id: a for a in all_accounts}
-    all_instruments = list_instruments(engine)
-    instruments = {i.id: i.name for i in all_instruments}
-    currencies = {i.id: i.quote_currency for i in all_instruments}
-    held_series = {series.name: series for series in list_bond_series(engine).values()}
-    mf_terms = load_series_terms(engine)
-    bond_ids = {i.id for i in all_instruments if i.is_bond_series}
-    bond_data = load_bond_data(engine)
-    saved_transactions = transactions_in_entry_order(engine)
-    # An edited Buy of a Bond Series opens in the bond mode, with its type
-    edited_series = next(
-        (
-            i.name
-            for i in all_instruments
-            if transaction is not None
-            and transaction.transaction_type is TransactionType.BUY
-            and i.id == transaction.instrument_id
-            and i.is_bond_series
-        ),
-        None,
+    form = TransactionForm(
+        FormContext(
+            accounts=list_accounts(engine),
+            instruments=list_instruments(engine),
+            transactions=transactions_in_entry_order(engine),
+            held_series={series.name: series for series in list_bond_series(engine).values()},
+            mf_terms=load_series_terms(engine),
+            bond_data=load_bond_data(engine),
+            rates=rates.before,
+            edited=transaction,
+        )
     )
     with dialog, ui.card().classes("w-[460px]"):
         ui.label("Nowa transakcja" if transaction is None else "Edytuj transakcję").classes("text-lg font-bold")
-        if not accounts:
+        if not form.accounts:
             ui.label("Najpierw dodaj konto z walutą PLN w zakładce Ustawienia.").classes("text-gray-500")
             with ui.row().classes("w-full justify-end"):
                 ui.button("Zamknij", on_click=dialog.close).props("flat")
             dialog.open()
             return
 
+        start = form.initial_state(date.today())
+        texts = start.texts
         # The Account comes first and stands out (#118): it decides the type's fields, Cash currencies and bond mode
-        account_id = transaction.account_id if transaction else next(iter(accounts))
-        account = ui.select(accounts, label="Konto", value=account_id).props("filled bg-color=blue-1")
+        account = ui.select(form.accounts, label="Konto", value=start.account_id).props("filled bg-color=blue-1")
         account.classes("w-full [&_.q-field\\_\\_native]:font-bold").mark("transaction-account")
-        kind = transaction.transaction_type if transaction else TransactionType.DEPOSIT
-        transaction_type = ui.select(TRANSACTION_TYPE_OPTIONS, label="Typ", value=kind.value)
+        transaction_type = ui.select(TRANSACTION_TYPE_OPTIONS, label="Typ", value=start.kind.value)
         transaction_type.classes("w-full").mark("transaction-type")
-        # A Transfer goes to another of the same Accounts; an edited one keeps offering its own target
-        own_target = transaction.target_account_id if transaction else None
-        targets = {**accounts, **({own_target: account_names[own_target]} if own_target is not None else {})}
-        target = ui.select(targets, label="Na konto", value=own_target).classes("w-full")
+        target = ui.select(form.targets, label="Na konto", value=start.target_id).classes("w-full")
         target.mark("transaction-target-account")
-        day_text = format_date(transaction.date if transaction else date.today())
-        day = ui.input("Data", value=day_text).classes("w-full").mark("transaction-date")
+        day = ui.input("Data", value=start.day).classes("w-full").mark("transaction-date")
         with day.add_slot("append"):
             icon = ui.icon("event").classes("cursor-pointer")
             with ui.menu() as menu:
                 ui.date(mask="DD.MM.YYYY").bind_value(day).on_value_change(menu.close)
             icon.on("click", menu.open)
 
-        texts = _field_texts(transaction)
         with ui.column().classes("w-full gap-0") as exchange_fields:
-            sells = transaction is not None and transaction.to_pln
-            directions = {_BUY: "PLN → waluta", _SELL: "waluta → PLN"}
-            direction = ui.select(directions, label="Kierunek", value=_SELL if sells else _BUY).classes("w-full")
+            directions = {BUY_CURRENCY: "PLN → waluta", SELL_CURRENCY: "waluta → PLN"}
+            direction = ui.select(directions, label="Kierunek", value=start.direction).classes("w-full")
             direction.mark("transaction-direction")
             exchange_currency = ui.select([], label="Waluta").classes("w-full").mark("transaction-currency")
             foreign_amount = ui.input(value=texts.foreign_amount).classes("w-full")
             foreign_amount.mark("transaction-foreign-amount")
-        # A Cost on an Account holding a foreign currency may be paid from that cash
-        own_cost_currency = (
-            transaction.cash_currency if transaction and transaction.transaction_type is TransactionType.COST else PLN
-        )
-        cost_currency = ui.select([own_cost_currency], label="Waluta", value=own_cost_currency).classes("w-full")
+        cost_currency = ui.select([start.cost_currency], label="Waluta", value=start.cost_currency).classes("w-full")
         cost_currency.mark("transaction-cost-currency")
         amount = ui.input("Kwota (zł)", value=texts.amount).classes("w-full").mark("transaction-amount")
         with ui.column().classes("w-full gap-0") as instrument_fields:
-            # A new Buy on a Bonds Account starts in the bond mode
-            bonds_account = accounts_by_id[account_id].account_type is AccountType.BONDS
-            starts_in_bonds = edited_series is not None or (transaction is None and bonds_account)
-            bond_mode = ui.checkbox("Obligacje skarbowe detaliczne", value=starts_in_bonds)
+            bond_mode = ui.checkbox("Obligacje skarbowe detaliczne", value=start.bond_mode)
             bond_mode.mark("transaction-bond-mode")
-            own_type = bond_type_of(edited_series) if edited_series else None
-            # The Series the edited Buy's own type and date give, which may differ from its own (an imported Buy dated
-            # on the settlement day, say)
-            own_name = series_name(own_type, transaction.date) if own_type and transaction else None
-            bond_type = ui.select(BOND_TYPE_OPTIONS, label="Rodzaj obligacji", value=(own_type or BondType.EDO).value)
+            bond_type = ui.select(BOND_TYPE_OPTIONS, label="Rodzaj obligacji", value=start.bond_type.value)
             bond_type.classes("w-full").mark("transaction-bond-type")
             # Any Series of the type may be picked, e.g. for an older purchase (L-26); the date's own is the default
             series_choice = ui.select({}, label="Seria", with_input=True).classes("w-full")
             series_choice.mark("transaction-bond-series-choice")
             series_text = ui.label().classes("text-sm text-gray-600").mark("transaction-bond-series")
-            rolled = edited_series is not None and transaction is not None and transaction.price != ISSUE_PRICE
-            rollover = ui.checkbox("z rolowania", value=rolled).mark("transaction-rollover")
-            instrument_id = transaction.instrument_id if transaction else None
+            rollover = ui.checkbox("z rolowania", value=start.rollover).mark("transaction-rollover")
             # A Dividend without an Instrument is interest, e.g. on the Account's cash
-            instrument = ui.select(instruments, label="Instrument", value=instrument_id, clearable=True)
+            instrument = ui.select(form.instruments, label="Instrument", value=start.instrument_id, clearable=True)
             instrument.classes("w-full").mark("transaction-instrument")
             # An Early Redemption names the Lot it redeems (ADR-0007)
             lot = ui.select({}, label="Partia").classes("w-full").mark("transaction-lot")
-            if not instruments:
+            if not form.instruments:
                 ui.label("Najpierw dodaj instrument w zakładce Ustawienia.").classes("text-gray-500")
-            own_dividend_currency = (
-                transaction.dividend_currency if transaction and transaction.transaction_type.is_dividend else None
-            )
+            own_dividend_currency = start.dividend_currency
             dividend_currency = ui.select(
                 [own_dividend_currency] if own_dividend_currency else [], label="Waluta", value=own_dividend_currency
             )
@@ -534,299 +447,149 @@ def open_transaction_dialog(
             withholding_tax.mark("transaction-withholding-tax")
             net = ui.label().classes("text-sm text-gray-600").mark("transaction-net")
             paid_from = ui.select({}, label="Płatność").classes("w-full").mark("transaction-paid-from")
-            fx_rate = ui.input(value=texts.fx_rate).props('hint="Puste = kurs NBP z dnia roboczego przed datą"')
+            fx_rate = ui.input(value=texts.fx_rate)
             fx_rate.classes("w-full").mark("transaction-fx-rate")
             commission = ui.input("Prowizja (zł)", value=texts.commission).classes("w-full")
             commission.mark("transaction-commission")
-            # Only on an Account with an FX Conversion Fee, unchecked unless the edited trade was converted (spec 3.3)
-            convert = ui.checkbox(value=texts.charged != "").mark("transaction-conversion")
+            convert = ui.checkbox(value=start.convert).mark("transaction-conversion")
             charged = ui.input("Kwota pobrana przez brokera (zł)", value=texts.charged).classes("w-full")
             charged.props('hint="Za liczbę × cenę, bez prowizji"').mark("transaction-charged")
-            # Only a new Buy: an automatic Exchange is a Transaction of its own once saved
             auto_exchange = ui.checkbox("Wymień walutę automatycznie").mark("transaction-auto-exchange")
-
-        def default_settlement(currency: str) -> str:
-            """The Instrument's own currency if the Account holds it, else PLN (spec 3.3).
-
-            An edited trade keeps how it was paid while its Account and currency stay, even if the Account's Cash
-            Currencies changed since.
-            """
-            if (
-                transaction is not None
-                and transaction.transaction_type.settles_in_cash_currency
-                and transaction.account_id == account.value
-                and transaction.instrument_id is not None
-                and currencies.get(transaction.instrument_id) == currency
-            ):
-                return transaction.cash_currency
-            return currency if currency in cash_currencies.get(account.value, ()) else PLN
-
-        def settlement_currency() -> str:
-            """The Cash Currency a Buy or Sell is paid from, or a Dividend into: the user's choice where the Account
-            offers one; interest goes into the cash of its own currency."""
-            if TransactionType(transaction_type.value) is TransactionType.DIVIDEND and instrument.value is None:
-                return trade_currency()
-            return paid_from.value if paid_from.visible and paid_from.value else PLN
-
-        def redeems_bonds() -> bool:
-            """A Sell of a Bond Series: an Early Redemption, which picks its Lot."""
-            return TransactionType(transaction_type.value) is TransactionType.SELL and instrument.value in bond_ids
-
-        def held_lots() -> dict[int, Lot]:
-            """The Lots of the chosen Bond Series the Account holds on the chosen day, by the Transaction that opened
-            them; the edited Sell's own units count as held."""
-            try:
-                day_value = parse_date(day.value or "")
-                held = open_lots(
-                    saved_transactions,  # in entry order, which settles same-day ties
-                    account.value,
-                    instrument.value,
-                    day_value,
-                    edited_id=None if transaction is None else transaction.id,
-                )
-            except ValueError, TransactionError:
-                return {}
-            return {held_lot.opened_by: held_lot for held_lot in held if held_lot.opened_by is not None}
-
-        def bonds_chosen() -> bool:
-            """A Buy in the bond mode: the type and date give the Instrument, a Bond Series in PLN."""
-            return TransactionType(transaction_type.value) is TransactionType.BUY and bool(bond_mode.value)
+        comment = ui.input("Komentarz", value=texts.comment).classes("w-full").mark("transaction-comment")
+        error = ui.label().classes("text-negative").mark("transaction-error")
 
         picked: list[str | None] = [None]  # a Series the user picked instead of the one the date gives
-        type_series: dict[BondType, dict[str, str]] = {}  # the Series list offered for each type, built once
         offered: list[tuple[list[str], str | None] | None] = [None]  # the Series list and value shown last
         syncing = [False]  # set while the dialog itself fills the Series list
+        # Set while a layout is applied, and set again when a value it sets asks for another one
+        applying, again = [False], [False]
 
-        def date_series() -> str | None:
-            """The Series the chosen type and purchase date give, ``None`` until the date reads as one."""
+        def state() -> FormState:
+            return FormState(
+                account_id=account.value,
+                kind=TransactionType(transaction_type.value),
+                day=day.value or "",
+                texts=FormTexts(
+                    amount=amount.value or "",
+                    foreign_amount=foreign_amount.value or "",
+                    quantity=quantity.value or "",
+                    price=price.value or "",
+                    fx_rate=fx_rate.value or "",
+                    commission=commission.value or "",
+                    charged=charged.value or "",
+                    gross=gross.value or "",
+                    withholding_tax=withholding_tax.value or "",
+                    ratio=ratio.value or "",
+                    comment=comment.value or "",
+                ),
+                target_id=target.value,
+                instrument_id=instrument.value,
+                bond_mode=bool(bond_mode.value),
+                bond_type=BondType(bond_type.value),
+                series_pick=picked[0],
+                rollover=bool(rollover.value),
+                lot_id=lot.value,
+                direction=direction.value,
+                exchange_currency=exchange_currency.value,
+                cost_currency=cost_currency.value,
+                dividend_currency=dividend_currency.value,
+                paid_from=paid_from.value,
+                convert=bool(convert.value),
+                auto_exchange=bool(auto_exchange.value),
+            )
+
+        def update() -> None:
+            """Show the fields the form's state needs; a value it sets that changes the state runs it once more."""
+            if applying[0]:
+                again[0] = True
+                return
+            applying[0] = True
             try:
-                day_value = parse_date(day.value or "")
-            except ValueError:
-                return None
-            name = series_name(BondType(bond_type.value), day_value)
-            # An edited Buy stays in its own Series while its type and the month of its date stay
-            if name == own_name and edited_series is not None:
-                name = edited_series
-            return name
+                for _ in range(5):  # settles in one or two rounds
+                    again[0] = False
+                    apply(form.layout(state()))
+                    if not again[0]:
+                        break
+            finally:
+                applying[0] = False
 
-        def chosen_series() -> BondSeries | None:
-            """The Bond Series picked, else the one the type and purchase date give."""
-            name = picked[0] or date_series()
-            if name is None:
-                return None
-            return held_series.get(name) or BondSeries(None, name, mf_terms.get(name))
+        def apply(layout: FormLayout) -> None:
+            amount.visible = layout.amount.visible
+            amount.props(f'label="{layout.amount.label}"')
+            instrument_fields.visible = layout.instrument_fields
+            target.visible = layout.target.visible
+            target.set_options(dict(layout.target.options), value=layout.target.value)
+            ratio.visible = layout.ratio
+            exchange_fields.visible = layout.exchange_fields
+            dividend_currency.visible = layout.dividend_currency.visible
+            if layout.dividend_currency.visible:
+                currencies = list(layout.dividend_currency.options)
+                dividend_currency.set_options(currencies, value=layout.dividend_currency.value)
+            quantity.visible = layout.quantity.visible
+            quantity.props(f'label="{layout.quantity.label}"')
+            bond_mode.visible = layout.bond_mode
+            for bond_field in (bond_type, series_choice, series_text):
+                bond_field.visible = layout.bond_fields
+            instrument.visible = layout.instrument
+            price.visible = layout.price.visible
+            price.props(f'label="{layout.price.label}"')
+            commission.visible = layout.commission
+            rollover.visible = layout.rollover
+            if layout.bond_fields:
+                list_series(layout.series.options, layout.series.value)
+            series_text.text = layout.series_text
+            lot.visible = layout.lot.visible
+            if layout.lot.visible:
+                lot.set_options(dict(layout.lot.options), value=layout.lot.value)
+            gross.visible = layout.gross.visible
+            gross.props(f'label="{layout.gross.label}"')
+            withholding_tax.visible = layout.withholding_tax.visible
+            withholding_tax.props(f'label="{layout.withholding_tax.label}"')
+            net.visible = layout.net.visible
+            prefill_redemption()
+            show_net()
+            fx_rate.visible = layout.fx_rate.visible
+            fx_rate.props(f'label="{layout.fx_rate.label}" hint="{layout.fx_rate.hint}"')
+            paid_from.visible = layout.paid_from.visible
+            paid_from.props(f'label="{layout.paid_from.label}"')
+            if layout.paid_from.visible:
+                paid_from.set_options(dict(layout.paid_from.options), value=layout.paid_from.value)
+            convert.visible = layout.convert.visible
+            if layout.convert.label:
+                convert.text = layout.convert.label
+            charged.visible = layout.charged.visible
+            charged.props(f'label="{layout.charged.label}" hint="{layout.charged.hint}"')
+            cost_currency.visible = layout.cost_currency.visible
+            cost_currency.set_options(list(layout.cost_currency.options), value=layout.cost_currency.value)
+            auto_exchange.visible = layout.auto_exchange
+            exchange_currency.set_options(list(layout.exchange_currency.options), value=layout.exchange_currency.value)
+            direction.set_options(dict(layout.direction.options), value=layout.direction.value)
+            foreign_amount.props(f'label="{layout.foreign_amount.label}"')
+
+        def list_series(options: Mapping[str, str], value: str | None) -> None:
+            """Offer the type's Series, sending the list only when it changed."""
+            if (list(options), value) == offered[0]:
+                return  # nothing to send again
+            offered[0] = (list(options), value)
+            syncing[0] = True
+            try:
+                series_choice.set_options(dict(options), value=value)
+            finally:
+                syncing[0] = False
 
         def series_picked() -> None:
             if syncing[0]:
                 return
             value = series_choice.value
-            picked[0] = None if value is None or value == date_series() else str(value)
+            picked[0] = None if value is None or value == form.date_series(state()) else str(value)
             update()
             bond_price()
 
         def type_changed() -> None:
             picked[0] = None  # a Series of another type is not one of this type
 
-        def trade_currency() -> str:
-            """The Instrument's currency; interest without one is in the currency the user chose."""
-            if bonds_chosen():
-                return PLN
-            if instrument.value is not None:
-                return currencies[instrument.value]
-            if TransactionType(transaction_type.value) is TransactionType.DIVIDEND and dividend_currency.value:
-                return str(dividend_currency.value)
-            return PLN
-
         def show_net() -> None:
-            """A Dividend's gross amount less its withholding tax, or what an Early Redemption pays out, once the
-            amounts read as numbers."""
-            if redeems_bonds():
-                try:
-                    paid = parse_number(quantity.value) * parse_number(price.value)
-                    deducted = [
-                        parse_number(text) for text in (commission.value, withholding_tax.value) if text.strip()
-                    ]
-                except ValueError:
-                    net.text = ""
-                    return
-                net.text = f"Wypłata netto: {format_pln(paid - sum(deducted, Decimal(0)))}"
-                return
-            try:
-                tax_text = withholding_tax.value.strip()
-                value = parse_number(gross.value) - (parse_number(tax_text) if tax_text else Decimal(0))
-            except ValueError:
-                net.text = ""
-                return
-            net.text = f"Netto: {format_amount(value, trade_currency())}"
-
-        def fee_percent() -> Decimal | None:
-            """The Account's FX Conversion Fee; an edited converted trade keeps its own while its Account stays."""
-            if transaction is not None and transaction.account_id == account.value:
-                own = transaction.fx_conversion_fee_percent
-                if own is not None:
-                    return own
-            return accounts_by_id[account.value].fx_conversion_fee_percent
-
-        def converted_by_broker() -> bool:
-            return convert.visible and bool(convert.value)
-
-        def cost_paid_in() -> str:
-            """The Cash Currency a Cost is paid from: PLN unless the user chose a foreign one."""
-            return str(cost_currency.value) if cost_currency.visible and cost_currency.value else PLN
-
-        def broker_conversion(kind: TransactionType) -> BrokerConversion | None:
-            """What the broker charged (or, for a Dividend, credited) when the user marked its conversion (spec 3.3)."""
-            if not converted_by_broker():
-                return None
-            if not charged.value.strip():
-                done = "pobraną" if kind.is_buy_or_sell else "wypłaconą"
-                raise TransactionError(f"Podaj kwotę {done} przez brokera.")
-            fee = fee_percent()
-            assert fee is not None  # the checkbox shows only with a fee
-            charged_amount = _read(parse_number, charged.value, "Kwota od brokera musi być liczbą, np. 5 451,90.")
-            return BrokerConversion(charged_amount, fee)
-
-        def update() -> None:
-            """Show the fields the chosen type needs; the price is in the Instrument's currency, a foreign one also
-            takes a rate, and an Account holding that currency pays from it (spec 3.3, 3.5)."""
-            kind = TransactionType(transaction_type.value)
-            trade, dividend_type, units_only = kind.is_buy_or_sell, kind.is_dividend, not kind.has_amount
-            amount.visible = not trade and not dividend_type and not units_only
-            instrument_fields.visible = trade or dividend_type or units_only
-            target.visible = kind.is_transfer
-            others = {i: name for i, name in targets.items() if i != account.value}
-            target.set_options(others, value=target.value if target.value in others else next(iter(others), None))
-            ratio.visible = kind is TransactionType.SPLIT
-            exchange_fields.visible = kind is TransactionType.CURRENCY_EXCHANGE
-            interest = kind is TransactionType.DIVIDEND and instrument.value is None
-            dividend_currency.visible = interest
-            if interest:
-                own = [own_dividend_currency] if own_dividend_currency else []
-                options = list(dict.fromkeys([*cash_currencies.get(account.value, ()), *own]))
-                chosen_currency = dividend_currency.value if dividend_currency.value in options else PLN
-                dividend_currency.set_options(options, value=chosen_currency)
-            currency = trade_currency()
-            quantity.visible = trade or kind in (TransactionType.DRIP, TransactionType.SECURITY_TRANSFER)
-            bonds = bonds_chosen()
-            bond_mode.visible = kind is TransactionType.BUY
-            for bond_field in (bond_type, series_choice, series_text):
-                bond_field.visible = bonds
-            instrument.visible = not bonds
-            price.visible = trade
-            commission.visible = trade
-            show_series(bonds)
-            redemption = redeems_bonds()
-            lot.visible = redemption
-            if redemption:
-                lot_options = {
-                    lot_id: f"{format_date(held.date)} · {format_quantity(held.quantity)} szt. · "
-                    f"po {format_pln(held.cost / held.quantity)}"
-                    for lot_id, held in held_lots().items()
-                }
-                own_lot = transaction.lot_id if transaction is not None else None
-                chosen_lot = lot.value if lot.value in lot_options else own_lot if own_lot in lot_options else None
-                first_lot = next(iter(lot_options), None)
-                lot.set_options(lot_options, value=chosen_lot if chosen_lot is not None else first_lot)
-            gross.visible = dividend_type
-            for dividend_field in (withholding_tax, net):
-                dividend_field.visible = dividend_type or redemption
-            gross.props(f'label="Kwota brutto ({currency_unit(currency)})"')
-            tax_label = "Podatek pobrany" if redemption else "Podatek u źródła"
-            withholding_tax.props(f'label="{tax_label} ({currency_unit(currency)})"')
-            prefill_redemption()
-            show_net()
-            price.props(f'label="Cena ({currency_unit(currency)})"')
-            fx_rate.props(f'label="Kurs {currency}/PLN"')
-            # An Account holding the Instrument's currency pays from that cash or from PLN, as the user chooses; a
-            # Dividend goes into either the same way
-            sources = {currency: f"gotówka {currency}", PLN: "PLN z przewalutowaniem"}
-            held = currency in cash_currencies.get(account.value, ())
-            settles = kind.settles_in_cash_currency and not interest
-            paid_from.visible = settles and currency != PLN and (held or default_settlement(currency) != PLN)
-            paid_from.props(f'label="{"Płatność" if trade else "Wpływ"}"')
-            if paid_from.visible:
-                chosen_source = paid_from.value if paid_from.value in sources else default_settlement(currency)
-                paid_from.set_options(sources, value=chosen_source)
-            settled_in = settlement_currency()
-            fee = fee_percent()
-            convert.visible = settles and currency != PLN and settled_in == PLN and fee is not None
-            if fee is not None:
-                chosen_account = accounts_by_id[account.value]
-                broker = chosen_account.broker or chosen_account.name
-                convert.text = f"Prowizja {broker} (przewalutowanie {format_percent(fee)})"
-            charged.visible = converted_by_broker()
-            if trade:
-                charged.props('label="Kwota pobrana przez brokera (zł)" hint="Za liczbę × cenę, bez prowizji"')
-            else:
-                charged.props('label="Kwota wypłacona przez brokera (zł)" hint="Za kwotę netto"')
-            cost_options = list(dict.fromkeys([*cash_currencies.get(account.value, ()), own_cost_currency]))
-            cost_currency.visible = kind is TransactionType.COST and cost_options != [PLN]
-            chosen_cost = cost_currency.value if cost_currency.value in cost_options else PLN
-            cost_currency.set_options(cost_options, value=chosen_cost)
-            amount.props(f'label="Kwota ({currency_unit(cost_paid_in())})"')
-            # Interest paid into foreign cash takes a rate too: it values that cash in PLN, like a Buy paid from it;
-            # a DRIP converts nothing, so it counts at the NBP Rate
-            fx_rate.visible = (trade or kind is TransactionType.DIVIDEND) and currency != PLN and not charged.visible
-            auto_exchange.visible = transaction is None and kind is TransactionType.BUY and settled_in != PLN
-            foreign = [c for c in cash_currencies.get(account.value, ()) if c != PLN]
-            # Buying a currency the Account does not hold yet is the usual first exchange, so offer the common ones
-            if direction.value == _BUY:
-                foreign = [*foreign, *SUGGESTED_EXCHANGE_CURRENCIES]
-            if transaction is not None and transaction.transaction_type is TransactionType.CURRENCY_EXCHANGE:
-                foreign = [*foreign, transaction.cash_currency]
-            foreign = [c for c in dict.fromkeys(foreign) if c != PLN]
-            chosen = exchange_currency.value if exchange_currency.value in foreign else None
-            if chosen is None and transaction is not None and transaction.cash_currency in foreign:
-                chosen = transaction.cash_currency
-            exchange_currency.set_options(foreign, value=chosen or (foreign[0] if foreign else None))
-            shown = exchange_currency.value or "waluta"
-            direction.set_options({_BUY: f"PLN → {shown}", _SELL: f"{shown} → PLN"}, value=direction.value)
-            foreign_amount.props(f'label="Kwota ({shown})"')
-
-        def show_series(bonds: bool) -> None:
-            """Name the Series the bond mode buys, with its first rate, and offer a Rollover where one buys it."""
-            series = chosen_series() if bonds else None
-            rollover.visible = series is not None and series.rollover_price is not None
-            quantity.props(f'label="{"Liczba obligacji" if bonds else "Liczba"}"')
-            if bonds:
-                list_series(series)
-            if series is None:
-                series_text.text = "Podaj datę zakupu, by wybrać serię." if bonds else ""
-                return
-            parts = [f"Seria {series.name}"]
-            if series.first_rate is not None:
-                parts.append(f"1. okres: {format_percent(series.first_rate * 100)}")
-            if series.mf is None:
-                parts.append("jeszcze nie ma jej w pliku MF")
-            else:
-                try:
-                    rolled_over = rollover.visible and bool(rollover.value)
-                    outside = not sold_on(series.mf, parse_date(day.value or ""), rolled_over)
-                except ValueError:
-                    outside = False
-                if outside:
-                    window = f"{format_date(series.mf.sale_start)}–{format_date(series.mf.sale_end)}"
-                    parts.append(f"data zakupu poza sprzedażą serii ({window})")
-            series_text.text = " · ".join(parts)
-
-        def list_series(series: BondSeries | None) -> None:
-            """Offer the type's Series from the MF file, the newest first, with the chosen one even when MF lacks it."""
-            kind = BondType(bond_type.value)
-            if kind not in type_series:
-                sold = series_of_type(mf_terms.values(), kind)
-                type_series[kind] = {t.series: f"{t.series} · sprzedaż {t.sale_start:%m.%Y}" for t in sold}
-            options = type_series[kind]
-            if series is not None and series.name not in options:
-                options = {series.name: series.name, **options}
-            value = series.name if series else None
-            if (list(options), value) == offered[0]:
-                return  # nothing to send again
-            offered[0] = (list(options), value)
-            syncing[0] = True
-            try:
-                series_choice.set_options(options, value=value)
-            finally:
-                syncing[0] = False
+            net.text = form.net_text(state())
 
         set_price = [""]  # the price the bond mode set last, which it may set again
         # What the Early Redemption prefill set last in each field, which it may set again; a value the user typed (or
@@ -842,50 +605,44 @@ def open_transaction_dialog(
         def prefill_redemption() -> None:
             """Fill an Early Redemption with the chosen Lot's bonds, one bond's gross value as the price, the fee as
             the commission and the tax the Account's Tax Regime withholds (spec 3.4.1)."""
-            if prefilling[0] or not redeems_bonds():
+            if prefilling[0] or not form.redeems_bonds(state()):
                 return
             prefilling[0] = True
             try:
-                held = held_lots().get(lot.value) if lot.value is not None else None
-                if held is None:
+                units = form.lot_quantity(state())
+                if units is None:
                     return
-                prefill(quantity, format_quantity(held.quantity))
-                bond_price = bond_data.price(instrument.value, parse_date(day.value))
-                units = parse_number(quantity.value)
-                tax_rate = tax_regime_for(accounts_by_id[account.value].account_type).withheld_tax_rate
-                redemption = None if bond_price is None else early_redemption(bond_price, held, units, tax_rate)
+                prefill(quantity, units)
+                redemption = form.redemption(state())
                 if redemption is None:
                     return
                 prefill(price, format_exact(redemption.price))
                 prefill(commission, format_exact(redemption.fee))
                 prefill(withholding_tax, format_exact(redemption.tax))
-            except ValueError:
-                return  # a quantity or date that does not read yet
             finally:
                 prefilling[0] = False
 
         def bond_price(rollover_changed: bool = False) -> None:
             """Price the bond mode's purchase: 100 zł, or the Rollover price of the Series. A price the user typed (or
             the edited Buy's own) stays unless the Rollover is switched."""
-            series = chosen_series()
-            if not bonds_chosen() or series is None:
+            value = form.bond_price(state())
+            if value is None:
                 return
             if not rollover_changed and price.value.strip() and price.value != set_price[0]:
                 return
-            rollover_price = series.rollover_price if rollover.value else None
-            price.value = set_price[0] = format_exact(rollover_price or ISSUE_PRICE)
+            price.value = set_price[0] = value
 
         def account_changed() -> None:
             # A new Buy follows the Account: the bond mode on a Bonds Account, else an Instrument
             if transaction is None:
-                bond_mode.value = accounts_by_id[account.value].account_type is AccountType.BONDS
+                bond_mode.value = form.bond_mode_for(account.value)
 
         update()
         if transaction is None:
             bond_price()
         account.on_value_change(account_changed)
         rollover.on_value_change(lambda: bond_price(rollover_changed=True))
-        rollover.on_value_change(lambda: show_series(bonds_chosen()))
+        rollover.on_value_change(update)
         series_choice.on_value_change(series_picked)
         bond_type.on_value_change(type_changed)  # before the handlers that read the chosen Series
         for bond_field in (bond_mode, bond_type, day, transaction_type):
@@ -908,174 +665,37 @@ def open_transaction_dialog(
             redemption_input.on_value_change(prefill_redemption)
         for net_input in (gross, withholding_tax, quantity, price, commission):
             net_input.on_value_change(show_net)
-        comment = ui.input("Komentarz", value=transaction.comment if transaction else "").classes("w-full")
-        comment.mark("transaction-comment")
-        error = ui.label().classes("text-negative").mark("transaction-error")
-
-        def stored_nbp_rate(currency: str, day_value: date) -> NbpRate:
-            """The edited Transaction's own NBP Rate while its currency and date stay, so editing works offline.
-
-            Otherwise it is fetched (or read from the cache) only now, so a missing one blocks the save (spec 3.3).
-            """
-            if transaction is not None and transaction.date == day_value:
-                own = transaction.nbp_rate
-                if own is not None and own.currency == currency:
-                    return own
-            return rates.before(currency, day_value)
-
-        def read_draft(series_id: int | None = None) -> TransactionDraft:
-            """The Transaction the fields describe; a bond-mode Buy buys the Series ``series_id``."""
-            kind = TransactionType(transaction_type.value)
-            day_value = _read(parse_date, day.value, "Data musi mieć postać DD.MM.RRRR.")
-            if kind is TransactionType.CURRENCY_EXCHANGE:
-                if exchange_currency.value is None:
-                    raise TransactionError("To konto nie ma waluty obcej. Dodaj ją w Ustawieniach, w Kontach.")
-                return currency_exchange(
-                    account.value,
-                    day_value,
-                    exchange_currency.value,
-                    _read(parse_number, foreign_amount.value, "Kwota w walucie musi być liczbą, np. 1 000,50."),
-                    _read(parse_number, amount.value, "Kwota musi być liczbą, np. 1 000,50."),
-                    to_pln=direction.value == _SELL,
-                    comment=comment.value,
-                )
-            if kind.is_dividend:
-                return read_dividend(kind, day_value)
-            if kind is TransactionType.CASH_TRANSFER:
-                value = _read(parse_number, amount.value, "Kwota musi być liczbą, np. 1 000,50.")
-                return cash_transfer(account.value, day_value, target.value, value, comment.value)
-            if not kind.has_amount:
-                return read_units_only(kind, day_value)
-            if not kind.is_buy_or_sell:
-                value = _read(parse_number, amount.value, "Kwota musi być liczbą, np. 1 000,50.")
-                paid_in = cost_paid_in()
-                if kind is TransactionType.COST and paid_in != PLN:
-                    nbp = stored_nbp_rate(paid_in, day_value)
-                    return cost(account.value, day_value, value, comment.value, cash_currency=paid_in, nbp_rate=nbp)
-                return TransactionDraft(account.value, day_value, kind, value, comment.value)
-            bought = instrument.value if series_id is None else series_id
-            if bought is None:
-                raise TransactionError("Wybierz instrument.")
-            currency = trade_currency()
-            nbp_rate = None if currency == PLN else stored_nbp_rate(currency, day_value)
-            conversion = broker_conversion(kind)
-            own_rate = fx_rate.value.strip() if nbp_rate and conversion is None else ""
-            tax_text = withholding_tax.value.strip() if redeems_bonds() else ""
-            return buy_or_sell(
-                account.value,
-                day_value,
-                kind,
-                bought,
-                _read(parse_number, quantity.value, "Liczba musi być liczbą, np. 10 lub 0,5."),
-                _read(parse_number, price.value, "Cena musi być liczbą, np. 45,50."),
-                _read(parse_number, commission.value, "Prowizja musi być liczbą, np. 5,00.")
-                if commission.value.strip()
-                else Decimal(0),
-                comment.value,
-                fx_rate=_read(parse_number, own_rate, "Kurs musi być liczbą, np. 3,65.") if own_rate else None,
-                nbp_rate=nbp_rate,
-                cash_currency=settlement_currency(),
-                conversion=conversion,
-                withholding_tax=_read(parse_number, tax_text, "Podatek musi być liczbą, np. 15,00.")
-                if tax_text
-                else Decimal(0),
-                lot_id=lot.value if redeems_bonds() else None,
-            )
-
-        def read_units_only(kind: TransactionType, day_value: date) -> TransactionDraft:
-            """A Split, or a Security Transfer of some units to the target Account."""
-            if instrument.value is None:
-                raise TransactionError("Wybierz instrument.")
-            if kind is TransactionType.SPLIT:
-                new, old = _read(parse_ratio, ratio.value, "Podaj split w postaci X:Y z liczb całkowitych, np. 2:1.")
-                return split(account.value, day_value, instrument.value, SplitRatio(new, old), comment.value)
-            units = _read(parse_number, quantity.value, "Liczba musi być liczbą, np. 10 lub 0,5.")
-            return security_transfer(account.value, day_value, target.value, instrument.value, units, comment.value)
-
-        def read_dividend(kind: TransactionType, day_value: date) -> TransactionDraft:
-            """A Dividend, interest or DRIP; a foreign-currency one takes the NBP Rate and maybe the user's rate or,
-            for a Dividend, the amount the broker credited."""
-            gross_value = _read(parse_number, gross.value, "Kwota brutto musi być liczbą, np. 100,50.")
-            tax_text = withholding_tax.value.strip()
-            tax = _read(parse_number, tax_text, "Podatek musi być liczbą, np. 15,00.") if tax_text else Decimal(0)
-            currency = trade_currency()
-            nbp_rate = None if currency == PLN else stored_nbp_rate(currency, day_value)
-            conversion = broker_conversion(kind)
-            own_rate = fx_rate.value.strip() if nbp_rate and conversion is None else ""
-            rate = _read(parse_number, own_rate, "Kurs musi być liczbą, np. 3,65.") if own_rate else None
-            if kind is TransactionType.DIVIDEND:
-                # Interest edited as interest keeps naming the Lot whose coupon it is, so its Draft stays confirmed
-                was_interest = transaction is not None and transaction.transaction_type is TransactionType.DIVIDEND
-                coupon_lot = transaction.lot_id if transaction is not None and was_interest else None
-                return dividend(
-                    account.value,
-                    day_value,
-                    gross_value,
-                    tax,
-                    comment.value,
-                    instrument_id=instrument.value,
-                    fx_rate=rate,
-                    nbp_rate=nbp_rate,
-                    cash_currency=settlement_currency(),
-                    conversion=conversion,
-                    lot_id=coupon_lot if instrument.value is None else None,
-                )
-            if instrument.value is None:
-                raise TransactionError("Wybierz instrument.")
-            units = _read(parse_number, quantity.value, "Liczba musi być liczbą, np. 10 lub 0,5.")
-            return drip(
-                account.value, day_value, instrument.value, units, gross_value, tax, comment.value, nbp_rate=nbp_rate
-            )  # fmt: skip
 
         def save() -> None:
-            created: int | None = None  # a Bond Series created for this purchase, removed again if it fails
+            form_state = state()
             try:
-                series_id = None
-                if bonds_chosen():
-                    series = chosen_series()
-                    if series is None:
-                        raise TransactionError("Data musi mieć postać DD.MM.RRRR.")
-                    bought, new = series_instrument(engine, series.name)
-                    series_id, created = bought.id, bought.id if new else None
-                draft = read_draft(series_id)
-                limit_check = LimitCheck.start(engine, [draft, transaction])
-                if transaction is None:
-                    # The Exchange goes first, so the Buy spends the cash it brings (spec 3.3)
-                    exchange = [covering_exchange(draft)] if auto_exchange.visible and auto_exchange.value else []
-                    add_transactions(engine, [*exchange, draft])
-                else:
-                    update_transaction(engine, transaction.id, draft)
+                saved = save_transaction(
+                    engine,
+                    lambda series_id: form.draft(form_state, series_id),
+                    edited=transaction,
+                    series=form.series_to_buy(form_state),
+                    with_exchange=form.with_exchange(form_state),
+                )
             except (TransactionError, MissingNbpRateError, InstrumentError) as exc:
-                drop_if_unused(engine, created)
                 error.text = str(exc)
                 return
-            except Exception:
-                drop_if_unused(engine, created)
-                raise
-            if (
-                transaction is not None
-                and edited_series is not None
-                and draft.instrument_id != transaction.instrument_id
-            ):
-                drop_if_unused(engine, transaction.instrument_id)  # the Series the Buy left, if it holds nothing else
             dialog.close()
-            # An edit may move the Transaction to another day or Account, so also check where it was
-            _warn_if_cash_runs_out(engine, "Zapisano", account_names, draft, transaction)
-            if limit_check is not None:
-                limit_check.warn([draft, transaction])
+            # The dialog asks for a Multi-asset Split itself, so it is no warning here
+            show_warnings(saved.warnings, unsplit=False)
             on_saved()
-            _ask_for_multi_asset_split(engine, draft, on_saved)
+            for unsplit in saved.warnings.unsplit:
+                open_split_dialog(engine, unsplit, on_saved)
 
         def delete(confirmation: ui.dialog) -> None:
             assert transaction is not None
             confirmation.close()
             try:
-                delete_transaction(engine, transaction.id)
+                deleted = delete_saved(engine, transaction.id)
             except TransactionError as exc:
                 error.text = f"Nie można usunąć tej transakcji. {exc}"
                 return
             dialog.close()
-            _warn_if_cash_runs_out(engine, "Usunięto", account_names, transaction)
+            show_warnings(deleted.warnings, "Usunięto")
             on_saved()
 
         with ui.row().classes("w-full items-center"):
@@ -1086,15 +706,6 @@ def open_transaction_dialog(
             ui.button("Anuluj", on_click=dialog.close).props("flat")
             ui.button("Zapisz" if transaction is None else "Zapisz zmiany", on_click=save)
     dialog.open()
-
-
-def _ask_for_multi_asset_split(engine: Engine, draft: TransactionDraft, on_saved: Callable[[], None]) -> None:
-    """After buying a Multi-asset Instrument that has no Multi-asset Split yet, open its split dialog (spec 3.2)."""
-    if draft.transaction_type not in (TransactionType.BUY, TransactionType.DRIP) or draft.instrument_id is None:
-        return
-    instrument = get_instrument(engine, draft.instrument_id)
-    if instrument.is_multi_asset and not instrument.multi_asset_split:
-        open_split_dialog(engine, instrument, on_saved)
 
 
 def _confirm_delete(delete: Callable[[ui.dialog], None]) -> None:
@@ -1110,61 +721,6 @@ def _confirm_delete(delete: Callable[[ui.dialog], None]) -> None:
     confirmation.open()
 
 
-@dataclass(frozen=True)
-class _FieldTexts:
-    amount: str = ""
-    foreign_amount: str = ""
-    quantity: str = ""
-    price: str = ""
-    fx_rate: str = ""
-    commission: str = ""
-    charged: str = ""
-    gross: str = ""
-    withholding_tax: str = ""
-    ratio: str = ""
-
-
-def _field_texts(transaction: Transaction | None) -> _FieldTexts:
-    """The edit-field texts for ``transaction``, exact so that re-saving never rounds a value."""
-    if transaction is None:
-        return _FieldTexts()
-    if transaction.transaction_type is TransactionType.CURRENCY_EXCHANGE:
-        assert transaction.quantity is not None
-        return _FieldTexts(
-            amount=format_exact(transaction.actual_amount), foreign_amount=format_exact(transaction.quantity)
-        )
-    if transaction.transaction_type.is_dividend:
-        assert transaction.gross is not None
-        return _FieldTexts(
-            quantity="" if transaction.quantity is None else format_quantity(transaction.quantity),
-            fx_rate="" if transaction.fx_rate is None else format_exact(transaction.fx_rate),
-            gross=format_exact(transaction.gross),
-            withholding_tax=format_exact(transaction.withholding_tax),
-            # What the broker credited for the net amount
-            charged="" if transaction.fx_conversion_fee_percent is None else format_exact(transaction.actual_amount),
-        )
-    if transaction.transaction_type is TransactionType.SPLIT:
-        return _FieldTexts(ratio=str(transaction.split_ratio))
-    if transaction.transaction_type is TransactionType.SECURITY_TRANSFER:
-        assert transaction.quantity is not None
-        return _FieldTexts(quantity=format_quantity(transaction.quantity))
-    if transaction.transaction_type is TransactionType.COST and transaction.quantity is not None:
-        return _FieldTexts(amount=format_exact(transaction.quantity))  # paid from foreign cash
-    if not transaction.transaction_type.is_buy_or_sell:
-        return _FieldTexts(amount=format_exact(transaction.actual_amount))
-    assert transaction.quantity is not None and transaction.price is not None
-    converted = transaction.fx_conversion_fee_percent is not None
-    return _FieldTexts(
-        quantity=format_quantity(transaction.quantity),
-        price=format_exact(transaction.price),
-        fx_rate="" if transaction.fx_rate is None else format_exact(transaction.fx_rate),
-        commission=format_exact(transaction.commission),
-        withholding_tax=format_exact(transaction.withholding_tax),
-        # What the broker charged for quantity × price, the commission aside
-        charged=format_exact(transaction.converted_amount) if converted else "",
-    )
-
-
 def _rates_text(trade: Transaction) -> str:
     """The rate the trade was converted at, if not the NBP Rate, then the NBP Rate with its table and publication day.
 
@@ -1177,38 +733,3 @@ def _rates_text(trade: Transaction) -> str:
     if fee is not None:
         return f"kurs {format_rate(trade.effective_fx_rate)} · przewalutowanie {format_pln(fee)} · {nbp}"
     return nbp if trade.fx_rate is None else f"kurs {format_exact(trade.fx_rate)} · {nbp}"
-
-
-def _warn_if_cash_runs_out(
-    engine: Engine, done: str, account_names: dict[int, str], *touched: TransactionDraft | None
-) -> None:
-    """Warn per Account and Cash Currency whose Cash Balance goes negative from the earliest ``touched`` date on.
-
-    Insufficient cash only warns (spec 3.3), so history can be entered in any order. ``done`` opens the
-    message ("Zapisano", "Usunięto").
-    """
-    starts: dict[tuple[int, str], date] = {}
-    for t in touched:
-        if t is not None:
-            keys = [(t.account_id, currency) for currency in dict.fromkeys((PLN, t.cash_currency))]
-            if t.target_account_id is not None:
-                keys.append((t.target_account_id, PLN))  # a Cash Transfer edited or deleted takes its cash back
-            for key in keys:
-                starts[key] = min(t.date, starts.get(key, t.date))
-    transactions = list_transactions(engine)
-    for (account_id, currency), start in starts.items():
-        lowest = lowest_cash_balance(transactions, account_id, start=start, currency=currency)
-        if lowest < 0:
-            cash = "Saldo gotówki" if currency == PLN else f"Saldo gotówki {currency}"
-            ui.notify(
-                f"{done}, ale {cash} konta {account_names[account_id]} jest ujemne: {format_amount(lowest, currency)}.",
-                type="warning",
-            )
-
-
-def _read[T](parse: Callable[[str], T], text: str, message: str) -> T:
-    """Parse a form field, turning a parse failure into a TransactionError with ``message``."""
-    try:
-        return parse(text)
-    except ValueError:
-        raise TransactionError(message) from None

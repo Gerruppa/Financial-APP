@@ -14,6 +14,8 @@ from financial_app.domain.formatting import format_date, format_pln, format_quan
 from financial_app.domain.instruments import InstrumentError
 from financial_app.domain.transactions import TransactionError
 from financial_app.persistence.bond_drafts import confirm_draft, confirm_rollover, pending_drafts, rollover_price
+from financial_app.sources.transaction_saving import checked_save
+from financial_app.ui.save_warnings import show_warnings
 
 
 def drafts_list(engine: Engine, today: date, account_id: int | None, on_saved: Callable[[], None]) -> None:
@@ -45,11 +47,12 @@ def _coupon_row(engine: Engine, draft: CouponDraft, name_account: bool, on_saved
 
         def confirm() -> None:
             try:
-                confirm_draft(engine, draft)
+                saved = checked_save(engine, lambda: confirm_draft(engine, draft))
             except TransactionError as exc:
                 ui.notify(str(exc), type="negative")
                 return
             ui.notify(f"Zapisano odsetki {draft.instrument.name}.", type="positive")
+            show_warnings(saved.warnings)
             on_saved()
 
         ui.button("Zatwierdź odsetki", on_click=confirm).props("flat").mark("confirm-coupon")
@@ -74,11 +77,12 @@ def _draft_row(engine: Engine, draft: MaturityDraft, name_account: bool, on_save
 
         def redeem() -> None:
             try:
-                confirm_draft(engine, draft)
+                saved = checked_save(engine, lambda: confirm_draft(engine, draft))
             except TransactionError as exc:
                 ui.notify(str(exc), type="negative")
                 return
             ui.notify(f"Zapisano wykup {draft.instrument.name}.", type="positive")
+            show_warnings(saved.warnings)
             on_saved()
 
         ui.button("Zatwierdź wykup", on_click=redeem).props("flat").mark("confirm-redemption")
@@ -112,12 +116,13 @@ def _rollover_dialog(engine: Engine, draft: MaturityDraft, on_saved: Callable[[]
                 error.text = "Liczba musi być liczbą, np. 10."
                 return
             try:
-                confirm_rollover(engine, draft, BondType(bond_type.value), units)
+                saved = checked_save(engine, lambda: confirm_rollover(engine, draft, BondType(bond_type.value), units))
             except (TransactionError, InstrumentError) as exc:
                 error.text = str(exc)
                 return
             dialog.close()
             ui.notify(f"Zapisano zamianę {draft.instrument.name}.", type="positive")
+            show_warnings(saved.warnings)
             on_saved()
 
         show()

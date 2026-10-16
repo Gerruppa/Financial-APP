@@ -21,12 +21,11 @@ from financial_app.domain.transactions import TransactionDraft, TransactionError
 from financial_app.domain.xtb_import import XtbStatement, yahoo_symbol
 from financial_app.persistence.accounts import list_accounts
 from financial_app.persistence.instruments import list_instruments
-from financial_app.persistence.reconciliation import AddBroker, TakeBroker
-from financial_app.persistence.transactions import list_transactions
 from financial_app.sources.spreadsheet import NbpLookup
+from financial_app.sources.transaction_saving import checked_save
 from financial_app.sources.xtb import LEFT_OUT, XtbDecisions, XtbPreview, apply_xtb, preview_xtb, read_statements
 from financial_app.ui.accounts import open_account_dialog
-from financial_app.ui.contribution_limits import LimitCheck
+from financial_app.ui.save_warnings import show_warnings
 
 NEW = "new"
 PAIR_OPTIONS = {Choice.BROKER: "Weź XTB", Choice.MINE: "Zostaw moje"}
@@ -260,16 +259,18 @@ class XtbImportSection:
         self.render()
 
     def apply(self) -> None:
-        limit_check = LimitCheck(self.engine, list_transactions(self.engine))
         try:
-            applied = apply_xtb(self.engine, self.statements, self.rates, self._decisions(), self.today())
+            applied = checked_save(
+                self.engine,
+                lambda: apply_xtb(self.engine, self.statements, self.rates, self._decisions(), self.today()),
+            )
         except TransactionError as error:
             ui.notify(str(error), type="negative")
             self.render()
             return
-        count = format_count(len(applied.actions()), "pozycję", "pozycje", "pozycji")
+        count = format_count(len(applied.value.actions()), "pozycję", "pozycje", "pozycji")
         ui.notify(f"Uzgodniono z XTB {count}.", type="positive")
-        limit_check.warn([a.draft for a in applied.actions() if isinstance(a, AddBroker | TakeBroker)])
+        show_warnings(applied.warnings)
         self.choices = {}
         if self.on_saved is not None:
             self.on_saved()
