@@ -20,6 +20,7 @@ from financial_app.domain.formatting import format_date, format_pln, format_quan
 from financial_app.sources.nbp import NbpRates
 from financial_app.sources.todays_view import todays_view
 from financial_app.ui.bond_drafts import drafts_list
+from financial_app.ui.changes import TODAYS_VALUE
 from financial_app.ui.view_scope import ViewScope
 
 COLUMNS = "grid-template-columns: minmax(8rem, 2fr) repeat(7, minmax(6rem, 1fr))"
@@ -44,6 +45,9 @@ CALENDAR_HEADERS = ("Data", "Seria", "Zdarzenie", "Brutto", "Netto")
 class BondsPage:
     """The Obligacje tab of the View Scope; the bonds are valued at the end of the NBP Rates' today, as the
     Portfolio values them."""
+
+    # The changes it redraws on (ui/changes.py)
+    CHANGES = TODAYS_VALUE
 
     engine: Engine
     rates: NbpRates

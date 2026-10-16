@@ -17,6 +17,7 @@ from financial_app.persistence.accounts import list_accounts
 from financial_app.persistence.benchmarks import add_benchmark, delete_benchmark, ensure_default_benchmarks, set_shown
 from financial_app.persistence.instruments import list_instruments
 from financial_app.sources.benchmarks import benchmark_comparison
+from financial_app.ui.changes import Change
 from financial_app.ui.charts import pln_bars_chart, pln_lines_chart
 from financial_app.ui.periods import PeriodChoice, period_selector
 from financial_app.ui.view_scope import ViewScope
@@ -40,6 +41,9 @@ KINDS = {BenchmarkKind.CPI: "CPI (inflacja)", BenchmarkKind.INSTRUMENT: "Instrum
 class BenchmarksPage:
     """The Benchmarki tab of the View Scope; ``history`` gives History's days once computed, ``fetch`` starts fetching
     the missing history (after a benchmark Instrument was added)."""
+
+    # The changes it redraws on (ui/changes.py)
+    CHANGES = frozenset({Change.BOND_DATA, Change.SCOPE, Change.HISTORY})
 
     engine: Engine
     scope: ViewScope

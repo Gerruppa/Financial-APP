@@ -18,6 +18,7 @@ from financial_app.domain.portfolio_history import DayValue
 from financial_app.domain.results import TABLE_PRESETS, PeriodResults, ResultsRow, period_results, results_rows
 from financial_app.persistence.accounts import list_accounts
 from financial_app.persistence.bond_data import load_cpi
+from financial_app.ui.changes import Change
 from financial_app.ui.charts import drawdown_chart
 from financial_app.ui.info import card_title
 from financial_app.ui.periods import PeriodChoice, period_selector
@@ -44,6 +45,9 @@ TILE_INFO = {
 @dataclass
 class ResultsPage:
     """The Wyniki tab of the View Scope, under the period selector; ``history`` gives History's days once computed."""
+
+    # The changes it redraws on (ui/changes.py)
+    CHANGES = frozenset({Change.BOND_DATA, Change.SCOPE, Change.HISTORY})
 
     engine: Engine
     scope: ViewScope

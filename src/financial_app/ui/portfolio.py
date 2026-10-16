@@ -36,6 +36,7 @@ from financial_app.domain.transactions import costs_by_account, dividends_by_acc
 from financial_app.domain.valuation import Badge, InstrumentPrice, PriceStatus
 from financial_app.sources.nbp import NbpRates
 from financial_app.sources.todays_view import TodaysView, todays_view
+from financial_app.ui.changes import TODAYS_VALUE
 from financial_app.ui.fund_details import fund_details
 from financial_app.ui.view_scope import ViewScope, breadcrumbs
 
@@ -59,6 +60,9 @@ class _Totals:
 @dataclass
 class PortfolioPage:
     """The Portfolio tab. It never offers editing controls."""
+
+    # The changes it redraws on (ui/changes.py)
+    CHANGES = TODAYS_VALUE
 
     engine: Engine
     rates: NbpRates

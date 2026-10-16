@@ -12,11 +12,16 @@ from financial_app.domain.instruments import Instrument
 from financial_app.domain.prices import source_reason
 from financial_app.domain.valuation import Unpriced
 from financial_app.sources.prices import unpriced_instruments
+from financial_app.ui.changes import Change
 
 
 @dataclass
 class UnpricedSection:
-    """The Instrumenty bez wyceny card; ``refresh`` redraws it after an Instrument save or a price refresh."""
+    """The Instrumenty bez wyceny card; ``refresh`` redraws it after a Transaction save, a price refresh or an
+    Instrument change. Bond Series are never listed, so bond data leaves it alone."""
+
+    # The changes it redraws on (ui/changes.py)
+    CHANGES = frozenset({Change.TRANSACTIONS, Change.PRICES, Change.INSTRUMENTS})
 
     engine: Engine
 

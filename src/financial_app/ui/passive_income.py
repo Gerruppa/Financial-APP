@@ -23,6 +23,7 @@ from financial_app.persistence.instruments import list_instruments
 from financial_app.persistence.settings import PASSIVE_INCOME_GOAL, load_setting, save_setting
 from financial_app.sources.nbp import NbpRates
 from financial_app.sources.passive_income import income_items
+from financial_app.ui.changes import TODAYS_VALUE
 from financial_app.ui.charts import pln_bars_chart
 from financial_app.ui.view_scope import ViewScope
 
@@ -49,6 +50,9 @@ FORECAST_COLUMNS = "grid-template-columns: minmax(6rem, 1fr) minmax(8rem, 2fr) m
 class PassiveIncomePage:
     """The Dochód pasywny tab of the View Scope; the year shown starts at the NBP Rates' today's and is not
     remembered."""
+
+    # The changes it redraws on (ui/changes.py)
+    CHANGES = TODAYS_VALUE
 
     engine: Engine
     rates: NbpRates

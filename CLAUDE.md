@@ -17,7 +17,7 @@ Rules no config enforces:
 - The schema changes only through a new migration: `.venv/Scripts/python.exe -m alembic revision --autogenerate -m "..."`; `tests/test_database.py` fails if models and migrations drift. The database lives in the user's app-data folder (`FINANCIAL_APP_DATA_DIR` overrides), never in the repo.
 - UI text is Polish; code, DB names and docs English. Errors for the user carry a Polish message.
 - UI tests use NiceGUI's `user_simulation` and find elements by `.mark(...)` markers; `user.find("text")` matches substrings, so keep labels and markers unique.
-- Each tab redraws through its page's `refresh()`; `ui/shell.py` calls it after a save, a price refresh, a scope change and once History is computed.
+- Each tab redraws through its page's `refresh()`, on the changes its class declares in `CHANGES` (`ui/changes.py`); `ui/shell.py` only publishes the changes (a save, a price or bond data refresh, a scope switch, an Instrument change, History outdated or computed). A new tab declares `CHANGES` and joins the shell's `tabs` list.
 
 The app re-implements the inwestomat.eu "Portfolio tracker" Google Sheet. The agreed spec is `docs/spec.md`, the glossary is `CONTEXT.md` (its Polish-to-English index is `GLOSSARY.md`, kept in step by `tests/test_glossary.py`) and key decisions are in `docs/adr/`. `reference/` holds the user's spreadsheet export and its Apps Script source; it is git-ignored because it contains personal financial data, so never commit it or copy its data into tracked files.
 
