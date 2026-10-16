@@ -25,7 +25,6 @@ from financial_app.ui.view_scope import ViewScope
 
 DASH = "—"
 COLUMNS = "grid-template-columns: minmax(10rem, 2.5fr) minmax(8rem, 1.5fr) repeat(11, minmax(5.5rem, 1fr))"
-NUMBER_FROM = 4  # the columns from Liczba on hold numbers
 HEADERS = (
     "Instrument",
     "Konto",
@@ -41,6 +40,7 @@ HEADERS = (
     "Wynik z dyw.",
     "Rentowność z dyw.",
 )
+NUMBER_FROM = HEADERS.index("Liczba")  # the columns from Liczba on hold numbers
 
 
 @dataclass
