@@ -70,6 +70,20 @@ async def test_withdrawal_is_listed_as_a_negative_amount(engine: Engine, ike: in
             await user.should_see(f"-300,00{NBSP}zł")
 
 
+async def test_the_dialog_asks_for_the_account_first_and_sets_it_apart(engine: Engine, ike: int) -> None:
+    """Issue #118: the Account decides the type's fields, Cash currencies and the bond mode, so it comes first."""
+    async with user_simulation(lambda: build_shell(engine)) as user:
+        await user.open("/transakcje")
+        user.find(marker="add-transaction").click()
+        await user.should_see(marker="transaction-account")
+
+        account = user.find(marker="transaction-account").elements.pop()
+        transaction_type = user.find(marker="transaction-type").elements.pop()
+        assert account.id < transaction_type.id
+        assert account.props.get("bg-color") == "blue-1"
+        assert "filled" in account.props
+
+
 async def test_invalid_amount_is_reported_and_not_saved(engine: Engine, ike: int) -> None:
     async with user_simulation(lambda: build_shell(engine)) as user:
         await user.open("/")

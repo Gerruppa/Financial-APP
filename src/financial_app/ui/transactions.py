@@ -451,12 +451,13 @@ def open_transaction_dialog(
             dialog.open()
             return
 
+        # The Account comes first and stands out (#118): it decides the type's fields, Cash currencies and bond mode
+        account_id = transaction.account_id if transaction else next(iter(accounts))
+        account = ui.select(accounts, label="Konto", value=account_id).props("filled bg-color=blue-1")
+        account.classes("w-full [&_.q-field\\_\\_native]:font-bold").mark("transaction-account")
         kind = transaction.transaction_type if transaction else TransactionType.DEPOSIT
         transaction_type = ui.select(TRANSACTION_TYPE_OPTIONS, label="Typ", value=kind.value)
         transaction_type.classes("w-full").mark("transaction-type")
-        account_id = transaction.account_id if transaction else next(iter(accounts))
-        account = ui.select(accounts, label="Konto", value=account_id).classes("w-full")
-        account.mark("transaction-account")
         # A Transfer goes to another of the same Accounts; an edited one keeps offering its own target
         own_target = transaction.target_account_id if transaction else None
         targets = {**accounts, **({own_target: account_names[own_target]} if own_target is not None else {})}

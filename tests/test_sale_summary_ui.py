@@ -119,7 +119,7 @@ async def test_names_wrap_while_dates_and_numbers_stay_on_one_line(engine: Engin
             assert {"break-words", "min-w-0"} <= set(name.classes)
         for value in cells[2:]:
             assert "whitespace-nowrap" in value.classes
-        headers = {h.text: h for h in user.find(marker="sale-header").elements}
+        headers = {h.text: h for h in user.find(marker="sale-header").elements if isinstance(h, ui.label)}
         assert "text-right" not in headers["Instrument"].classes
         assert "text-right" not in headers["Sprzedaż"].classes
         assert "text-right" in headers["Liczba"].classes
