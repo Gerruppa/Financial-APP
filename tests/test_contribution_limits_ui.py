@@ -89,6 +89,21 @@ async def test_a_limit_edited_in_ustawienia_moves_the_bar_and_a_year_is_added_an
     assert list(load_limits(engine)) == [2026]
 
 
+async def test_the_self_employed_ikze_limit_is_its_own_label_and_the_columns_share_the_row(engine: Engine) -> None:
+    """Issue #117: a two-line field hint ran over "wpłacono" and the columns ran out of a narrow window."""
+    async with user_simulation(lambda: _shell(engine)) as user:
+        await user.open("/ustawienia")
+
+        await user.should_see(
+            marker="limit-self-employed-2026", content=f"Przy działalności gospodarczej: {_pln('16 956,00')}"
+        )
+        field = user.find(marker="limit-2026-ikze").elements.pop()
+        assert "hint" not in field.props
+        for account_type in ("ike", "ikze", "oipe"):
+            column = user.find(marker=f"limit-column-2026-{account_type}").elements.pop()
+            assert {"flex-1", "min-w-0"} <= set(column.classes)
+
+
 async def test_any_earlier_year_can_be_added_but_not_one_that_is_no_year(engine: Engine) -> None:
     async with user_simulation(lambda: _shell(engine)) as user:
         await user.open("/ustawienia")
