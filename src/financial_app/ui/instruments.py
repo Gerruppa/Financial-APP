@@ -25,6 +25,7 @@ from financial_app.domain.instrument_search import (
     fill_empty,
 )
 from financial_app.domain.instruments import (
+    MAX_QUANTITY_DECIMALS,
     AssetClass,
     DistributionPolicy,
     Instrument,
@@ -382,6 +383,13 @@ class InstrumentsSection:
                 symbol_input.on_value_change(count_more)
             asset_class.on_value_change(arrange)
             arrange()
+            decimals = ui.select(
+                {places: str(places) for places in range(MAX_QUANTITY_DECIMALS + 1)},
+                label="Miejsca po przecinku w liczbie",
+                value=instrument.quantity_decimals if instrument else 0,
+            ).classes("w-full")
+            decimals.props('hint="Np. 8 dla kryptowalut; zaokrągla liczbę proponowaną z kwoty do wydania"')
+            decimals.mark("instrument-quantity-decimals")
             price = instrument.manual_price if instrument else None
             price_input = ui.input("Cena ręczna", value="" if price is None else format_exact(price))
             price_input.props(
@@ -500,6 +508,7 @@ class InstrumentsSection:
                         distribution_policy=policy.value,
                         domicile=domicile.value,
                         multi_asset_split=typed_split() if split_section.visible else {},
+                        quantity_decimals=decimals.value,
                     )
                     if instrument is None:
                         saved = add_instrument(self.engine, draft)

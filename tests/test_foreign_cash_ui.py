@@ -229,3 +229,28 @@ async def test_exchange_offers_usd_and_eur_on_an_account_without_foreign_cash(en
         user.find(marker="transaction-currency").click()
         await user.should_see("USD")
         await user.should_see("EUR")
+
+
+async def test_a_usd_deposit_at_the_users_rate_is_listed_and_held_as_usd_cash(engine: Engine, ibkr: int) -> None:
+    async with user_simulation(lambda: _shell(engine)) as user:
+        await user.open("/transakcje")
+        user.find(marker="add-transaction").click()
+        _choose(user, "transaction-account", "IBKR")
+        _choose(user, "transaction-cash-currency", "USD")
+        user.find(marker="transaction-date").clear().type("07.01.2026")
+        user.find(marker="transaction-amount").type("1000")
+        user.find(marker="transaction-fx-rate").type("3,7")
+        user.find("Zapisz").click()
+
+        with user.scope(marker="transactions"):
+            await user.should_see(f"+1{NBSP}000,00{NBSP}USD")
+            await user.should_see(f"rzeczywista +3{NBSP}700,00{NBSP}zł")
+            await user.should_see(f"podatkowa +3{NBSP}604,50{NBSP}zł")
+
+    [deposit] = list_transactions(engine)
+    assert (deposit.transaction_type, deposit.cash_currency, deposit.quantity) == (
+        TransactionType.DEPOSIT,
+        "USD",
+        Decimal(1000),
+    )
+    assert (deposit.actual_amount, deposit.fx_rate) == (Decimal("3700.00"), Decimal("3.7"))

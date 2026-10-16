@@ -36,6 +36,8 @@ ISIN_PATTERN = re.compile(r"[A-Z]{2}[A-Z0-9]{9}[0-9]")
 
 # A troy ounce, the unit of metal spot prices (spec 4.1)
 GRAMS_PER_TROY_OUNCE = Decimal("31.1034768")
+# The most decimal places an Instrument's quantity may have, as crypto needs (#120)
+MAX_QUANTITY_DECIMALS = 8
 
 
 class DistributionPolicy(StrEnum):
@@ -107,6 +109,9 @@ class InstrumentDraft:
     distribution_policy: DistributionPolicy | None = None
     domicile: str = ""
     multi_asset_split: Mapping[int, Decimal] = field(default_factory=dict)
+    # How many decimal places a quantity of it may have: 0 for whole units, up to 8 for crypto or fractional shares;
+    # it only rounds the quantity the transaction dialog proposes from an amount (#120)
+    quantity_decimals: int = 0
 
     def __post_init__(self) -> None:
         name = self.name.strip()
@@ -127,6 +132,8 @@ class InstrumentDraft:
                 raise InstrumentError("Spread odkupu wymaga wagi metalu w jednostce.")
             if not 0 <= spread < 100:
                 raise InstrumentError("Spread odkupu musi wynosić od 0 do mniej niż 100%.")
+        if not 0 <= self.quantity_decimals <= MAX_QUANTITY_DECIMALS:
+            raise InstrumentError(f"Miejsca po przecinku w liczbie: od 0 do {MAX_QUANTITY_DECIMALS}.")
         if self.ter_percent is not None and not 0 <= self.ter_percent < 100:
             raise InstrumentError("TER musi wynosić od 0 do mniej niż 100%.")
         isin = self.isin.strip().upper()

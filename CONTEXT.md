@@ -187,7 +187,7 @@ The daily series of portfolio value by Asset Class, recomputed from Transactions
 _Avoid_: snapshot, daily log
 
 **Net Deposits** (Wpłaty netto):
-Deposits minus Withdrawals up to a date.
+Deposits minus Withdrawals up to a date, in PLN; a foreign-currency one at its own rate (the user's, else the NBP Rate D-1), not at the cost of the foreign cash it moves.
 
 **XIRR**:
 Money-weighted annual return of the portfolio or an Account, based on Deposits and Withdrawals.

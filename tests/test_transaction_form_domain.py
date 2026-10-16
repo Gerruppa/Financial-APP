@@ -18,13 +18,14 @@ from financial_app.domain.transaction_form import (
     FormError,
     FormState,
     FormTexts,
+    Shown,
     TransactionForm,
 )
 from financial_app.domain.transactions import PLN, Transaction, TransactionError, TransactionType
 
 TODAY = date(2026, 3, 10)
 IKE, XTB, OLD, BONDS = 1, 2, 3, 4
-CDR, AAPL, EDO = 10, 11, 12
+CDR, AAPL, EDO, BTC, VWCE = 10, 11, 12, 13, 14
 ACCOUNTS = [
     Account("mBank IKE", "mBank", AccountType.IKE, (PLN,), id=IKE),
     Account("XTB", "XTB", AccountType.REGULAR, (PLN, "USD"), fx_conversion_fee_percent=Decimal("0.5"), id=XTB),
@@ -33,9 +34,12 @@ ACCOUNTS = [
 ]
 
 
-def _instrument(instrument_id: int, name: str, currency: str, asset_class: str = "Akcje polskie") -> Instrument:
+def _instrument(
+    instrument_id: int, name: str, currency: str, asset_class: str = "Akcje polskie", decimals: int = 0
+) -> Instrument:
     return Instrument(
-        name, 1, currency, id=instrument_id, asset_class_name=asset_class, fallback_order=()
+        name, 1, currency, quantity_decimals=decimals, id=instrument_id, asset_class_name=asset_class,
+        fallback_order=(),
     )  # fmt: skip
 
 
@@ -43,14 +47,18 @@ INSTRUMENTS = [
     _instrument(CDR, "CD Projekt", PLN),
     _instrument(AAPL, "Apple", "USD", "Akcje zagraniczne"),
     _instrument(EDO, "EDO0336", PLN, "Obligacje skarbowe polskie"),
+    _instrument(BTC, "Bitcoin", "USD", "Kryptowaluty", decimals=8),
+    _instrument(VWCE, "VWCE", "EUR", "Akcje zagraniczne"),
 ]
 USD_RATE = NbpRate("USD", Decimal("4.0000"), date(2026, 3, 9), "045/A/NBP/2026")
+EUR_RATE = NbpRate("EUR", Decimal("4.2000"), date(2026, 3, 9), "045/A/NBP/2026")
 
 
 def _rates(currency: str, day: date) -> NbpRate:
-    if currency != "USD":
+    rates = {"USD": USD_RATE, "EUR": EUR_RATE}
+    if currency not in rates:
         raise MissingNbpRateError(f"Brak kursu NBP {currency}.")
-    return USD_RATE
+    return rates[currency]
 
 
 def _form(transactions: list[Transaction] | None = None, edited: Transaction | None = None) -> TransactionForm:
@@ -73,7 +81,7 @@ def test_only_active_accounts_holding_pln_are_offered_unless_the_edited_transact
 
 
 def test_a_new_form_opens_as_a_deposit_on_the_first_account_and_an_edit_with_its_own_fields() -> None:
-    assert _form().initial_state(TODAY) == FormState(IKE, TransactionType.DEPOSIT, "10.03.2026", cost_currency=PLN)
+    assert _form().initial_state(TODAY) == FormState(IKE, TransactionType.DEPOSIT, "10.03.2026", cash_currency=PLN)
 
     edited = Transaction(XTB, date(2026, 3, 2), TransactionType.WITHDRAWAL, Decimal("12.5"), "bankomat", id=7)
     start = _form(edited=edited).initial_state(TODAY)
@@ -188,12 +196,44 @@ def test_a_field_that_does_not_read_is_named() -> None:
 def test_a_cost_on_an_account_holding_a_foreign_currency_may_be_paid_from_it() -> None:
     form = _form()
 
-    assert not form.layout(_state(TransactionType.COST, IKE)).cost_currency.visible
-    layout = form.layout(_state(TransactionType.COST, XTB, cost_currency="USD"))
-    assert layout.cost_currency.visible and layout.amount.label == "Kwota (USD)"
+    assert not form.layout(_state(TransactionType.COST, IKE)).cash_currency.visible
+    layout = form.layout(_state(TransactionType.COST, XTB, cash_currency="USD"))
+    assert layout.cash_currency.visible and layout.amount.label == "Kwota (USD)"
 
-    draft = form.draft(_state(TransactionType.COST, XTB, cost_currency="USD", amount="5"))
+    draft = form.draft(_state(TransactionType.COST, XTB, cash_currency="USD", amount="5"))
     assert (draft.cash_currency, draft.quantity, draft.actual_amount) == ("USD", Decimal(5), Decimal(20))
+
+
+def test_a_deposit_on_an_account_holding_a_foreign_currency_may_be_in_it_at_the_users_or_the_nbp_rate() -> None:
+    form = _form()
+
+    pln = form.layout(_state(TransactionType.DEPOSIT, XTB))
+    assert pln.cash_currency.visible and pln.cash_currency.value == PLN and not pln.fx_rate.visible
+    assert not form.layout(_state(TransactionType.DEPOSIT, IKE)).cash_currency.visible
+    usd = form.layout(_state(TransactionType.WITHDRAWAL, XTB, cash_currency="USD"))
+    assert (usd.amount.label, usd.fx_rate.visible, usd.fx_rate.label) == ("Kwota (USD)", True, "Kurs USD/PLN")
+    assert usd.fx_rate.hint == "Puste = kurs NBP z dnia roboczego przed datą"
+    # A Cost in a foreign currency counts at the NBP Rate only
+    assert not form.layout(_state(TransactionType.COST, XTB, cash_currency="USD")).fx_rate.visible
+
+    at_nbp = form.draft(_state(TransactionType.DEPOSIT, XTB, cash_currency="USD", amount="100"))
+    assert (at_nbp.cash_currency, at_nbp.quantity, at_nbp.actual_amount) == ("USD", Decimal(100), Decimal(400))
+    own = form.draft(_state(TransactionType.WITHDRAWAL, XTB, cash_currency="USD", amount="100", fx_rate="3,9"))
+    assert (own.fx_rate, own.nbp_rate, own.actual_amount) == (Decimal("3.9"), USD_RATE, Decimal(390))
+
+
+def test_an_edited_foreign_deposit_opens_with_its_amount_rate_and_own_nbp_rate() -> None:
+    own = NbpRate("USD", Decimal("3.5"), date(2026, 2, 27), "040/A/NBP/2026")
+    edited = Transaction(
+        XTB, date(2026, 3, 2), TransactionType.DEPOSIT, Decimal(360), quantity=Decimal(100), fx_rate=Decimal("3.6"),
+        nbp_rate=own, cash_currency="USD", id=5,
+    )  # fmt: skip
+    form = _form(edited=edited)
+    state = form.initial_state(TODAY)
+
+    assert (state.cash_currency, state.texts.amount, state.texts.fx_rate) == ("USD", "100,00", "3,60")
+    assert form.draft(replace(state, texts=replace(state.texts, fx_rate=""))).nbp_rate == own
+    assert form.draft(replace(state, day="03.03.2026")).nbp_rate == USD_RATE
 
 
 def test_the_bond_mode_buys_the_series_the_type_and_date_give_at_the_issue_price() -> None:
@@ -241,3 +281,53 @@ def test_a_sell_of_a_bond_series_picks_its_lot_the_oldest_by_default() -> None:
     assert form.net_text(replace(state, texts=FormTexts(quantity="4", price="101", commission="1"))) == (
         "Wypłata netto: 403,00\xa0zł"
     )
+
+
+def test_a_buy_proposes_whole_units_for_the_amount_to_spend_less_the_commission() -> None:
+    form = _form()
+    state = _state(TransactionType.BUY, instrument_id=CDR, spend="1000", price="45", commission="5")
+
+    assert form.layout(state).spend == Shown(True, "Kwota do wydania (zł)")
+    # (1000 − 5) ÷ 45 = 22.1
+    assert form.proposed_quantity(state) == "22"
+    assert form.proposed_quantity(replace(state, texts=replace(state.texts, price=""))) is None
+    assert not form.layout(_state(TransactionType.SELL, instrument_id=CDR)).spend.visible
+
+
+def test_a_foreign_buy_paid_in_pln_converts_the_amount_at_the_users_rate_else_the_nbp_rate() -> None:
+    form = _form()
+    state = _state(TransactionType.BUY, instrument_id=BTC, spend="1000", price="60000", commission="10")
+
+    # 990 zł ÷ 4,00 ÷ 60 000, rounded down to the Instrument's 8 decimal places
+    assert form.proposed_quantity(state) == "0,004125"
+    # 990 zł ÷ 3,95 = 250,6329… USD ÷ 60 000
+    assert form.proposed_quantity(replace(state, texts=replace(state.texts, fx_rate="3,95"))) == "0,00417721"
+
+
+def test_a_broker_conversion_raises_the_rate_by_the_accounts_fee() -> None:
+    state = _state(TransactionType.BUY, XTB, instrument_id=BTC, paid_from=PLN, convert=True, spend="1000", price="100")
+
+    # 1000 zł ÷ (4,00 × 1,005) ÷ 100
+    assert _form().proposed_quantity(state) == "2,48756218"
+
+
+def test_the_fee_raises_the_rate_of_any_currency_the_broker_converts_pln_into() -> None:
+    # XTB holds no EUR, so a EUR Instrument is paid in PLN, which the broker converts
+    state = _state(TransactionType.BUY, XTB, instrument_id=VWCE, convert=True, spend="10000", price="100")
+
+    # 10 000 zł ÷ (4,20 × 1,005) ÷ 100 = 23,69…
+    assert _form().proposed_quantity(state) == "23"
+
+
+def test_paid_from_foreign_cash_the_amount_is_in_that_currency_and_the_pln_commission_stays_apart() -> None:
+    form = _form()
+    state = _state(TransactionType.BUY, XTB, instrument_id=AAPL, spend="1000", price="300", commission="5")
+
+    assert form.layout(state).spend.label == "Kwota do wydania (USD)"
+    assert form.proposed_quantity(state) == "3"
+
+
+def test_the_bond_mode_proposes_bonds_at_their_price() -> None:
+    state = _state(TransactionType.BUY, bond_mode=True, spend="1050", price="100")
+
+    assert _form().proposed_quantity(state) == "10"
