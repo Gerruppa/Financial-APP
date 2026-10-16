@@ -22,11 +22,23 @@ from financial_app.domain.account_ranking import (
 )
 from financial_app.domain.formatting import format_percent, format_pln
 from financial_app.ui.charts import PLN_FORMATTER
+from financial_app.ui.info import card_title
 
 DASH = "—"
 # The tile colours run from pale at no P&L to full at this share of the Net Deposits
 _FULL_COLOUR_AT = Decimal("0.3")
 _PALE, _GAIN, _LOSS, _UNKNOWN = (232, 245, 233), (46, 125, 50), (198, 40, 40), "#9e9e9e"
+TREEMAP_INFO = (
+    "Każde konto to prostokąt: im większy, tym większa wartość konta. Kolor to zysk lub strata względem wpłat "
+    "netto: zielony to zysk, czerwony strata, a im ciemniejszy, tym większy (pełny kolor od 30 % wpłat); szary "
+    "oznacza konto bez wyliczonego wyniku.\n\nKliknięcie konta przełącza widok na to konto."
+)
+RANKING_INFO = (
+    "Konta obok siebie: XIRR (roczna stopa zwrotu z uwzględnieniem terminów wpłat), TWR (stopa zwrotu bez wpływu "
+    "wpłat i wypłat, dobra do porównania kont), zysk lub strata, wpłaty netto i koszty.\n\n"
+    "Kliknij nagłówek, by posortować; ponowne kliknięcie odwraca kolejność. Zielona pogrubiona wartość to najlepsza "
+    "w kolumnie, czerwona najgorsza."
+)
 
 
 def accounts_treemap(rows: Sequence[RankingRow], switch: Callable[[int], None]) -> None:
@@ -67,7 +79,7 @@ def accounts_treemap(rows: Sequence[RankingRow], switch: Callable[[int], None]) 
             switch(ids[event.name])
 
     with ui.card().classes("w-full gap-1"):
-        ui.label("Konta").classes("text-lg font-medium")
+        card_title("Konta", TREEMAP_INFO, "accounts-treemap")
         ui.echart(options, on_point_click=clicked).classes("w-full h-72").mark("chart-accounts-treemap")
 
 
@@ -105,7 +117,7 @@ class AccountRanking:
             table.refresh()
 
         with ui.card().classes("w-full overflow-x-auto").mark("account-ranking"):
-            ui.label("Ranking kont").classes("text-lg font-medium")
+            card_title("Ranking kont", RANKING_INFO, "account-ranking")
             table()
 
     def _table(self, rows: Sequence[RankingRow], sort_by: Callable[[RankingColumn], None]) -> None:

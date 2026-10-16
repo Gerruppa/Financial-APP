@@ -38,6 +38,7 @@ from financial_app.persistence.strategies import delete_strategy, list_strategie
 from financial_app.sources.dashboard import TodaysDashboard, todays_dashboard
 from financial_app.sources.nbp import NbpRates
 from financial_app.ui.dialogs import movable_dialog
+from financial_app.ui.info import info_icon
 from financial_app.ui.view_scope import ViewScope
 
 STATUS_COLOURS = {BandStatus.GREEN: "bg-green-1", BandStatus.YELLOW: "bg-amber-2", BandStatus.RED: "bg-red-2"}
@@ -104,6 +105,15 @@ def out_of_band_notice(engine: Engine, rates: NbpRates) -> str | None:
     return f"Poza pasmem tolerancji: {'; '.join(parts)}." if parts else None
 
 
+# Behind the "i" of the Dashboard's Strategia inwestycyjna
+STRATEGY_INFO = (
+    "Porównanie dzisiejszego udziału każdej klasy aktywów z celem ustawionym w zakładce Strategie inwestycyjne. "
+    "Klasa poza dopuszczalnym odchyleniem wymaga rebalansowania.\n\n"
+    "Planowana wpłata pokazuje, jak podzielić nowe pieniądze między klasy, żeby zbliżyć portfel do celów bez "
+    "sprzedawania czegokolwiek."
+)
+
+
 def strategy_section(
     engine: Engine, today: TodaysDashboard, account_id: int | None, planned: PlannedDeposit
 ) -> ScopeStrategy:
@@ -113,6 +123,7 @@ def strategy_section(
         with ui.row().classes("w-full items-center"):
             ui.label("Strategia inwestycyjna").classes("text-lg font-medium grow")
             ui.link("Szczegóły", "/strategie").mark("strategy-details")
+            info_icon(STRATEGY_INFO, "strategy")
         return _strategy_body(engine, today, account_id, planned, details=False)
 
 

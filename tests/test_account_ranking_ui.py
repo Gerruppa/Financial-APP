@@ -182,3 +182,54 @@ async def test_after_tax_takes_the_estimated_belka_off_regular_accounts_results(
         await _until(lambda: _ranking(user)[0][3] == "+153,90\N{NO-BREAK SPACE}zł")
         assert _ranking(user)[1][3] == "+111,20\N{NO-BREAK SPACE}zł"
         await _until(lambda: _changes(_chart(user, "waterfall").options)[-2:] == [-39.9, 265.1])
+
+
+async def test_the_waterfall_labels_each_bar_with_its_change_and_its_axis_labels_slant(engine: Engine) -> None:
+    async with user_simulation(_shell(engine)) as user:
+        await _opened(user)
+
+        options = _chart(user, "waterfall").options
+        assert options["xAxis"]["axisLabel"]["rotate"] == 35
+        render = options["series"][0][":renderItem"]
+        assert "type: 'text'" in render
+        assert "signDisplay: 'exceptZero'" in render
+
+
+INFO_MARKERS = (
+    "total-net-deposits",
+    "total-value",
+    "total-open-positions",
+    "total-unrealized",
+    "total-realized",
+    "total-dividends",
+    "total-xirr",
+    "accounts-treemap",
+    "account-ranking",
+    "currency-exposure",
+    "strategy",
+    "waterfall",
+    "dividends",
+    "currencies",
+    "accounts",
+    "allocation",
+    "class-shares",
+    "value",
+    "profit",
+    "xirr",
+    "drawdown",
+)
+
+
+async def test_the_dashboard_explains_its_tiles_and_charts_behind_an_info_icon(engine: Engine) -> None:
+    async with user_simulation(_shell(engine)) as user:
+        await _opened(user)
+
+        for name in INFO_MARKERS:
+            [icon] = user.find(marker=f"info-{name}").elements
+            [tooltip] = [element for element in icon.descendants() if isinstance(element, ui.tooltip)]
+            assert len(tooltip.text) > 40, name
+        # The waterfall's names each of its sources
+        [icon] = user.find(marker="info-waterfall").elements
+        [tooltip] = [element for element in icon.descendants() if isinstance(element, ui.tooltip)]
+        for source in ("Efekt ceny", "Efekt walutowy", "Prowizje i koszty", "Podatki"):
+            assert source in tooltip.text

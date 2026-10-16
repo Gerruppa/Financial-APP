@@ -143,6 +143,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `0025_catalyst_bond_prices.py`: Migration 0025: moves treasury bonds to Bossa per-bond prices and drops the old percent-of-nominal Bossa Quotes
 - `0026_reconciliation.py`: Migration adding broker ids, reconciled dates and the skipped broker rows table for reconciliation
 - `0027_benchmarks.py`: Migration 0027 creates the benchmarks table (kind, Instrument or Account, offset, shown, position).
+- `0028_polish_benchmark_etfs.py`: Migration 0028 drops the WSE:WIG and WSE:SWIG80TR default benchmarks left on Stooq so the Beta ETF defaults come in.
 
 ## src/financial_app/sources/
 
@@ -182,6 +183,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `fund_details.py`: Builds the short fund detail texts (TER, Distribution Policy, domicile) shared by Instrument list and Portfolio
 - `history.py`: Shared per-database History window state: background fetch, progress and failure status, cached days
 - `import_sheet.py`: Ustawienia import section that previews the Transakcje spreadsheet and saves it only after user decisions
+- `info.py`: Hover "i" icon and card title helper that show explanatory text in Dashboard and Wyniki cards
 - `instruments.py`: Ustawienia Klasy aktywów and Instrumenty cards: editable Asset Classes and the Instrument catalog with its dialog
 - `multi_asset.py`: Multi-asset tab and split editor: edits an Instrument's Multi-asset Split and lists held Multi-asset Instruments by Asset Class
 - `passive_income.py`: Dochód pasywny tab: year navigation, Monthly Income Goal, tiles, monthly chart and table with progress, forecast coupons.

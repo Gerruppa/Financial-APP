@@ -22,11 +22,37 @@ from financial_app.sources.nbp import NbpRates
 from financial_app.sources.prices import RefreshStatus, last_refresh, refresh_summary, unpriced_instruments
 from financial_app.ui.account_ranking import AccountRanking, accounts_treemap
 from financial_app.ui.charts import dashboard_charts
+from financial_app.ui.info import card_title
 from financial_app.ui.periods import PeriodChoice, period_selector
 from financial_app.ui.strategy import PlannedDeposit, strategy_section
 from financial_app.ui.view_scope import ViewScope
 
 DASH = "—"
+# Behind the "i" of the tiles and tables that need explaining, by their marker
+TILE_INFO = {
+    "net-deposits": "Wszystkie wpłaty na konta minus wszystkie wypłaty: ile własnych pieniędzy naprawdę włożyłeś.",
+    "value": "Ile jest dziś warty portfel: otwarte pozycje według ostatnich cen i gotówka, przeliczone na złote.",
+    "open-positions": "Dzisiejsza wartość posiadanych instrumentów, wycenionych po ostatnich cenach.",
+    "unrealized": (
+        "Zysk lub strata na tym, co nadal masz: dzisiejsza wartość pozycji minus ich koszt zakupu (z wynikiem "
+        "walutowym gotówki w walucie obcej). Stanie się zrealizowany dopiero przy sprzedaży. Z „Po podatku” "
+        "jest pomniejszony o szacowany podatek."
+    ),
+    "realized": "Zysk lub strata na tym, co już sprzedałeś: cena sprzedaży minus koszt zakupu tych jednostek.",
+    "dividends": "Dywidendy i odsetki netto, czyli po podatku pobranym u źródła.",
+    "xirr": (
+        "Roczna stopa zwrotu z uwzględnieniem terminów i kwot wpłat i wypłat, jak oprocentowanie lokaty dającej "
+        "ten sam wynik. Przy krótkim okresie bywa przesadnie wysoka lub niska."
+    ),
+    "estimated-tax": (
+        "Ile zapłaciłbyś, sprzedając wszystko dziś: podatek Belki od niezrealizowanych zysków na zwykłych kontach "
+        "(nie IKE/IKZE) oraz opłata i podatek przy przedterminowym wykupie obligacji."
+    ),
+}
+CURRENCY_INFO = (
+    "Ile majątku trzymasz w każdej walucie: pozycje według waluty notowania i gotówka, w złotych, oraz ich udział. "
+    "Waluty obce to ryzyko kursowe, ale też źródło efektu walutowego w wyniku."
+)
 
 
 @dataclass
@@ -110,7 +136,7 @@ def _totals(totals: Totals, after_tax: bool) -> None:
     ):
         for key, title, text in tiles:
             with ui.card().classes("gap-1"):
-                ui.label(title).classes("text-sm text-gray-500")
+                card_title(title, TILE_INFO.get(key), f"total-{key}", "text-sm text-gray-500")
                 ui.label(DASH if text is None else text).classes("text-xl font-medium").mark(f"total-{key}")
 
 
@@ -164,7 +190,7 @@ CURRENCY_COLUMNS = "grid-template-columns: 4rem repeat(2, minmax(6rem, 10rem))"
 def _currency_exposure(currencies: tuple[CurrencyShare, ...]) -> None:
     """The value held in each currency (Positions by their quote currency, and cash) and its share, largest first."""
     with ui.card().mark("currency-exposure"):
-        ui.label("Waluty w portfelu").classes("text-lg font-medium")
+        card_title("Waluty w portfelu", CURRENCY_INFO, "currency-exposure")
         with ui.element("div").classes("grid gap-x-4 text-sm font-medium").style(CURRENCY_COLUMNS):
             for header in ("Waluta", "Wartość", "Udział"):
                 ui.label(header).classes("text-right" if header != "Waluta" else "")
