@@ -28,6 +28,7 @@ from financial_app.persistence.transactions import (
     add_transaction,
     delete_transaction,
     list_transactions,
+    transactions_in_entry_order,
     update_transaction,
 )
 
@@ -67,7 +68,7 @@ def test_split_is_saved_with_its_ratio_and_rescales_the_position(engine: Engine,
     [reread, _] = list_transactions(engine)
     assert reread == saved
     assert (reread.split_ratio, reread.instrument_id, reread.actual_amount) == (SplitRatio(5, 1), pzu, Decimal(0))
-    [position] = open_positions(reversed(list_transactions(engine)))
+    [position] = open_positions(transactions_in_entry_order(engine))
     assert (position.quantity, position.cost) == (Decimal(50), Decimal(500))
 
 
@@ -99,7 +100,7 @@ def test_security_transfer_is_saved_and_the_target_account_can_sell_the_units(
 
     assert list_transactions(engine)[1] == transfer
     assert transfer.target_account_id == xtb
-    [position] = open_positions(reversed(list_transactions(engine)))
+    [position] = open_positions(transactions_in_entry_order(engine))
     assert (position.account_id, position.quantity, position.lots[0].date) == (xtb, Decimal(6), date(2026, 1, 1))
 
 
@@ -131,7 +132,7 @@ def test_foreign_instrument_moves_and_splits_without_an_nbp_rate(
     add_transaction(engine, security_transfer(ike, date(2026, 1, 3), xtb, apple, Decimal(2)))
     add_transaction(engine, split(xtb, date(2026, 1, 4), apple, SplitRatio(4, 1)))
 
-    [position] = open_positions(reversed(list_transactions(engine)))
+    [position] = open_positions(transactions_in_entry_order(engine))
     assert (position.account_id, position.quantity, position.cost) == (xtb, Decimal(8), Decimal(720))
 
 

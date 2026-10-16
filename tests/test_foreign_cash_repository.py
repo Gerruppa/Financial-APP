@@ -21,7 +21,12 @@ from financial_app.domain.transactions import (
 from financial_app.persistence.accounts import add_account
 from financial_app.persistence.db import init_db
 from financial_app.persistence.instruments import add_instrument, list_asset_classes
-from financial_app.persistence.transactions import add_transaction, add_transactions, list_transactions
+from financial_app.persistence.transactions import (
+    add_transaction,
+    add_transactions,
+    list_transactions,
+    transactions_in_entry_order,
+)
 
 USD_RATE = NbpRate("USD", Decimal("3.6045"), date(2026, 1, 5), "002/A/NBP/2026")
 
@@ -101,7 +106,7 @@ def test_automatic_exchange_and_buy_are_saved_together_in_that_order(
     saved = add_transactions(engine, [exchange, buy])
 
     assert [t.transaction_type for t in saved] == [TransactionType.CURRENCY_EXCHANGE, TransactionType.BUY]
-    assert [t.id for t in reversed(list_transactions(engine))] == [t.id for t in saved]
+    assert [t.id for t in transactions_in_entry_order(engine)] == [t.id for t in saved]
 
 
 def test_nothing_is_saved_when_one_of_several_is_rejected(engine: Engine, usd_account: int, apple: int) -> None:

@@ -34,6 +34,13 @@ def list_transactions(engine: Engine) -> list[Transaction]:
         return [to_transaction(row) for row in rows]
 
 
+def transactions_in_entry_order(engine: Engine) -> list[Transaction]:
+    """All Transactions in the order they were saved, as the FIFO engine takes them (ADR-0003): it sorts them by date
+    itself, and entry order settles same-day ties."""
+    with Session(engine) as session:
+        return [to_transaction(row) for row in session.scalars(select(TransactionRow).order_by(TransactionRow.id))]
+
+
 def add_transaction(engine: Engine, draft: TransactionDraft) -> Transaction:
     """Save ``draft``; a Sell not covered by the Account's Lots raises InsufficientQuantityError (spec 3.3)."""
     [saved] = add_transactions(engine, [draft])

@@ -25,6 +25,7 @@ from financial_app.persistence.transactions import (
     add_transaction,
     delete_transaction,
     list_transactions,
+    transactions_in_entry_order,
     update_transaction,
 )
 
@@ -73,6 +74,16 @@ def test_same_day_transactions_keep_entry_order_newest_first(engine: Engine, acc
     second = add_transaction(engine, _deposit(account_id, 1))
 
     assert [t.id for t in list_transactions(engine)] == [second.id, first.id]
+
+
+def test_entry_order_is_the_order_transactions_were_saved_in_whatever_their_dates(
+    engine: Engine, account_id: int
+) -> None:
+    add_transaction(engine, _deposit(account_id, 20))
+    add_transaction(engine, _deposit(account_id, 1))
+    add_transaction(engine, _deposit(account_id, 10))
+
+    assert [t.date.day for t in transactions_in_entry_order(engine)] == [20, 1, 10]
 
 
 def test_transactions_survive_a_restart(db_file: Path, engine: Engine, account_id: int) -> None:
@@ -214,7 +225,7 @@ def test_editing_a_buy_changes_the_position(engine: Engine, account_id: int, ins
 
     update_transaction(engine, buy.id, _trade(account_id, instrument_id, TransactionType.BUY, "4"))
 
-    [position] = open_positions(reversed(list_transactions(engine)))
+    [position] = open_positions(transactions_in_entry_order(engine))
     assert position.quantity == 4
 
 
@@ -224,7 +235,7 @@ def test_edit_keeps_the_same_day_entry_order(engine: Engine, account_id: int, in
 
     update_transaction(engine, buy.id, _trade(account_id, instrument_id, TransactionType.BUY, "6", day=1))
 
-    [position] = open_positions(reversed(list_transactions(engine)))
+    [position] = open_positions(transactions_in_entry_order(engine))
     assert position.quantity == 1
 
 
@@ -301,7 +312,7 @@ def test_deleting_a_sell_is_allowed(engine: Engine, account_id: int, instrument_
 
     delete_transaction(engine, sell.id)
 
-    [position] = open_positions(reversed(list_transactions(engine)))
+    [position] = open_positions(transactions_in_entry_order(engine))
     assert position.quantity == 10
 
 

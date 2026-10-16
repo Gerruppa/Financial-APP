@@ -19,7 +19,7 @@ from financial_app.domain.formatting import (
 from financial_app.domain.sale_summary import SalePair, SaleStats, in_view, sale_pairs, sale_stats
 from financial_app.persistence.accounts import list_accounts
 from financial_app.persistence.instruments import list_instruments
-from financial_app.persistence.transactions import list_transactions
+from financial_app.persistence.transactions import transactions_in_entry_order
 from financial_app.ui.periods import PeriodChoice, period_selector
 from financial_app.ui.view_scope import ViewScope
 
@@ -66,8 +66,7 @@ class SaleSummaryPage:
     @ui.refreshable_method
     def content(self) -> None:
         first, last = self.period.dates()
-        # list_transactions is newest first; the FIFO engine wants entry order
-        pairs = in_view(sale_pairs(list(reversed(list_transactions(self.engine)))), self.scope.account_id, first, last)
+        pairs = in_view(sale_pairs(transactions_in_entry_order(self.engine)), self.scope.account_id, first, last)
         stats = sale_stats(pairs)
         if stats is None:
             ui.label("Brak sprzedaży w tym okresie.").classes("text-gray-500").mark("sale-empty")

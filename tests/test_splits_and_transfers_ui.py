@@ -16,7 +16,7 @@ from financial_app.domain.transactions import SplitRatio, TransactionType, buy_o
 from financial_app.persistence.accounts import add_account
 from financial_app.persistence.db import init_db
 from financial_app.persistence.instruments import add_instrument, list_asset_classes
-from financial_app.persistence.transactions import add_transaction, list_transactions
+from financial_app.persistence.transactions import add_transaction, list_transactions, transactions_in_entry_order
 from financial_app.sources.nbp import NbpRates
 from financial_app.ui.shell import build_shell
 
@@ -79,7 +79,7 @@ async def test_split_rescales_the_position_and_shows_its_ratio(engine: Engine, i
         await user.open("/transakcje")
         with user.scope(marker="transactions"):
             await user.should_see("split 3:1")
-    [position] = open_positions(reversed(list_transactions(engine)))
+    [position] = open_positions(transactions_in_entry_order(engine))
     assert (position.quantity, position.cost) == (Decimal(30), Decimal(400))
     assert list_transactions(engine)[0].split_ratio == SplitRatio(3, 1)
 
@@ -150,7 +150,7 @@ async def test_security_transfer_moves_the_units_with_their_lots(engine: Engine,
         with user.scope(marker="transactions"):
             await user.should_see("IKE → XTB")
             await user.should_see("4 szt.")
-    moved = next(p for p in open_positions(reversed(list_transactions(engine))) if p.account_id == xtb)
+    moved = next(p for p in open_positions(transactions_in_entry_order(engine)) if p.account_id == xtb)
     assert (moved.quantity, moved.cost, moved.lots[0].date) == (Decimal(4), Decimal(160), date(2026, 1, 2))
 
 

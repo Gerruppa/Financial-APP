@@ -27,6 +27,7 @@ from financial_app.persistence.transactions import (
     add_transaction,
     delete_transaction,
     list_transactions,
+    transactions_in_entry_order,
     update_transaction,
 )
 
@@ -117,7 +118,7 @@ def test_drip_lot_covers_a_later_sell_and_cannot_then_be_deleted(engine: Engine,
     add_transaction(engine, buy_or_sell(ike, date(2026, 1, 9), TransactionType.SELL, pzu, Decimal("10.5"), Decimal(45)))
 
     assert list_transactions(engine)[1] == reinvested
-    assert open_positions(reversed(list_transactions(engine))) == []
+    assert open_positions(transactions_in_entry_order(engine)) == []
     with pytest.raises(InsufficientQuantityError):
         delete_transaction(engine, reinvested.id)
     with pytest.raises(InsufficientQuantityError):

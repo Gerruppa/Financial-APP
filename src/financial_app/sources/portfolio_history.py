@@ -19,7 +19,7 @@ from financial_app.persistence.benchmarks import list_benchmarks
 from financial_app.persistence.bond_series import load_bond_data
 from financial_app.persistence.history import history_prices, nbp_rates_between
 from financial_app.persistence.instruments import list_instruments
-from financial_app.persistence.transactions import list_transactions
+from financial_app.persistence.transactions import list_transactions, transactions_in_entry_order
 from financial_app.sources.history import QuoteHistory
 from financial_app.sources.nbp import NbpRates
 
@@ -113,7 +113,7 @@ class PortfolioHistory:
 
     def inputs(self) -> HistoryInputs | None:
         """What History is computed from, read from the cache alone; ``None`` without any Transaction."""
-        transactions = sorted(list_transactions(self.engine), key=lambda t: t.id)
+        transactions = transactions_in_entry_order(self.engine)
         if not transactions:
             return None
         instruments = {instrument.id: instrument for instrument in list_instruments(self.engine)}
