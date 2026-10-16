@@ -24,7 +24,7 @@ from financial_app.ui.periods import PeriodChoice, period_selector
 from financial_app.ui.view_scope import ViewScope
 
 DASH = "—"
-COLUMNS = "grid-template-columns: minmax(8rem, 2fr) minmax(6rem, 1fr) repeat(11, minmax(5.5rem, 1fr))"
+COLUMNS = "grid-template-columns: minmax(10rem, 2.5fr) minmax(8rem, 1.5fr) repeat(11, minmax(5.5rem, 1fr))"
 HEADERS = (
     "Instrument",
     "Konto",
@@ -40,6 +40,7 @@ HEADERS = (
     "Wynik z dyw.",
     "Rentowność z dyw.",
 )
+NUMBER_FROM = HEADERS.index("Liczba")  # the columns from Liczba on hold numbers
 
 
 @dataclass
@@ -109,17 +110,17 @@ def _tiles(stats: SaleStats, names: dict[int, str]) -> None:
 
 
 def _table(pairs: list[SalePair], names: dict[int, str], accounts: dict[int, str]) -> None:
+    # Names wrap in their own column; dates and numbers keep one line, numbers (and their headers) to the right.
     with ui.card().classes("w-full overflow-x-auto").mark("sale-table"):
         with ui.element("div").classes("grid w-full gap-x-3 text-sm font-medium").style(COLUMNS):
-            for header in HEADERS:
-                ui.label(header)
+            for index, header in enumerate(HEADERS):
+                ui.label(header).classes("text-right" if index >= NUMBER_FROM else "").mark("sale-header")
         for pair in pairs:
-            line = ui.element("div").classes("grid w-full gap-x-3 border-t py-1 text-sm whitespace-nowrap")
-            with line.style(COLUMNS).mark("sale-row"):
-                ui.label(names.get(pair.instrument_id, "")).classes("font-medium")
-                ui.label(accounts.get(pair.account_id, ""))
-                ui.label(format_date(pair.bought_on))
-                ui.label(format_date(pair.sold_on))
+            with ui.element("div").classes("grid w-full gap-x-3 border-t py-1 text-sm").style(COLUMNS).mark("sale-row"):
+                ui.label(names.get(pair.instrument_id, "")).classes("font-medium min-w-0 break-words")
+                ui.label(accounts.get(pair.account_id, "")).classes("min-w-0 break-words")
+                ui.label(format_date(pair.bought_on)).classes("whitespace-nowrap")
+                ui.label(format_date(pair.sold_on)).classes("whitespace-nowrap")
                 for text in (
                     format_quantity(pair.quantity),
                     format_pln(pair.cost),
@@ -131,7 +132,7 @@ def _table(pairs: list[SalePair], names: dict[int, str], accounts: dict[int, str
                     format_pln(pair.result_with_dividends, signed=True),
                     _percent(pair.return_with_dividends),
                 ):
-                    ui.label(text).classes("text-right")
+                    ui.label(text).classes("text-right whitespace-nowrap")
 
 
 def _percent(fraction: Decimal | None) -> str:

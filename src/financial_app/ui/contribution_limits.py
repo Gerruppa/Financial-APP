@@ -63,16 +63,19 @@ class ContributionLimitsSection:
             with ui.row().classes("w-full items-start no-wrap"):
                 ui.label(str(year)).classes("w-14 pt-4 font-medium")
                 fields = {}
+                # The columns share the row and wrap their notes (#117), so a narrow window does not cut them off.
                 for account_type in LIMITED_TYPES:
-                    with ui.column().classes("grow gap-0"):
+                    column = ui.column().classes("flex-1 min-w-0 gap-0")
+                    with column.mark(f"limit-column-{year}-{account_type.value}"):
                         amount = year_limits[account_type]
                         field = ui.input(account_type.label, value="" if amount is None else format_exact(amount))
                         field.classes("w-full").mark(f"limit-{year}-{account_type.value}")
-                        if account_type is AccountType.IKZE:
-                            field.props(f'hint="{_self_employed_hint(year)}"')
                         fields[account_type] = field
                         paid_label = ui.label(f"wpłacono {format_pln(paid[account_type])}")
                         paid_label.classes("text-xs text-gray-500").mark(f"limit-paid-{year}-{account_type.value}")
+                        if account_type is AccountType.IKZE:
+                            note = ui.label(_self_employed_note(year)).classes("text-xs text-gray-500 break-words")
+                            note.mark(f"limit-self-employed-{year}")
                 save = ui.button("Ustaw limity", on_click=lambda y=year, f=fields: self._save(y, f))
                 save.props("no-caps flat").classes("mt-2").mark(f"limits-save-{year}")
                 delete = ui.button(icon="delete", on_click=lambda y=year: self._delete(y))
@@ -110,7 +113,7 @@ class ContributionLimitsSection:
         self.rows.refresh()
 
 
-def _self_employed_hint(year: int) -> str:
+def _self_employed_note(year: int) -> str:
     amount = IKZE_SELF_EMPLOYED.get(year)
     if amount is None:
         return "Przy działalności gospodarczej limit jest wyższy"
