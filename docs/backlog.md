@@ -34,9 +34,9 @@ Outside Stage 3, later:
 
 ## Stage 5, Reports
 
-- [ ] #91 (L-12) Benchmarks: any Instrument or CPI, Deposits and Withdrawals invested on their dates, a "+x pp/year" offset, an Account as a benchmark, the defaults (spec 6).
-- [ ] #92 (L-13) Sell Summary with closed-position statistics: win rate, holding time, best and worst (spec 10).
-- [ ] #93 (L-14) Passive-income calendar: Dividends and bond interest, received and forecast, monthly income goal (spec 10).
+- [x] #91 (L-12) Benchmarks: any Instrument or CPI, Deposits and Withdrawals invested on their dates, a "+x pp/year" offset, an Account as a benchmark, the defaults (spec 6).
+- [x] #92 (L-13) Sell Summary with closed-position statistics: win rate, holding time, best and worst (spec 10).
+- [x] #93 (L-14) Passive-income calendar: Dividends and bond interest, received and forecast, monthly income goal (spec 10).
 
 ## Stage 6, Beyond the sheet
 

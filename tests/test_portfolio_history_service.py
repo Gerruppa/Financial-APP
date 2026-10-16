@@ -10,12 +10,15 @@ from pathlib import Path
 from sqlalchemy import Engine
 
 from financial_app.domain.accounts import AccountDraft, AccountType
+from financial_app.domain.benchmarks import Benchmark, BenchmarkKind
 from financial_app.domain.instruments import InstrumentDraft
 from financial_app.domain.portfolio_history import DayValue
 from financial_app.domain.prices import STOOQ
 from financial_app.domain.transactions import TransactionDraft, TransactionType, buy_or_sell
 from financial_app.persistence.accounts import add_account
+from financial_app.persistence.benchmarks import add_benchmark
 from financial_app.persistence.db import init_db
+from financial_app.persistence.history import history_prices
 from financial_app.persistence.instruments import add_asset_class, add_instrument
 from financial_app.persistence.settings import STOOQ_API_KEY, save_setting
 from financial_app.persistence.transactions import add_transactions
@@ -114,3 +117,20 @@ def test_a_computation_overtaken_by_an_invalidation_is_not_kept(tmp_path: Path) 
     asyncio.run(overtaken())
 
     assert len(calls) == 2
+
+
+def test_a_benchmark_instruments_history_is_fetched_from_the_first_transaction(tmp_path: Path) -> None:
+    # The Portfolio holds only cash; WIG is a benchmark (issue #91), so its closes are fetched too
+    engine = init_db(tmp_path / "app.sqlite3")
+    save_setting(engine, STOOQ_API_KEY, "KEY")
+    account = add_account(engine, AccountDraft("IKE", "mBank", AccountType.REGULAR, ("PLN",))).id
+    funds = add_asset_class(engine, "Fundusze indeksowe")
+    wig = add_instrument(engine, InstrumentDraft("WIG", funds.id, "PLN", "GPW", source_symbols={STOOQ: "wig"})).id
+    add_transactions(engine, [TransactionDraft(account, date(2026, 1, 2), TransactionType.DEPOSIT, Decimal(1000))])
+    add_benchmark(engine, Benchmark(BenchmarkKind.INSTRUMENT, instrument_id=wig))
+    steps: list[tuple[int, int]] = []
+
+    _history(engine).fetch(lambda done, total: steps.append((done, total)))
+
+    assert steps == [(1, 1)]
+    assert [price.day for price in history_prices(engine, wig)][0] == date(2026, 1, 2)

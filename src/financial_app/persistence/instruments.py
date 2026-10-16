@@ -20,6 +20,7 @@ from financial_app.domain.prices import HISTORY_SOURCES, OTHER, default_fallback
 from financial_app.persistence.history import forget_quote_history
 from financial_app.persistence.models import (
     AssetClassRow,
+    BenchmarkRow,
     ClassTargetRow,
     InstrumentRow,
     InstrumentTargetRow,
@@ -184,7 +185,8 @@ def set_multi_asset_split(engine: Engine, instrument_id: int, split: Mapping[int
 
 
 def delete_instrument(engine: Engine, instrument_id: int) -> None:
-    """Remove an Instrument that no Transaction uses, with its Instrument Targets; one with Transactions is kept."""
+    """Remove an Instrument that no Transaction uses, with its Instrument Targets and Benchmarks; one with Transactions
+    is kept."""
     with Session(engine) as session, session.begin():
         row = session.get_one(InstrumentRow, instrument_id)
         if session.scalar(select(TransactionRow.id).where(TransactionRow.instrument_id == instrument_id).limit(1)):
@@ -193,6 +195,7 @@ def delete_instrument(engine: Engine, instrument_id: int) -> None:
         session.execute(delete(QuoteRow).where(QuoteRow.instrument_id == instrument_id))
         session.execute(delete(PriceFailureRow).where(PriceFailureRow.instrument_id == instrument_id))
         session.execute(delete(InstrumentTargetRow).where(InstrumentTargetRow.instrument_id == instrument_id))
+        session.execute(delete(BenchmarkRow).where(BenchmarkRow.instrument_id == instrument_id))
         session.delete(row)
 
 

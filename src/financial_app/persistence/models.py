@@ -359,3 +359,18 @@ class BondDataStatusRow(Base):
     succeeded_at: Mapped[dt.datetime | None] = mapped_column(DateTime)
     failed_at: Mapped[dt.datetime | None] = mapped_column(DateTime)
     error: Mapped[str | None] = mapped_column(Text)
+
+
+class BenchmarkRow(Base):
+    """A Benchmark (issue #91): CPI, an Instrument or an Account (``kind``), with its offset in pp a year (Decimal as
+    text), whether the chart shows it, and its place in the list."""
+
+    __tablename__ = "benchmarks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    kind: Mapped[str] = mapped_column(String(20))
+    instrument_id: Mapped[int | None] = mapped_column(ForeignKey("instruments.id"))
+    account_id: Mapped[int | None] = mapped_column(ForeignKey("accounts.id"))
+    offset: Mapped[str] = mapped_column(String(20))
+    shown: Mapped[bool] = mapped_column(Boolean)
+    position: Mapped[int] = mapped_column(Integer)

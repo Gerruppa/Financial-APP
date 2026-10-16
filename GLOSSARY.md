@@ -8,6 +8,7 @@ The Polish UI labels with the English terms the code and the docs use, in Polish
 | Cel w klasie | [Instrument Target](CONTEXT.md#accounts-and-instruments) | Accounts and instruments |
 | Cel % | [Allocation Target](CONTEXT.md#accounts-and-instruments) | Accounts and instruments |
 | Cena ręczna | [Manual Price](CONTEXT.md#transactions-and-holdings) | Transactions and holdings |
+| Dochód pasywny | [Passive Income](CONTEXT.md#results) | Results |
 | DRIP | [DRIP](CONTEXT.md#transactions-and-holdings) | Transactions and holdings |
 | Dywidenda / odsetki | [Dividend](CONTEXT.md#transactions-and-holdings) | Transactions and holdings |
 | Historia | [History](CONTEXT.md#results) | Results |
@@ -20,11 +21,13 @@ The Polish UI labels with the English terms the code and the docs use, in Polish
 | Kurs NBP D-1 | [NBP Rate](CONTEXT.md#transactions-and-holdings) | Transactions and holdings |
 | Kwota podatkowa | [Tax Amount](CONTEXT.md#transactions-and-holdings) | Transactions and holdings |
 | Kwota rzeczywista | [Actual Amount](CONTEXT.md#transactions-and-holdings) | Transactions and holdings |
+| Miesięczny cel dochodu | [Monthly Income Goal](CONTEXT.md#results) | Results |
 | Nieaktualna cena | [Stale Price](CONTEXT.md#transactions-and-holdings) | Transactions and holdings |
 | Notowanie | [Quote](CONTEXT.md#transactions-and-holdings) | Transactions and holdings |
 | Opłata za przewalutowanie | [FX Conversion Fee](CONTEXT.md#accounts-and-instruments) | Accounts and instruments |
 | Oprocentowanie prognozowane | [Forecast Rate](CONTEXT.md#bonds) | Bonds |
 | Oprocentowanie szacunkowe | [Estimated Rate](CONTEXT.md#bonds) | Bonds |
+| Para kupno–sprzedaż | [Sale Pair](CONTEXT.md#results) | Results |
 | Partia | [Lot](CONTEXT.md#transactions-and-holdings) | Transactions and holdings |
 | Pasmo tolerancji | [Tolerance Band](CONTEXT.md#accounts-and-instruments) | Accounts and instruments |
 | Planowana wpłata | [Planned Deposit](CONTEXT.md#accounts-and-instruments) | Accounts and instruments |

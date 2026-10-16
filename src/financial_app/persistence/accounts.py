@@ -8,7 +8,14 @@ from sqlalchemy.orm import InstrumentedAttribute, Session, selectinload
 
 from financial_app.domain.accounts import Account, AccountDraft, AccountError, AccountHolders, AccountType
 from financial_app.domain.view_scope import scope_setting
-from financial_app.persistence.models import AccountCashCurrency, AccountRow, AppSetting, StrategyRow, TransactionRow
+from financial_app.persistence.models import (
+    AccountCashCurrency,
+    AccountRow,
+    AppSetting,
+    BenchmarkRow,
+    StrategyRow,
+    TransactionRow,
+)
 from financial_app.persistence.settings import VIEW_SCOPE, XTB_ACCOUNT
 
 
@@ -47,7 +54,8 @@ def account_holders(engine: Engine, account_id: int) -> AccountHolders:
 
 def delete_account(engine: Engine, account_id: int) -> None:
     """Delete an Account nothing names any more, else raise ``AccountError`` saying what holds it (L-28). A View
-    Scope remembered on it goes back to Total. An Account already gone (deleted in another window) is left so."""
+    Scope remembered on it goes back to Total, and a Benchmark comparing against it goes with it. An Account already
+    gone (deleted in another window) is left so."""
     with Session(engine) as session, session.begin():
         row = session.get(AccountRow, account_id)
         if row is None:
@@ -55,6 +63,7 @@ def delete_account(engine: Engine, account_id: int) -> None:
         refusal = _holders(session, account_id).refusal(row.name)
         if refusal is not None:
             raise AccountError(refusal)
+        session.execute(delete(BenchmarkRow).where(BenchmarkRow.account_id == account_id))
         session.delete(row)
         session.execute(
             delete(AppSetting).where(AppSetting.key == VIEW_SCOPE, AppSetting.value == scope_setting(account_id))

@@ -104,6 +104,39 @@ def drawdown_chart(
     _card("Drawdown", name, _drawdown(history, first, last, account_id))
 
 
+def pln_lines_chart(title: str, name: str, days: Sequence[date], series: Mapping[str, Sequence[Decimal]]) -> None:
+    """Lines of PLN amounts by day in a card marked ``chart-<name>`` (the Benchmarki tab's, issue #91)."""
+    amounts = {label: [_pln(amount) for amount in values] for label, values in series.items()}
+    _card(title, name, _lines(days, amounts, PLN_FORMATTER, _AXIS_PLN))
+
+
+def pln_bars_chart(
+    title: str,
+    name: str,
+    categories: Sequence[str],
+    series: Mapping[str, Sequence[Decimal]],
+    line: tuple[str, Decimal] | None = None,
+) -> None:
+    """Stacked bars of PLN amounts by category in a card marked ``chart-<name>``, with ``line`` (its name and amount) a
+    level marked across them (the Benchmarki and Dochód pasywny tabs', issues #91 and #93)."""
+    bars: list[dict[str, Any]] = [
+        {"name": label, "type": "bar", "stack": "total", "data": [_pln(amount) for amount in values]}
+        for label, values in series.items()
+    ]
+    if line is not None and bars:
+        label, level = line
+        bars[0]["markLine"] = {"symbol": "none", "label": {"formatter": label}, "data": [{"yAxis": _pln(level)}]}
+    options = {
+        "tooltip": {"trigger": "axis", ":valueFormatter": PLN_FORMATTER},
+        "legend": {"type": "scroll", "bottom": 0},
+        "grid": {"containLabel": True, "bottom": 40},
+        "xAxis": {"type": "category", "data": list(categories)},
+        "yAxis": {"type": "value", "axisLabel": {":formatter": _AXIS_PLN}},
+        "series": bars,
+    }
+    _card(title, name, options)
+
+
 def _card(title: str, name: str, options: dict[str, Any]) -> None:
     with ui.card().classes("w-full gap-1"):
         ui.label(title).classes("text-lg font-medium")

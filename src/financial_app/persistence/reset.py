@@ -16,6 +16,7 @@ from financial_app.persistence.models import (
     AccountRow,
     AppSetting,
     AssetClassRow,
+    BenchmarkRow,
     ClassTargetRow,
     InstrumentRow,
     InstrumentTargetRow,
@@ -30,7 +31,7 @@ from financial_app.persistence.models import (
     TransactionRow,
 )
 from financial_app.persistence.paths import BACKUPS_DIR
-from financial_app.persistence.settings import XTB_PREFIX
+from financial_app.persistence.settings import BENCHMARKS_SEEDED, XTB_PREFIX
 
 NO_DATABASE_FILE = "Nie znaleziono pliku bazy, więc nie można zrobić kopii zapasowej."
 
@@ -59,9 +60,10 @@ def portfolio_counts(engine: Engine) -> PortfolioCounts:
 
 def clear_portfolio(engine: Engine) -> Path:
     """Back the database up, then remove every Account, Instrument (with its Source Symbols, Multi-asset Split, rate
-    corrections, Quotes, price history and refresh failures), Transaction, Investment Strategy, skipped broker row and
-    remembered XTB match and restore the default Asset Classes with their Fallback Orders (Multi-asset marked again),
-    all or nothing. The NBP Rate caches, the bond data and the other app settings stay. Returns the backup's path.
+    corrections, Quotes, price history and refresh failures), Transaction, Investment Strategy, Benchmark (the defaults
+    come back next time), skipped broker row and remembered XTB match and restore the default Asset Classes with their
+    Fallback Orders (Multi-asset marked again), all or nothing. The NBP Rate caches, the bond data and the other app
+    settings stay. Returns the backup's path.
 
     The backup goes to the ``backups`` folder next to the database file, where the start-up backups are. Without a
     backup nothing is cleared: ``BackupError``.
@@ -78,6 +80,7 @@ def clear_portfolio(engine: Engine) -> Path:
         # Children first, so the foreign keys never point at a removed row
         for model in (
             SkippedBrokerRow,
+            BenchmarkRow,
             ClassTargetRow,
             InstrumentTargetRow,
             StrategyRow,
@@ -96,6 +99,7 @@ def clear_portfolio(engine: Engine) -> Path:
             session.execute(delete(model))
         # The remembered XTB matches name Account and Instrument ids that new ones may take again
         session.execute(delete(AppSetting).where(AppSetting.key.startswith(XTB_PREFIX)))
+        session.execute(delete(AppSetting).where(AppSetting.key == BENCHMARKS_SEEDED))
         session.execute(
             insert(AssetClassRow),
             [

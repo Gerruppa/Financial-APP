@@ -17,6 +17,8 @@ TABS = [
     "Strategie inwestycyjne",
     "Obligacje",
     "Benchmarki",
+    "Podsumowanie sprzedaży",
+    "Dochód pasywny",
     "Ustawienia",
 ]
 

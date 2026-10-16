@@ -213,34 +213,60 @@ def realized_fx_results(transactions: Iterable[TransactionDraft]) -> dict[int, D
 
 
 @dataclass(frozen=True)
+class ClosedLot:
+    """The part ``lot`` of a Lot that the Sell ``sell`` closed (the Sell Summary's pair, issue #92): its units, in the
+    units of the Sell's day, and its Actual and Tax costs."""
+
+    sell: TransactionDraft
+    lot: Lot
+
+    @property
+    def account_id(self) -> int:
+        return self.sell.account_id
+
+    @property
+    def instrument_id(self) -> int:
+        assert self.sell.instrument_id is not None  # a Sell has one
+        return self.sell.instrument_id
+
+    @property
+    def revenue(self) -> Decimal:
+        """The Sell's Actual Amount pro rata to the units closed: what they brought, net of the commission."""
+        assert self.sell.quantity is not None  # a Sell has one
+        return self.sell.actual_amount * self.lot.quantity / self.sell.quantity
+
+
+@dataclass(frozen=True)
 class Replay:
     """What one FIFO replay of the Transactions gives (see ``open_positions``): the open ``positions``; the
     ``realized`` result of Sells in PLN per Account, each Sell's Actual Amount (net of its commission) less the Actual
     cost of the Lots it consumed; and its FX part ``realized_fx``, how much more (or less) in PLN the sold Lots' cost
     in the Instrument's currency brought at the Sell's rate than it cost at theirs. Only Accounts with a Sell (a
-    foreign-currency one for ``realized_fx``) are keys."""
+    foreign-currency one for ``realized_fx``) are keys. ``closed`` lists the Lots each Sell closed, by the Sells'
+    date and same-day order, each Sell's oldest Lot first."""
 
     positions: list[Position]
     realized: dict[int, Decimal]
     realized_fx: dict[int, Decimal]
+    closed: list[ClosedLot] = field(default_factory=list)
 
 
 def replay(transactions: Iterable[TransactionDraft]) -> Replay:
     """The Positions and realised results of ``transactions`` from one replay, for callers needing both."""
-    lots, realized, realized_fx = _replay(transactions)
+    lots, realized, realized_fx, closed = _replay(transactions)
     positions = [
         Position(account_id, instrument_id, tuple(open_lots))
         for (account_id, instrument_id), open_lots in lots.items()
         if open_lots
     ]
-    return Replay(positions, realized, realized_fx)
+    return Replay(positions, realized, realized_fx, closed)
 
 
 def _replay(
     transactions: Iterable[TransactionDraft],
-) -> tuple[dict[tuple[int, int], list[Lot]], dict[int, Decimal], dict[int, Decimal]]:
-    """The open Lots per Account and Instrument, the realised result and its FX part per Account (see
-    ``open_positions``)."""
+) -> tuple[dict[tuple[int, int], list[Lot]], dict[int, Decimal], dict[int, Decimal], list[ClosedLot]]:
+    """The open Lots per Account and Instrument, the realised result and its FX part per Account and the Lots the
+    Sells closed (see ``Replay``)."""
     moves = sorted(
         (t for t in transactions if t.transaction_type in _SAME_DAY_ORDER),
         key=lambda t: (t.date, _SAME_DAY_ORDER[t.transaction_type]),
@@ -248,6 +274,7 @@ def _replay(
     positions: dict[tuple[int, int], list[Lot]] = {}
     realized: dict[int, Decimal] = {}
     realized_fx: dict[int, Decimal] = {}
+    closed: list[ClosedLot] = []
     ever_held: set[tuple[int, int]] = set()
     for t in moves:
         assert t.instrument_id is not None  # guaranteed for these types by TransactionDraft
@@ -277,6 +304,7 @@ def _replay(
                 sold = _consume(lots, t.date, t.quantity, t.transaction_type)
             else:
                 sold = [_consume_lot(lots, t.date, t.quantity, t.lot_id)]
+            closed.extend(ClosedLot(t, lot) for lot in sold)
             cost = sum((lot.cost for lot in sold), Decimal(0))
             realized[t.account_id] = realized.get(t.account_id, Decimal(0)) + t.actual_amount - cost
             sold_basis = _fx_basis(t)
@@ -284,7 +312,7 @@ def _replay(
                 rate = sold_basis.pln / sold_basis.foreign
                 fx = sum((lot.fx_basis.fx_result(rate) for lot in sold if lot.fx_basis), Decimal(0))
                 realized_fx[t.account_id] = realized_fx.get(t.account_id, Decimal(0)) + fx
-    return positions, realized, realized_fx
+    return positions, realized, realized_fx, closed
 
 
 def _fx_basis(t: TransactionDraft) -> FxBasis | None:
