@@ -12,6 +12,7 @@ from financial_app.domain.formatting import format_date, format_pln, format_quan
 from financial_app.domain.spreadsheet_import import SheetError, SheetLine, cash_currencies_of
 from financial_app.persistence.accounts import list_accounts
 from financial_app.persistence.instruments import list_instruments
+from financial_app.persistence.transactions import list_transactions
 from financial_app.sources.spreadsheet import (
     Decisions,
     NbpLookup,
@@ -21,6 +22,7 @@ from financial_app.sources.spreadsheet import (
     save_import,
 )
 from financial_app.ui.accounts import open_account_dialog
+from financial_app.ui.contribution_limits import LimitCheck
 from financial_app.ui.multi_asset import warn_of_unsplit
 
 NEW_ACCOUNT = "new"
@@ -206,6 +208,7 @@ class SheetImportSection:
         self.render()
 
     def save(self) -> None:
+        limit_check = LimitCheck(self.engine, list_transactions(self.engine))
         try:
             saved = save_import(self.engine, self.lines, self.rates, self._decisions())
         except SheetError as error:
@@ -213,6 +216,7 @@ class SheetImportSection:
             self.render()
             return
         ui.notify(f"Zaimportowano transakcje: {saved.to_save}.", type="positive")
+        limit_check.warn()
         warn_of_unsplit(self.engine)
         if self.on_saved is not None:
             self.on_saved()

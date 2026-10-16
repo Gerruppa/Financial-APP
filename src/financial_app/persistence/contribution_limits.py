@@ -1,5 +1,6 @@
 """Reading and saving Contribution Limits (issue #95, spec 8.1): a row per year, an amount per limited Account Type."""
 
+from collections.abc import Mapping
 from decimal import Decimal
 
 from sqlalchemy import Engine, delete, select
@@ -33,14 +34,15 @@ def add_year(engine: Engine, year: int) -> None:
                 session.add(ContributionLimitRow(year=year, account_type=account_type.value, amount=None))
 
 
-def set_limit(engine: Engine, year: int, account_type: AccountType, amount: Decimal | None) -> None:
-    """Enter or clear (``None``) the year's limit of ``account_type``."""
+def set_limits(engine: Engine, year: int, amounts: Mapping[AccountType, Decimal | None]) -> None:
+    """Enter or clear (``None``) the year's limit of each type in ``amounts``, all or none."""
     with Session(engine) as session, session.begin():
-        row = session.get(ContributionLimitRow, (year, account_type.value))
-        if row is None:
-            session.add(ContributionLimitRow(year=year, account_type=account_type.value, amount=_text(amount)))
-        else:
-            row.amount = _text(amount)
+        for account_type, amount in amounts.items():
+            row = session.get(ContributionLimitRow, (year, account_type.value))
+            if row is None:
+                session.add(ContributionLimitRow(year=year, account_type=account_type.value, amount=_text(amount)))
+            else:
+                row.amount = _text(amount)
 
 
 def delete_year(engine: Engine, year: int) -> None:

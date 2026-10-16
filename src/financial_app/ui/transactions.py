@@ -90,7 +90,7 @@ from financial_app.persistence.transactions import (
 )
 from financial_app.sources.export import FileFormat, export_transactions
 from financial_app.sources.nbp import NbpRates
-from financial_app.ui.contribution_limits import warn_over_limit
+from financial_app.ui.contribution_limits import LimitCheck
 from financial_app.ui.dialogs import movable_dialog
 from financial_app.ui.multi_asset import open_split_dialog
 from financial_app.ui.view_scope import ViewScope, breadcrumbs
@@ -1032,6 +1032,7 @@ def open_transaction_dialog(
                     bought, new = series_instrument(engine, series.name)
                     series_id, created = bought.id, bought.id if new else None
                 draft = read_draft(series_id)
+                limit_check = LimitCheck.start(engine, [draft, transaction])
                 if transaction is None:
                     # The Exchange goes first, so the Buy spends the cash it brings (spec 3.3)
                     exchange = [covering_exchange(draft)] if auto_exchange.visible and auto_exchange.value else []
@@ -1054,7 +1055,8 @@ def open_transaction_dialog(
             dialog.close()
             # An edit may move the Transaction to another day or Account, so also check where it was
             _warn_if_cash_runs_out(engine, "Zapisano", account_names, draft, transaction)
-            warn_over_limit(engine, [draft])
+            if limit_check is not None:
+                limit_check.warn([draft, transaction])
             on_saved()
             _ask_for_multi_asset_split(engine, draft, on_saved)
 

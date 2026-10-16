@@ -89,6 +89,21 @@ async def test_a_limit_edited_in_ustawienia_moves_the_bar_and_a_year_is_added_an
     assert list(load_limits(engine)) == [2026]
 
 
+async def test_any_earlier_year_can_be_added_but_not_one_that_is_no_year(engine: Engine) -> None:
+    async with user_simulation(lambda: _shell(engine)) as user:
+        await user.open("/ustawienia")
+        await user.should_see(marker="limits-new-year")
+
+        user.find(marker="limits-new-year").clear().type("dwa tysiące")
+        user.find(marker="limits-add-year").click()
+        await user.should_see("Rok podaj czterema cyframi, np. 2025.")
+
+        user.find(marker="limits-new-year").clear().type("2025")
+        user.find(marker="limits-add-year").click()
+        await user.should_see(marker="limit-2025-ike")
+    assert list(load_limits(engine)) == [2025, 2026]
+
+
 async def test_a_limit_that_is_no_amount_is_refused(engine: Engine) -> None:
     async with user_simulation(lambda: _shell(engine)) as user:
         await user.open("/ustawienia")

@@ -14,6 +14,8 @@ LIMITED_TYPES = (AccountType.IKE, AccountType.IKZE, AccountType.OIPE)
 # IKZE's higher limit for the self-employed, shown as a hint beside the year's IKZE limit (MRPiPS, November 2025)
 IKZE_SELF_EMPLOYED = {2026: Decimal(16956)}
 
+GROSZ = Decimal("0.01")
+
 
 class ContributionLimitError(ValueError):
     """A Contribution Limit that cannot be saved; the message is Polish, for the user."""
@@ -40,17 +42,35 @@ class LimitBar:
     def over(self) -> Decimal | None:
         return None if self.limit is None else max(self.paid - self.limit, Decimal(0))
 
+    @property
+    def share(self) -> Decimal | None:
+        """The part of the limit used, as a fraction: a limit of 0 is unused while nothing is paid, else full."""
+        if self.limit is None:
+            return None
+        if not self.limit:
+            return Decimal(1 if self.paid else 0)
+        return self.paid / self.limit
+
 
 def contributions(
     transactions: Iterable[TransactionDraft], accounts: Iterable[Account], year: int
 ) -> dict[AccountType, Decimal]:
     """The PLN paid in ``year`` into each limited Account Type."""
-    types = {account.id: account.account_type for account in accounts}
     paid = {account_type: Decimal(0) for account_type in LIMITED_TYPES}
+    return paid | _paid_by_year(transactions, accounts).get(year, {})
+
+
+def _paid_by_year(
+    transactions: Iterable[TransactionDraft], accounts: Iterable[Account]
+) -> dict[int, dict[AccountType, Decimal]]:
+    """The PLN paid into each limited Account Type, by year, in one pass."""
+    types = {account.id: account.account_type for account in accounts}
+    paid: dict[int, dict[AccountType, Decimal]] = {}
     for transaction in transactions:
         account_type = contribution_type(transaction, types)
-        if account_type is not None and transaction.date.year == year:
-            paid[account_type] += transaction.actual_amount
+        if account_type is not None:
+            year = paid.setdefault(transaction.date.year, {})
+            year[account_type] = year.get(account_type, Decimal(0)) + transaction.actual_amount
     return paid
 
 
@@ -90,13 +110,15 @@ def limit_bars(
 
 
 def over_limit(
-    transactions: Iterable[TransactionDraft],
+    before: Iterable[TransactionDraft],
+    after: Iterable[TransactionDraft],
     accounts: Iterable[Account],
     limits: Limits,
     saved: Iterable[TransactionDraft],
 ) -> list[LimitBar]:
-    """The bars over their limit, once per type and year, among those the ``saved`` Transactions count towards;
-    ``transactions`` are all of them after the save."""
+    """The bars a save leaves over their limit with more paid than ``before`` it, once per type and year, among those
+    the ``saved`` Transactions count towards (an edit passes both its old and new form); ``before`` and ``after`` are
+    all the Transactions either side of the save. So an edit of a comment, or one lowering an amount, never warns."""
     accounts = list(accounts)
     types = {account.id: account.account_type for account in accounts}
     touched: dict[tuple[int, AccountType], None] = {}
@@ -104,12 +126,15 @@ def over_limit(
         account_type = contribution_type(transaction, types)
         if account_type is not None:
             touched[transaction.date.year, account_type] = None
-    transactions = list(transactions)
+    if not touched:
+        return []
+    paid_before = _paid_by_year(before, accounts)
+    paid_after = _paid_by_year(after, accounts)
     bars = []
     for year, account_type in touched:
-        paid = contributions(transactions, accounts, year)[account_type]
+        paid = paid_after.get(year, {}).get(account_type, Decimal(0))
         bar = LimitBar(account_type, year, paid, limits.get(year, {}).get(account_type))
-        if bar.over:
+        if bar.over and paid > paid_before.get(year, {}).get(account_type, Decimal(0)):
             bars.append(bar)
     return bars
 
@@ -128,4 +153,6 @@ def parse_limit(text: str) -> Decimal | None:
         amount = Decimal(-1)
     if amount < 0:
         raise ContributionLimitError("Limit musi być kwotą w zł, nie mniejszą od zera.")
+    if amount != amount.quantize(GROSZ):
+        raise ContributionLimitError("Limit podaj z dokładnością do grosza.")
     return amount

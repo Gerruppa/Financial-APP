@@ -15,6 +15,7 @@ from financial_app.domain.contribution_limits import (
     LIMITED_TYPES,
     ContributionLimitError,
     LimitBar,
+    contribution_type,
     contributions,
     limit_bars,
     over_limit,
@@ -22,9 +23,9 @@ from financial_app.domain.contribution_limits import (
     parse_limit,
 )
 from financial_app.domain.formatting import format_exact, format_percent, format_pln
-from financial_app.domain.transactions import TransactionDraft
+from financial_app.domain.transactions import Transaction, TransactionDraft
 from financial_app.persistence.accounts import list_accounts
-from financial_app.persistence.contribution_limits import add_year, delete_year, load_limits, set_limit
+from financial_app.persistence.contribution_limits import add_year, delete_year, load_limits, set_limits
 from financial_app.persistence.transactions import list_transactions
 
 
@@ -39,12 +40,18 @@ class ContributionLimitsSection:
             with ui.row().classes("w-full items-center"):
                 ui.label("Limity wpłat").classes("text-xl font-bold")
                 ui.space()
+                self.new_year = ui.input("Rok", value=str(self._next_year())).props("dense").classes("w-24")
+                self.new_year.mark("limits-new-year")
                 ui.button("Dodaj rok", icon="add", on_click=self._add_year).props("no-caps").mark("limits-add-year")
             ui.label(
                 "Roczne limity wpłat na IKE, IKZE i OIPE, łącznie na wszystkich kontach danego typu. Liczą się wpłaty "
                 "i przelewy z kont innego typu; wypłaty nie zwalniają limitu."
             ).classes("text-sm")
             self.rows()
+
+    def refresh(self) -> None:
+        """Redraw the rows, e.g. after Transactions or Accounts change their contributions."""
+        self.rows.refresh()
 
     @ui.refreshable_method
     def rows(self) -> None:
@@ -77,14 +84,21 @@ class ContributionLimitsSection:
         except ContributionLimitError as error:
             ui.notify(str(error), type="negative")
             return
-        for account_type, amount in amounts.items():
-            set_limit(self.engine, year, account_type, amount)
+        set_limits(self.engine, year, amounts)
         ui.notify(f"Zapisano limity wpłat na {year}.", type="positive")
         self.rows.refresh()
 
-    def _add_year(self) -> None:
+    def _next_year(self) -> int:
         years = list(load_limits(self.engine))
-        add_year(self.engine, years[-1] + 1 if years else date.today().year)
+        return years[-1] + 1 if years else date.today().year
+
+    def _add_year(self) -> None:
+        text = self.new_year.value.strip()
+        if not (text.isdigit() and len(text) == 4):
+            ui.notify("Rok podaj czterema cyframi, np. 2025.", type="negative")
+            return
+        add_year(self.engine, int(text))
+        self.new_year.value = str(self._next_year())
         self.rows.refresh()
 
     def _delete(self, year: int) -> None:
@@ -134,7 +148,7 @@ def _bar(bar: LimitBar, total: bool) -> None:
         if bar.limit is None:
             ui.label(f"Brak limitu na {bar.year} — uzupełnij w Ustawieniach").classes("text-sm text-gray-500")
             return
-        share = bar.paid / bar.limit if bar.limit else Decimal(1)
+        share = bar.share or Decimal(0)
         over = bool(bar.over)
         progress = ui.linear_progress(float(min(share, Decimal(1))), show_value=False, size="10px")
         progress.props(f"color={'negative' if over else 'primary'}")
@@ -147,8 +161,30 @@ def _bar(bar: LimitBar, total: bool) -> None:
             ui.label(format_percent(share * 100))
 
 
-def warn_over_limit(engine: Engine, saved: Iterable[TransactionDraft]) -> None:
-    """After a save, warn once per type and year the ``saved`` Transactions leave over its limit; never blocks."""
-    bars = over_limit(list_transactions(engine), list_accounts(engine), load_limits(engine), saved)
-    for bar in bars:
-        ui.notify(over_limit_warning(bar), type="warning")
+@dataclass
+class LimitCheck:
+    """The Transactions before a save, to warn after it once per type and year the save leaves over its limit with
+    more paid than before; it never blocks the save."""
+
+    engine: Engine
+    before: list[Transaction]
+
+    @classmethod
+    def start(cls, engine: Engine, drafts: Iterable[TransactionDraft | None]) -> LimitCheck | None:
+        """Before a save; given the ``drafts`` it saves (an edit's new and old form), ``None`` when none counts
+        towards a limit, so most saves skip the check."""
+        types = {account.id: account.account_type for account in list_accounts(engine)}
+        if all(d is None or contribution_type(d, types) is None for d in drafts):
+            return None
+        return cls(engine, list_transactions(engine))
+
+    def warn(self, saved: Iterable[TransactionDraft | None] | None = None) -> None:
+        """After the save; ``saved`` defaults to the Transactions it added."""
+        after = list_transactions(self.engine)
+        if saved is None:
+            known = {transaction.id for transaction in self.before}
+            saved = [transaction for transaction in after if transaction.id not in known]
+        drafts = [draft for draft in saved if draft is not None]
+        bars = over_limit(self.before, after, list_accounts(self.engine), load_limits(self.engine), drafts)
+        for bar in bars:
+            ui.notify(over_limit_warning(bar), type="warning")

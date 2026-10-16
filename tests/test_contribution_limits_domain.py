@@ -118,7 +118,9 @@ def test_a_save_warns_once_per_type_and_year_its_contributions_leave_over_the_li
     ]
     transactions = [earlier, *saved, _deposit(IKE, date(2027, 1, 2), 99999)]
 
-    over = over_limit(transactions, ACCOUNTS, LIMITS, saved)
+    before = [earlier, transactions[-1]]
+
+    over = over_limit(before, transactions, ACCOUNTS, LIMITS, saved)
 
     assert over == [LimitBar(AccountType.IKE, 2026, paid=Decimal(28500), limit=Decimal(28260))]
     assert over_limit_warning(over[0]) == "IKE 2026: przekroczono limit wpłat o 240,00\xa0zł."
@@ -131,7 +133,7 @@ def test_a_save_counting_towards_no_limit_or_a_year_without_one_never_warns() ->
         _deposit(IKE, date(2027, 1, 1), 1),
     ]
 
-    assert over_limit(transactions, ACCOUNTS, LIMITS, transactions[1:]) == []
+    assert over_limit(transactions[:1], transactions, ACCOUNTS, LIMITS, transactions[1:]) == []
 
 
 def test_a_limit_is_typed_in_pln_and_left_empty_for_none() -> None:
@@ -140,3 +142,25 @@ def test_a_limit_is_typed_in_pln_and_left_empty_for_none() -> None:
     for text in ("-1", "dużo"):
         with pytest.raises(ContributionLimitError, match="Limit musi być kwotą w zł"):
             parse_limit(text)
+    with pytest.raises(ContributionLimitError, match="z dokładnością do grosza"):
+        parse_limit("28 260,555")
+
+
+def test_an_edit_warns_only_when_it_adds_to_a_year_over_its_limit() -> None:
+    over = _deposit(IKE, date(2026, 1, 5), 30000)
+    commented = TransactionDraft(IKE, date(2026, 1, 5), TransactionType.DEPOSIT, Decimal(30000), "premia")
+    lowered = _deposit(IKE, date(2026, 1, 5), 29000)
+    raised = _deposit(IKE, date(2026, 1, 5), 31000)
+
+    assert over_limit([over], [commented], ACCOUNTS, LIMITS, [commented, over]) == []
+    assert over_limit([over], [lowered], ACCOUNTS, LIMITS, [lowered, over]) == []
+    assert over_limit([over], [raised], ACCOUNTS, LIMITS, [raised, over]) == [
+        LimitBar(AccountType.IKE, 2026, paid=Decimal(31000), limit=Decimal(28260))
+    ]
+
+
+def test_a_bar_shows_its_used_share_and_a_zero_limit_with_nothing_paid_none() -> None:
+    assert LimitBar(AccountType.IKE, 2026, Decimal(7065), Decimal(28260)).share == Decimal("0.25")
+    assert LimitBar(AccountType.IKE, 2026, Decimal(0), Decimal(0)).share == 0
+    assert LimitBar(AccountType.IKE, 2026, Decimal(5), Decimal(0)).share == 1
+    assert LimitBar(AccountType.IKE, 2026, Decimal(5), None).share is None

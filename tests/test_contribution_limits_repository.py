@@ -8,7 +8,7 @@ from sqlalchemy import Engine
 
 from financial_app.domain.accounts import AccountType
 from financial_app.domain.contribution_limits import ContributionLimitError
-from financial_app.persistence.contribution_limits import add_year, delete_year, load_limits, set_limit
+from financial_app.persistence.contribution_limits import add_year, delete_year, load_limits, set_limits
 from financial_app.persistence.db import init_db
 
 IKE, IKZE, OIPE = AccountType.IKE, AccountType.IKZE, AccountType.OIPE
@@ -27,8 +27,8 @@ def test_a_year_is_added_empty_then_its_limits_entered_and_cleared(engine: Engin
     add_year(engine, 2027)
     assert load_limits(engine)[2027] == {IKE: None, IKZE: None, OIPE: None}
 
-    set_limit(engine, 2027, IKZE, Decimal("16956"))
-    set_limit(engine, 2026, IKE, None)
+    set_limits(engine, 2027, {IKE: None, IKZE: Decimal("16956"), OIPE: None})
+    set_limits(engine, 2026, {IKE: None, IKZE: Decimal(11304), OIPE: Decimal(28260)})
 
     limits = load_limits(engine)
     assert limits[2027] == {IKE: None, IKZE: Decimal(16956), OIPE: None}
