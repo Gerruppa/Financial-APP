@@ -82,6 +82,7 @@ async def test_the_sheets_defaults_come_in_on_the_first_visit(engine: Engine) ->
             "LON:CSPX*",
             "AMS:V80A*",
             "WSE:ETFBW20TR*",
+            "WSE:ETFBM40TR*",
             "WSE:ETFBS80TR*",
         ]
         assert rows[0][1] == f"4{NBSP}000,00{NBSP}zł"

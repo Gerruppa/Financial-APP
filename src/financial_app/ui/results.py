@@ -19,11 +19,26 @@ from financial_app.domain.results import TABLE_PRESETS, PeriodResults, ResultsRo
 from financial_app.persistence.accounts import list_accounts
 from financial_app.persistence.bond_data import load_cpi
 from financial_app.ui.charts import drawdown_chart
+from financial_app.ui.info import card_title
 from financial_app.ui.periods import PeriodChoice, period_selector
 from financial_app.ui.view_scope import ViewScope
 
 DASH = "—"
 NO_CPI = "brak CPI GUS za ten okres"
+# Behind the "i" of the tiles that need explaining, by their key
+TILE_INFO = {
+    "xirr": (
+        "Twoja roczna stopa zwrotu z uwzględnieniem terminów i kwot wpłat i wypłat, jak oprocentowanie lokaty, "
+        "która dałaby ten sam wynik. Pokazuje, jak urosły Twoje pieniądze, łącznie z tym, kiedy je dokładałeś.\n\n"
+        "Przy okresie krótszym niż rok jest przeliczona na rok, więc potrafi być przesadnie wysoka lub niska."
+    ),
+    "twr": (
+        "Stopa zwrotu za cały wybrany okres (nie rocznie), liczona tak, jakby nie było żadnych wpłat ani wypłat: "
+        "mierzy samą skuteczność inwestycji, niezależnie od tego, kiedy i ile wpłacałeś.\n\n"
+        "Nadaje się do porównania z benchmarkiem lub innym kontem. Gdy XIRR jest wyższy od TWR (w przeliczeniu na "
+        "rok), wpłaty trafiały w dobre momenty; gdy niższy, w gorsze."
+    ),
+}
 
 
 @dataclass
@@ -92,7 +107,7 @@ def _tiles(results: PeriodResults) -> None:
     ):
         for key, title, text, note in tiles:
             with ui.card().classes("gap-1"):
-                ui.label(title).classes("text-sm text-gray-500")
+                card_title(title, TILE_INFO.get(key), f"results-{key}", "text-sm text-gray-500")
                 ui.label(text).classes("text-xl font-medium").mark(f"results-{key}")
                 if note:
                     ui.label(note).classes("text-xs text-gray-500")

@@ -95,12 +95,13 @@ class DefaultBenchmark:
 
 
 # The defaults besides CPI (spec 6.2): the sheet's Google Finance tickers as names; the sheet's WIG and sWIG80TR have
-# no history on Yahoo, so the Beta ETFs tracking WIG20TR and sWIG80TR stand in for them, needing no Stooq key
+# no history on Yahoo, so the Beta ETFs tracking WIG20TR, mWIG40TR and sWIG80TR stand in for them, needing no Stooq key
 DEFAULT_BENCHMARKS = (
     DefaultBenchmark("LON:ACWI", "GBP", "Akcje zagraniczne", yahoo="ACWI.L"),
     DefaultBenchmark("LON:CSPX", "USD", "Akcje zagraniczne", yahoo="CSPX.L"),
     DefaultBenchmark("AMS:V80A", "EUR", "Akcje zagraniczne", yahoo="V80A.AS"),
     DefaultBenchmark("WSE:ETFBW20TR", "PLN", "Akcje polskie", yahoo="ETFBW20TR.WA"),
+    DefaultBenchmark("WSE:ETFBM40TR", "PLN", "Akcje polskie", yahoo="ETFBM40TR.WA"),
     DefaultBenchmark("WSE:ETFBS80TR", "PLN", "Akcje polskie", yahoo="ETFBS80TR.WA"),
 )
 

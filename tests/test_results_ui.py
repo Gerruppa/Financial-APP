@@ -155,3 +155,14 @@ async def test_without_transactions_there_are_no_results(tmp_path: Path) -> None
 
         await user.should_see(marker="results-empty")
         await user.should_not_see(marker="results-twr")
+
+
+async def test_the_xirr_and_twr_tiles_explain_themselves_behind_an_info_icon(engine: Engine) -> None:
+    async with user_simulation(_shell(engine)) as user:
+        await user.open("/wyniki")
+        await user.should_see(marker="results-xirr")
+
+        for name, words in (("xirr", "terminów i kwot wpłat"), ("twr", "żadnych wpłat")):
+            [icon] = user.find(marker=f"info-results-{name}").elements
+            [tooltip] = [element for element in icon.descendants() if isinstance(element, ui.tooltip)]
+            assert words in tooltip.text

@@ -28,6 +28,7 @@ from financial_app.domain.metrics import drawdowns
 from financial_app.domain.portfolio_history import DayValue
 from financial_app.domain.profit_sources import ProfitSources
 from financial_app.domain.transactions import TransactionDraft
+from financial_app.ui.info import card_title
 
 # ECharts formats in the browser, so its tooltips and axes write numbers as domain/formatting.py does: a decimal comma,
 # non-breaking spaces between thousands (4-digit numbers too) and before "zł" and "%"
@@ -46,15 +47,78 @@ _AXIS_PLN = (
     rf".format(value).replace(/\s/g, '{_NBSP}')"
 )
 _AXIS_PERCENT = f"value => value + '{_NBSP}%'"
-# A waterfall bar is a rectangle from the running total before it (value[1]) to after it (value[2])
-_WATERFALL_BAR = """(params, api) => {
+# A waterfall bar is a rectangle from the running total before it (value[1]) to after it (value[2]), its signed
+# change (value[3]) in whole złoty above it
+_WATERFALL_CHANGE = (
+    "value => new Intl.NumberFormat('pl-PL', {maximumFractionDigits: 0, useGrouping: 'always',"
+    rf" signDisplay: 'exceptZero'}}).format(value).replace(/\s/g, '{_NBSP}').replace('\u2212', '-') + '{_NBSP}zł'"
+)
+_WATERFALL_BAR = f"""(params, api) => {{
     const top = api.coord([api.value(0), Math.max(api.value(1), api.value(2))]);
     const bottom = api.coord([api.value(0), Math.min(api.value(1), api.value(2))]);
     const width = api.size([1, 0])[0] * 0.6;
-    return {type: 'rect', shape: {x: top[0] - width / 2, y: top[1], width: width, height: bottom[1] - top[1]},
-            style: {fill: api.visual('color')}};
-}"""
+    const change = {_WATERFALL_CHANGE};
+    return {{type: 'group', children: [
+        {{type: 'rect', shape: {{x: top[0] - width / 2, y: top[1], width: width, height: bottom[1] - top[1]}},
+         style: {{fill: api.visual('color')}}}},
+        {{type: 'text', style: {{text: change(api.value(3)), x: top[0], y: top[1] - 4, align: 'center',
+         verticalAlign: 'bottom', fill: '#424242', fontSize: 11}}}},
+    ]}};
+}}"""
 _GAIN, _LOSS, _RESULT = "#2e7d32", "#c62828", "#3f51b5"
+
+# What each Dashboard chart shows and how to read it, behind the "i" in its card's corner
+CHART_INFO = {
+    "waterfall": (
+        "Skąd wziął się Twój wynik od pierwszej transakcji. Każdy słupek zaczyna się tam, gdzie skończył się "
+        "poprzedni: zielony podnosi wynik, czerwony go obniża, a niebieski „Wynik” to ich suma.\n\n"
+        "Efekt ceny: zmiana kursów instrumentów w ich walucie, przed prowizjami.\n"
+        "Efekt walutowy: ile dała zmiana kursu walut, w tym na gotówce w walucie obcej.\n"
+        "Dywidendy i Odsetki: wypłaty brutto.\n"
+        "Prowizje i koszty: prowizje, opłaty za przewalutowanie i inne koszty.\n"
+        "Podatki: podatek pobrany u źródła i przy przedterminowym wykupie obligacji; z „Po podatku” także "
+        "szacowany podatek od niezrealizowanych zysków.\n\n"
+        "Kwota nad słupkiem to jego zmiana w złotych."
+    ),
+    "dividends": (
+        "Dywidendy i odsetki otrzymane w każdym roku wybranego okresu, z podziałem na konta (kolory słupka). "
+        "Rosnące słupki oznaczają rosnący dochód pasywny."
+    ),
+    "currencies": (
+        "W jakich walutach jest Twój majątek dziś: pozycje według waluty notowania i gotówka, przeliczone na złote. "
+        "Duży udział walut obcych oznacza, że kurs złotego mocno wpływa na wynik (efekt walutowy)."
+    ),
+    "accounts": (
+        "Wartość każdego konta dziś, podzielona na otwarte pozycje i gotówkę. Długi odcinek gotówki oznacza "
+        "pieniądze, które czekają na zainwestowanie."
+    ),
+    "allocation": (
+        "Dzisiejszy udział każdej klasy aktywów w wartości portfela (z gotówką). Jeśli ustawisz cele w zakładce "
+        "Strategie inwestycyjne, obok udziału pojawi się słupek „Cel”; różnica między nimi pokazuje, co warto "
+        "dokupić przy rebalansowaniu."
+    ),
+    "class-shares": (
+        "Jak zmieniał się udział klas aktywów w portfelu w kolejnych miesiącach, kwartałach, półroczach lub latach "
+        "(przełącznik nad wykresem). Każdy słupek sumuje się do 100 %."
+    ),
+    "value": (
+        "Wartość konta (pozycje i gotówka) na tle wpłat netto, czyli wpłat pomniejszonych o wypłaty. Gdy linia "
+        "wartości jest nad linią wpłat, jesteś na plusie; odległość między nimi to zysk lub strata."
+    ),
+    "profit": (
+        "Zysk lub strata każdego dnia: wartość konta minus wpłaty netto. Powyżej zera jesteś na plusie. Skoki "
+        "wynikają ze zmian cen i kursów, a nie z samych wpłat, bo te są odjęte."
+    ),
+    "xirr": (
+        "XIRR to roczna stopa zwrotu z uwzględnieniem terminów i kwot Twoich wpłat i wypłat, jak oprocentowanie "
+        "lokaty dające ten sam wynik. Punkt na wykresie to XIRR od początku okresu do tego dnia; na krótkim "
+        "odcinku czasu potrafi mocno skakać."
+    ),
+    "drawdown": (
+        "Obsunięcie: o ile procent stopa zwrotu (TWR, bez wpływu wpłat i wypłat) jest poniżej swojego najwyższego "
+        "punktu w okresie. 0 % oznacza nowy szczyt; najniższy punkt to największy spadek, jaki portfel przeszedł."
+    ),
+}
 
 
 def dashboard_charts(
@@ -101,7 +165,7 @@ def drawdown_chart(
     history: Sequence[DayValue], first: date, last: date, account_id: int | None, name: str = "drawdown"
 ) -> None:
     """The drawdown of the TWR from the "from" day, in a card marked ``chart-<name>``; also on the Wyniki tab."""
-    _card("Drawdown", name, _drawdown(history, first, last, account_id))
+    _card("Drawdown", name, _drawdown(history, first, last, account_id), CHART_INFO["drawdown"])
 
 
 def pln_lines_chart(title: str, name: str, days: Sequence[date], series: Mapping[str, Sequence[Decimal]]) -> None:
@@ -137,9 +201,11 @@ def pln_bars_chart(
     _card(title, name, options)
 
 
-def _card(title: str, name: str, options: dict[str, Any]) -> None:
+def _card(title: str, name: str, options: dict[str, Any], info: str | None = None) -> None:
+    """A chart in a card marked ``chart-<name>``, with an "i" (marked ``info-<name>``) showing ``info``, by default
+    its ``CHART_INFO``."""
     with ui.card().classes("w-full gap-1"):
-        ui.label(title).classes("text-lg font-medium")
+        card_title(title, info or CHART_INFO.get(name), name)
         ui.echart(options).classes("w-full h-72").mark(f"chart-{name}")
 
 
@@ -174,7 +240,7 @@ def _class_shares_card(history: Sequence[DayValue], first: date, last: date, acc
         ui.echart(options).classes("w-full h-72").mark("chart-class-shares")
 
     with ui.card().classes("w-full gap-1"):
-        ui.label("Udział aktywów w czasie").classes("text-lg font-medium")
+        card_title("Udział aktywów w czasie", CHART_INFO["class-shares"], "class-shares")
         shown(Grouping.MONTH)
 
 
@@ -281,7 +347,11 @@ def _waterfall(sources: ProfitSources) -> dict[str, Any]:
     return {
         "tooltip": {"trigger": "item", ":formatter": tooltip},
         "grid": {"containLabel": True},
-        "xAxis": {"type": "category", "data": [bar["name"] for bar in bars], "axisLabel": {"interval": 0}},
+        "xAxis": {
+            "type": "category",
+            "data": [bar["name"] for bar in bars],
+            "axisLabel": {"interval": 0, "rotate": 35},
+        },
         "yAxis": {"type": "value", "axisLabel": {":formatter": _AXIS_PLN}},
         "series": [
             {
