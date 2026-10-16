@@ -104,6 +104,28 @@ async def test_an_account_scope_keeps_its_own_sales(engine: Engine) -> None:
         assert [row[0] for row in _rows(user)] == ["PZU"]
 
 
+async def test_names_wrap_while_dates_and_numbers_stay_on_one_line(engine: Engine) -> None:
+    """Issue #116: a long Instrument or Account name wraps in its own column instead of running over the next one."""
+    async with user_simulation(lambda: build_shell(engine, now=lambda: NOW)) as user:
+        await user.open("/sprzedaz")
+        with user.scope(marker="period-selector"):
+            user.find("Od początku").click()
+        await user.should_see(marker="sale-row")
+
+        row = sorted(user.find(marker="sale-row").elements, key=lambda element: element.id)[0]
+        assert "whitespace-nowrap" not in row.classes
+        cells = [d for d in row.descendants() if isinstance(d, ui.label)]
+        for name in cells[:2]:
+            assert {"break-words", "min-w-0"} <= set(name.classes)
+        for value in cells[2:]:
+            assert "whitespace-nowrap" in value.classes
+        headers = {h.text: h for h in user.find(marker="sale-header").elements}
+        assert "text-right" not in headers["Instrument"].classes
+        assert "text-right" not in headers["Sprzedaż"].classes
+        assert "text-right" in headers["Liczba"].classes
+        assert "text-right" in headers["Rentowność z dyw."].classes
+
+
 async def test_a_period_without_sales_says_so(engine: Engine) -> None:
     async with user_simulation(lambda: build_shell(engine, now=lambda: NOW)) as user:
         await user.open("/sprzedaz")
