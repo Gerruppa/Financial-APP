@@ -20,7 +20,15 @@ from sqlalchemy import Engine
 
 from financial_app.domain.accounts import AccountType, tax_regime_for
 from financial_app.domain.bond_redemption import early_redemption
-from financial_app.domain.bonds import ISSUE_PRICE, BondSeries, BondType, bond_type_of, series_name
+from financial_app.domain.bonds import (
+    ISSUE_PRICE,
+    BondSeries,
+    BondType,
+    bond_type_of,
+    series_name,
+    series_of_type,
+    sold_on,
+)
 from financial_app.domain.currencies import MissingNbpRateError, NbpRate
 from financial_app.domain.formatting import (
     currency_unit,
@@ -488,6 +496,9 @@ def open_transaction_dialog(
             own_name = series_name(own_type, transaction.date) if own_type and transaction else None
             bond_type = ui.select(BOND_TYPE_OPTIONS, label="Rodzaj obligacji", value=(own_type or BondType.EDO).value)
             bond_type.classes("w-full").mark("transaction-bond-type")
+            # Any Series of the type may be picked, e.g. for an older purchase (L-26); the date's own is the default
+            series_choice = ui.select({}, label="Seria", with_input=True).classes("w-full")
+            series_choice.mark("transaction-bond-series-choice")
             series_text = ui.label().classes("text-sm text-gray-600").mark("transaction-bond-series")
             rolled = edited_series is not None and transaction is not None and transaction.price != ISSUE_PRICE
             rollover = ui.checkbox("z rolowania", value=rolled).mark("transaction-rollover")
@@ -574,8 +585,13 @@ def open_transaction_dialog(
             """A Buy in the bond mode: the type and date give the Instrument, a Bond Series in PLN."""
             return TransactionType(transaction_type.value) is TransactionType.BUY and bool(bond_mode.value)
 
-        def chosen_series() -> BondSeries | None:
-            """The Bond Series the chosen type and purchase date give, ``None`` until the date reads as one."""
+        picked: list[str | None] = [None]  # a Series the user picked instead of the one the date gives
+        type_series: dict[BondType, dict[str, str]] = {}  # the Series list offered for each type, built once
+        offered: list[tuple[list[str], str | None] | None] = [None]  # the Series list and value shown last
+        syncing = [False]  # set while the dialog itself fills the Series list
+
+        def date_series() -> str | None:
+            """The Series the chosen type and purchase date give, ``None`` until the date reads as one."""
             try:
                 day_value = parse_date(day.value or "")
             except ValueError:
@@ -584,7 +600,25 @@ def open_transaction_dialog(
             # An edited Buy stays in its own Series while its type and the month of its date stay
             if name == own_name and edited_series is not None:
                 name = edited_series
+            return name
+
+        def chosen_series() -> BondSeries | None:
+            """The Bond Series picked, else the one the type and purchase date give."""
+            name = picked[0] or date_series()
+            if name is None:
+                return None
             return held_series.get(name) or BondSeries(None, name, mf_terms.get(name))
+
+        def series_picked() -> None:
+            if syncing[0]:
+                return
+            value = series_choice.value
+            picked[0] = None if value is None or value == date_series() else str(value)
+            update()
+            bond_price()
+
+        def type_changed() -> None:
+            picked[0] = None  # a Series of another type is not one of this type
 
         def trade_currency() -> str:
             """The Instrument's currency; interest without one is in the currency the user chose."""
@@ -668,7 +702,7 @@ def open_transaction_dialog(
             quantity.visible = trade or kind in (TransactionType.DRIP, TransactionType.SECURITY_TRANSFER)
             bonds = bonds_chosen()
             bond_mode.visible = kind is TransactionType.BUY
-            for bond_field in (bond_type, series_text):
+            for bond_field in (bond_type, series_choice, series_text):
                 bond_field.visible = bonds
             instrument.visible = not bonds
             price.visible = trade
@@ -747,6 +781,8 @@ def open_transaction_dialog(
             series = chosen_series() if bonds else None
             rollover.visible = series is not None and series.rollover_price is not None
             quantity.props(f'label="{"Liczba obligacji" if bonds else "Liczba"}"')
+            if bonds:
+                list_series(series)
             if series is None:
                 series_text.text = "Podaj datę zakupu, by wybrać serię." if bonds else ""
                 return
@@ -755,7 +791,35 @@ def open_transaction_dialog(
                 parts.append(f"1. okres: {format_percent(series.first_rate * 100)}")
             if series.mf is None:
                 parts.append("jeszcze nie ma jej w pliku MF")
+            else:
+                try:
+                    rolled_over = rollover.visible and bool(rollover.value)
+                    outside = not sold_on(series.mf, parse_date(day.value or ""), rolled_over)
+                except ValueError:
+                    outside = False
+                if outside:
+                    window = f"{format_date(series.mf.sale_start)}–{format_date(series.mf.sale_end)}"
+                    parts.append(f"data zakupu poza sprzedażą serii ({window})")
             series_text.text = " · ".join(parts)
+
+        def list_series(series: BondSeries | None) -> None:
+            """Offer the type's Series from the MF file, the newest first, with the chosen one even when MF lacks it."""
+            kind = BondType(bond_type.value)
+            if kind not in type_series:
+                sold = series_of_type(mf_terms.values(), kind)
+                type_series[kind] = {t.series: f"{t.series} · sprzedaż {t.sale_start:%m.%Y}" for t in sold}
+            options = type_series[kind]
+            if series is not None and series.name not in options:
+                options = {series.name: series.name, **options}
+            value = series.name if series else None
+            if (list(options), value) == offered[0]:
+                return  # nothing to send again
+            offered[0] = (list(options), value)
+            syncing[0] = True
+            try:
+                series_choice.set_options(options, value=value)
+            finally:
+                syncing[0] = False
 
         set_price = [""]  # the price the bond mode set last, which it may set again
         # What the Early Redemption prefill set last in each field, which it may set again; a value the user typed (or
@@ -814,6 +878,9 @@ def open_transaction_dialog(
             bond_price()
         account.on_value_change(account_changed)
         rollover.on_value_change(lambda: bond_price(rollover_changed=True))
+        rollover.on_value_change(lambda: show_series(bonds_chosen()))
+        series_choice.on_value_change(series_picked)
+        bond_type.on_value_change(type_changed)  # before the handlers that read the chosen Series
         for bond_field in (bond_mode, bond_type, day, transaction_type):
             bond_field.on_value_change(lambda: bond_price())
         for field in (

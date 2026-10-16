@@ -24,6 +24,7 @@ Re-implement the inwestomat.eu "Portfolio tracker" Google Sheet (v2.0.1, 01.07.2
 
 ### 3.1 Accounts (Q14, Q48, Q49)
 - Managed list (not free text). Fields: name, broker name, Account Type, Cash Currencies (e.g. PLN only, or PLN+USD), optional FX Conversion Fee % (e.g. XTB 0.5%; empty for most accounts), flag "exclude FX result from Dashboard P&L", active/inactive.
+- **Deleting** (L-28, #103): the edit dialog's "Usuń konto" deletes an Account after a confirmation naming it, only while nothing names it: its own Transactions, Cash or Security Transfers into it, its own Investment Strategy or an XTB account number mapped to it; otherwise a Polish message says what holds it, and deactivating stays the way to hide it. A View Scope on it goes back to Total.
 - Account Types: Regular, IKE, IKZE, OIPE, PPK, OKI, Deposit/Savings, Bonds, Other (#64). Each type maps to a **Tax Regime** module:
   - Regular: 19% Belka per sale, reported in PIT-38.
   - IKE/OIPE: exempt on a qualifying withdrawal, otherwise tax on the whole gain.
@@ -76,7 +77,7 @@ Validation at save time (Q36):
 - **Value shown**: gross (nominal plus accrued interest) in the Portfolio, Dashboard and History, as other assets. The net value (after the early-redemption fee and the Tax Regime's tax) is shown in the Obligacje tab and feeds the after-tax toggle (#89).
 - **Tax by Account**: the net value, the Drafts and an early redemption take the tax from the Account's Tax Regime: Belka withheld at redemption on a Bonds or Regular Account, none on IKE/IKZE. The early-redemption fee applies everywhere, capped at the accrued interest as the issue letters say.
 - **Early-redemption fees**: a table built into the app (bond type, first issue it applies to, amount), updated with app releases, unless the MF file carries the fee.
-- **Entering a purchase**: the ordinary "+" dialog in a bond mode: type and purchase date give the Series (created on its first purchase), the price is 100 or, with "z rolowania", the MF Rollover price.
+- **Entering a purchase**: the ordinary "+" dialog in a bond mode: type and purchase date give the Series (created on its first purchase), the price is 100 or, with "z rolowania", the MF Rollover price. An older purchase may pick any Series of the type from the MF copy (L-26, #102; searchable, the newest sold first, the date's own by default); a date outside that Series' sale window only warns, a Rollover up to 7 days after it. The MF file also lists types no longer sold (KOS, POS, IR, RS, DOS, TOZ, TZ, SP); they are not offered, since their terms and valuation differ and none is held.
 - **Early redemption**: a Sell of a Bond Series picks the Lot (default the oldest, ADR-0007), prefilled with the gross value of one bond on that day as the price, the early-redemption fee as the commission and the tax as withheld tax; all editable to match the bank's statement, the Actual Amount being the net received.
 - **Drafts**: a matured Series and (for COI, ROR, DOR) a due coupon without a matching Transaction show as a Draft in the Obligacje tab's "Do zatwierdzenia" list, with a count in the header. Drafts are computed, never stored; confirming one saves an ordinary Transaction. A coupon is an interest Dividend (no Instrument) with Belka as withholding tax, into the PLN cash of the Account holding the Series. A Rollover is one action ("roluj do…") saving the redemption and the purchase of the new Series.
 - **History**: Bond Series are valued day by day with the same function as today, Estimated and forecast rates included; the bond deviation of the Historia parity test goes.
@@ -109,6 +110,7 @@ Validation at save time (Q36):
 | GPW current (shares, NewConnect, ETF, bonds) | Bossa JSON API (bulk per category) |
 | Foreign stocks/ETF, crypto, metals | Yahoo chart API (GBp → /100; crypto non-USD via USD cross) |
 | GPW history, indices (WIG, sWIG80TR) | Yahoo history; Stooq only with an API key, which the user cannot get (see below) |
+| Funds, PPK history | analizy.pl API (the whole valuation series, #101) |
 | Funds, PPK | analizy.pl API, fallback bankier.pl |
 | Catalyst prices | Bossa JSON API (percent of nominal, made a price per bond, 4.2) |
 | Catalyst accrued interest, nominal | gpwcatalyst.pl "Instrumenty notowane" |
@@ -119,7 +121,7 @@ Validation at save time (Q36):
 
 Dropped: Google Finance, FT, Biznesradar scraping. Each source is a module with per-class fallback order configurable in settings. When all fail: last known price with its timestamp and a staleness warning; Manual Price always available. Historical prices and FX are cached locally (needed for History, ADR-0002).
 
-**No Stooq API key (2026-10-12).** The user cannot get a Stooq API key, so in practice History runs on Yahoo alone; the Stooq code stays as an unused fallback. Open-source libraries do not help: pandas-datareader's Stooq reader hits the same keyed endpoint, yfinance reads the same Yahoo data the app already uses, investpy is broken. The gaps are Instruments without a Yahoo symbol (funds and PPK, which keep only the Quotes saved by daily refreshes) and indices such as WIG as benchmarks. If they become a problem, the keyless candidates are the analizy.pl quotation history (probably the full series behind the API the fund prices already use) and the Bossa EOD archive (`mstall.zip`, MetaStock files for GPW shares, NewConnect, ETFs and indices); see backlog L-25.
+**No Stooq API key (2026-10-12).** The user cannot get a Stooq API key, so in practice History runs on Yahoo alone; the Stooq code stays as an unused fallback. Open-source libraries do not help: pandas-datareader's Stooq reader hits the same keyed endpoint, yfinance reads the same Yahoo data the app already uses, investpy is broken. Funds and PPK take their history from analizy.pl since #101 (L-25): the quotation API the fund prices use answers with the fund's whole valuation series, so History asks it after Yahoo and before Stooq, keyless; funds do not split, so those prices are not rescaled. The Bossa EOD archive (`mstall.zip`) the backlog also named is gone (checked 2026-10-16: `info.bossa.pl/pub/` redirects to the home page), so indices such as WIG as benchmarks still need a Yahoo symbol.
 
 ### 4.1 Automatic valuation rules (grilling of #3 and #25)
 - **Manual Price wins while set**; the automatic Quote is still fetched and shown beside it. Clearing the Manual Price returns the Instrument to automatic valuation. A Bond Series is valued from MF data (3.4.1), every type since L-8; a Manual Price still overrides it ("ręczna"), a Series without its first rate stays at cost marked "brak oprocentowania"; another treasury bond (no Bond Series, e.g. DS or IZ on Catalyst) is quoted like any Instrument (4.2).
@@ -141,7 +143,7 @@ Dropped: Google Finance, FT, Biznesradar scraping. Each source is a module with 
 
 ## 5. Screens (tabs)
 
-Shell (UI prototype verdict, branch `prototype/ui-shell`, issue #1): **left navigation menu**, Dashboard as tiles and cards, **"+" floating button** opening the transaction dialog. Number format everywhere: Polish (decimal comma, non-breaking thousand separators and before "zł"/"%"), produced by one shared formatter; amounts never wrap.
+Shell (UI prototype verdict, branch `prototype/ui-shell`, issue #1): **left navigation menu**, Dashboard as tiles and cards, **"+" floating button** opening the transaction dialog (on every tab but Ustawienia, L-28). Number format everywhere: Polish (decimal comma, non-breaking thousand separators and before "zł"/"%"), produced by one shared formatter; amounts never wrap.
 
 **View Scope** (Q61–Q64, inspired by MyFund): sub-portfolios are Accounts (no extra grouping level). A scope switcher in the header, visible on every tab, offers **Total** first, then Accounts sorted by value descending, each with value, share-of-total bar and daily change; inactive Accounts hidden behind "pokaż nieaktywne". Every tab (sums, charts, Portfolio, Transakcje, Wyniki, Strategia, Benchmarki) follows the scope; the last scope is remembered. Breadcrumbs (Total › Account) return to Total. Transfers between Accounts do not change Net Deposits or XIRR in Total; in an Account scope they count as Deposit on the target and Withdrawal on the source.
 
@@ -167,7 +169,7 @@ Shell (UI prototype verdict, branch `prototype/ui-shell`, issue #1): **left navi
 
 ### 6.1 Stage 4 decisions (grilling of #5, 2026-10-11)
 - **Order**: Stage 4 runs before Stage 3. Slices: (a) History engine (daily value per Account and Asset Class, Net Deposits; no UI), (b) metrics (XIRR, TWR, drawdown, volatility), (j) Historia parity test right after (a)+(b), then (c) View Scope switcher and period selector, (d) Dashboard totals, Account table, currency exposure, (e) charts, (f) Wyniki tab, (g) Multi-asset; (h) Investment Strategies last as a separate slice. Benchmarks stay in Stage 5 (#6); treemap, Account ranking, profit-by-source waterfall and after-tax toggle come after (h).
-- **Quote history sources** (ADR-0006): Yahoo chart history first (it knows the currency, GBp ÷ 100), Stooq as fallback, in a per-Asset-Class history order like the price Fallback Order. Yahoo `close` (split-adjusted only), never `adjclose`: Dividends come from Transactions.
+- **Quote history sources** (ADR-0006): Yahoo chart history first (it knows the currency, GBp ÷ 100), then analizy.pl for funds and PPK (#101), Stooq as fallback, in a per-Asset-Class history order like the price Fallback Order. Yahoo `close` (split-adjusted only), never `adjclose`: Dividends come from Transactions.
 - **Splits**: history prices are split-adjusted, so before a Split's date History divides the price by the Splits recorded in Transactions (un-adjusts it). An unrecorded split shows as a jump caught by the parity test.
 - **Missing days**: the last known Quote and NBP Rate carry forward; with none on or before the day, the Position is valued at cost and flagged "brak ceny". Bond Series are valued by the MF issue letters with today's known rates (3.4.1), Estimated and forecast ones included; a type not valued yet stays at cost (nominal).
 - **FX on day D**: valuation uses the NBP table of day D (else the latest earlier); D-1 stays only for tax costs.

@@ -16,10 +16,15 @@ BANKIER = "bankier"
 STOOQ = "stooq"
 # Yahoo's daily closes for History (ADR-0006), saved apart from its current prices: they are split-adjusted
 YAHOO_HISTORY = "yahoo_history"
-# The sources of History's daily prices, tried in this order (spec 6.1)
-HISTORY_SOURCES = (YAHOO, STOOQ)
+# The analizy.pl valuations of funds and PPK for History (#101), saved apart from its current prices; funds do not
+# split, so they are not split-adjusted
+ANALIZY_HISTORY = "analizy_history"
+# The sources of History's daily prices, tried in this order (spec 6.1); analizy.pl needs no key, unlike Stooq
+HISTORY_SOURCES = (YAHOO, ANALIZY, STOOQ)
 # The sources of saved Quotes that only History uses, never valuing a Position
-HISTORY_ONLY_SOURCES = (STOOQ, YAHOO_HISTORY)
+HISTORY_ONLY_SOURCES = (STOOQ, YAHOO_HISTORY, ANALIZY_HISTORY)
+# Those whose prices are split-adjusted, so in the units of the day they were fetched (ADR-0006)
+SPLIT_ADJUSTED_SOURCES = (STOOQ, YAHOO_HISTORY)
 # How each Price Source is named in the UI
 SOURCE_NAMES = {YAHOO: "Yahoo", BOSSA: "Bossa", ANALIZY: "analizy.pl", BANKIER: "bankier.pl", STOOQ: "Stooq"}
 

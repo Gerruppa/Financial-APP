@@ -1,0 +1,64 @@
+{
+ "id": "PZU01",
+ "label": "PZU Akcji KRAKOWIAK",
+ "currency": "PLN",
+ "isRegular": true,
+ "isDividend": false,
+ "periods": [
+  {
+   "period": "MAX",
+   "label": "MAX",
+   "start": "1999-10-25",
+   "end": "2026-10-14"
+  }
+ ],
+ "events": [],
+ "dividends": [],
+ "series": [
+  {
+   "id": "fund_PZU01",
+   "label": "Fundusz",
+   "currency": "PLN",
+   "price": [
+    {
+     "date": "2025-12-29",
+     "value": 132.63
+    },
+    {
+     "date": "2025-12-30",
+     "value": 133.33
+    },
+    {
+     "date": "2025-12-31",
+     "value": 133.33
+    },
+    {
+     "date": "2026-01-02",
+     "value": 136.24
+    },
+    {
+     "date": "2026-01-05",
+     "value": 137.06
+    },
+    {
+     "date": "2026-01-07",
+     "value": 139.68
+    },
+    {
+     "date": "2026-01-08",
+     "value": 137.48
+    },
+    {
+     "date": "2026-01-09",
+     "value": 139.33
+    }
+   ]
+  },
+  {
+   "id": "fund_with_dividend_PZU01",
+   "label": "Fundusz z dywidendą",
+   "currency": "PLN",
+   "price": []
+  }
+ ]
+}

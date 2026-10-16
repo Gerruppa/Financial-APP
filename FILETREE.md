@@ -49,7 +49,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 
 - `__init__.py`: Docstring marking the domain package as pure-Python calculations with no UI or database imports.
 - `account_ranking.py`: Account ranking and treemap figures for the Total Dashboard: XIRR, TWR, P&L, Net Deposits and costs per Account, sorted with best and worst marked
-- `accounts.py`: Account Types, their Tax Regime descriptions and validation of Account fields with Polish error messages.
+- `accounts.py`: Account Types, Tax Regime descriptions, Account field validation, and the refusal naming what still holds an Account from deletion
 - `bond_calendar.py`: Calendar of coupons, anniversaries and maturities of held Bond Series over the next 12 months, by View Scope
 - `bond_drafts.py`: Drafts for matured Bond Series Lots (redemption, Rollover) and coupons of COI, ROR and DOR Lots, with the Sell or interest Transaction each confirms
 - `bond_holdings.py`: Obligacje tab data: each Bond Series held in the View Scope with its Lots, gross and net values, rates and dates
@@ -86,7 +86,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 ## src/financial_app/persistence/
 
 - `__init__.py`: Package marker for the SQLite and SQLAlchemy persistence layer.
-- `accounts.py`: Saves and reads Accounts, enforcing case-insensitive unique names and cash currency rows.
+- `accounts.py`: Saves, reads and deletes Accounts, enforcing case-insensitive unique names and refusing to delete a held Account
 - `backup.py`: Copies the database to the backups folder at each start and keeps only the newest copies.
 - `bond_data.py`: SQLite copy of the bond data sources (MF Bond Series, GUS CPI, NBP reference rates) and each source's fetch status
 - `bond_drafts.py`: Lists pending bond Drafts (maturities and unentered coupons) and saves them as Transactions, all or nothing
@@ -141,7 +141,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 ## src/financial_app/sources/
 
 - `__init__.py`: Package marker describing the external price sources package
-- `analizy.py`: Fund and PPK Quotes and fund search through the undocumented analizy.pl API, a price source and an Instrument lookup.
+- `analizy.py`: Fund and PPK Quotes, valuation history for History, and fund search through the undocumented analizy.pl API
 - `bankier.py`: Fetches fund and PPK Quotes from bankier.pl pages as the fallback price source
 - `bond_data.py`: Fetches and parses the MF bond file, GUS CPI and NBP reference rates, refreshing their SQLite copies at most once a day
 - `bossa.py`: Fetches GPW, NewConnect, ETF and bond Quotes in PLN from the Bossa JSON API
@@ -149,7 +149,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `current_prices.py`: Today's valuation inputs shared by the Portfolio and the Dashboard: Instrument prices and NBP Rates from the last business day before today, each currency fetched once
 - `dashboard.py`: Computes today's Dashboard of a View Scope from the database, shared by the Dashboard and the Investment Strategy
 - `export.py`: Writes the Transactions list to CSV and XLSX files for export
-- `history.py`: Returns an Instrument's Quotes in a date range, fetching missing days from Stooq into cache
+- `history.py`: Returns an Instrument's Quotes in a date range, fetching missing days from Yahoo, analizy.pl or Stooq into cache
 - `nbp.py`: Gets NBP exchange rates from the NBP API through the local cache
 - `portfolio_history.py`: Fetches History prices and NBP Rates into cache and computes daily values, cached until invalidated
 - `prices.py`: Refreshes held Instruments' Quotes from price sources in fallback order and records failures
@@ -162,7 +162,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 
 - `__init__.py`: Package marker for the NiceGUI user interface layer, a thin layer over domain and persistence
 - `account_ranking.py`: Total Dashboard's Accounts treemap and sortable Account ranking; clicking a tile switches the View Scope to that Account
-- `accounts.py`: Ustawienia Konta card: lists Accounts and opens the add and edit dialog
+- `accounts.py`: Ustawienia Konta card: lists Accounts, opens the add and edit dialog, and deletes an unused Account
 - `bond_data.py`: Header status listing failing bond data sources with their reasons, shown only while one keeps failing
 - `bond_drafts.py`: Obligacje tab's "Do zatwierdzenia" list of maturities and unpaid coupons, and its count in the header
 - `bond_series.py`: Bond Series rate summary and dialog for correcting MF rates by hand in Ustawienia Instrumenty
@@ -190,11 +190,13 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 
 ## tests/
 
+- `test_account_deletion.py`: Tests deleting an Account that nothing names and the refusals naming what still holds an Account
 - `test_account_ranking_domain.py`: Tests Account ranking figures, sorting, best and worst marks and treemap tiles
 - `test_account_ranking_ui.py`: Tests the Dashboard's Account treemap and ranking, profit waterfall and after-tax toggle
 - `test_accounts_domain.py`: Tests Account Types, Tax Regime registry and AccountDraft validation rules
 - `test_accounts_repository.py`: Tests saving, listing and editing Accounts in SQLite, including unique names
 - `test_accounts_ui.py`: UI tests for Ustawienia Konta: adding, editing and deactivating Accounts without a browser
+- `test_analizy_history.py`: Tests fund and PPK valuation history from analizy.pl on saved responses, and the source order for History
 - `test_analizy_search.py`: Tests for analizy.pl fund and PPK search on saved, trimmed responses without network
 - `test_analizy_source.py`: Tests the analizy.pl fund and PPK quote source against saved API responses
 - `test_architecture.py`: Architecture test enforcing that the domain core does not import UI or database code
@@ -211,6 +213,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_bond_purchase_ui.py`: UI tests for buying retail treasury bonds in the transaction dialog's bond mode
 - `test_bond_rates_ui.py`: UI tests for correcting a Bond Series' MF rates in Ustawienia Instrumenty
 - `test_bond_redemption_domain.py`: Tests bond early-redemption fees, Belka withholding, anniversaries and maturity dates
+- `test_bond_series_choice.py`: Tests the MF Series a past bond purchase may pick, their newest-first order and sale windows
 - `test_bond_series_domain.py`: Domain tests for Bond Series naming and corrected MF rates
 - `test_bond_series_repository.py`: Repository tests for Bond Series as Instruments with saved rate corrections
 - `test_bond_valuation.py`: Unit tests for bond valuation: MF, CPI and NBP rates, linear accrual, grosz rounding and coupon payouts
@@ -318,6 +321,10 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `FTI068_AH_EUR.json`: Saved analizy.pl API response for a EUR fund, used to test the analizy price source offline
 - `PZU01.json`: Saved analizy.pl quotation response for the PZU Akcji KRAKOWIAK fund, used by tests
 - `PZU60.json`: Saved analizy.pl API response for the PZU60 PPK fund in PLN, for offline price source tests
+
+## tests/fixtures/analizy/history/
+
+- `PZU01.json`: Saved analizy.pl valuation history response of a fund, for offline history tests
 
 ## tests/fixtures/analizy/search/
 
