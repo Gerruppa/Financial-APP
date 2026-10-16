@@ -9,10 +9,11 @@ Bond Series is an Early Redemption: it picks its Lot, the oldest by default, and
 one bond, the early-redemption fee and the tax withheld (ADR-0007).
 """
 
-from collections.abc import Callable
-from dataclasses import dataclass
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass, field, replace
 from datetime import date
 from decimal import Decimal
+from typing import Any
 
 from nicegui import ui
 from sqlalchemy import Engine
@@ -37,6 +38,18 @@ from financial_app.domain.formatting import (
 )
 from financial_app.domain.instruments import InstrumentError
 from financial_app.domain.lots import Lot, open_lots
+from financial_app.domain.transaction_filters import (
+    CHOICE_COLUMNS,
+    NEWEST_FIRST,
+    NO_FILTER,
+    Column,
+    Sort,
+    TransactionFilter,
+    account_options,
+    instrument_options,
+    type_options,
+    view,
+)
 from financial_app.domain.transactions import (
     PLN,
     BrokerConversion,
@@ -92,17 +105,36 @@ BOND_TYPE_OPTIONS = {
 COLUMNS = "grid-template-columns: 7rem minmax(8rem, 1fr) 6rem minmax(9rem, 1fr) 9rem minmax(8rem, 2fr)"
 
 
+HEADERS = {
+    Column.DATE: "Data",
+    Column.ACCOUNT: "Konto",
+    Column.TYPE: "Typ",
+    Column.INSTRUMENT: "Instrument",
+    Column.AMOUNT: "Kwota",
+    Column.COMMENT: "Komentarz",
+}
+# A newly chosen column sorts this way first: dates and amounts largest first, text from A
+_FIRST_DESCENDING = {Column.DATE, Column.AMOUNT}
+NO_INSTRUMENT_LABEL = "(bez instrumentu)"
+
+
 @dataclass
 class TransactionsPage:
     """The Transakcje tab; clicking a Transaction opens it for editing or deleting. In an Account's View Scope it lists
-    only that Account's Transactions, Cash and Security Transfers to it included."""
+    only that Account's Transactions, Cash and Security Transfers to it included. Each column header sorts the list and
+    filters it (L-27); the export buttons export what is listed."""
 
     engine: Engine
     rates: NbpRates
     scope: ViewScope
+    filters: TransactionFilter = NO_FILTER
+    sort: Sort = NEWEST_FIRST
+    _headers: dict[Column, _ColumnHeader] = field(init=False, default_factory=dict)
+    _header_row: ui.element = field(init=False)
 
     def refresh(self) -> None:
         """Redraw the list if it is on screen (e.g. after a save)."""
+        self.notes.refresh()
         self.rows.refresh()
 
     def build(self) -> None:
@@ -112,25 +144,65 @@ class TransactionsPage:
             ui.button("Eksportuj XLSX", on_click=lambda: self.export("xlsx")).props("outline")
         # The marker sits outside the refreshable list so it survives a refresh
         with ui.column().classes("w-full max-w-6xl gap-0").mark("transactions"):
+            self.notes()
+            # The headers stay while the list redraws, so an open filter stays open as it is typed in
+            self._header_row = ui.element("div").classes("grid w-full gap-x-4 border-b py-1 font-medium").style(COLUMNS)
+            with self._header_row:
+                self._headers = {column: _ColumnHeader(self, column) for column in Column}
             self.rows()
 
     def export(self, file_format: FileFormat) -> None:
-        """Hands the listed Transactions (those of the View Scope) to the browser as a file, in the list's order."""
-        name, data = export_transactions(self.engine, file_format, self.scope.account_id)
+        """Hands the listed Transactions (those of the View Scope the filters keep) to the browser as a file, in the
+        list's order."""
+        name, data = export_transactions(self.engine, file_format, self.scope.account_id, self.filters, self.sort)
         ui.download(data, name)
+
+    def scoped(self) -> list[Transaction]:
+        return [t for t in list_transactions(self.engine) if self.scope.includes(t)]
+
+    def sort_by(self, column: Column) -> None:
+        """The column's header clicked: the same column turns its order round, another sorts by it."""
+        if self.sort.column is column:
+            self.sort = Sort(column, not self.sort.descending)
+        else:
+            self.sort = Sort(column, column in _FIRST_DESCENDING)
+        self.filters_changed()
+
+    def filter_by(self, filters: TransactionFilter) -> None:
+        self.filters = filters
+        self.filters_changed()
+
+    def clear_filters(self) -> None:
+        self.filter_by(NO_FILTER)
+        for header in self._headers.values():
+            header.menu.close()
+
+    def filters_changed(self) -> None:
+        for header in self._headers.values():
+            header.show()
+        self.refresh()
+
+    @ui.refreshable_method
+    def notes(self) -> None:
+        breadcrumbs(self.scope)
+        if self.filters.active:
+            ui.button("wyczyść filtry", icon="filter_alt_off", on_click=self.clear_filters).props(
+                "flat dense no-caps size=sm"
+            ).classes("self-start").mark("clear-filters")
 
     @ui.refreshable_method
     def rows(self) -> None:
-        breadcrumbs(self.scope)
-        transactions = [t for t in list_transactions(self.engine) if self.scope.includes(t)]
-        if not transactions:
+        listed = self.scoped()
+        self._header_row.set_visibility(bool(listed))
+        if not listed:
             ui.label("Brak transakcji. Dodaj pierwszą przyciskiem „+”.").classes("text-gray-500")
             return
         account_names = {account.id: account.name for account in list_accounts(self.engine)}
         instruments = {instrument.id: instrument for instrument in list_instruments(self.engine)}
-        with ui.element("div").classes("grid w-full gap-x-4 border-b py-1 font-medium").style(COLUMNS):
-            for header in ("Data", "Konto", "Typ", "Instrument", "Kwota", "Komentarz"):
-                ui.label(header)
+        names = {instrument_id: instrument.name for instrument_id, instrument in instruments.items()}
+        transactions = view(listed, self.filters, self.sort, account_names, names)
+        if not transactions:
+            ui.label("Żadna transakcja nie spełnia filtrów.").classes("text-gray-500 py-1").mark("no-match")
         for transaction in transactions:
             row = ui.element("div").classes("grid w-full gap-x-4 border-b py-1 cursor-pointer hover:bg-gray-100")
             row.style(COLUMNS).mark("transaction-row")
@@ -190,6 +262,114 @@ class TransactionsPage:
                     ui.label(transaction.comment).classes("text-gray-600")
                     if transaction.origin is not Origin.MANUAL:
                         ui.label(transaction.origin.label).classes("text-xs text-gray-500").mark("transaction-origin")
+
+
+class _ColumnHeader:
+    """A column's header: its name sorts the list by it (the arrow shows the order), the funnel opens its filter,
+    coloured while the filter is set. The menu is drawn only while open, so it offers the values listed then."""
+
+    menu: ui.menu
+
+    def __init__(self, page: TransactionsPage, column: Column) -> None:
+        self.page = page
+        self.column = column
+        with ui.row().classes("items-center gap-0 no-wrap"):
+            self.sort_button = ui.button(HEADERS[column], on_click=lambda: page.sort_by(column))
+            self.sort_button.props("flat dense no-caps").classes("font-medium").mark(f"sort-{column}")
+            self.filter_button = ui.button(icon="filter_alt", on_click=lambda: self.menu.open()).props(
+                "flat dense round size=sm"
+            )
+            with self.filter_button:
+                self.menu = ui.menu()
+                self.menu.on_value_change(lambda _: self.content.refresh())
+                with self.menu:
+                    self.content()
+        self.show()
+
+    def show(self) -> None:
+        sort = self.page.sort
+        arrow = ("arrow_downward" if sort.descending else "arrow_upward") if sort.column is self.column else None
+        if arrow:
+            self.sort_button.props(f"icon-right={arrow}")
+        else:
+            self.sort_button.props(remove="icon-right")
+        active = self.page.filters.is_set(self.column)
+        self.filter_button.props(f"color={'primary' if active else 'grey'}")
+        self.filter_button.mark(f"filter-{self.column}", *(["filter-active"] if active else []))
+
+    @ui.refreshable_method
+    def content(self) -> None:
+        if not self.menu.value:
+            return
+        with ui.column().classes("gap-1 p-3 min-w-56"):
+            if self.column in CHOICE_COLUMNS:
+                self._choices()
+            elif self.column is Column.COMMENT:
+                field_input = ui.input("Zawiera", value=self.page.filters.comment).props("dense clearable autofocus")
+                field_input.on_value_change(
+                    lambda e: self.page.filter_by(replace(self.page.filters, comment=e.value or ""))
+                )
+                field_input.mark("filter-comment-text")
+            else:
+                self._range()
+
+    def _options(self) -> Sequence[tuple[object, str]]:
+        page = self.page
+        listed = page.scoped()
+        if self.column is Column.ACCOUNT:
+            names = {account.id: account.name for account in list_accounts(page.engine)}
+            return account_options(listed, names)
+        if self.column is Column.TYPE:
+            return type_options(listed)
+        names = {instrument.id: instrument.name for instrument in list_instruments(page.engine)}
+        return [(i, name or NO_INSTRUMENT_LABEL) for i, name in instrument_options(listed, names)]
+
+    def _choices(self) -> None:
+        """A checkbox per value listed, all ticked while the column is unfiltered."""
+        options = self._options()
+        present = {key for key, _ in options}
+        chosen = self.page.filters.chosen(self.column)
+
+        def choose(value: frozenset[object] | None) -> None:
+            self.page.filter_by(self.page.filters.choose(self.column, value))
+            self.content.refresh()
+
+        def toggle(key: object, ticked: bool) -> None:
+            current = present if chosen is None else set(chosen)
+            kept = current | {key} if ticked else current - {key}
+            choose(None if present <= kept else frozenset(kept))
+
+        ui.checkbox("(zaznacz wszystkie)", value=chosen is None).on_value_change(
+            lambda e: choose(None if e.value else frozenset())
+        ).mark(f"filter-all-{self.column}")
+        for key, label in options:
+            ui.checkbox(label, value=chosen is None or key in chosen).on_value_change(
+                lambda e, key=key: toggle(key, e.value)
+            ).mark(f"filter-option-{self.column}-{key}")
+
+    def _range(self) -> None:
+        """ "od" and "do", either may stay empty; a value that cannot be read leaves the filter as it was."""
+        amount = self.column is Column.AMOUNT
+        parse: Callable[[str], Decimal | date] = parse_number if amount else parse_date
+        show: Callable[[Any], str] = format_exact if amount else format_date
+        hint = "kwota rzeczywista" if amount else "dd.mm.rrrr"
+        for last, (label, value) in enumerate(zip(("od", "do"), self.page.filters.bounds(self.column), strict=True)):
+            end_input = ui.input(label, value="" if value is None else show(value))
+            end_input.props(f"dense clearable hint='{hint}'")
+            end_input.on_value_change(
+                lambda _, last=bool(last), end_input=end_input: self._set_end(last, end_input, parse)
+            )
+            end_input.mark(f"filter-{self.column}-{label}")
+
+    def _set_end(self, last: bool, end_input: ui.input, parse: Callable[[str], Decimal | date]) -> None:
+        text = (end_input.value or "").strip()
+        try:
+            value = parse(text) if text else None
+        except ValueError:
+            end_input.props("error error-message='Nieprawidłowa wartość'")
+            return
+        end_input.props(remove="error error-message")
+        self.page.filter_by(self.page.filters.bound(self.column, last, value))
 
 
 def _exchange_cell(exchange: Transaction) -> None:

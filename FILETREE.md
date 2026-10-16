@@ -77,6 +77,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `results.py`: Wyniki tab figures: period XIRR, TWR, drawdown, volatility and fixed-period returns per Total and Account, from History
 - `spreadsheet_import.py`: Pure conversion of the user's Inwestomat Transakcje sheet rows into Transaction drafts, with fingerprints for re-import skipping.
 - `strategy.py`: Investment Strategy rules: Allocation Targets with tolerance bands, Instrument Targets, and the water-filling split of the Planned Deposit
+- `transaction_filters.py`: Excel-like column filters and sort order for the Transakcje list; returns the filtered, sorted view of Transactions
 - `transactions.py`: Transaction types, drafts and builders for every kind, plus cash balances and cost and dividend totals per Account.
 - `valuation.py`: Decides each Instrument's price and status from Manual Price or Quote, including metal spot conversion and badges.
 - `view_scope.py`: View Scope logic: Total or one Account, its remembered setting, switcher entries and transaction filtering
@@ -182,7 +183,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `settings.py`: Builds the Ustawienia page by assembling its sections: Accounts, Asset Classes, Instruments, sources, import, reset
 - `shell.py`: Main app window shell: left menu, header with refresh status and View Scope, and the transaction button
 - `strategy.py`: Strategie inwestycyjne tab, Dashboard strategy section and post-refresh notice for classes outside their tolerance band
-- `transactions.py`: Transakcje tab and transaction dialog for adding, editing and deleting all supported transaction types
+- `transactions.py`: Transakcje tab with column sorting and filters, and the transaction dialog for adding, editing and deleting all supported transaction types
 - `unpriced.py`: Ustawienia Instrumenty bez wyceny card listing held Instruments lacking an automatic price, with reasons
 - `view_scope.py`: View Scope header switcher and breadcrumbs, listing Accounts by value with share and daily change
 - `xtb_import.py`: Ustawienia card for importing XTB statements and resolving the Reconciliation before applying
@@ -292,6 +293,8 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_symbol_fields_ui.py`: UI tests for the Instrument dialog's Source Symbol fields, ordered by the Asset Class's Fallback Order.
 - `test_trades_ui.py`: Tests PLN Buys and Sells end to end through the transaction dialog, Transakcje list and Portfolio.
 - `test_transaction_edit_ui.py`: UI tests for editing and deleting a Transaction from the Transakcje list, including blocked edits
+- `test_transaction_filters_domain.py`: Domain tests for the Transakcje list's column filters, sort order and value options
+- `test_transaction_filters_ui.py`: UI tests for Transakcje column headers: sorting, filter menus, clearing filters and the filtered export
 - `test_transactions_domain.py`: Domain tests for Deposits, Withdrawals, trade amounts, validation and per-Account cash balances
 - `test_transactions_repository.py`: Repository tests for saving, listing, editing and deleting Transactions in SQLite, with FIFO coverage checks
 - `test_transactions_ui.py`: UI tests for Deposits and Withdrawals from the plus dialog, Transakcje list and Portfolio Cash Balance
