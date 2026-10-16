@@ -6,7 +6,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 
 - `.filetree.json`: Filetree manifest config: manifest path, include/exclude filters, summary language, commit guard and self-only mode.
 - `.gitignore`: Git ignore rules for the venv, caches, build output, the personal spreadsheet reference folder and graphify output.
-- `CLAUDE.md`: Guidance for Claude Code: project state, module layout, environment commands and the domain rules for this repo.
+- `CLAUDE.md`: Guidance for Claude Code: project state, layers and unwritten rules, pointers to docs/architecture.md, environment commands.
 - `CONTEXT.md`: Domain glossary defining the app's Polish-labelled terms (Accounts, Instruments, Transactions, Lots, Quotes) and terms to avoid.
 - `GLOSSARY.md`: Polish-to-English index of glossary terms, mapping UI labels to CONTEXT.md definitions and sections
 - `README.md`: User-facing setup guide: install steps, desktop shortcut creation, data location, backups and log file.
@@ -16,6 +16,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 
 ## docs/
 
+- `architecture.md`: Per-module reference for src/financial_app: main functions, UI markers and decisions; CLAUDE.md points here before changing a module.
 - `backlog.md`: Local stand-in for GitHub Issues: done and open stage items, with L-n ids for items not yet on GitHub
 - `spec.md`: Agreed product specification: goals, architecture, data model, transaction rules, valuation and feature scope.
 
@@ -50,6 +51,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `__init__.py`: Docstring marking the domain package as pure-Python calculations with no UI or database imports.
 - `account_ranking.py`: Account ranking and treemap figures for the Total Dashboard: XIRR, TWR, P&L, Net Deposits and costs per Account, sorted with best and worst marked
 - `accounts.py`: Account Types, Tax Regime descriptions, Account field validation, and the refusal naming what still holds an Account from deletion
+- `benchmarks.py`: Benchmarks: CPI, Instrument or Account with a pp/year offset, daily growth factors and the Portfolio-vs-benchmark comparison over a period.
 - `bond_calendar.py`: Calendar of coupons, anniversaries and maturities of held Bond Series over the next 12 months, by View Scope
 - `bond_drafts.py`: Drafts for matured Bond Series Lots (redemption, Rollover) and coupons of COI, ROR and DOR Lots, with the Sell or interest Transaction each confirms
 - `bond_holdings.py`: Obligacje tab data: each Bond Series held in the View Scope with its Lots, gross and net values, rates and dates
@@ -69,12 +71,14 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `lots.py`: The single FIFO engine that opens and consumes Lots for Positions and foreign cash, raising uncovered-sale errors.
 - `metrics.py`: Pure History metrics: XIRR, TWR, drawdowns, max drawdown, volatility and daily change per Total or Account
 - `multi_asset.py`: Multi-asset Instruments held in the View Scope, with their PLN value and split value per Asset Class, largest first
+- `passive_income.py`: Passive income: Dividends and interest received, coupons forecast, monthly sums, 12-month average and the Monthly Income Goal.
 - `periods.py`: Period presets and custom ranges for charts and results, with date calculation and text persistence
 - `portfolio_history.py`: Computes daily Portfolio value and Net Deposits per Account and Asset Class from transactions and cached prices
 - `prices.py`: Quote model, Price Source keys and names, and the per-Asset-Class Fallback Order deciding which sources to try.
 - `profit_sources.py`: Splits the View Scope's result into price, FX, Dividends, interest, costs and taxes for the Dashboard waterfall
 - `reconciliation.py`: Pairs broker Transactions with entered ones and classifies matches, broker-only and entered-only; resolves choices
 - `results.py`: Wyniki tab figures: period XIRR, TWR, drawdown, volatility and fixed-period returns per Total and Account, from History
+- `sale_summary.py`: Sell Summary: Sale Pairs from the FIFO replay with attributed Dividends, and closed-position statistics (win rate, days, best, worst).
 - `spreadsheet_import.py`: Pure conversion of the user's Inwestomat Transakcje sheet rows into Transaction drafts, with fingerprints for re-import skipping.
 - `strategy.py`: Investment Strategy rules: Allocation Targets with tolerance bands, Instrument Targets, and the water-filling split of the Planned Deposit
 - `transaction_filters.py`: Excel-like column filters and sort order for the Transakcje list; returns the filtered, sorted view of Transactions
@@ -88,6 +92,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `__init__.py`: Package marker for the SQLite and SQLAlchemy persistence layer.
 - `accounts.py`: Saves, reads and deletes Accounts, enforcing case-insensitive unique names and refusing to delete a held Account
 - `backup.py`: Copies the database to the backups folder at each start and keeps only the newest copies.
+- `benchmarks.py`: Saves Benchmarks (add, show, delete) and seeds the sheet's default benchmarks and their Instruments once.
 - `bond_data.py`: SQLite copy of the bond data sources (MF Bond Series, GUS CPI, NBP reference rates) and each source's fetch status
 - `bond_drafts.py`: Lists pending bond Drafts (maturities and unentered coupons) and saves them as Transactions, all or nothing
 - `bond_series.py`: Bond Series persistence: lists Series with their MF terms and rate corrections, saves corrections, finds or creates Series Instruments
@@ -137,12 +142,14 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `0024_redeemed_lots.py`: Migration 0024 adds the nullable lot_id column to transactions, naming the Lot an Early Redemption Sell redeems
 - `0025_catalyst_bond_prices.py`: Migration 0025: moves treasury bonds to Bossa per-bond prices and drops the old percent-of-nominal Bossa Quotes
 - `0026_reconciliation.py`: Migration adding broker ids, reconciled dates and the skipped broker rows table for reconciliation
+- `0027_benchmarks.py`: Migration 0027 creates the benchmarks table (kind, Instrument or Account, offset, shown, position).
 
 ## src/financial_app/sources/
 
 - `__init__.py`: Package marker describing the external price sources package
 - `analizy.py`: Fund and PPK Quotes, valuation history for History, and fund search through the undocumented analizy.pl API
 - `bankier.py`: Fetches fund and PPK Quotes from bankier.pl pages as the fallback price source
+- `benchmarks.py`: Builds each saved benchmark's growth from the CPI, price and NBP caches and compares it with History.
 - `bond_data.py`: Fetches and parses the MF bond file, GUS CPI and NBP reference rates, refreshing their SQLite copies at most once a day
 - `bossa.py`: Fetches GPW, NewConnect, ETF and bond Quotes in PLN from the Bossa JSON API
 - `catalyst.py`: Fetches Catalyst bonds' nominal and accrued interest from gpwcatalyst.pl and IZ indexation coefficients from gov.pl
@@ -151,6 +158,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `export.py`: Writes the Transactions list to CSV and XLSX files for export
 - `history.py`: Returns an Instrument's Quotes in a date range, fetching missing days from Yahoo, analizy.pl or Stooq into cache
 - `nbp.py`: Gets NBP exchange rates from the NBP API through the local cache
+- `passive_income.py`: Loads the passive-income items: income received from Transactions and the coupons not entered for the next 12 months.
 - `portfolio_history.py`: Fetches History prices and NBP Rates into cache and computes daily values, cached until invalidated
 - `prices.py`: Refreshes held Instruments' Quotes from price sources in fallback order and records failures
 - `spreadsheet.py`: Previews and imports Transactions and Instruments from the user's Inwestomat spreadsheet
@@ -163,11 +171,12 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `__init__.py`: Package marker for the NiceGUI user interface layer, a thin layer over domain and persistence
 - `account_ranking.py`: Total Dashboard's Accounts treemap and sortable Account ranking; clicking a tile switches the View Scope to that Account
 - `accounts.py`: Ustawienia Konta card: lists Accounts, opens the add and edit dialog, and deletes an unused Account
+- `benchmarks.py`: Benchmarki tab: comparison table with chart toggles and delete, the add form, and value charts over the period.
 - `bond_data.py`: Header status listing failing bond data sources with their reasons, shown only while one keeps failing
 - `bond_drafts.py`: Obligacje tab's "Do zatwierdzenia" list of maturities and unpaid coupons, and its count in the header
 - `bond_series.py`: Bond Series rate summary and dialog for correcting MF rates by hand in Ustawienia Instrumenty
 - `bonds.py`: Obligacje tab UI: expandable table of Bond Series and their Lots with gross and net values, the "Do zatwierdzenia" list of matured Lots, and the 12-month bond calendar
-- `charts.py`: Dashboard's nine ECharts charts plus the profit-by-source waterfall, following the View Scope and period
+- `charts.py`: Dashboard's nine ECharts charts, the profit waterfall, and shared PLN line and bar chart helpers for other tabs.
 - `dashboard.py`: Dashboard tab UI: totals, price status, Account table, exposure, charts, Account treemap and ranking, and the after-tax toggle
 - `dialogs.py`: Draggable dialog support with no backdrop, so the screen behind stays readable
 - `fund_details.py`: Builds the short fund detail texts (TER, Distribution Policy, domicile) shared by Instrument list and Portfolio
@@ -175,11 +184,13 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `import_sheet.py`: Ustawienia import section that previews the Transakcje spreadsheet and saves it only after user decisions
 - `instruments.py`: Ustawienia Klasy aktywów and Instrumenty cards: editable Asset Classes and the Instrument catalog with its dialog
 - `multi_asset.py`: Multi-asset tab and split editor: edits an Instrument's Multi-asset Split and lists held Multi-asset Instruments by Asset Class
+- `passive_income.py`: Dochód pasywny tab: year navigation, Monthly Income Goal, tiles, monthly chart and table with progress, forecast coupons.
 - `periods.py`: Period selector UI: preset buttons and custom range inputs, remembered per user and redrawing listeners
 - `portfolio.py`: Read-only Portfolio tab: per-Account cards with cash balances, valued Positions, Lots, FX result and dividends
 - `price_sources.py`: Ustawienia Źródła wycen card where the user stores the personal Stooq API key
 - `reset.py`: Ustawienia Wyczyść dane card that clears the whole portfolio after a warning and typed confirmation
 - `results.py`: Wyniki tab page: result tiles, drawdown chart and per-Account results table under the period selector
+- `sale_summary.py`: Podsumowanie sprzedaży tab: Sale Pairs of the scope and period with the closed-position statistics tiles.
 - `settings.py`: Builds the Ustawienia page by assembling its sections: Accounts, Asset Classes, Instruments, sources, import, reset
 - `shell.py`: Main app window shell: left menu, header with refresh status and View Scope, and the transaction button
 - `strategy.py`: Strategie inwestycyjne tab, Dashboard strategy section and post-refresh notice for classes outside their tolerance band
@@ -202,6 +213,9 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_architecture.py`: Architecture test enforcing that the domain core does not import UI or database code
 - `test_backup.py`: Tests database backup copies and the retention of the newest backups
 - `test_bankier_source.py`: Tests the bankier.pl fund and PPK quote source against saved pages
+- `test_benchmarks_domain.py`: Tests benchmark growth, cash before data, offsets, CPI spreading, Account benchmarks and offset parsing.
+- `test_benchmarks_repository.py`: Tests saving benchmarks, seeding defaults once, dropping them with Instruments or Accounts, and cache-based comparison.
+- `test_benchmarks_ui.py`: UI tests of the Benchmarki tab: defaults, CPI, adding, hiding, removing and the Account scope.
 - `test_bond_calendar_domain.py`: Tests for the bond calendar domain: event kinds, amounts, View Scope filtering and day ordering
 - `test_bond_data.py`: Tests for bond data parsers, SQLite persistence and daily refresh rules on saved fixtures
 - `test_bond_data_ui.py`: UI tests for the bond data header status and its error dialog
@@ -264,6 +278,8 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_multi_asset_repository.py`: Tests saving Multi-asset Splits with their Instruments, Asset Class rules, and their removal on reset
 - `test_multi_asset_ui.py`: UI tests for the Multi-asset split in the Instrument dialog, the split dialog after a buy, and the Multi-asset tab
 - `test_nbp_rates.py`: Tests fetching and caching NBP D-1 rates from saved API responses, without the network.
+- `test_passive_income_domain.py`: Tests received income kinds, monthly sums by scope, goal progress, the 12-month average and goal parsing.
+- `test_passive_income_ui.py`: UI tests of the Dochód pasywny tab: received and forecast by month, the goal, years and the scope.
 - `test_paths.py`: Tests that the default data directory lies outside the repository and respects the override.
 - `test_periods_domain.py`: Unit tests for period presets, custom ranges and period text persistence
 - `test_physical_metals_ui.py`: Tests physical metal Instruments with weight per unit and Buyback Spread in the dialog and Portfolio.
@@ -280,6 +296,8 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_reconciliation_domain.py`: Tests pairing of broker and entered Transactions in the Reconciliation domain logic
 - `test_results_domain.py`: Tests for the Wyniki tab's period results and fixed-period rows per Total and Account
 - `test_results_ui.py`: UI tests for the Wyniki tab: tiles, drawdown chart, results table and pending state
+- `test_sale_summary_domain.py`: Tests Sale Pairs across Lots, Splits and DRIPs, Dividend and coupon attribution, statistics and the view filter.
+- `test_sale_summary_ui.py`: UI tests of the Podsumowanie sprzedaży tab: pairs, statistics, Account scope and an empty period.
 - `test_shell.py`: Smoke tests of the app shell's tabs and navigation, run without a browser.
 - `test_splits_and_transfers_domain.py`: Tests Splits, Cash Transfers and Security Transfers in the FIFO engine and Cash Balances.
 - `test_splits_and_transfers_repository.py`: Tests saving Splits, Cash Transfers and Security Transfers in SQLite.

@@ -22,6 +22,7 @@ from financial_app.sources.nbp import NbpRates
 from financial_app.sources.portfolio_history import PortfolioHistory
 from financial_app.sources.prices import PriceSource, RefreshResult, last_refresh, refresh_prices, refresh_summary
 from financial_app.sources.yahoo import YahooSearch, YahooSource
+from financial_app.ui.benchmarks import BenchmarksPage
 from financial_app.ui.bond_data import bond_data_status
 from financial_app.ui.bond_drafts import drafts_count
 from financial_app.ui.bonds import BondsPage
@@ -29,9 +30,11 @@ from financial_app.ui.dashboard import DashboardPage
 from financial_app.ui.dialogs import install_movable_dialogs
 from financial_app.ui.history import history_status, shared_history
 from financial_app.ui.multi_asset import MultiAssetPage
+from financial_app.ui.passive_income import PassiveIncomePage
 from financial_app.ui.periods import PeriodChoice
 from financial_app.ui.portfolio import PortfolioPage
 from financial_app.ui.results import ResultsPage
+from financial_app.ui.sale_summary import SaleSummaryPage
 from financial_app.ui.settings import build_settings_page
 from financial_app.ui.strategy import PlannedDeposit, StrategyPage, out_of_band_notice
 from financial_app.ui.transactions import TransactionsPage, open_transaction_dialog
@@ -59,6 +62,8 @@ TABS = [
     Tab("Obligacje", "/obligacje", "savings"),
     Tab("Multi-asset", "/multi-asset", "pie_chart"),
     Tab("Benchmarki", "/benchmarki", "compare_arrows"),
+    Tab("Podsumowanie sprzedaży", "/sprzedaz", "sell"),
+    Tab("Dochód pasywny", "/dochod-pasywny", "payments"),
     Tab("Ustawienia", SETTINGS_PATH, "settings"),
 ]
 
@@ -106,6 +111,9 @@ def build_shell(
     portfolio_page = PortfolioPage(engine, rates, scope)
     bonds_page = BondsPage(engine, rates, scope, on_saved=lambda: transactions_changed())
     unpriced = UnpricedSection(engine)
+    sale_page = SaleSummaryPage(engine, scope, period)
+    income_page = PassiveIncomePage(engine, rates, scope)
+    benchmarks_page = BenchmarksPage(engine, scope, period, lambda: shared.days, lambda: fetch_in_background())
 
     async def load_history() -> None:
         """Compute History (or take it already computed) and show it in the switcher."""
@@ -113,12 +121,14 @@ def build_shell(
         switcher.refresh()
         dashboard_page.refresh()
         results_page.refresh()
+        benchmarks_page.refresh()
 
     def history_outdated() -> None:
         shared.invalidate()
         switcher.refresh()
         dashboard_page.refresh()
         results_page.refresh()
+        benchmarks_page.refresh()
         background_tasks.create(load_history(), name="history")
 
     # A Multi-asset Split changes the value History counts in each Asset Class
@@ -136,6 +146,11 @@ def build_shell(
             history_state.refresh()
         await load_history()
 
+    def fetch_in_background() -> None:
+        # A timer in the header, so the fetch's status has the window's slot whichever tab asked for it
+        with header:
+            ui.timer(0, fetch_history, once=True)
+
     def transactions_changed() -> None:
         # Only the tab on screen has something to redraw; the others rebuild from the database when opened
         transactions_page.refresh()
@@ -144,6 +159,8 @@ def build_shell(
         drafts_state.refresh()
         multi_asset_page.refresh()
         strategy_page.refresh()
+        sale_page.refresh()
+        income_page.refresh()
         unpriced.refresh()
         history_outdated()
 
@@ -161,6 +178,9 @@ def build_shell(
         strategy_page.refresh()
         dashboard_page.refresh()
         results_page.refresh()
+        benchmarks_page.refresh()
+        sale_page.refresh()
+        income_page.refresh()
         scope_pages.refresh()
 
     scope.on_change(scope_changed)
@@ -198,6 +218,7 @@ def build_shell(
         drafts_state.refresh()
         multi_asset_page.refresh()
         strategy_page.refresh()
+        income_page.refresh()
         unpriced.refresh()
         history_outdated()
         ui.notify(_refresh_message(result), type="warning" if result.failures else "positive")
@@ -210,6 +231,8 @@ def build_shell(
         bonds_page.refresh()
         drafts_state.refresh()
         results_page.refresh()
+        benchmarks_page.refresh()
+        income_page.refresh()
 
     async def start() -> None:
         if engine in _running_refreshes or (refresh_at_start and refresh_due(last_successful_refresh(engine), now())):
@@ -220,7 +243,7 @@ def build_shell(
         if refresh_at_start or shared.fetching is not None:
             await fetch_history()
 
-    with ui.header().classes("bg-indigo-900 items-center").mark("header"):
+    with ui.header().classes("bg-indigo-900 items-center").mark("header") as header:
         ui.label(APP_TITLE).classes("text-lg font-bold")
         ui.space()
         # MF's new rates may value a matured Series, so the bond data refresh redraws it too
@@ -275,6 +298,9 @@ def build_shell(
     pages["/multi-asset"] = lambda: scope_pages(multi_asset_page.build)
     pages["/obligacje"] = lambda: scope_pages(bonds_page.build)
     pages["/strategie"] = lambda: scope_pages(strategy_page.build)
+    pages["/benchmarki"] = lambda: scope_pages(benchmarks_page.build)
+    pages["/sprzedaz"] = lambda: scope_pages(sale_page.build)
+    pages["/dochod-pasywny"] = lambda: scope_pages(income_page.build)
     pages[SETTINGS_PATH] = lambda: build_settings_page(
         engine, rates, search, sources, unpriced, instruments_changed, transactions_changed, account_deleted
     )

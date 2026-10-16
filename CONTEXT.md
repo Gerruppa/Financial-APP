@@ -196,7 +196,17 @@ The TWR over a period after the inflation of that period: (1 + TWR) / (1 + infla
 _Avoid_: inflation-adjusted XIRR, real value
 
 **Benchmark** (Benchmark):
-An Instrument or CPI into which every Deposit is hypothetically invested on its date, to compare with the real portfolio.
+CPI, a catalog Instrument or another Account into which every Deposit and Withdrawal of the View Scope is hypothetically invested on its date, without fees or taxes, optionally with "+x pp a year", to compare with the real portfolio.
+
+**Sale Pair** (Para kupno–sprzedaż):
+The units of one Lot one Sell closed, from the single FIFO engine: its cost, the revenue they brought, the days held and the Dividends attributed to them. The Sell Summary lists them with the statistics of the closed positions.
+_Avoid_: trade, round trip
+
+**Passive Income** (Dochód pasywny):
+The net Dividends (DRIPs included) and interest received, with the bond coupons not entered yet as its forecast; a bond's interest paid at its redemption is not counted.
+
+**Monthly Income Goal** (Miesięczny cel dochodu):
+The Passive Income the user aims at each month, in PLN; each month shows its progress toward it.
 
 **Reconciliation** (Uzgadnianie):
 Pairing Transactions from two Origins (e.g. spreadsheet vs XTB import) and resolving their differences.

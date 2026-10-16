@@ -21,18 +21,20 @@ _TRADING_DAYS = 252
 
 
 @dataclass(frozen=True)
-class _Day:
+class ScopeDay:
+    """The View Scope's value at the end of ``day`` and its ``flow``, that day's change in its Net Deposits."""
+
     day: date
     value: Decimal
     flow: Decimal
 
 
 @dataclass(frozen=True)
-class _Period:
+class ScopePeriod:
     """The "from" day and the days after it; no "from" day when the period starts with the History, from nothing."""
 
-    start: _Day | None
-    days: list[_Day]
+    start: ScopeDay | None
+    days: list[ScopeDay]
 
     @property
     def start_value(self) -> Decimal:
@@ -52,7 +54,7 @@ class MaxDrawdown:
 def twr(history: Sequence[DayValue], first: date, last: date, account_id: int | None = None) -> Decimal:
     """The time-weighted return: the daily returns (V_D − F_D) / V_{D−1} − 1 chained over the period."""
     growth = Decimal(1)
-    for _, rate in _daily_returns(_period(history, first, last, account_id)):
+    for _, rate in daily_returns(scope_period(history, first, last, account_id)):
         growth *= 1 + rate
     return growth - 1
 
@@ -62,7 +64,7 @@ def xirr(history: Sequence[DayValue], first: date, last: date, account_id: int |
 
     ``None`` when no rate settles them, e.g. with nothing invested.
     """
-    return _xirr(_period(history, first, last, account_id))
+    return _xirr(scope_period(history, first, last, account_id))
 
 
 def xirr_to_each(
@@ -73,7 +75,7 @@ def xirr_to_each(
     return [_xirr(_clip(days, first, last)) for last in lasts]
 
 
-def _xirr(period: _Period) -> Decimal | None:
+def _xirr(period: ScopePeriod) -> Decimal | None:
     if not period.days:
         return None
     end = period.days[-1]
@@ -116,7 +118,7 @@ def drawdowns(
     """Each day's fall of the TWR below its highest point so far in the period (0 or negative)."""
     points = []
     highest = Decimal(1)
-    for day, growth in _growth(_period(history, first, last, account_id)):
+    for day, growth in _growth(scope_period(history, first, last, account_id)):
         highest = max(highest, growth)
         points.append((day, growth / highest - 1))
     return points
@@ -126,7 +128,7 @@ def max_drawdown(
     history: Sequence[DayValue], first: date, last: date, account_id: int | None = None
 ) -> MaxDrawdown | None:
     """The deepest drawdown in the period, ``None`` when the TWR never fell."""
-    points = _growth(_period(history, first, last, account_id))
+    points = _growth(scope_period(history, first, last, account_id))
     deepest: MaxDrawdown | None = None
     peak_day, peak_growth = None, Decimal(0)
     for day, growth in points:
@@ -144,7 +146,7 @@ def volatility(history: Sequence[DayValue], first: date, last: date, account_id:
 
     ``None`` with fewer than two such returns.
     """
-    returns = [rate for day, rate in _daily_returns(_period(history, first, last, account_id)) if day.weekday() < 5]
+    returns = [rate for day, rate in daily_returns(scope_period(history, first, last, account_id)) if day.weekday() < 5]
     if len(returns) < 2:
         return None
     mean = sum(returns, Decimal(0)) / len(returns)
@@ -161,9 +163,9 @@ def daily_change(history: Sequence[DayValue], account_id: int | None = None) -> 
     return days[-1].value - previous - days[-1].flow
 
 
-def _growth(period: _Period) -> list[tuple[date, Decimal]]:
+def _growth(period: ScopePeriod) -> list[tuple[date, Decimal]]:
     """The TWR index, 1 on the "from" day, then on each day after it."""
-    returns = dict(_daily_returns(period))
+    returns = dict(daily_returns(period))
     growth = Decimal(1)
     points = [] if period.start is None else [(period.start.day, growth)]
     for day in period.days:
@@ -172,7 +174,7 @@ def _growth(period: _Period) -> list[tuple[date, Decimal]]:
     return points
 
 
-def _daily_returns(period: _Period) -> list[tuple[date, Decimal]]:
+def daily_returns(period: ScopePeriod) -> list[tuple[date, Decimal]]:
     """Each day's return; a day after one with nothing invested has none."""
     returns = []
     previous = period.start_value
@@ -183,19 +185,20 @@ def _daily_returns(period: _Period) -> list[tuple[date, Decimal]]:
     return returns
 
 
-def _period(history: Sequence[DayValue], first: date, last: date, account_id: int | None) -> _Period:
+def scope_period(history: Sequence[DayValue], first: date, last: date, account_id: int | None) -> ScopePeriod:
+    """The View Scope's days in the period, clipped to the History."""
     return _clip(_scope_days(history, account_id), first, last)
 
 
-def _clip(days: list[_Day], first: date, last: date) -> _Period:
+def _clip(days: list[ScopeDay], first: date, last: date) -> ScopePeriod:
     within = [day for day in days if day.day <= last]
     if not within or first <= within[0].day:
-        return _Period(None, within)
+        return ScopePeriod(None, within)
     start = [day for day in within if day.day <= first][-1]
-    return _Period(start, [day for day in within if day.day > first])
+    return ScopePeriod(start, [day for day in within if day.day > first])
 
 
-def _scope_days(history: Sequence[DayValue], account_id: int | None) -> list[_Day]:
+def _scope_days(history: Sequence[DayValue], account_id: int | None) -> list[ScopeDay]:
     days = []
     deposits_before = Decimal(0)
     for day_value in history:
@@ -204,6 +207,6 @@ def _scope_days(history: Sequence[DayValue], account_id: int | None) -> list[_Da
         else:
             value = day_value.accounts.get(account_id, Decimal(0))
             deposits = day_value.account_net_deposits.get(account_id, Decimal(0))
-        days.append(_Day(day_value.day, value, deposits - deposits_before))
+        days.append(ScopeDay(day_value.day, value, deposits - deposits_before))
         deposits_before = deposits
     return days

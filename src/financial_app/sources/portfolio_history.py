@@ -15,6 +15,7 @@ from financial_app.domain.instruments import Instrument
 from financial_app.domain.portfolio_history import DayValue, HistoryPrice, daily_history
 from financial_app.domain.prices import PriceSourceError
 from financial_app.domain.transactions import PLN, Transaction
+from financial_app.persistence.benchmarks import list_benchmarks
 from financial_app.persistence.bond_series import load_bond_data
 from financial_app.persistence.history import history_prices, nbp_rates_between
 from financial_app.persistence.instruments import list_instruments
@@ -69,8 +70,9 @@ class PortfolioHistory:
 
     def fetch(self, progress: Callable[[int, int], None] = lambda done, total: None) -> HistoryFetch:
         """Fetch the days still missing from each traded Instrument's first Transaction and each foreign currency's
-        first one, up to yesterday; ``progress(done, total)`` follows each Instrument and currency. A failure is
-        recorded and the rest goes on; the next fetch tries the missing days again."""
+        first one, and for each benchmark Instrument (issue #91) from the first Transaction, up to yesterday;
+        ``progress(done, total)`` follows each Instrument and currency. A failure is recorded and the rest goes on;
+        the next fetch tries the missing days again."""
         transactions = list_transactions(self.engine)
         firsts: dict[int, date] = {}
         currencies: dict[str, date] = {}
@@ -79,6 +81,11 @@ class PortfolioHistory:
                 firsts[t.instrument_id] = min(t.date, firsts.get(t.instrument_id, t.date))
             if t.cash_currency != PLN:
                 currencies[t.cash_currency] = min(t.date, currencies.get(t.cash_currency, t.date))
+        if transactions:
+            start = min(t.date for t in transactions)
+            for benchmark in list_benchmarks(self.engine):
+                if benchmark.instrument_id is not None:
+                    firsts[benchmark.instrument_id] = start
         currencies |= {
             instrument.quote_currency: min(firsts[instrument.id], currencies.get(instrument.quote_currency, date.max))
             for instrument in list_instruments(self.engine)

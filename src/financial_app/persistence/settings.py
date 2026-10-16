@@ -10,6 +10,10 @@ STOOQ_API_KEY = "stooq_api_key"
 # The last View Scope, ``total`` or an Account id, and the last period of the period selector (issue #71)
 VIEW_SCOPE = "view_scope"
 PERIOD = "period"
+# Set once the sheet's default Benchmarks were added (issue #91); clearing the data removes it, so they come back
+BENCHMARKS_SEEDED = "benchmarks_seeded"
+# The Monthly Income Goal of the passive-income calendar in PLN, as typed (issue #93)
+PASSIVE_INCOME_GOAL = "passive_income_goal"
 # The XTB import's remembered matches (L-17): an XTB account number's Account id, a ticker's Instrument id; clearing
 # the data removes every key starting with ``XTB_PREFIX``, as they name ids new rows may take again
 XTB_PREFIX = "xtb_"

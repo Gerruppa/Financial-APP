@@ -105,6 +105,27 @@ def daily_history(
     return history
 
 
+def pln_prices(
+    instrument: Instrument,
+    prices: Sequence[HistoryPrice],
+    rates: Mapping[str, Sequence[NbpRate]],
+    first: date,
+    last: date,
+) -> dict[date, Decimal]:
+    """The Instrument's price in PLN at the end of each day from ``first`` to ``last``, as History converts it (the
+    last price and NBP Rate carried forward), leaving out the days without one; prices as their source gives them,
+    split-adjusted or not (a Benchmark's, issue #91)."""
+    pricing = _Pricing({instrument.id: instrument}, {instrument.id: prices}, rates, {}, BondData())
+    found: dict[date, Decimal] = {}
+    day = first
+    while day <= last:
+        unit = pricing.unit_pln(instrument.id, day)
+        if isinstance(unit, Decimal):
+            found[day] = unit
+        day += ONE_DAY
+    return found
+
+
 @dataclass(frozen=True)
 class _State:
     """The open Positions and Cash Balances at the end of a day."""
