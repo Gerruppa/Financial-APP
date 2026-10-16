@@ -18,6 +18,7 @@ from financial_app.domain.transactions import Transaction
 from financial_app.domain.view_scope import ScopeEntry, in_scope, parse_scope, scope_entries, scope_setting
 from financial_app.persistence.accounts import list_accounts
 from financial_app.persistence.settings import VIEW_SCOPE, load_setting, save_setting
+from financial_app.ui.changes import Change
 
 TOTAL_LABEL = "Total"
 NO_VALUE = "—"
@@ -54,6 +55,9 @@ class ViewScope:
 
 class ScopeSwitcher:
     """The header's switcher; ``days`` gives History's days, ``None`` while they load."""
+
+    # The changes it redraws on (ui/changes.py)
+    CHANGES = frozenset({Change.SCOPE, Change.HISTORY})
 
     def __init__(self, scope: ViewScope, days: Callable[[], list[DayValue] | None]) -> None:
         self.scope = scope

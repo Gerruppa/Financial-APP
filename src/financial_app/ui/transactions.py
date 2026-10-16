@@ -91,6 +91,7 @@ from financial_app.persistence.transactions import (
 )
 from financial_app.sources.export import FileFormat, export_transactions
 from financial_app.sources.nbp import NbpRates
+from financial_app.ui.changes import Change
 from financial_app.ui.contribution_limits import LimitCheck
 from financial_app.ui.dialogs import movable_dialog
 from financial_app.ui.multi_asset import open_split_dialog
@@ -133,6 +134,9 @@ class TransactionsPage:
     """The Transakcje tab; clicking a Transaction opens it for editing or deleting. In an Account's View Scope it lists
     only that Account's Transactions, Cash and Security Transfers to it included. Each column header sorts the list and
     filters it (L-27); the export buttons export what is listed."""
+
+    # The changes it redraws on (ui/changes.py)
+    CHANGES = frozenset({Change.TRANSACTIONS, Change.SCOPE})
 
     engine: Engine
     rates: NbpRates

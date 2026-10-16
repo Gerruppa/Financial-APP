@@ -26,6 +26,7 @@ from financial_app.ui.benchmarks import BenchmarksPage
 from financial_app.ui.bond_data import bond_data_status
 from financial_app.ui.bond_drafts import drafts_count
 from financial_app.ui.bonds import BondsPage
+from financial_app.ui.changes import Change, ChangeEvents, Redrawing
 from financial_app.ui.dashboard import DashboardPage
 from financial_app.ui.dialogs import install_movable_dialogs
 from financial_app.ui.history import history_status, shared_history
@@ -98,6 +99,7 @@ def build_shell(
         sources = {YAHOO: YahooSource(), BOSSA: BossaSource(), ANALIZY: AnalizySource(), BANKIER: BankierSource()}
     search = search or CombinedSearch({SOURCE_NAMES[YAHOO]: YahooSearch(), SOURCE_NAMES[ANALIZY]: AnalizySearch()})
     install_movable_dialogs()
+    events = ChangeEvents()
     shared = shared_history(
         engine, lambda: history or PortfolioHistory(engine, QuoteHistory(engine), rates, lambda: now().date())
     )
@@ -109,7 +111,7 @@ def build_shell(
     results_page = ResultsPage(engine, scope, period, lambda: shared.days)
     transactions_page = TransactionsPage(engine, rates, scope)
     portfolio_page = PortfolioPage(engine, rates, scope)
-    bonds_page = BondsPage(engine, rates, scope, on_saved=lambda: transactions_changed())
+    bonds_page = BondsPage(engine, rates, scope, on_saved=lambda: events.publish(Change.TRANSACTIONS))
     unpriced = UnpricedSection(engine)
     sale_page = SaleSummaryPage(engine, scope, period)
     income_page = PassiveIncomePage(engine, rates, scope)
@@ -118,21 +120,18 @@ def build_shell(
     async def load_history() -> None:
         """Compute History (or take it already computed) and show it in the switcher."""
         await shared.values()
-        switcher.refresh()
-        dashboard_page.refresh()
-        results_page.refresh()
-        benchmarks_page.refresh()
+        events.publish(Change.HISTORY)
 
     def history_outdated() -> None:
         shared.invalidate()
-        switcher.refresh()
-        dashboard_page.refresh()
-        results_page.refresh()
-        benchmarks_page.refresh()
+        events.publish(Change.HISTORY)
         background_tasks.create(load_history(), name="history")
 
+    # First, so that a change outdating History has it invalidated before any tab redraws
+    events.subscribe(history_outdated, {Change.TRANSACTIONS, Change.PRICES, Change.BOND_DATA, Change.INSTRUMENTS})
+
     # A Multi-asset Split changes the value History counts in each Asset Class
-    multi_asset_page = MultiAssetPage(engine, rates, scope, on_split_saved=history_outdated)
+    multi_asset_page = MultiAssetPage(engine, rates, scope, on_split_saved=lambda: events.publish(Change.INSTRUMENTS))
 
     async def fetch_history() -> None:
         # The status follows the fetch's progress, which a worker thread advances
@@ -151,39 +150,23 @@ def build_shell(
         with header:
             ui.timer(0, fetch_history, once=True)
 
+    # Each tab declares the changes it redraws on; only the tab on screen has something to redraw, the others rebuild
+    # from the database when opened
+    tabs: list[Redrawing] = [
+        dashboard_page, strategy_page, results_page, transactions_page, portfolio_page, bonds_page, multi_asset_page,
+        unpriced, sale_page, income_page, benchmarks_page,
+    ]  # fmt: skip
+    for redrawing in tabs:
+        events.subscribe(redrawing.refresh, redrawing.CHANGES)
+
     def transactions_changed() -> None:
-        # Only the tab on screen has something to redraw; the others rebuild from the database when opened
-        transactions_page.refresh()
-        portfolio_page.refresh()
-        bonds_page.refresh()
-        drafts_state.refresh()
-        multi_asset_page.refresh()
-        strategy_page.refresh()
-        sale_page.refresh()
-        income_page.refresh()
-        unpriced.refresh()
-        history_outdated()
+        events.publish(Change.TRANSACTIONS)
 
     def instruments_changed() -> None:
         # A class or Multi-asset Split changed in Ustawienia moves value between the Asset Classes
-        unpriced.refresh()
-        history_outdated()
+        events.publish(Change.INSTRUMENTS)
 
-    def scope_changed() -> None:
-        switcher.refresh()
-        transactions_page.refresh()
-        portfolio_page.refresh()
-        bonds_page.refresh()
-        multi_asset_page.refresh()
-        strategy_page.refresh()
-        dashboard_page.refresh()
-        results_page.refresh()
-        benchmarks_page.refresh()
-        sale_page.refresh()
-        income_page.refresh()
-        scope_pages.refresh()
-
-    scope.on_change(scope_changed)
+    scope.on_change(lambda: events.publish(Change.SCOPE))
 
     def account_deleted(account_id: int) -> None:
         # A View Scope on the deleted Account goes back to Total; otherwise only the switcher lists one less
@@ -210,29 +193,17 @@ def build_shell(
         finally:
             refresh_button.props(remove="loading")
             price_status.refresh()
-            bond_state.refresh()
         if result is None:  # the app is shutting down
             return
-        portfolio_page.refresh()
-        bonds_page.refresh()
-        drafts_state.refresh()
-        multi_asset_page.refresh()
-        strategy_page.refresh()
-        income_page.refresh()
-        unpriced.refresh()
-        history_outdated()
+        # The refresh fetches the bond data due today along with the prices
+        events.publish(Change.PRICES, Change.BOND_DATA)
         ui.notify(_refresh_message(result), type="warning" if result.failures else "positive")
         if notice := out_of_band_notice(engine, rates):
             ui.notify(notice, type="warning", multi_line=True)
 
     async def refresh_bond_data_now(sources: BondDataSources) -> None:
         await run.io_bound(refresh_bond_data, engine, sources, now)
-        bond_state.refresh()
-        bonds_page.refresh()
-        drafts_state.refresh()
-        results_page.refresh()
-        benchmarks_page.refresh()
-        income_page.refresh()
+        events.publish(Change.BOND_DATA)
 
     async def start() -> None:
         if engine in _running_refreshes or (refresh_at_start and refresh_due(last_successful_refresh(engine), now())):
@@ -249,10 +220,12 @@ def build_shell(
         # MF's new rates may value a matured Series, so the bond data refresh redraws it too
         drafts_state = ui.refreshable(lambda: drafts_count(engine, rates.today()))
         drafts_state()
+        events.subscribe(drafts_state.refresh, {Change.TRANSACTIONS, Change.PRICES, Change.BOND_DATA})
         history_state = ui.refreshable(lambda: history_status(engine, shared))
         history_state()
         bond_state = ui.refreshable(lambda: bond_data_status(engine))
         bond_state()
+        events.subscribe(bond_state.refresh, {Change.BOND_DATA})
         price_status = ui.refreshable(lambda: _price_status(engine, engine in _running_refreshes))
         price_status()
         refresh_button = ui.button(icon="refresh", on_click=refresh_now).props(
@@ -260,6 +233,7 @@ def build_shell(
         )
         refresh_button.tooltip("Odśwież wyceny").mark("refresh-prices")
         switcher = ScopeSwitcher(scope, lambda: shared.days)
+        events.subscribe(switcher.refresh, switcher.CHANGES)
 
     with ui.left_drawer(value=True).classes("bg-indigo-950").props("width=260").mark("nav-menu"):
         for tab in TABS:
@@ -286,6 +260,8 @@ def build_shell(
     def scope_pages(build: Callable[[], None]) -> None:
         breadcrumbs(scope)
         build()
+
+    events.subscribe(scope_pages.refresh, {Change.SCOPE})
 
     def placeholder(tab: Tab) -> Callable[[], None]:
         return lambda: scope_pages(_placeholder_page(tab.label))

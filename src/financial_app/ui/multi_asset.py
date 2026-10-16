@@ -15,6 +15,7 @@ from financial_app.persistence.instruments import list_asset_classes, list_instr
 from financial_app.persistence.transactions import list_transactions
 from financial_app.sources.nbp import NbpRates
 from financial_app.sources.todays_view import todays_view
+from financial_app.ui.changes import TODAYS_VALUE
 from financial_app.ui.dialogs import movable_dialog
 from financial_app.ui.view_scope import ViewScope
 
@@ -111,6 +112,9 @@ class MultiAssetPage:
     """The Multi-asset tab of the View Scope: each Multi-asset Instrument held, its value today and its split, the
     value it puts in each Asset Class and their sums; clicking one edits its split. ``on_split_saved`` lets History
     count the new split."""
+
+    # The changes it redraws on (ui/changes.py)
+    CHANGES = TODAYS_VALUE
 
     engine: Engine
     rates: NbpRates

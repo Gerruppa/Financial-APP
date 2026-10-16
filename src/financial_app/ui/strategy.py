@@ -37,6 +37,7 @@ from financial_app.persistence.instruments import list_asset_classes
 from financial_app.persistence.strategies import delete_strategy, list_strategies, save_strategy
 from financial_app.sources.dashboard import TodaysDashboard, todays_dashboard
 from financial_app.sources.nbp import NbpRates
+from financial_app.ui.changes import TODAYS_VALUE
 from financial_app.ui.dialogs import movable_dialog
 from financial_app.ui.info import info_icon
 from financial_app.ui.view_scope import ViewScope
@@ -130,6 +131,9 @@ def strategy_section(
 @dataclass
 class StrategyPage:
     """The Strategie inwestycyjne tab of the View Scope."""
+
+    # The changes it redraws on (ui/changes.py)
+    CHANGES = TODAYS_VALUE
 
     engine: Engine
     rates: NbpRates

@@ -21,6 +21,7 @@ from financial_app.sources.dashboard import todays_dashboard
 from financial_app.sources.nbp import NbpRates
 from financial_app.sources.prices import RefreshStatus, last_refresh, refresh_summary, unpriced_instruments
 from financial_app.ui.account_ranking import AccountRanking, accounts_treemap
+from financial_app.ui.changes import Change
 from financial_app.ui.charts import dashboard_charts
 from financial_app.ui.contribution_limits import limits_section
 from financial_app.ui.info import card_title
@@ -60,6 +61,9 @@ CURRENCY_INFO = (
 class DashboardPage:
     """The Dashboard tab of the View Scope, under the period selector; ``history`` gives History's days once
     computed. It never offers editing controls."""
+
+    # The changes it redraws on (ui/changes.py)
+    CHANGES = frozenset({Change.SCOPE, Change.HISTORY})
 
     engine: Engine
     rates: NbpRates

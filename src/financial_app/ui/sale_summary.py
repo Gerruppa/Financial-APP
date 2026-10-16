@@ -20,6 +20,7 @@ from financial_app.domain.sale_summary import SalePair, SaleStats, in_view, sale
 from financial_app.persistence.accounts import list_accounts
 from financial_app.persistence.instruments import list_instruments
 from financial_app.persistence.transactions import transactions_in_entry_order
+from financial_app.ui.changes import Change
 from financial_app.ui.periods import PeriodChoice, period_selector
 from financial_app.ui.view_scope import ViewScope
 
@@ -46,6 +47,9 @@ NUMBER_FROM = HEADERS.index("Liczba")  # the columns from Liczba on hold numbers
 @dataclass
 class SaleSummaryPage:
     """The Podsumowanie sprzedaży tab of the View Scope over the period."""
+
+    # The changes it redraws on (ui/changes.py)
+    CHANGES = frozenset({Change.TRANSACTIONS, Change.SCOPE})
 
     engine: Engine
     scope: ViewScope
