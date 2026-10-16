@@ -1,7 +1,7 @@
-"""Contribution Limits (issue #95, spec 8.1): the limits per year in Ustawienia, this year's bars on the Dashboard and
-the warning after a save leaves a year over its limit."""
+"""Contribution Limits (issue #95, spec 8.1): the limits per year in Ustawienia and this year's bars on the Dashboard;
+the warning after a save leaves a year over its limit comes from ``domain/save_warnings.py`` (#110)."""
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
@@ -15,15 +15,12 @@ from financial_app.domain.contribution_limits import (
     LIMITED_TYPES,
     ContributionLimitError,
     LimitBar,
-    contribution_type,
     contributions,
     limit_bars,
-    over_limit,
-    over_limit_warning,
     parse_limit,
 )
 from financial_app.domain.formatting import format_exact, format_percent, format_pln
-from financial_app.domain.transactions import Transaction, TransactionDraft
+from financial_app.domain.transactions import TransactionDraft
 from financial_app.persistence.accounts import list_accounts
 from financial_app.persistence.contribution_limits import add_year, delete_year, load_limits, set_limits
 from financial_app.persistence.transactions import list_transactions
@@ -162,32 +159,3 @@ def _bar(bar: LimitBar, total: bool) -> None:
                 ui.label(f"Pozostało {format_pln(bar.left or Decimal(0))}")
             ui.space()
             ui.label(format_percent(share * 100))
-
-
-@dataclass
-class LimitCheck:
-    """The Transactions before a save, to warn after it once per type and year the save leaves over its limit with
-    more paid than before; it never blocks the save."""
-
-    engine: Engine
-    before: list[Transaction]
-
-    @classmethod
-    def start(cls, engine: Engine, drafts: Iterable[TransactionDraft | None]) -> LimitCheck | None:
-        """Before a save; given the ``drafts`` it saves (an edit's new and old form), ``None`` when none counts
-        towards a limit, so most saves skip the check."""
-        types = {account.id: account.account_type for account in list_accounts(engine)}
-        if all(d is None or contribution_type(d, types) is None for d in drafts):
-            return None
-        return cls(engine, list_transactions(engine))
-
-    def warn(self, saved: Iterable[TransactionDraft | None] | None = None) -> None:
-        """After the save; ``saved`` defaults to the Transactions it added."""
-        after = list_transactions(self.engine)
-        if saved is None:
-            known = {transaction.id for transaction in self.before}
-            saved = [transaction for transaction in after if transaction.id not in known]
-        drafts = [draft for draft in saved if draft is not None]
-        bars = over_limit(self.before, after, list_accounts(self.engine), load_limits(self.engine), drafts)
-        for bar in bars:
-            ui.notify(over_limit_warning(bar), type="warning")

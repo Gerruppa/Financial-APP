@@ -11,8 +11,7 @@ from sqlalchemy import Engine
 from financial_app.domain.formatting import format_exact, format_percent, format_pln
 from financial_app.domain.instruments import AssetClass, Instrument, InstrumentError, parse_optional_number
 from financial_app.domain.multi_asset import MultiAssetHolding, multi_asset_holdings
-from financial_app.persistence.instruments import list_asset_classes, list_instruments, set_multi_asset_split
-from financial_app.persistence.transactions import list_transactions
+from financial_app.persistence.instruments import list_asset_classes, set_multi_asset_split
 from financial_app.sources.nbp import NbpRates
 from financial_app.sources.todays_view import todays_view
 from financial_app.ui.changes import TODAYS_VALUE
@@ -63,19 +62,6 @@ def split_editor(asset_classes: Sequence[AssetClass], split: Mapping[int, Decima
         field.on_value_change(show_total)
     show_total()
     return typed
-
-
-def warn_of_unsplit(engine: Engine) -> None:
-    """Name the Multi-asset Instruments that have Transactions but no Multi-asset Split yet, e.g. after an import,
-    which never asks for one; the Multi-asset tab gives them their split."""
-    used = {t.instrument_id for t in list_transactions(engine)}
-    names = [i.name for i in list_instruments(engine) if i.id in used and i.is_multi_asset and not i.multi_asset_split]
-    if names:
-        ui.notify(
-            f"Instrumenty Multi-asset bez podziału na klasy: {', '.join(names)}. Podaj go w zakładce Multi-asset.",
-            type="warning",
-            multi_line=True,
-        )
 
 
 def open_split_dialog(engine: Engine, instrument: Instrument, on_saved: Callable[[], None]) -> None:

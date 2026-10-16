@@ -81,9 +81,11 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `reconciliation.py`: Pairs broker Transactions with entered ones and classifies matches, broker-only and entered-only; resolves choices
 - `results.py`: Wyniki tab figures: period XIRR, TWR, drawdown, volatility and fixed-period returns per Total and Account, from History
 - `sale_summary.py`: Sell Summary: Sale Pairs from the FIFO replay with attributed Dividends, and closed-position statistics (win rate, days, best, worst).
+- `save_warnings.py`: Warnings a save of Transactions shows (cash shortfalls, over-limit contributions, unsplit Multi-asset), computed before and after the save; never blocks it
 - `spreadsheet_import.py`: Pure conversion of the user's Inwestomat Transakcje sheet rows into Transaction drafts, with fingerprints for re-import skipping.
 - `strategy.py`: Investment Strategy rules: Allocation Targets with tolerance bands, Instrument Targets, and the water-filling split of the Planned Deposit
 - `transaction_filters.py`: Excel-like column filters and sort order for the Transakcje list; returns the filtered, sorted view of Transactions
+- `transaction_form.py`: Transaction dialog rules without widgets: fields per Transaction Type and the Transaction they describe, or the field error
 - `transactions.py`: Transaction types, drafts and builders for every kind, plus cash balances and cost and dividend totals per Account.
 - `valuation.py`: Decides each Instrument's price and status from Manual Price or Quote, including metal spot conversion and badges.
 - `view_scope.py`: View Scope logic: Total or one Account, its remembered setting, switcher entries and transaction filtering
@@ -169,6 +171,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `spreadsheet.py`: Previews and imports Transactions and Instruments from the user's Inwestomat spreadsheet
 - `stooq.py`: Stooq history source for GPW stocks and indices; fetches daily closes via CSV with API key and browser proof-of-work check
 - `todays_view.py`: Loads today's portfolio state once (Transactions, Accounts, Positions, prices, NBP Rates) for the tabs and Dashboard to share
+- `transaction_saving.py`: Single save path for Transactions (dialog, sheet import, XTB Reconciliation, bond Drafts) that returns the save's warnings
 - `xtb.py`: Reads, previews and applies XTB statement imports, matching accounts and tickers and remembering matches
 - `yahoo.py`: Yahoo Finance source for current quotes and Instrument search; converts GBp pence and parses chart and search responses
 
@@ -184,7 +187,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `bonds.py`: Obligacje tab UI: expandable table of Bond Series and their Lots with gross and net values, the "Do zatwierdzenia" list of matured Lots, and the 12-month bond calendar
 - `changes.py`: Window change events: the Change enum, the TODAYS_VALUE set, and ChangeEvents, which redraws each tab or header element that declared the published changes.
 - `charts.py`: Dashboard's nine ECharts charts, the profit waterfall, and shared PLN line and bar chart helpers for other tabs.
-- `contribution_limits.py`: Contribution Limits UI: yearly limits in Ustawienia, Dashboard bars and over-limit warnings after saves
+- `contribution_limits.py`: Contribution Limits UI: yearly limits in Ustawienia and this year's Dashboard bars
 - `dashboard.py`: Dashboard tab UI: totals, price status, Account table, exposure, charts, Account treemap and ranking, and the after-tax toggle
 - `dialogs.py`: Draggable dialog support with no backdrop, so the screen behind stays readable
 - `fund_details.py`: Builds the short fund detail texts (TER, Distribution Policy, domicile) shared by Instrument list and Portfolio
@@ -200,6 +203,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `reset.py`: Ustawienia Wyczyść dane card that clears the whole portfolio after a warning and typed confirmation
 - `results.py`: Wyniki tab page: result tiles, drawdown chart and per-Account results table under the period selector
 - `sale_summary.py`: Podsumowanie sprzedaży tab: Sale Pairs of the scope and period with the closed-position statistics tiles.
+- `save_warnings.py`: Shows save warnings as notifications, the same way wherever Transactions were saved
 - `settings.py`: Builds the Ustawienia page by assembling its sections: Accounts, Asset Classes, Instruments, sources, import, reset
 - `shell.py`: Main app window shell: left menu, header with refresh status and View Scope, and the transaction button
 - `strategy.py`: Strategie inwestycyjne tab, Dashboard strategy section and post-refresh notice for classes outside their tolerance band
@@ -312,6 +316,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_results_ui.py`: UI tests for the Wyniki tab: tiles, drawdown chart, results table and pending state
 - `test_sale_summary_domain.py`: Tests Sale Pairs across Lots, Splits and DRIPs, Dividend and coupon attribution, statistics and the view filter.
 - `test_sale_summary_ui.py`: UI tests of the Podsumowanie sprzedaży tab: pairs, statistics, Account scope and an empty period.
+- `test_save_warnings_domain.py`: Tests the save warnings computed from Transactions before and after a save
 - `test_shell.py`: Smoke tests of the app shell's tabs and navigation, run without a browser.
 - `test_splits_and_transfers_domain.py`: Tests Splits, Cash Transfers and Security Transfers in the FIFO engine and Cash Balances.
 - `test_splits_and_transfers_repository.py`: Tests saving Splits, Cash Transfers and Security Transfers in SQLite.
@@ -331,6 +336,8 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_transaction_edit_ui.py`: UI tests for editing and deleting a Transaction from the Transakcje list, including blocked edits
 - `test_transaction_filters_domain.py`: Domain tests for the Transakcje list's column filters, sort order and value options
 - `test_transaction_filters_ui.py`: UI tests for Transakcje column headers: sorting, filter menus, clearing filters and the filtered export
+- `test_transaction_form_domain.py`: Tests the transaction dialog's field rules and draft building without widgets
+- `test_transaction_saving.py`: Tests saving Transactions on in-memory SQLite: the save, the Bond Series it creates and its warnings
 - `test_transactions_domain.py`: Domain tests for Deposits, Withdrawals, trade amounts, validation and per-Account cash balances
 - `test_transactions_repository.py`: Repository tests for saving, listing, editing and deleting Transactions in SQLite, with FIFO coverage checks
 - `test_transactions_ui.py`: UI tests for Deposits and Withdrawals from the plus dialog, Transakcje list and Portfolio Cash Balance

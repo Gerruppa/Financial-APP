@@ -74,6 +74,17 @@ async def test_a_matured_lot_is_a_draft_counted_in_the_header_and_confirmed_as_i
     assert (sell.transaction_type, sell.date, sell.lot_id) == (TransactionType.SELL, date(2026, 6, 15), 2)
 
 
+async def test_a_confirmed_draft_warns_like_any_other_save(engine: Engine) -> None:
+    account = _bought(engine, "Obligacje")
+    add_transaction(engine, TransactionDraft(account, date(2026, 7, 1), TransactionType.WITHDRAWAL, Decimal(1500)))
+
+    async with user_simulation(lambda: _shell(engine)) as user:
+        await _open(user)
+        user.find(marker="confirm-redemption").click()
+
+        await user.should_see(f"Zapisano, ale Saldo gotówki konta Obligacje jest ujemne: -221,40{NBSP}zł.")
+
+
 async def test_a_rollover_redeems_the_lot_and_buys_the_new_series(engine: Engine) -> None:
     _bought(engine, "Obligacje")
 
