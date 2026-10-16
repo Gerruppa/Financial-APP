@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 from financial_app.domain.instruments import Instrument
-from financial_app.domain.lots import Position
+from financial_app.domain.lots import Position, UnitPrice
 
 
 @dataclass(frozen=True)
@@ -22,7 +22,7 @@ class MultiAssetHolding:
 def multi_asset_holdings(
     positions: Sequence[Position],
     instruments: Mapping[int, Instrument],
-    prices: Mapping[int, Decimal | None],
+    prices: Mapping[int, UnitPrice | None],
     account_id: int | None,
 ) -> list[MultiAssetHolding]:
     """The Multi-asset Instruments among ``positions`` of the Account ``account_id`` (``None``: every Account), valued

@@ -93,7 +93,8 @@ class TransactionRow(Base):
     # Foreign-currency Buy and Sell paid in PLN only: the FX Conversion Fee % when the broker converted it; the fee in
     # PLN follows from it like the Tax Amount follows from the NBP Rate (issue #17)
     fx_conversion_fee_percent: Mapped[str | None] = mapped_column(String(20))
-    # Dividend and DRIP only: the gross amount and the withholding tax, in the Dividend's currency (issue #18)
+    # Dividend and DRIP only: the gross amount and the withholding tax, in the Dividend's currency (issue #18); an
+    # Early Redemption (a Sell) has the tax withheld from it too, in PLN (L-5)
     gross: Mapped[str | None] = mapped_column(String(30))
     withholding_tax: Mapped[str | None] = mapped_column(String(30))
     # Cash and Security Transfer only: the Account it goes to (issue #19)
@@ -104,6 +105,21 @@ class TransactionRow(Base):
     # Where it came from (spec 7): "manual" or "spreadsheet"; an imported one carries its row's fingerprint (issue #20)
     origin: Mapped[str] = mapped_column(String(20), server_default="manual")
     external_id: Mapped[str | None] = mapped_column(String(100), unique=True)
+    # A Sell only: the Transaction that opened the Lot it takes its units from, instead of FIFO (L-5, ADR-0007)
+    lot_id: Mapped[int | None] = mapped_column(ForeignKey("transactions.id"))
+    # Reconciliation (L-17, spec 7): the broker's external id of the Transaction it was paired with, and the day the
+    # user resolved it; a reconciled Transaction is not offered for pairing again
+    broker_id: Mapped[str | None] = mapped_column(String(100), unique=True)
+    reconciled_on: Mapped[dt.date | None] = mapped_column(Date)
+
+
+class SkippedBrokerRow(Base):
+    """A broker's Transaction the user chose not to add in a Reconciliation (L-17), so it is not offered again."""
+
+    __tablename__ = "skipped_broker_rows"
+
+    external_id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    skipped_on: Mapped[dt.date] = mapped_column(Date)
 
 
 class AssetClassRow(Base):
@@ -145,6 +161,7 @@ class InstrumentRow(Base):
     asset_class: Mapped[AssetClassRow] = relationship()
     source_symbols: Mapped[list[SourceSymbolRow]] = relationship(cascade="all, delete-orphan")
     multi_asset_split: Mapped[list[MultiAssetShareRow]] = relationship(cascade="all, delete-orphan")
+    rate_correction: Mapped[RateCorrectionRow | None] = relationship(cascade="all, delete-orphan")
 
 
 class SourceSymbolRow(Base):
@@ -155,6 +172,17 @@ class SourceSymbolRow(Base):
     instrument_id: Mapped[int] = mapped_column(ForeignKey("instruments.id"), primary_key=True)
     source: Mapped[str] = mapped_column(String(20), primary_key=True)
     symbol: Mapped[str] = mapped_column(String(100))
+
+
+class RateCorrectionRow(Base):
+    """The user's corrections of a Bond Series' MF rates (spec 3.4.1): exact decimal text, ``rates`` one per period,
+    comma-separated, empty where the MF file's rate stands."""
+
+    __tablename__ = "bond_rate_corrections"
+
+    instrument_id: Mapped[int] = mapped_column(ForeignKey("instruments.id"), primary_key=True)
+    margin: Mapped[str | None] = mapped_column(String(20))
+    rates: Mapped[str] = mapped_column(Text, default="", server_default="")
 
 
 class MultiAssetShareRow(Base):
@@ -281,3 +309,53 @@ class NbpHistoryRow(Base):
     currency: Mapped[str] = mapped_column(String(3), primary_key=True)
     first_day: Mapped[dt.date] = mapped_column(Date)
     last_day: Mapped[dt.date] = mapped_column(Date)
+
+
+class MfBondSeriesRow(Base):
+    """A Bond Series as the MF file last fetched lists it (spec 3.4.1); each fetch replaces all rows.
+
+    ``rates`` and ``interest`` hold one decimal per period, comma-separated, empty where MF has published none.
+    """
+
+    __tablename__ = "mf_bond_series"
+
+    series: Mapped[str] = mapped_column(String(10), primary_key=True)
+    isin: Mapped[str] = mapped_column(String(12))
+    sale_start: Mapped[dt.date] = mapped_column(Date)
+    sale_end: Mapped[dt.date] = mapped_column(Date)
+    issue_price: Mapped[str] = mapped_column(String(20))
+    rollover_price: Mapped[str | None] = mapped_column(String(20))
+    margin: Mapped[str | None] = mapped_column(String(20))
+    rates: Mapped[str] = mapped_column(Text)
+    interest: Mapped[str] = mapped_column(Text)
+
+
+class CpiRow(Base):
+    """The GUS consumer price indices of a month (spec 3.4.1); each fetch replaces all rows."""
+
+    __tablename__ = "cpi"
+
+    year: Mapped[int] = mapped_column(Integer, primary_key=True)
+    month: Mapped[int] = mapped_column(Integer, primary_key=True)
+    year_on_year: Mapped[str | None] = mapped_column(String(20))
+    month_on_month: Mapped[str | None] = mapped_column(String(20))
+
+
+class ReferenceRateRow(Base):
+    """The NBP reference rate in force from ``valid_from`` (spec 3.4.1); each fetch replaces all rows."""
+
+    __tablename__ = "nbp_reference_rates"
+
+    valid_from: Mapped[dt.date] = mapped_column(Date, primary_key=True)
+    rate: Mapped[str] = mapped_column(String(20))
+
+
+class BondDataStatusRow(Base):
+    """The last successful fetch of a bond data source and, while it keeps failing, the last failure's reason."""
+
+    __tablename__ = "bond_data_status"
+
+    source: Mapped[str] = mapped_column(String(20), primary_key=True)
+    succeeded_at: Mapped[dt.datetime | None] = mapped_column(DateTime)
+    failed_at: Mapped[dt.datetime | None] = mapped_column(DateTime)
+    error: Mapped[str | None] = mapped_column(Text)

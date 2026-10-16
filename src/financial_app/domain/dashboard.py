@@ -13,8 +13,10 @@ from datetime import date
 from decimal import Decimal
 
 from financial_app.domain.accounts import Account, tax_regime_for
+from financial_app.domain.bond_redemption import net_value
+from financial_app.domain.bond_valuation import BondPrice
 from financial_app.domain.instruments import Instrument
-from financial_app.domain.lots import foreign_cash, replay
+from financial_app.domain.lots import Position, UnitPrice, foreign_cash, replay
 from financial_app.domain.metrics import twr, xirr
 from financial_app.domain.portfolio_history import CASH_CLASS, FOREIGN_CASH_CLASS, DayValue
 from financial_app.domain.profit_sources import ProfitSources, profit_sources
@@ -31,7 +33,8 @@ from financial_app.domain.transactions import (
 class Totals:
     """Sums in PLN; ``net_deposits`` is ``None`` while History is not computed, ``xirr`` (a fraction) also without a
     rate that settles the flows, ``twr`` (a fraction) without a period. ``estimated_tax`` is the Belka a Regular
-    Account would pay on its unrealised gains at the Tax cost if it sold everything today (issue #89)."""
+    Account would pay on its unrealised gains at the Tax cost if it sold everything today (issue #89), plus what
+    redeeming its Bond Series today would cost: the early-redemption fee and the tax withheld (spec 3.4.1)."""
 
     net_deposits: Decimal | None
     cash: Decimal
@@ -110,7 +113,7 @@ def dashboard(
     transactions: Sequence[TransactionDraft],
     accounts: Sequence[Account],
     instruments: Mapping[int, Instrument],
-    prices: Mapping[int, Decimal | None],
+    prices: Mapping[int, UnitPrice | None],
     rates: Mapping[str, Decimal],
     history: Sequence[DayValue] | None,
     account_id: int | None = None,
@@ -136,6 +139,7 @@ def dashboard(
     account_classes: dict[int, dict[str, Decimal]] = {}
     # Unrealised gains at the Tax cost by tax rate: PIT-38 is one return, so Total offsets the Accounts' gains
     taxable: dict[Decimal, Decimal] = {}
+    withheld_total = Decimal(0)
     # The FX part of the scope's unrealised and realised result, for the profit by source
     fx = Decimal(0)
 
@@ -161,6 +165,8 @@ def dashboard(
         positions_value = Decimal(0)
         unrealized = Decimal(0)
         taxable_gain = Decimal(0)
+        # A Bond Series' early-redemption fee and the tax withheld at redemption, outside PIT-38 (spec 3.4.1)
+        withheld = Decimal(0)
         account_realized = moves.realized.get(account.id, Decimal(0))
         fx += moves.realized_fx.get(account.id, Decimal(0))
         for position in (p for p in moves.positions if p.account_id == account.id):
@@ -169,9 +175,12 @@ def dashboard(
             value = position.value_or_cost(price)
             parts = instrument.class_parts(value)
             positions_value += count_held(instrument.quote_currency, value, parts, position.instrument_id)
+            if isinstance(price, BondPrice):
+                withheld += _bond_deductions(position, price, account)
+            elif price is not None:
+                taxable_gain += position.value(price) - position.tax_cost
             if price is not None:
                 unrealized += position.result(price)
-                taxable_gain += position.value(price) - position.tax_cost
                 rate = rates.get(instrument.quote_currency)
                 if rate is not None:
                     fx += position.fx_result(rate)
@@ -190,6 +199,7 @@ def dashboard(
         count_cash(PLN, CASH_CLASS, balances.get(account.id, Decimal(0)))
         tax_rate = tax_regime_for(account.account_type).unrealized_tax_rate
         taxable[tax_rate] = taxable.get(tax_rate, Decimal(0)) + taxable_gain
+        withheld_total += withheld
         rows.append(
             AccountRow(
                 account,
@@ -203,7 +213,7 @@ def dashboard(
                     realized=account_realized,
                     dividends=dividends.get(account.id, Decimal(0)),
                     costs=costs.get(account.id, Decimal(0)),
-                    estimated_tax=_estimated_tax(tax_rate, taxable_gain),
+                    estimated_tax=_estimated_tax(tax_rate, taxable_gain) + withheld,
                 ),
             )
         )
@@ -238,7 +248,7 @@ def dashboard(
         costs=sum((row.costs for row in scoped), Decimal(0)),
         xirr=xirr_rate,
         twr=twr_rate,
-        estimated_tax=sum((_estimated_tax(rate, gain) for rate, gain in taxable.items()), Decimal(0)),
+        estimated_tax=sum((_estimated_tax(rate, gain) for rate, gain in taxable.items()), withheld_total),
     )
     currencies = tuple(CurrencyShare(*share) for share in _shares(exposure))
     classes = tuple(ClassShare(*share) for share in _shares(allocation) if share[1])
@@ -254,6 +264,14 @@ def dashboard(
         {a: values for a, values in held.items() if values},
         profit_sources(transactions, {row.account.id for row in rows}, totals.unrealized + totals.realized, fx),
     )
+
+
+def _bond_deductions(position: Position, price: BondPrice, account: Account) -> Decimal:
+    """What redeeming the Bond Series' Lots today would cost: the early-redemption fee and the tax the Account's Tax
+    Regime withholds, i.e. the gross value less the net value of the Obligacje tab."""
+    rate = tax_regime_for(account.account_type).withheld_tax_rate
+    values = ((lot, net_value(price, lot, rate)) for lot in position.lots)
+    return sum((lot.quantity * v.deductions for lot, v in values if v is not None), Decimal(0))
 
 
 def _estimated_tax(rate: Decimal, gain: Decimal) -> Decimal:

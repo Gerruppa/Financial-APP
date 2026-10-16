@@ -2,7 +2,9 @@
 
 Recomputed from the Transactions and the cached daily prices and NBP Rates, never stored. Positions come from the
 single FIFO engine (ADR-0003) replayed up to each day. A day without a price carries the last one forward; with none
-on or before it, a Position is valued at cost and listed in ``unpriced``. Bond Series are valued at cost until Stage 3.
+on or before it, a Position is valued at cost and listed in ``unpriced``. Bond Series are valued by the MF issue letters
+(``domain.bond_valuation``) with the rates and CPI known now, Estimated and forecast rates included (spec 3.4.1); one
+not valued yet stays at cost.
 Foreign prices and cash are converted at the NBP Rate published that day (else the latest earlier), not D-1.
 
 History prices are split-adjusted by their source (ADR-0006), while the Lots hold the units of their day, so a price is
@@ -15,11 +17,11 @@ from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
 
+from financial_app.domain.bond_valuation import BondData
 from financial_app.domain.currencies import NbpRate
 from financial_app.domain.history import ONE_DAY
 from financial_app.domain.instruments import Instrument
-from financial_app.domain.lots import ForeignCash, Position, foreign_cash, open_positions
-from financial_app.domain.prices import STAGE_3_CLASSES
+from financial_app.domain.lots import ForeignCash, Position, UnitPrice, foreign_cash, open_positions
 from financial_app.domain.transactions import PLN, SplitRatio, TransactionDraft, TransactionType, cash_balances
 
 # The Asset Classes PLN and foreign cash are counted in
@@ -77,13 +79,14 @@ def daily_history(
     rates: Mapping[str, Sequence[NbpRate]],
     first: date,
     last: date,
+    bonds: BondData | None = None,
 ) -> list[DayValue]:
     """Each day from ``first`` to ``last``.
 
     ``transactions`` come in entry order (for the FIFO engine's same-day ties), ``prices`` by Instrument id and
-    ``rates`` by currency, both oldest first.
+    ``rates`` by currency, both oldest first; ``bonds`` values the Bond Series.
     """
-    pricing = _Pricing(instruments, prices, rates, _splits(transactions))
+    pricing = _Pricing(instruments, prices, rates, _splits(transactions), bonds or BondData())
     change_days = {t.date for t in transactions}
     flows = _flows(transactions, pricing)
     flows_by_day: dict[date, list[_Flow]] = {}
@@ -123,6 +126,7 @@ class _Pricing:
         prices: Mapping[int, Sequence[HistoryPrice]],
         rates: Mapping[str, Sequence[NbpRate]],
         splits: Mapping[int, Sequence[tuple[date, SplitRatio]]],
+        bonds: BondData,
     ) -> None:
         self.instruments = instruments
         self.prices = prices
@@ -130,12 +134,14 @@ class _Pricing:
         self.rates = rates
         self.rate_days = {key: [rate.published_on for rate in values] for key, values in rates.items()}
         self.splits = splits
+        self.bonds = bonds
 
-    def unit_pln(self, instrument_id: int, day: date) -> Decimal | None:
-        """One unit's PLN value at the end of ``day``, in that day's units; ``None`` without a price or NBP Rate."""
+    def unit_pln(self, instrument_id: int, day: date) -> UnitPrice | None:
+        """One unit's PLN value at the end of ``day``, in that day's units (a Bond Series' by Lot); ``None`` without a
+        price or NBP Rate."""
         instrument = self.instruments[instrument_id]
-        if self.is_bond(instrument_id):
-            return None
+        if self.is_bond_series(instrument_id):
+            return self.bonds.price(instrument_id, day)
         price = _last_on(self.prices.get(instrument_id, ()), self.price_days.get(instrument_id, []), day)
         if price is None:
             return None
@@ -160,8 +166,8 @@ class _Pricing:
                 factor *= Decimal(ratio.old) / ratio.new
         return factor
 
-    def is_bond(self, instrument_id: int) -> bool:
-        return self.instruments[instrument_id].asset_class_name in STAGE_3_CLASSES
+    def is_bond_series(self, instrument_id: int) -> bool:
+        return self.instruments[instrument_id].is_bond_series
 
 
 def _last_on[T](values: Sequence[T], days: list[date], day: date) -> T | None:
@@ -206,19 +212,20 @@ def _moved_value(transactions: Sequence[TransactionDraft], transfer: Transaction
     """The units a Security Transfer moves at their value that day, or at the cost of their Lots without a price."""
     assert transfer.instrument_id is not None and transfer.quantity is not None
     unit = pricing.unit_pln(transfer.instrument_id, transfer.date)
-    if unit is not None:
+    if isinstance(unit, Decimal):
         return transfer.quantity * unit
     until = [t for t in transactions if t.date <= transfer.date]
     without = [t for t in until if t is not transfer]
     key = (transfer.target_account_id, transfer.instrument_id)
 
-    def target_cost(positions: list[Position]) -> Decimal:
+    def target_value(positions: list[Position]) -> Decimal:
+        """The moved Lots' value on the target Account, a Bond Series' by Lot."""
         return sum(
-            (p.cost for p in positions if (p.account_id, p.instrument_id) == key),
+            (p.value_or_cost(unit) for p in positions if (p.account_id, p.instrument_id) == key),
             Decimal(0),
         )
 
-    return target_cost(open_positions(until)) - target_cost(open_positions(without))
+    return target_value(open_positions(until)) - target_value(open_positions(without))
 
 
 def _add_flows(
@@ -262,10 +269,10 @@ def _value(
         unit = pricing.unit_pln(position.instrument_id, day)
         if unit is None:
             value = position.cost
-            if not pricing.is_bond(position.instrument_id):
+            if not pricing.is_bond_series(position.instrument_id):
                 unpriced.add(position.instrument_id)
         else:
-            value = position.quantity * unit
+            value = position.value(unit)
         # A Multi-asset Split spreads the value across its classes, the same split on every day (spec 6.1)
         add(position.account_id, value, pricing.instruments[position.instrument_id].class_parts(value))
     return DayValue(

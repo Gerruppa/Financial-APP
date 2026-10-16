@@ -3,6 +3,8 @@
 from datetime import date
 from decimal import Decimal
 
+from financial_app.domain.bond_valuation import BondPrice, Cpi
+from financial_app.domain.bonds import BondSeries, SeriesTerms
 from financial_app.domain.instruments import Instrument
 from financial_app.domain.prices import BOSSA, YAHOO, Quote, default_fallback_order
 from financial_app.domain.valuation import Badge, InstrumentPrice, PriceStatus, instrument_price
@@ -115,21 +117,64 @@ def test_an_instrument_without_a_source_symbol_for_its_asset_class_has_no_source
     assert (price.status, price.badge) == (PriceStatus.NO_PRICE, Badge.NO_SOURCE)
 
 
-def test_a_polish_treasury_bond_waits_for_stage_3_even_with_a_manual_price() -> None:
-    bond = Instrument(
-        "EDO0735",
-        4,
-        "PLN",
-        "",
-        Decimal("104.5"),
-        id=1,
-        asset_class_name="Obligacje skarbowe polskie",
-        fallback_order=(),
+def _bond(manual_price: str | None = None) -> Instrument:
+    price = None if manual_price is None else Decimal(manual_price)
+    return Instrument(
+        "EDO0536", 4, "PLN", "", price, id=1, asset_class_name="Obligacje skarbowe polskie", fallback_order=()
     )
 
-    price = instrument_price(bond, None, lambda currency: Decimal(1))
 
-    assert (price.pln, price.status, price.badge) == (Decimal("104.5"), PriceStatus.MANUAL, Badge.STAGE_3)
+def _bond_price() -> BondPrice:
+    terms = SeriesTerms(
+        "EDO0536", "PL0", date(2026, 5, 1), date(2026, 5, 31), Decimal(100), None, None, (Decimal("0.0535"),), ()
+    )
+    return BondPrice(BondSeries(1, "EDO0536", terms), date(2026, 10, 8), Cpi(()))
+
+
+def test_a_bond_series_is_valued_by_the_mf_issue_letters_without_a_badge() -> None:
+    bond_price = _bond_price()
+
+    price = instrument_price(_bond(), None, lambda currency: Decimal(1), bond=bond_price)
+
+    assert price == InstrumentPrice(None, "PLN", bond_price, PriceStatus.BOND, bond=bond_price)
+
+
+def test_a_manual_price_overrides_the_value_of_a_bond_series() -> None:
+    price = instrument_price(_bond("104.5"), None, lambda currency: Decimal(1), bond=_bond_price())
+
+    assert (price.pln, price.status, price.badge) == (Decimal("104.5"), PriceStatus.MANUAL, Badge.MANUAL)
+
+
+def test_a_bond_series_without_its_first_rate_says_so() -> None:
+    price = instrument_price(_bond(), None, lambda currency: Decimal(1))
+
+    assert (price.pln, price.status, price.badge) == (None, PriceStatus.NO_PRICE, Badge.NO_BOND_RATE)
+
+
+def _catalyst_treasury_bond(symbols: dict[str, str]) -> Instrument:
+    return Instrument(
+        "DS1030",
+        4,
+        "PLN",
+        source_symbols=symbols,
+        id=1,
+        asset_class_name="Obligacje skarbowe polskie",
+        fallback_order=default_fallback_order("Obligacje skarbowe polskie"),
+    )
+
+
+def test_a_treasury_bond_on_catalyst_is_valued_at_its_bossa_quote_per_bond() -> None:
+    quote = Quote(Decimal("865.06"), "PLN", date(2026, 10, 2), BOSSA)
+
+    price = instrument_price(_catalyst_treasury_bond({BOSSA: "DS1030"}), quote, lambda currency: Decimal(1))
+
+    assert (price.pln, price.status, price.badge) == (Decimal("865.06"), PriceStatus.QUOTE, None)
+
+
+def test_a_treasury_bond_that_is_no_bond_series_without_a_bossa_symbol_has_no_source() -> None:
+    price = instrument_price(_catalyst_treasury_bond({}), None, lambda currency: Decimal(1))
+
+    assert (price.status, price.badge) == (PriceStatus.NO_PRICE, Badge.NO_SOURCE)
 
 
 def _metal(grams: str, spread: str | None, manual_price: str | None = None) -> Instrument:
@@ -163,7 +208,7 @@ def test_a_coin_of_31_1035_grams_is_worth_95_percent_of_spot() -> None:
 
     price = instrument_price(_metal("31.1035", "5"), quote, {"USD": Decimal(4)}.get)
 
-    assert price.pln is not None
+    assert isinstance(price.pln, Decimal)
     assert abs(price.pln - Decimal(9120)) < Decimal("0.1")
 
 

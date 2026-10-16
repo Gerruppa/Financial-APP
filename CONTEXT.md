@@ -79,7 +79,7 @@ One user-recorded event on an Account: Deposit, Withdrawal, Buy, Sell, Dividend,
 _Avoid_: operation, trade, entry
 
 **Dividend** (Dywidenda / odsetki):
-A payout of an Instrument, or interest (with or without an Instrument), recorded with its gross amount and the withholding tax taken at source, both in its own currency. The net amount goes into PLN cash (converted) or foreign cash of the same currency.
+A payout of an Instrument, or interest (with or without an Instrument), recorded with its gross amount and the withholding tax taken at source, both in its own currency. The net amount goes into PLN cash (converted) or foreign cash of the same currency. A Bond Series' coupon is recorded as interest naming the Lot it was paid on.
 _Avoid_: coupon, income
 
 **DRIP** (DRIP):
@@ -149,7 +149,7 @@ _Avoid_: dividend type
 ## Bonds
 
 **Bond Series** (Seria obligacji):
-A Polish retail treasury bond issue identified by type, maturity month and year, e.g. `EDO0735`. It is an Instrument and carries the rates (first-year rate, margin, each period's rate); each purchase of it is a separate Lot earning from its own date.
+A Polish retail treasury bond issue identified by type, maturity month and year, e.g. `EDO0735`. It is an Instrument, created on its first purchase from the type and purchase date, and carries the rates (first-year rate, margin, each period's rate) from the MF file, which the user may correct by hand; each purchase of it is a separate Lot earning from its own date.
 _Avoid_: bond ticker, bond
 
 **Estimated Rate** (Oprocentowanie szacunkowe):
@@ -163,6 +163,10 @@ _Avoid_: Estimated Rate, guess
 **Early Redemption** (Wcześniejszy wykup):
 Selling a Bond Series back to the issuer before maturity: it names its Lot (ADR-0007) and pays the early-redemption fee, capped at the accrued interest.
 _Avoid_: sale, early sell
+
+**Net Value** (Wartość netto):
+What redeeming one bond of a Bond Series' Lot today would pay, a Lot's being that times its bonds: the bond's gross value less the early-redemption fee (none at maturity) and the tax the Account's Tax Regime withholds on its profit. Shown in the Obligacje tab; the Dashboard's after-tax toggle takes it.
+_Avoid_: after-tax value, redemption value
 
 **Draft** (Szkic):
 A Transaction the app proposes for confirmation (a maturity redemption, a Rollover or a bond coupon), computed from what is due and not yet recorded, never stored; confirming it saves an ordinary Transaction.
@@ -186,6 +190,10 @@ Money-weighted annual return of the portfolio or an Account, based on Deposits a
 
 **TWR**:
 Time-weighted return, independent of the timing of Deposits and Withdrawals. Drawdown and benchmark comparison are based on it.
+
+**Real Return** (Wynik realny):
+The TWR over a period after the inflation of that period: (1 + TWR) / (1 + inflation) − 1, the inflation from the GUS month-on-month CPI spread evenly across each month's days.
+_Avoid_: inflation-adjusted XIRR, real value
 
 **Benchmark** (Benchmark):
 An Instrument or CPI into which every Deposit is hypothetically invested on its date, to compare with the real portfolio.

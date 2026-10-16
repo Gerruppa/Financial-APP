@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 
+from financial_app.domain.bonds import TREASURY_BOND_CLASS
+
 # Price Sources by the key their Source Symbols are saved under
 YAHOO = "yahoo"
 BOSSA = "bossa"
@@ -35,8 +37,8 @@ DEFAULT_FALLBACK_ORDERS: dict[str, tuple[str, ...]] = {
     "Gotówka": (),
     "Akcje polskie": (BOSSA, YAHOO),
     "Akcje zagraniczne": (YAHOO, BOSSA),
-    # Valued from the MF data in Stage 3
-    "Obligacje skarbowe polskie": (),
+    # Bond Series are valued from the MF data (spec 3.4.1); other treasury bonds are quoted on Catalyst (L-23)
+    "Obligacje skarbowe polskie": (BOSSA,),
     "Obligacje skarbowe zagraniczne": (YAHOO,),
     "Obligacje korporacyjne polskie": (BOSSA,),
     "Obligacje korporacyjne zagraniczne": (YAHOO,),
@@ -46,8 +48,9 @@ DEFAULT_FALLBACK_ORDERS: dict[str, tuple[str, ...]] = {
     OTHER: (ANALIZY, BANKIER, YAHOO, BOSSA),
     "Multi-asset": (ANALIZY, BANKIER, YAHOO, BOSSA),
 }
-# Asset Classes of the Bond Series, which keep their Manual Price until Stage 3 values them from the MF data
-STAGE_3_CLASSES = frozenset({"Obligacje skarbowe polskie"})
+# The Asset Class of the Bond Series, valued from the MF data (no Price Source quotes them); its other bonds, such as
+# DS or IZ on Catalyst, are quoted like any Instrument
+STAGE_3_CLASSES = frozenset({TREASURY_BOND_CLASS})
 # Seeded Asset Classes nothing quotes, priced only by a Manual Price
 MANUAL_PRICE_CLASSES = frozenset({"Gotówka", "Waluty"})
 

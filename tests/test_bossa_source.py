@@ -9,11 +9,36 @@ from urllib.error import HTTPError, URLError
 
 import pytest
 
+from financial_app.domain.catalyst import BondFacts
 from financial_app.domain.prices import BOSSA, CurrencyMismatchError, PriceSourceError, Quote
 from financial_app.sources.bossa import BossaSource
+from financial_app.sources.catalyst import CATALYST_LISTING, INDEXATION_PAGE, CatalystFacts
 
 FIXTURES = Path(__file__).parent / "fixtures" / "bossa"
 FRIDAY = date(2026, 10, 2)
+CATALYST_PAGES = {
+    CATALYST_LISTING: Path(__file__).parent / "fixtures" / "catalyst" / "instrumenty-notowane.html",
+    INDEXATION_PAGE: Path(__file__).parent / "fixtures" / "indexation" / "wspolczynniki-indeksacji.html",
+}
+
+
+class FixedFacts:
+    """Catalyst bond facts by symbol; counts the refreshes."""
+
+    def __init__(self, facts: dict[str, BondFacts]) -> None:
+        self.facts = facts
+        self.refreshes = 0
+
+    def of(self, symbol: str, day: date) -> BondFacts:
+        if symbol not in self.facts:
+            raise PriceSourceError(f"gpwcatalyst.pl nie podaje wartości nominalnej obligacji „{symbol}”.")
+        return self.facts[symbol]
+
+    def new_refresh(self) -> None:
+        self.refreshes += 1
+
+
+ACH0427 = FixedFacts({"ACH0427": BondFacts(Decimal("1000.00"), Decimal("2.93"))})
 
 
 class SavedBossa:
@@ -48,15 +73,44 @@ def test_without_a_trade_the_reference_price_is_the_quote() -> None:
 
 @pytest.mark.parametrize(
     ("symbol", "price"),
-    [("ONE", "0.0992"), ("ETFBDIVPL", "297.7500"), ("ACH0427", "101.00"), ("ABE0227", "100.00")],
+    [("ONE", "0.0992"), ("ETFBDIVPL", "297.7500")],
 )
-def test_newconnect_etfs_and_catalyst_bonds_are_quoted_too(symbol: str, price: str) -> None:
+def test_newconnect_and_etfs_are_quoted_too(symbol: str, price: str) -> None:
     assert BossaSource(SavedBossa()).quote(symbol, "PLN").price == Decimal(price)
+
+
+def test_a_catalyst_bond_is_priced_per_bond_its_percent_of_nominal_plus_its_accrued_interest() -> None:
+    quote = BossaSource(SavedBossa(), ACH0427).quote("ACH0427", "PLN")
+
+    assert quote == Quote(Decimal("1012.93"), "PLN", FRIDAY, BOSSA)  # 101,00 % of 1000 zł + 2,93 zł
+
+
+def test_an_iz_bond_is_priced_at_its_indexed_nominal_of_the_quotes_day_from_gov_pl() -> None:
+    def pages(url: str) -> str:
+        return CATALYST_PAGES[url].read_text(encoding="utf-8")
+
+    facts = CatalystFacts(pages)
+
+    # 96,50 % of 1075,72 zł (1000 zł × 1,07572 on Friday 02.10.2026, the Quote's day) + 1,96 zł
+    assert BossaSource(SavedBossa(), facts).quote("IZ0831", "PLN").price == Decimal("1040.0298")
+
+
+def test_a_catalyst_bond_without_its_nominal_is_an_error_not_a_percent() -> None:
+    with pytest.raises(PriceSourceError, match="gpwcatalyst.pl"):
+        BossaSource(SavedBossa(), FixedFacts({})).quote("ACH0427", "PLN")
+
+
+def test_a_new_refresh_also_fetches_the_bond_facts_anew() -> None:
+    facts = FixedFacts({})
+
+    BossaSource(SavedBossa(), facts).new_refresh()
+
+    assert facts.refreshes == 1
 
 
 def test_one_request_per_category_whatever_the_number_of_instruments() -> None:
     fetch = SavedBossa()
-    source = BossaSource(fetch)
+    source = BossaSource(fetch, ACH0427)
 
     for symbol in ("PZU", "CDR", "11B", "ONE", "BGD", "ACH0427", "ETFBDIVPL"):
         source.quote(symbol, "PLN")

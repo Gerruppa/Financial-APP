@@ -136,7 +136,7 @@ async def test_a_new_instrument_without_a_class_shows_a_hint_instead_of_fields(e
 @pytest.mark.parametrize(
     ("class_name", "note"),
     [
-        ("Obligacje skarbowe polskie", "etapie 3"),
+        ("Obligacje skarbowe polskie", "danych MF"),
         ("Gotówka", "cenę ręczną"),
         ("Waluty", "cenę ręczną"),
         ("Własna klasa", "Ustawienia > Klasy aktywów"),
@@ -147,6 +147,9 @@ async def test_a_class_without_sources_says_where_the_price_comes_from(
 ) -> None:
     if class_name == "Własna klasa":
         add_asset_class(engine, class_name, [])
+    if class_name == "Obligacje skarbowe polskie":  # quoted through Bossa unless the user removes it
+        treasury = next(c for c in list_asset_classes(engine) if c.name == class_name)
+        set_fallback_order(engine, treasury.id, [])
 
     async with user_simulation(lambda: build_shell(engine, sources={})) as user:
         await user.open("/ustawienia")

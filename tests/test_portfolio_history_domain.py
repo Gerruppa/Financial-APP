@@ -3,6 +3,8 @@
 from datetime import date
 from decimal import Decimal
 
+from financial_app.domain.bond_valuation import BondData
+from financial_app.domain.bonds import BondSeries, SeriesTerms
 from financial_app.domain.currencies import NbpRate
 from financial_app.domain.instruments import Instrument
 from financial_app.domain.portfolio_history import CASH_CLASS, FOREIGN_CASH_CLASS, HistoryPrice, daily_history
@@ -22,14 +24,14 @@ PZU, AAPL, EDO = 10, 20, 30
 SHARES, FOREIGN, BONDS = "Akcje polskie", "Akcje zagraniczne", "Obligacje skarbowe polskie"
 
 
-def _instrument(instrument_id: int, asset_class: str, currency: str = "PLN") -> Instrument:
-    return Instrument("X", 1, currency, id=instrument_id, asset_class_name=asset_class, fallback_order=())
+def _instrument(instrument_id: int, asset_class: str, currency: str = "PLN", name: str = "X") -> Instrument:
+    return Instrument(name, 1, currency, id=instrument_id, asset_class_name=asset_class, fallback_order=())
 
 
 INSTRUMENTS = {
     PZU: _instrument(PZU, SHARES),
     AAPL: _instrument(AAPL, FOREIGN, "USD"),
-    EDO: _instrument(EDO, BONDS),
+    EDO: _instrument(EDO, BONDS, name="EDO0836"),
 }
 
 
@@ -101,12 +103,40 @@ def test_without_any_quote_yet_a_position_is_valued_at_cost_and_flagged() -> Non
     assert history[1].unpriced == frozenset()
 
 
-def test_bond_series_are_valued_at_cost_until_stage_3() -> None:
+def test_bond_series_without_bond_data_are_valued_at_cost() -> None:
     history = daily_history(
         [_buy("10", "100", instrument=EDO)], INSTRUMENTS, {EDO: [_price(1, "120")]}, {}, _day(1), _day(1)
     )
 
     assert history[0].classes[BONDS] == Decimal(1000)
+    assert history[0].unpriced == frozenset()
+
+
+def _edo_data() -> BondData:
+    terms = SeriesTerms(
+        "EDO0136", "PL0", _day(1), _day(31), Decimal(100), Decimal("99.9"), Decimal("0.02"), (Decimal("0.0535"),), ()
+    )
+    return BondData({EDO: BondSeries(EDO, "EDO0136", terms)})
+
+
+def test_bond_series_are_valued_each_day_by_the_mf_issue_letters() -> None:
+    # Bought on 1 January, a Rollover purchase at 99.90 among them: each bond is worth 100.44 after 30 days
+    transactions = [_buy("6", "100", instrument=EDO), _buy("4", "99.90", instrument=EDO)]
+
+    history = daily_history(transactions, INSTRUMENTS, {}, {}, _day(1), _day(31), bonds=_edo_data())
+
+    assert history[0].classes[BONDS] == Decimal(1000)
+    assert history[30].classes[BONDS] == Decimal("1004.40")
+    assert history[30].unpriced == frozenset()
+
+
+def test_a_bond_security_transfer_moves_its_value_that_day() -> None:
+    transactions = [_buy("10", "100", instrument=EDO), security_transfer(IKE, _day(31), XTB, EDO, Decimal(4))]
+
+    history = daily_history(transactions, INSTRUMENTS, {}, {}, _day(1), _day(31), bonds=_edo_data())
+
+    assert history[30].account_net_deposits == {IKE: Decimal("-401.76"), XTB: Decimal("401.76")}
+    assert history[30].accounts[XTB] == Decimal("401.76")
 
 
 def test_a_foreign_price_is_converted_at_the_nbp_rate_of_that_day() -> None:

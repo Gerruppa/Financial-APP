@@ -13,10 +13,12 @@ from nicegui.testing import User, user_simulation
 from sqlalchemy import Engine
 
 from financial_app.domain.accounts import AccountDraft, AccountType
+from financial_app.domain.bonds import CpiReading
 from financial_app.domain.instruments import InstrumentDraft
 from financial_app.domain.portfolio_history import DayValue
 from financial_app.domain.transactions import TransactionDraft, TransactionType, buy_or_sell, dividend
 from financial_app.persistence.accounts import add_account
+from financial_app.persistence.bond_data import save_cpi
 from financial_app.persistence.db import init_db
 from financial_app.persistence.instruments import add_instrument, list_asset_classes
 from financial_app.persistence.transactions import add_transactions
@@ -80,8 +82,19 @@ async def test_the_results_of_the_period_follow_history(engine: Engine) -> None:
         await user.should_see(marker="results-twr", content=_percent("0,50"))
         await user.should_see(marker="results-max-drawdown", content=_percent("0,00"))
         await user.should_see(marker="results-recovery", content="—")
-        await user.should_see(marker="results-real", content="wynik realny — po dodaniu CPI")
+        await user.should_see(marker="results-real", content="—")
+        await user.should_see("brak CPI GUS za ten okres")
         await user.should_see(marker="chart-results-drawdown")
+
+
+async def test_the_real_return_is_the_twr_after_the_gus_cpi_published_so_far(engine: Engine) -> None:
+    # Prices flat in August and September, October not published yet: the real return is the TWR
+    save_cpi(engine, [CpiReading(2026, 8, None, Decimal(100)), CpiReading(2026, 9, None, Decimal(100))])
+    async with user_simulation(_shell(engine)) as user:
+        await user.open("/wyniki")
+
+        await user.should_see(marker="results-real", content=_percent("0,50"))
+        await user.should_see(f"inflacja (CPI) {_percent('0,00')} · CPI do 09.2026")
 
 
 async def test_the_table_lists_the_total_then_each_account_over_the_fixed_periods(engine: Engine) -> None:

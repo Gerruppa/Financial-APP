@@ -4,6 +4,7 @@ from datetime import date
 from decimal import Decimal
 
 from financial_app.domain.accounts import Account, AccountType
+from financial_app.domain.bonds import CpiReading
 from financial_app.domain.metrics import MaxDrawdown, xirr
 from financial_app.domain.periods import PeriodPreset
 from financial_app.domain.portfolio_history import DayValue
@@ -48,6 +49,48 @@ def test_a_fall_not_won_back_has_no_recovery_days_and_a_rise_no_drawdown() -> No
     assert period_results(history, date(2026, 1, 5), date(2026, 1, 6), IKE).recovery_days is None
     rising = period_results(history[:1], date(2026, 1, 5), date(2026, 1, 5), IKE)
     assert rising.max_drawdown is None and rising.recovery_days is None
+
+
+def test_the_real_return_is_the_twr_after_the_periods_inflation() -> None:
+    # +21 % over 5.01–9.01; January's prices rose 3.1 %, so these 4 of its 31 days by 1.031^(4/31)
+    history = [_on(date(2026, 1, 5), "1000"), _on(date(2026, 1, 9), "1210")]
+    cpi = [CpiReading(2026, 1, None, Decimal("103.1"))]
+
+    results = period_results(history, date(2026, 1, 5), date(2026, 1, 9), IKE, cpi)
+
+    assert results.inflation is not None and results.inflation.complete
+    assert results.real_return == Decimal("1.21") / Decimal("1.031") ** (Decimal(4) / 31) - 1
+    assert period_results(history, date(2026, 1, 5), date(2026, 1, 9), IKE).real_return is None
+
+
+def test_an_account_is_charged_inflation_only_from_the_day_it_first_held_something() -> None:
+    # XTB is empty until 7.01, so its real return counts January's inflation from then (2 of 31 days)
+    history = [
+        DayValue(date(2026, 1, 5), {IKE: Decimal(1000)}, {}, Decimal(1000), {IKE: Decimal(1000)}, frozenset()),
+        DayValue(
+            date(2026, 1, 7),
+            {IKE: Decimal(1000), XTB: Decimal(1000)},
+            {},
+            Decimal(2000),
+            {IKE: Decimal(1000), XTB: Decimal(1000)},
+            frozenset(),
+        ),
+        DayValue(
+            date(2026, 1, 9),
+            {IKE: Decimal(1000), XTB: Decimal(1000)},
+            {},
+            Decimal(2000),
+            {IKE: Decimal(1000), XTB: Decimal(1000)},
+            frozenset(),
+        ),
+    ]
+    cpi = [CpiReading(2026, 1, None, Decimal("103.1"))]
+
+    xtb = period_results(history, date(2026, 1, 5), date(2026, 1, 9), XTB, cpi)
+    total = period_results(history, date(2026, 1, 5), date(2026, 1, 9), None, cpi)
+
+    assert xtb.inflation is not None and xtb.inflation.rate == Decimal("1.031") ** (Decimal(2) / 31) - 1
+    assert total.inflation is not None and total.inflation.rate == Decimal("1.031") ** (Decimal(4) / 31) - 1
 
 
 def test_the_total_scope_lists_the_total_then_each_account_holding_something_by_value() -> None:

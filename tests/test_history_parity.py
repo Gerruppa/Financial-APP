@@ -1,10 +1,11 @@
 """Parity of History with the Historia tab of the user's Inwestomat copy (spec 6.1, 9; ADR-0002, ADR-0006; issue #70).
 
 The sheet's Transakcje rows are imported as they are, each Instrument gets the Yahoo symbol of its sheet ticker, and
-History is computed from Yahoo's daily closes and the NBP Rates. At the last Historia row of each month the total value,
-the Net Deposits and the value of each Asset Class are compared with the sheet's. The sheet wrote each row from the
-prices of that moment, so a difference counts only when it is over 1% of the sheet's figure and over 50 PLN. The tab has
-no Multi-asset column, so Multi-asset is compared only within the total.
+History is computed from Yahoo's daily closes and the NBP Rates, the Bond Series from the MF file saved in the test
+fixtures. At the last Historia row of each month the total value, the Net Deposits and the value of each Asset Class are
+compared with the sheet's. The sheet wrote each row from the prices of that moment, so a difference counts only when it
+is over 1% of the sheet's figure and over 50 PLN. The tab has no Multi-asset column, so Multi-asset is compared only
+within the total.
 
 The workbook is personal data: it stays in ``reference/`` (git-ignored), is read at test time, and the tests are skipped
 when it is missing. The fetched prices and rates are cached in ``CACHE`` next to it, so only the first run needs the
@@ -30,9 +31,11 @@ from financial_app.domain.prices import YAHOO
 from financial_app.domain.spreadsheet_import import SheetLine, fingerprints
 from financial_app.domain.transactions import PLN
 from financial_app.persistence.accounts import add_account
+from financial_app.persistence.bond_data import save_series_terms
 from financial_app.persistence.db import init_db
 from financial_app.persistence.instruments import list_instruments, update_instrument
 from financial_app.persistence.transactions import list_transactions
+from financial_app.sources.bond_data import parse_mf_file
 from financial_app.sources.history import QuoteHistory
 from financial_app.sources.nbp import NbpRates
 from financial_app.sources.portfolio_history import PortfolioHistory
@@ -40,6 +43,7 @@ from financial_app.sources.spreadsheet import Decisions, read_sheet_lines, save_
 
 REFERENCE = Path(__file__).resolve().parents[1] / "reference" / "Newest portfolio.xlsx"
 CACHE = REFERENCE.with_name("historia-parity.sqlite3")
+MF_FILE = Path(__file__).parent / "fixtures" / "mf" / "dane_obligacji_detalicznych.xls"
 RELATIVE_TOLERANCE = Decimal("0.01")
 ABSOLUTE_TOLERANCE = Decimal(50)
 TOTAL = "Wartość konta"
@@ -85,9 +89,6 @@ class Deviation:
         return difference.measure in self.measures and (self.days is None or difference.day in self.days)
 
 
-BONDS_AT_COST = (
-    "Do etapu 3 Historia wycenia Serie obligacji po koszcie (nominale), a arkusz z narosłymi odsetkami (spec 6.1)."
-)
 FROZEN_ROWS = (
     "Arkusz zapisuje wiersz Historii raz, z bieżącego stanu, więc Transakcja wpisana później z wcześniejszą datą nie "
     "trafia do wierszy już zapisanych; aplikacja przelicza Historię (ADR-0002, spec 9)."
@@ -95,10 +96,7 @@ FROZEN_ROWS = (
 
 
 def deviations(historia: dict[date, dict[str, Decimal]], history: dict[date, DayValue]) -> tuple[Deviation, ...]:
-    return (
-        Deviation(frozenset({"Obligacje skarbowe polskie"}), BONDS_AT_COST),
-        Deviation(frozenset({*CLASSES, TOTAL, NET_DEPOSITS}), FROZEN_ROWS, late_entry_days(historia, history)),
-    )
+    return (Deviation(frozenset({*CLASSES, TOTAL, NET_DEPOSITS}), FROZEN_ROWS, late_entry_days(historia, history)),)
 
 
 def late_entry_days(historia: dict[date, dict[str, Decimal]], history: dict[date, DayValue]) -> frozenset[date]:
@@ -206,6 +204,7 @@ def history(historia: dict[date, dict[str, Decimal]]) -> dict[date, DayValue]:
         CACHE.unlink()
         engine = init_db(CACHE)
         _import(engine, lines, NbpRates(engine))
+    save_series_terms(engine, parse_mf_file(MF_FILE.read_bytes()))
     last = max(historia)
     service = PortfolioHistory(engine, QuoteHistory(engine), NbpRates(engine), today=lambda: last + ONE_DAY)
     failed = service.fetch()
@@ -213,7 +212,7 @@ def history(historia: dict[date, dict[str, Decimal]]) -> dict[date, DayValue]:
     inputs = service.inputs()
     assert inputs is not None
     values = daily_history(
-        inputs.transactions, inputs.instruments, inputs.prices, inputs.rates, inputs.first, inputs.last
+        inputs.transactions, inputs.instruments, inputs.prices, inputs.rates, inputs.first, inputs.last, inputs.bonds
     )
     engine.dispose()
     return {value.day: value for value in values}

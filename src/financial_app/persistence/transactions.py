@@ -31,7 +31,7 @@ def list_transactions(engine: Engine) -> list[Transaction]:
     """All Transactions, newest first; same-day ones in reverse entry order."""
     with Session(engine) as session:
         rows = session.scalars(select(TransactionRow).order_by(TransactionRow.date.desc(), TransactionRow.id.desc()))
-        return [_to_transaction(row) for row in rows]
+        return [to_transaction(row) for row in rows]
 
 
 def add_transaction(engine: Engine, draft: TransactionDraft) -> Transaction:
@@ -45,13 +45,13 @@ def add_transactions(engine: Engine, drafts: Sequence[TransactionDraft]) -> list
     with Session(engine) as session, session.begin():
         saved = []
         for draft in drafts:
-            _check_references(session, draft)
+            check_references(session, draft)
             _check_coverage(session, draft, replacing=None)
             row = TransactionRow()
-            _fill(row, draft)
+            fill_row(row, draft)
             session.add(row)
             session.flush()
-            saved.append(_to_transaction(row))
+            saved.append(to_transaction(row))
         return saved
 
 
@@ -62,31 +62,38 @@ def update_transaction(engine: Engine, transaction_id: int, draft: TransactionDr
     An imported Transaction keeps its Origin and fingerprint, so that importing its file again still skips it.
     """
     with Session(engine) as session, session.begin():
-        row = _get(session, transaction_id)
+        row = get_row(session, transaction_id)
         draft = replace(draft, origin=Origin(row.origin), external_id=row.external_id)
-        _check_references(session, draft)
+        check_references(session, draft)
         _check_coverage(session, draft, replacing=row)
-        _fill(row, draft)
+        fill_row(row, draft)
         session.flush()
-        return _to_transaction(row)
+        return to_transaction(row)
 
 
 def delete_transaction(engine: Engine, transaction_id: int) -> None:
-    """Delete the Transaction; blocked with InsufficientQuantityError if a later Sell would lose its cover."""
+    """Delete the Transaction; blocked with InsufficientQuantityError if a later Sell would lose its cover, and with
+    TransactionError while a coupon (interest naming its Lot, L-8) names the Buy."""
     with Session(engine) as session, session.begin():
-        row = _get(session, transaction_id)
+        row = get_row(session, transaction_id)
+        coupons = select(TransactionRow.id).where(
+            TransactionRow.lot_id == transaction_id,
+            TransactionRow.transaction_type == TransactionType.DIVIDEND.value,
+        )
+        if session.scalar(coupons.limit(1)) is not None:
+            raise TransactionError("Od tej partii zapisano odsetki; usuń je najpierw.")
         _check_coverage(session, None, replacing=row)
         session.delete(row)
 
 
-def _get(session: Session, transaction_id: int) -> TransactionRow:
+def get_row(session: Session, transaction_id: int) -> TransactionRow:
     row = session.get(TransactionRow, transaction_id)
     if row is None:
         raise TransactionError("Ta transakcja nie istnieje.")
     return row
 
 
-def _check_references(session: Session, draft: TransactionDraft) -> None:
+def check_references(session: Session, draft: TransactionDraft) -> None:
     # SQLite does not enforce foreign keys unless asked to, so check the references here
     account = session.get(AccountRow, draft.account_id)
     if account is None:
@@ -129,14 +136,16 @@ def _check_coverage(session: Session, draft: TransactionDraft | None, replacing:
     rows = session.scalars(
         select(TransactionRow).where(TransactionRow.instrument_id.in_(instruments)).order_by(TransactionRow.id)
     )
-    # The edited Transaction keeps its id, so its draft takes the row's place in entry order
-    transactions = [draft if row is replacing else _to_transaction(row) for row in rows]
+    # The edited Transaction keeps its id, so its draft takes the row's place in entry order and still opens the Lot a
+    # Sell may name
+    edited = None if draft is None or replacing is None else draft.with_id(replacing.id)
+    transactions: list[TransactionDraft | None] = [edited if row is replacing else to_transaction(row) for row in rows]
     if replacing is None:
         transactions.append(draft)
     open_positions(t for t in transactions if t is not None)
 
 
-def _fill(row: TransactionRow, draft: TransactionDraft) -> None:
+def fill_row(row: TransactionRow, draft: TransactionDraft) -> None:
     row.account_id = draft.account_id
     row.date = draft.date
     row.transaction_type = draft.transaction_type.value
@@ -156,13 +165,15 @@ def _fill(row: TransactionRow, draft: TransactionDraft) -> None:
     row.to_pln = draft.to_pln
     row.fx_conversion_fee_percent = _text(draft.fx_conversion_fee_percent)
     row.gross = _text(draft.gross)
-    row.withholding_tax = str(draft.withholding_tax) if draft.transaction_type.is_dividend else None
+    withheld = draft.transaction_type.is_dividend or draft.withholding_tax
+    row.withholding_tax = str(draft.withholding_tax) if withheld else None
     row.target_account_id = draft.target_account_id
     ratio = draft.split_ratio
     row.split_new = None if ratio is None else ratio.new
     row.split_old = None if ratio is None else ratio.old
     row.origin = draft.origin.value
     row.external_id = draft.external_id
+    row.lot_id = draft.lot_id
 
 
 def _text(value: Decimal | None) -> str | None:
@@ -173,7 +184,7 @@ def _decimal(text: str | None) -> Decimal | None:
     return None if text is None else Decimal(text)
 
 
-def _to_transaction(row: TransactionRow) -> Transaction:
+def to_transaction(row: TransactionRow) -> Transaction:
     return Transaction(
         id=row.id,
         account_id=row.account_id,
@@ -196,6 +207,7 @@ def _to_transaction(row: TransactionRow) -> Transaction:
         split_ratio=_split_ratio(row),
         origin=Origin(row.origin),
         external_id=row.external_id,
+        lot_id=row.lot_id,
     )
 
 

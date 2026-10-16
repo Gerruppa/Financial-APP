@@ -2,8 +2,6 @@
 
 Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all operations.
 
-> **Paused: the GitHub account `Gerruppa` is suspended (since 2026-10-12).** Until the user says it is restored, run no `gh` command and no `git push`, `git pull` or `git fetch`. Work locally: branch, commit and merge into `main` with git alone. Ask the user for an issue's text instead of fetching it, and don't create or update issues or PRs.
-
 ## Conventions
 
 - **Create an issue**: `gh issue create --title "..." --body "..."`. Use a heredoc for multi-line bodies.

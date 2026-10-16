@@ -6,7 +6,7 @@ between PLN and a foreign Cash Currency, Dividends (and interest) paid into PLN 
 """
 
 from collections.abc import Iterable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 from enum import StrEnum
@@ -91,10 +91,14 @@ class Origin(StrEnum):
 
     MANUAL = "manual"
     SPREADSHEET = "spreadsheet"
+    BROKER = "broker"
 
     @property
     def label(self) -> str:
-        return "import z arkusza" if self is Origin.SPREADSHEET else "ręczna"
+        return _ORIGIN_LABELS[self]
+
+
+_ORIGIN_LABELS = {Origin.MANUAL: "ręczna", Origin.SPREADSHEET: "import z arkusza", Origin.BROKER: "import od brokera"}
 
 
 @dataclass(frozen=True)
@@ -146,6 +150,11 @@ class TransactionDraft:
     A Cash Transfer (``cash_transfer``) moves ``actual_amount`` PLN, a Security Transfer (``security_transfer``)
     ``quantity`` units of its Instrument with their Lots, to ``target_account_id``. A Split and a Security Transfer
     move no cash, so their ``actual_amount`` is 0.
+
+    A Sell of a Bond Series (an Early Redemption, spec 3.4.1, ADR-0007) may name in ``lot_id`` the Transaction that
+    opened the Lot it redeems, and carry the ``withholding_tax`` taken from it at redemption (PLN only): its Actual
+    Amount is then quantity × price less the commission (the early-redemption fee) and that tax. An interest Dividend
+    may name the Lot of a Bond Series whose coupon it is (L-8).
     """
 
     account_id: int
@@ -169,6 +178,9 @@ class TransactionDraft:
     origin: Origin = field(default=Origin.MANUAL, kw_only=True)
     # Imported Transactions only: the fingerprint of their spreadsheet row, so importing the file again skips them
     external_id: str | None = field(default=None, kw_only=True)
+    # A Sell: the id of the Transaction that opened the Lot it takes its units from, instead of FIFO (ADR-0007); an
+    # interest Dividend: that of the Lot whose coupon it is
+    lot_id: int | None = field(default=None, kw_only=True)
 
     def __post_init__(self) -> None:
         if not self.transaction_type.has_amount:
@@ -191,8 +203,17 @@ class TransactionDraft:
             self.nbp_rate,
             self.fx_conversion_fee_percent,
         )
-        if not self.transaction_type.is_dividend and (self.gross is not None or self.withholding_tax):
-            raise TransactionError(f"{self.transaction_type.label} nie ma kwoty brutto ani podatku u źródła.")
+        if not self.transaction_type.is_dividend and self.gross is not None:
+            raise TransactionError(f"{self.transaction_type.label} nie ma kwoty brutto.")
+        if self.transaction_type is TransactionType.SELL:
+            _check_withheld_on_sale(self.withholding_tax, self.nbp_rate)
+        elif not self.transaction_type.is_dividend and self.withholding_tax:
+            raise TransactionError(f"{self.transaction_type.label} nie ma pobranego podatku.")
+        names_lot = self.transaction_type is TransactionType.SELL or (
+            self.transaction_type is TransactionType.DIVIDEND and self.instrument_id is None
+        )
+        if self.lot_id is not None and not names_lot:
+            raise TransactionError(f"{self.transaction_type.label} nie wskazuje partii.")
         if self.transaction_type.is_buy_or_sell:
             if self.instrument_id is None:
                 raise TransactionError("Wybierz instrument.")
@@ -287,6 +308,11 @@ class TransactionDraft:
         if self.actual_amount != _pln(self.quantity * self.nbp_rate.rate):
             raise TransactionError("Kwota kosztów w PLN musi wynikać z kursu NBP.")
 
+    def with_id(self, transaction_id: int) -> Transaction:
+        """The Transaction saved from this draft under ``transaction_id``."""
+        values = {f.name: getattr(self, f.name) for f in fields(TransactionDraft)}
+        return Transaction(**values, id=transaction_id)
+
     @property
     def net(self) -> Decimal:
         """A Dividend's gross amount less the withholding tax, in its ``dividend_currency``."""
@@ -300,13 +326,14 @@ class TransactionDraft:
 
     @property
     def tax_amount(self) -> Decimal:
-        """The PLN amount at the NBP Rate, for tax reports; equal to the Actual Amount for PLN Transactions.
+        """The PLN amount at the NBP Rate, for tax reports; equal to the Actual Amount for PLN Transactions, except
+        that an Early Redemption's is before the tax withheld from it, which is no cost.
 
         The FX Conversion Fee is a cost like the commission (deductible in PIT-38, spec 3.3). A Dividend's is its net
         amount at the NBP Rate.
         """
         if self.nbp_rate is None:
-            return self.actual_amount
+            return self.actual_amount + self._withheld_on_sale
         if self.transaction_type.is_dividend:
             return _pln(self.net * self.nbp_rate.rate)
         if self.transaction_type is TransactionType.COST:
@@ -317,8 +344,14 @@ class TransactionDraft:
 
     @property
     def converted_amount(self) -> Decimal:
-        """The Actual Amount of a Buy or Sell without its commission: what quantity × price alone cost or brought."""
-        return _with_commission(self.transaction_type, self.actual_amount, -self.commission)
+        """The Actual Amount of a Buy or Sell without its commission (and a Sell's withheld tax): what quantity × price
+        alone cost or brought."""
+        return _with_commission(self.transaction_type, self.actual_amount, -self.commission) + self._withheld_on_sale
+
+    @property
+    def _withheld_on_sale(self) -> Decimal:
+        """The tax withheld at an Early Redemption, which the Actual Amount is net of; 0 for anything else."""
+        return self.withholding_tax if self.transaction_type is TransactionType.SELL else Decimal(0)
 
     @property
     def effective_fx_rate(self) -> Decimal:
@@ -449,8 +482,12 @@ def buy_or_sell(
     nbp_rate: NbpRate | None = None,
     cash_currency: str = PLN,
     conversion: BrokerConversion | None = None,
+    withholding_tax: Decimal = Decimal(0),
+    lot_id: int | None = None,
 ) -> TransactionDraft:
     """A Buy or Sell: in PLN, a Buy costs quantity × price × rate plus commission, a Sell brings that minus it.
+
+    An Early Redemption (a Sell of a Bond Series) may name its ``lot_id`` and bring less the ``withholding_tax`` too.
 
     The rate is 1 for a PLN Instrument; for a foreign-currency one it is ``fx_rate`` if the user gave one, otherwise
     the NBP Rate, which ``nbp_rate`` must then carry. Paid from foreign cash (``cash_currency``), quantity × price
@@ -472,9 +509,13 @@ def buy_or_sell(
         value = conversion.charged
     if value.is_zero():
         raise TransactionError("Wartość transakcji (liczba × cena) musi wynosić co najmniej 0,01 zł.")
-    if transaction_type is TransactionType.SELL and commission >= value:
-        raise TransactionError("Prowizja nie może przekraczać wartości sprzedaży.")
-    actual_amount = _with_commission(transaction_type, value, commission)
+    if transaction_type is TransactionType.SELL:
+        _check_withheld_on_sale(withholding_tax, nbp_rate)
+        if withholding_tax and commission + withholding_tax >= value:
+            raise TransactionError("Prowizja i podatek nie mogą przekraczać wartości sprzedaży.")
+        if commission >= value:
+            raise TransactionError("Prowizja nie może przekraczać wartości sprzedaży.")
+    actual_amount = _with_commission(transaction_type, value, commission) - withholding_tax
     return TransactionDraft(
         account_id,
         day,
@@ -489,6 +530,8 @@ def buy_or_sell(
         nbp_rate=nbp_rate,
         cash_currency=cash_currency,
         fx_conversion_fee_percent=fee_percent,
+        withholding_tax=withholding_tax,
+        lot_id=lot_id,
     )
 
 
@@ -527,12 +570,14 @@ def dividend(
     nbp_rate: NbpRate | None = None,
     cash_currency: str = PLN,
     conversion: BrokerConversion | None = None,
+    lot_id: int | None = None,
 ) -> TransactionDraft:
     """A Dividend or interest of ``gross`` less ``withholding_tax``, in the currency of ``nbp_rate`` (else PLN).
 
     Paid into PLN, its Actual Amount is the net amount at ``fx_rate`` or the NBP Rate, or, with a broker
     ``conversion``, the PLN the broker credited, recording its FX Conversion Fee; paid into foreign cash
-    (``cash_currency``), the net amount moves that cash and the Actual Amount values it at the same rate.
+    (``cash_currency``), the net amount moves that cash and the Actual Amount values it at the same rate. Interest
+    paid as a Bond Series' coupon names its Lot in ``lot_id``.
     """
     return _dividend_draft(
         TransactionType.DIVIDEND,
@@ -546,6 +591,7 @@ def dividend(
         nbp_rate=nbp_rate,
         cash_currency=cash_currency,
         conversion=conversion,
+        lot_id=lot_id,
     )
 
 
@@ -589,6 +635,7 @@ def _dividend_draft(
     nbp_rate: NbpRate | None,
     cash_currency: str = PLN,
     conversion: BrokerConversion | None = None,
+    lot_id: int | None = None,
 ) -> TransactionDraft:
     _check_dividend_amounts(gross, withholding_tax)
     _check_rates(fx_rate, nbp_rate)
@@ -617,6 +664,7 @@ def _dividend_draft(
         gross=gross,
         withholding_tax=withholding_tax,
         fx_conversion_fee_percent=fee_percent,
+        lot_id=lot_id,
     )
 
 
@@ -760,6 +808,18 @@ def _check_dividend_amounts(gross: Decimal | None, withholding_tax: Decimal) -> 
         raise TransactionError("Podatek u źródła musi wynosić co najmniej 0 i mniej niż kwota brutto.")
     if withholding_tax != withholding_tax.quantize(GROSZ):
         raise TransactionError("Podatek u źródła podaj z dokładnością do grosza.")
+
+
+def _check_withheld_on_sale(withholding_tax: Decimal, nbp_rate: NbpRate | None) -> None:
+    """The tax withheld at an Early Redemption: in PLN, to the grosz."""
+    if not withholding_tax:
+        return
+    if nbp_rate is not None:
+        raise TransactionError("Pobrany podatek przy sprzedaży podaje się tylko w PLN.")
+    if withholding_tax < 0:
+        raise TransactionError("Pobrany podatek nie może być ujemny.")
+    if withholding_tax != withholding_tax.quantize(GROSZ):
+        raise TransactionError("Pobrany podatek podaj z dokładnością do grosza.")
 
 
 def _check_buy_or_sell_fields(quantity: Decimal | None, price: Decimal | None, commission: Decimal) -> None:

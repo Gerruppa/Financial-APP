@@ -80,6 +80,11 @@ def format_date(value: date) -> str:
     return value.strftime(DATE_FORMAT)
 
 
+def format_month(value: date) -> str:
+    """Format a date's month and year, e.g. 2026-09-30 -> '09.2026'."""
+    return value.strftime("%m.%Y")
+
+
 def format_datetime(value: datetime) -> str:
     """Format a time day-first to the minute, e.g. '09.10.2026 18:05'."""
     return f"{format_date(value)} {value:%H:%M}"

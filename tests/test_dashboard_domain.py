@@ -6,6 +6,8 @@ from decimal import Decimal
 import pytest
 
 from financial_app.domain.accounts import Account, AccountType
+from financial_app.domain.bond_valuation import BondData
+from financial_app.domain.bonds import BondSeries, CpiReading, SeriesTerms
 from financial_app.domain.currencies import NbpRate
 from financial_app.domain.dashboard import dashboard
 from financial_app.domain.instruments import Instrument
@@ -281,3 +283,39 @@ def test_the_dashboard_carries_the_profit_by_source() -> None:
     board = dashboard(transactions, ACCOUNTS, INSTRUMENTS, {PZU: Decimal(60)}, {}, None)
 
     assert (board.sources.price, board.sources.costs) == (Decimal(100), Decimal(-5))
+
+
+def test_a_bond_series_deducts_its_fee_and_withheld_tax_after_tax_not_offset_by_other_losses() -> None:
+    # 10 EDO0535 bought on 22.05.2025 are worth 107.66 zł a bond on 8.10.2026 and would net 103.77 zł: the 3 zł fee
+    # and 0.89 zł of Belka withheld at redemption, which a loss on the shares (19 zł on XTB, Regular) never offsets
+    edo = Instrument("EDO0535", 1, "PLN", id=30, asset_class_name="Obligacje skarbowe polskie", fallback_order=())
+    terms = SeriesTerms(
+        "EDO0535",
+        "PL0",
+        date(2025, 5, 1),
+        date(2025, 5, 31),
+        Decimal(100),
+        Decimal("99.9"),
+        Decimal("0.02"),
+        (Decimal("0.0565"),) + (None,) * 9,
+        (),
+    )
+    bonds = BondData({30: BondSeries(30, "EDO0535", terms)}, (CpiReading(2026, 3, Decimal("103.0"), None),))
+    price = bonds.price(30, date(2026, 10, 8))
+    bonds_account = Account("Obligacje", "", AccountType.BONDS, ("PLN",), id=3)
+    transactions = [
+        TransactionDraft(3, date(2025, 5, 22), TransactionType.DEPOSIT, Decimal(1000)),
+        buy_or_sell(3, date(2025, 5, 22), TransactionType.BUY, 30, Decimal(10), Decimal(100)),
+        _deposit("1000", account=XTB),
+        _buy("10", "62", account=XTB),
+    ]
+
+    board = dashboard(
+        transactions, [ACCOUNTS[1], bonds_account], INSTRUMENTS | {30: edo}, {PZU: Decimal(60), 30: price}, {}, None
+    )
+
+    xtb_row, bonds_row = board.accounts
+    assert bonds_row.totals.open_positions == Decimal("1076.60")
+    assert bonds_row.totals.estimated_tax == Decimal("38.90")
+    assert xtb_row.totals.estimated_tax == Decimal(0)
+    assert board.totals.estimated_tax == Decimal("38.90")

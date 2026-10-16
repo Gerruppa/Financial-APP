@@ -42,6 +42,9 @@ _LABELS = {
 }
 
 
+BELKA_RATE = Decimal("0.19")
+
+
 @dataclass(frozen=True)
 class TaxRegime:
     """How gains on an Account are taxed. Tax calculations hang off this module as later stages add them."""
@@ -51,9 +54,10 @@ class TaxRegime:
     is_placeholder: bool = False
     # The tax the Dashboard's "po podatku" toggle estimates on unrealised gains, a fraction (issue #89)
     unrealized_tax_rate: Decimal = Decimal(0)
+    # The tax the issuer withholds from a retail treasury bond's profit at redemption (spec 3.4.1); none in a tax-free
+    # wrapper
+    withheld_tax_rate: Decimal = BELKA_RATE
 
-
-BELKA_RATE = Decimal("0.19")
 
 _TAX_REGIMES = {
     AccountType.REGULAR: TaxRegime(
@@ -62,15 +66,21 @@ _TAX_REGIMES = {
         unrealized_tax_rate=BELKA_RATE,
     ),
     AccountType.IKE: TaxRegime(
-        "IKE", "Zwolnienie z podatku przy wypłacie spełniającej warunki ustawy; w przeciwnym razie podatek od zysku."
+        "IKE",
+        "Zwolnienie z podatku przy wypłacie spełniającej warunki ustawy; w przeciwnym razie podatek od zysku.",
+        withheld_tax_rate=Decimal(0),
     ),
     AccountType.IKZE: TaxRegime(
-        "IKZE", "Wpłaty odliczane od dochodu; przy wypłacie zryczałtowany podatek 10% od całej kwoty."
+        "IKZE",
+        "Wpłaty odliczane od dochodu; przy wypłacie zryczałtowany podatek 10% od całej kwoty.",
+        withheld_tax_rate=Decimal(0),
     ),
     AccountType.OIPE: TaxRegime(
-        "OIPE", "Jak IKE: zwolnienie przy wypłacie spełniającej warunki, w przeciwnym razie podatek od zysku."
+        "OIPE",
+        "Jak IKE: zwolnienie przy wypłacie spełniającej warunki, w przeciwnym razie podatek od zysku.",
+        withheld_tax_rate=Decimal(0),
     ),
-    AccountType.PPK: TaxRegime("PPK", "Zasady opodatkowania właściwe dla PPK."),
+    AccountType.PPK: TaxRegime("PPK", "Zasady opodatkowania właściwe dla PPK.", withheld_tax_rate=Decimal(0)),
     AccountType.OKI: TaxRegime(
         "OKI",
         "Zasady opodatkowania OKI zostaną dodane po uchwaleniu przepisów.",

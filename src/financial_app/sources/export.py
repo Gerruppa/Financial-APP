@@ -17,6 +17,7 @@ from sqlalchemy import Engine
 
 from financial_app.domain.export import COLUMNS, export_rows
 from financial_app.domain.formatting import format_date
+from financial_app.domain.transaction_filters import NEWEST_FIRST, NO_FILTER, Sort, TransactionFilter, view
 from financial_app.domain.view_scope import in_scope
 from financial_app.persistence.accounts import list_accounts
 from financial_app.persistence.instruments import list_instruments
@@ -69,12 +70,21 @@ def to_xlsx(headers: Sequence[str], rows: Sequence[Sequence[object]]) -> bytes:
     return buffer.getvalue()
 
 
-def export_transactions(engine: Engine, file_format: FileFormat, account_id: int | None = None) -> tuple[str, bytes]:
-    """The file name and the bytes of the saved Transactions in the order the Transakcje list shows them: every one,
-    or with ``account_id`` that Account's View Scope, named after the Account."""
+def export_transactions(
+    engine: Engine,
+    file_format: FileFormat,
+    account_id: int | None = None,
+    filters: TransactionFilter = NO_FILTER,
+    sort: Sort = NEWEST_FIRST,
+) -> tuple[str, bytes]:
+    """The file name and the bytes of the saved Transactions as the Transakcje list shows them: every one, or with
+    ``account_id`` that Account's View Scope, named after the Account; then those ``filters`` keep, in ``sort``'s
+    order (L-27)."""
     accounts = {account.id: account.name for account in list_accounts(engine)}
-    transactions = [t for t in list_transactions(engine) if in_scope(t, account_id)]
     instruments = {instrument.id: instrument for instrument in list_instruments(engine)}
+    scoped = [t for t in list_transactions(engine) if in_scope(t, account_id)]
+    names = {instrument_id: instrument.name for instrument_id, instrument in instruments.items()}
+    transactions = view(scoped, filters, sort, accounts, names)
     rows = export_rows(transactions, accounts, instruments)
     name = "transakcje" if account_id is None else f"transakcje-{_UNSAFE.sub('_', accounts[account_id])}"
     if file_format == "csv":

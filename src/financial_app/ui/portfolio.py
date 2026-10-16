@@ -2,11 +2,12 @@
 
 Positions are valued at their price from ``domain.valuation`` (the Manual Price or the newest Quote, with a badge when
 it is manual, stale, has no source or waits for Stage 3; a physical metal at its spot less the Buyback Spread, with the
-spot beside it), converted from a foreign currency at the NBP Rate from the last business day before today; one
-without a price or a rate counts at cost and adds nothing to the result. Clicking a Position shows its Lots with both
-costs, below the fund's TER, Distribution Policy and domicile when entered. Foreign cash is valued at the same NBP
-Rate; its FX result (realised and unrealised) counts in the Account's result unless the Account excludes it (spec 3.1,
-3.5). Each card also sums the Account's net Dividends and interest and its commissions and costs. In an Account's
+spot beside it; a Bond Series by the MF issue letters, each Lot from its purchase day, with the year's rate and its
+label when MF has not published it), converted from a foreign currency at the NBP Rate from the last business day before
+today; one without a price or a rate counts at cost and adds nothing to the result. Clicking a Position shows its Lots
+with both costs, below the fund's TER, Distribution Policy and domicile when entered. Foreign cash is valued at the same
+NBP Rate; its FX result (realised and unrealised) counts in the Account's result unless the Account excludes it (spec
+3.1, 3.5). Each card also sums the Account's net Dividends and interest and its commissions and costs. In an Account's
 View Scope only its card shows, under the breadcrumbs back to Total.
 """
 
@@ -17,6 +18,7 @@ from nicegui import ui
 from sqlalchemy import Engine
 
 from financial_app.domain.accounts import Account
+from financial_app.domain.bond_valuation import BondPrice, most_uncertain, rate_text
 from financial_app.domain.formatting import (
     format_amount,
     format_date,
@@ -27,7 +29,7 @@ from financial_app.domain.formatting import (
     format_unit_price,
 )
 from financial_app.domain.instruments import Instrument
-from financial_app.domain.lots import ForeignCash, Position, foreign_cash, fx_result, open_positions
+from financial_app.domain.lots import ForeignCash, Lot, Position, UnitPrice, foreign_cash, fx_result, open_positions
 from financial_app.domain.prices import SOURCE_NAMES
 from financial_app.domain.transactions import cash_balances, costs_by_account, dividends_by_account
 from financial_app.domain.valuation import Badge, InstrumentPrice, PriceStatus
@@ -43,6 +45,7 @@ from financial_app.ui.view_scope import ViewScope, breadcrumbs
 COLUMNS = "grid-template-columns: minmax(8rem, 2fr) repeat(7, minmax(6rem, 1fr))"
 HEADERS = ("Instrument", "Liczba", "Śr. cena", "Koszt", "Cena", "Wartość", "Zysk/strata", "Zysk/strata %")
 LOT_COLUMNS = "grid-template-columns: repeat(4, minmax(6rem, 10rem))"
+BOND_LOT_COLUMNS = "grid-template-columns: repeat(6, minmax(6rem, 10rem))"
 CASH_COLUMNS = "grid-template-columns: repeat(5, minmax(6rem, 10rem))"
 # Why an Instrument has no PLN price
 MISSING = {PriceStatus.NO_PRICE: "brak ceny", PriceStatus.NO_RATE: "brak kursu"}
@@ -211,14 +214,16 @@ def _positions_table(
             ui.label(format_pln(position.average_price)).classes("text-right")
             ui.label(format_pln(position.cost)).classes("text-right")
             _valuation_cells(position, current)
-        details = _lots_table(position, instruments_by_id[position.instrument_id])
+        details = _lots_table(position, instruments_by_id[position.instrument_id], current.bond)
         row.on("click", lambda details=details: details.set_visibility(not details.visible))
 
 
 def _valuation_cells(position: Position, current: InstrumentPrice) -> None:
     """Price, value and result; without a PLN price, the reason ("brak ceny", "brak kursu") and dashes."""
     missing = MISSING.get(current.status, "")
-    if current.price is None:
+    if current.bond is not None:
+        _bond_price_cell(position, current.bond)
+    elif current.price is None:
         ui.label(missing).classes("text-right text-gray-500")
     else:
         _price_cell(current.price, current)
@@ -260,26 +265,53 @@ def _price_cell(price: Decimal, current: InstrumentPrice) -> None:
         ui.label(caption).classes("text-xs text-gray-500")
 
 
-def _lots_table(position: Position, instrument: Instrument) -> ui.element:
-    """The Position's open Lots with their Actual and Tax cost, below the fund's details when entered, hidden until
-    the Position is clicked."""
+def _bond_price_cell(position: Position, bond: BondPrice) -> None:
+    """A Bond Series' value of one bond, averaged over its Lots, with the rate of the oldest Lot's year and the most
+    uncertain label of any Lot's value."""
+    with ui.column().classes("gap-0 items-end"):
+        ui.label(format_pln(position.value(bond) / position.quantity))
+        _bond_rate(bond, position.lots[0], position.lots)
+
+
+def _bond_rate(bond: BondPrice, lot: Lot, labelled: tuple[Lot, ...]) -> None:
+    """The rate of the year ``lot`` is in, labelled when MF has not published a rate the value of any ``labelled``
+    Lot rests on."""
+    value = bond.value(lot.date)
+    if value is None:
+        ui.label("po koszcie").classes("text-xs text-gray-500")
+        return
+    ui.label(rate_text(value)).classes("text-xs text-gray-500")
+    label = most_uncertain(v.label for other in labelled if (v := bond.value(other.date)) is not None)
+    if label is not None:
+        ui.label(label.value).classes("text-xs text-orange-700").mark("bond-rate-label")
+
+
+def _lots_table(position: Position, instrument: Instrument, bond: BondPrice | None) -> ui.element:
+    """The Position's open Lots with their Actual and Tax cost (a Bond Series' also with each one's rate and value),
+    below the fund's details when entered, hidden until the Position is clicked."""
+    columns = LOT_COLUMNS if bond is None else BOND_LOT_COLUMNS
+    headers = ("Data zakupu", "Liczba", "Koszt rzeczywisty", "Koszt podatkowy")
     with ui.column().classes("w-full gap-0 pl-8 pb-2").mark("position-lots") as details:
         if fund := fund_details(instrument):
             ui.label(" · ".join(fund)).classes("text-sm text-gray-500 pb-1").mark("fund-details")
-        with ui.element("div").classes("grid gap-x-4 text-sm font-medium").style(LOT_COLUMNS):
-            for header in ("Data zakupu", "Liczba", "Koszt rzeczywisty", "Koszt podatkowy"):
+        with ui.element("div").classes("grid gap-x-4 text-sm font-medium").style(columns):
+            for header in headers if bond is None else (*headers, "Oprocentowanie", "Wartość"):
                 ui.label(header).classes("text-right" if header != "Data zakupu" else "")
         for lot in position.lots:
-            with ui.element("div").classes("grid gap-x-4 text-sm").style(LOT_COLUMNS):
+            with ui.element("div").classes("grid gap-x-4 text-sm").style(columns):
                 ui.label(format_date(lot.date))
                 ui.label(format_quantity(lot.quantity)).classes("text-right")
                 ui.label(format_pln(lot.cost)).classes("text-right")
                 ui.label(format_pln(lot.tax_cost)).classes("text-right")
+                if bond is not None:
+                    with ui.column().classes("gap-0 items-end"):
+                        _bond_rate(bond, lot, (lot,))
+                    ui.label(format_pln(lot.quantity * bond.of(lot))).classes("text-right")
     details.visible = False
     return details
 
 
-def _result(position: Position, price: Decimal | None) -> Decimal:
+def _result(position: Position, price: UnitPrice | None) -> Decimal:
     return Decimal(0) if price is None else position.result(price)
 
 

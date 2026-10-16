@@ -30,7 +30,7 @@ from financial_app.persistence.instruments import add_instrument, list_asset_cla
 from financial_app.persistence.transactions import add_transaction, list_transactions
 from financial_app.sources.spreadsheet import Decisions, preview_import, read_sheet_lines, save_import
 
-HEADER = list(COLUMNS.values())
+HEADER = [*COLUMNS.values(), "Cena nominalna"]
 USD = NbpRate("USD", Decimal("3.6500"), date(2026, 4, 23), "086/A/NBP/2026")
 EUR = NbpRate("EUR", Decimal("4.2500"), date(2026, 4, 21), "077/A/NBP/2026")
 
@@ -129,6 +129,35 @@ def test_a_foreign_buy_takes_the_app_amount_from_the_sheet_rate_and_the_nbp_rate
     assert draft.nbp_rate == USD
     assert draft.origin is Origin.SPREADSHEET
     assert draft.external_id == "sheet-x"
+
+
+def test_a_catalyst_bond_priced_as_a_percent_of_its_nominal_is_bought_at_its_price_per_bond(ike: int) -> None:
+    bond = row(
+        Ticker="ACH0427",
+        Waluta="PLN",
+        Nazwa="Archicom 0427",
+        **{"Klasa aktywów": "Obligacje korporacyjne polskie", "Cena nominalna": 1000.0, "Kurs PLN transakcji": 1.0},
+        Liczba=10,
+        Cena=101.0,
+        Prowizje=5.0,
+    )
+    draft = sheet_draft(lines_of(bond)[0], account_id=ike, instrument_id=7, nbp_rate=None, external_id="sheet-x")
+
+    assert draft.price == Decimal("1010")  # 101 % of 1000 zł
+    assert draft.actual_amount == Decimal("10105.00")
+
+
+def test_a_sheet_without_the_nominal_column_reads_each_price_as_it_is() -> None:
+    header = [label for label in HEADER if label != "Cena nominalna"]
+    values = dict(zip(HEADER, row(), strict=True))
+
+    lines = parse_lines(header, [[values[label] for label in header]])
+
+    assert lines[0].price == Decimal("114.72")
+
+
+def test_the_nominal_does_not_change_a_rows_fingerprint() -> None:
+    assert fingerprints(lines_of(row(**{"Cena nominalna": 1000.0}))) == fingerprints(lines_of(row()))
 
 
 def test_a_pln_deposit_and_a_foreign_currency_exchange_become_their_transactions(ike: int) -> None:
@@ -298,11 +327,9 @@ def test_a_row_like_a_manual_transaction_is_held_back_until_the_user_keeps_it(en
     assert len(list_transactions(engine)) == 2
 
 
-def test_an_existing_bond_without_a_manual_price_gets_the_sheet_price_and_keeps_one_it_has(
-    engine: Engine, ike: int
-) -> None:
+def test_bonds_are_saved_without_a_manual_price_and_keep_one_set_by_hand(engine: Engine, ike: int) -> None:
+    """Stage 3 values Bond Series from the MF data (spec 3.4.1), so the sheet's price is no Manual Price."""
     class_id = list_asset_classes(engine)[0].id
-    plain = add_instrument(engine, InstrumentDraft("EDO0836", class_id, "PLN"))
     priced = add_instrument(engine, InstrumentDraft("EDO0636", class_id, "PLN", manual_price=Decimal("101.5")))
     bond_row = dict(Konto="IKE", Ticker="EDO-040836", Waluta="PLN", Liczba=50.0, Cena=100.0, **{"Total PLN": 5000.0})
     other_row = dict(bond_row, Ticker="EDO-170636")
@@ -311,9 +338,9 @@ def test_an_existing_bond_without_a_manual_price_gets_the_sheet_price_and_keeps_
     save_import(engine, lines, FakeRates({}), Decisions(accounts={"IKE": ike}))
 
     by_name = {instrument.name: instrument for instrument in list_instruments(engine)}
-    assert by_name["EDO0836"].manual_price == Decimal("100")
+    assert by_name["EDO0836"].manual_price is None
     assert by_name["EDO0636"].manual_price == Decimal("101.5")
-    assert plain.id == by_name["EDO0836"].id and priced.id == by_name["EDO0636"].id
+    assert priced.id == by_name["EDO0636"].id
 
 
 def test_editing_the_total_or_comment_of_a_row_keeps_its_fingerprint() -> None:
