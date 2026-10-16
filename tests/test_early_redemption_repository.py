@@ -19,6 +19,7 @@ from financial_app.persistence.transactions import (
     add_transaction,
     delete_transaction,
     list_transactions,
+    transactions_in_entry_order,
     update_transaction,
 )
 
@@ -67,7 +68,7 @@ def test_a_redemption_keeps_its_lot_and_tax(engine: Engine, ids: tuple[int, int]
         Decimal("5.08"),
         Decimal("421.60"),
     )
-    [position] = open_positions(reversed(list_transactions(engine)))
+    [position] = open_positions(transactions_in_entry_order(engine))
     assert [(lot.opened_by, lot.quantity) for lot in position.lots] == [
         (first.id, Decimal(10)),
         (second.id, Decimal(6)),
@@ -91,5 +92,5 @@ def test_editing_the_named_lots_buy_keeps_its_name(engine: Engine, ids: tuple[in
     cheaper = buy_or_sell(account, date(2024, 5, 22), TransactionType.BUY, edo, Decimal(10), Decimal("99.9"))
     update_transaction(engine, bought.id, cheaper)
 
-    [position] = open_positions(reversed(list_transactions(engine)))
+    [position] = open_positions(transactions_in_entry_order(engine))
     assert (position.quantity, position.lots[0].opened_by) == (Decimal(6), bought.id)

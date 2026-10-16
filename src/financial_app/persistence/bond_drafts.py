@@ -13,15 +13,14 @@ from financial_app.persistence.accounts import list_accounts
 from financial_app.persistence.bond_data import load_series_terms
 from financial_app.persistence.bond_series import drop_if_unused, load_bond_data, series_instrument
 from financial_app.persistence.instruments import list_instruments
-from financial_app.persistence.transactions import add_transaction, add_transactions, list_transactions
+from financial_app.persistence.transactions import add_transaction, add_transactions, transactions_in_entry_order
 
 
 def pending_drafts(engine: Engine, day: date, account_id: int | None = None) -> list[BondDraft]:
     """The Drafts due by ``day`` in the View Scope (``account_id``, ``None`` for Total): maturities and the coupons not
     entered yet."""
-    transactions = list_transactions(engine)
-    # list_transactions is newest first; the FIFO engine wants entry order
-    positions = open_positions(reversed(transactions))
+    transactions = transactions_in_entry_order(engine)
+    positions = open_positions(transactions)
     instruments = {i.id: i for i in list_instruments(engine)}
     accounts = list_accounts(engine)
     entered = coupons_entered(transactions)

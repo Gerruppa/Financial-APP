@@ -12,6 +12,7 @@ from dataclasses import dataclass, field, replace
 from datetime import date
 from decimal import Decimal
 
+from financial_app.domain.account_value import account_value, is_listed
 from financial_app.domain.accounts import Account, tax_regime_for
 from financial_app.domain.bond_redemption import net_value
 from financial_app.domain.bond_valuation import BondPrice
@@ -140,14 +141,15 @@ def dashboard(
     # Unrealised gains at the Tax cost by tax rate: PIT-38 is one return, so Total offsets the Accounts' gains
     taxable: dict[Decimal, Decimal] = {}
     withheld_total = Decimal(0)
+    listed: set[int] = set()
     # The FX part of the scope's unrealised and realised result, for the profit by source
     fx = Decimal(0)
 
     def count_held(
         currency: str, amount: Decimal, parts: Iterable[tuple[str, Decimal]], instrument_id: int | None = None
-    ) -> Decimal:
+    ) -> None:
         """Add ``amount`` held in ``currency`` to the exposure and its ``parts`` by Asset Class to the allocation (of
-        the scope and of the Account) and to the holdings of ``instrument_id``, and return it."""
+        the scope and of the Account) and to the holdings of ``instrument_id``."""
         exposure[currency] = exposure.get(currency, Decimal(0)) + amount
         by_class = account_classes.setdefault(account.id, {})
         for name, part in parts:
@@ -156,47 +158,37 @@ def dashboard(
             if instrument_id is not None:
                 held = holdings.setdefault(name, {})
                 held[instrument_id] = held.get(instrument_id, Decimal(0)) + part
-        return amount
 
-    def count_cash(currency: str, asset_class: str, amount: Decimal) -> Decimal:
-        return count_held(currency, amount, [(asset_class, amount)])
+    def count_cash(currency: str, asset_class: str, amount: Decimal) -> None:
+        count_held(currency, amount, [(asset_class, amount)])
 
     for account in (a for a in accounts if account_id in (None, a.id)):
-        positions_value = Decimal(0)
-        unrealized = Decimal(0)
+        held_value = account_value(
+            account, balances.get(account.id, Decimal(0)), moves.positions, foreign, prices, rates
+        )
+        if is_listed(account, held_value) or account.id == account_id:
+            listed.add(account.id)
         taxable_gain = Decimal(0)
         # A Bond Series' early-redemption fee and the tax withheld at redemption, outside PIT-38 (spec 3.4.1)
         withheld = Decimal(0)
-        account_realized = moves.realized.get(account.id, Decimal(0))
         fx += moves.realized_fx.get(account.id, Decimal(0))
+        if not account.exclude_fx_result:
+            fx += held_value.fx
         for position in (p for p in moves.positions if p.account_id == account.id):
             price = prices.get(position.instrument_id)
             instrument = instruments[position.instrument_id]
             value = position.value_or_cost(price)
-            parts = instrument.class_parts(value)
-            positions_value += count_held(instrument.quote_currency, value, parts, position.instrument_id)
+            count_held(instrument.quote_currency, value, instrument.class_parts(value), position.instrument_id)
             if isinstance(price, BondPrice):
                 withheld += _bond_deductions(position, price, account)
             elif price is not None:
                 taxable_gain += position.value(price) - position.tax_cost
-            if price is not None:
-                unrealized += position.result(price)
-                rate = rates.get(instrument.quote_currency)
-                if rate is not None:
-                    fx += position.fx_result(rate)
+            if price is not None and (rate := rates.get(instrument.quote_currency)) is not None:
+                fx += position.fx_result(rate)
         for balance in (c for c in foreign if c.account_id == account.id):
-            if not account.exclude_fx_result:
-                account_realized += balance.realized_result
-                fx += balance.realized_result
             rate = rates.get(balance.currency)
-            if rate is None:
-                positions_value += count_cash(balance.currency, FOREIGN_CASH_CLASS, balance.cost)
-                continue
-            positions_value += count_cash(balance.currency, FOREIGN_CASH_CLASS, balance.value(rate))
-            if not account.exclude_fx_result:
-                unrealized += balance.result(rate)
-                fx += balance.result(rate)
-        count_cash(PLN, CASH_CLASS, balances.get(account.id, Decimal(0)))
+            count_cash(balance.currency, FOREIGN_CASH_CLASS, balance.cost if rate is None else balance.value(rate))
+        count_cash(PLN, CASH_CLASS, held_value.cash)
         tax_rate = tax_regime_for(account.account_type).unrealized_tax_rate
         taxable[tax_rate] = taxable.get(tax_rate, Decimal(0)) + taxable_gain
         withheld_total += withheld
@@ -207,10 +199,10 @@ def dashboard(
                     net_deposits=None
                     if last_day is None
                     else last_day.account_net_deposits.get(account.id, Decimal(0)),
-                    cash=balances.get(account.id, Decimal(0)),
-                    open_positions=positions_value,
-                    unrealized=unrealized,
-                    realized=account_realized,
+                    cash=held_value.cash,
+                    open_positions=held_value.open_positions,
+                    unrealized=held_value.unrealized,
+                    realized=moves.realized.get(account.id, Decimal(0)) + held_value.realized_fx,
                     dividends=dividends.get(account.id, Decimal(0)),
                     costs=costs.get(account.id, Decimal(0)),
                     estimated_tax=_estimated_tax(tax_rate, taxable_gain) + withheld,
@@ -253,7 +245,7 @@ def dashboard(
     currencies = tuple(CurrencyShare(*share) for share in _shares(exposure))
     classes = tuple(ClassShare(*share) for share in _shares(allocation) if share[1])
     # An inactive Account stays in the totals (its past costs and Dividends) but leaves the table once emptied
-    shown = tuple(row for row in rows if row.account.active or row.totals.value or row.account.id == account_id)
+    shown = tuple(row for row in rows if row.account.id in listed)
     held = {account: {name: v for name, v in values.items() if v} for account, values in account_classes.items()}
     return Dashboard(
         totals,

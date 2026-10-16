@@ -13,15 +13,14 @@ from financial_app.domain.passive_income import IncomeItem, forecast_coupons, re
 from financial_app.persistence.accounts import list_accounts
 from financial_app.persistence.bond_series import load_bond_data
 from financial_app.persistence.instruments import list_instruments
-from financial_app.persistence.transactions import list_transactions
+from financial_app.persistence.transactions import transactions_in_entry_order
 
 
 def income_items(engine: Engine, today: date) -> list[IncomeItem]:
     """Every income received and the coupons due by ``CALENDAR_MONTHS`` after ``today`` not entered yet (those already
     due are Drafts to confirm), by day."""
-    transactions = list_transactions(engine)
-    # list_transactions is newest first; the FIFO engine wants entry order
-    positions = open_positions(reversed(transactions))
+    transactions = transactions_in_entry_order(engine)
+    positions = open_positions(transactions)
     instruments = {i.id: i for i in list_instruments(engine)}
     drafts = coupon_drafts(
         positions,

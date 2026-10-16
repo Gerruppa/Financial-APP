@@ -14,7 +14,7 @@ from financial_app.domain.prices import CurrencyMismatchError, PriceSourceError,
 from financial_app.domain.valuation import Unpriced, instruments_without_price
 from financial_app.persistence.instruments import list_instruments
 from financial_app.persistence.quotes import latest_quotes, load_refresh, save_quote, save_refresh
-from financial_app.persistence.transactions import list_transactions
+from financial_app.persistence.transactions import transactions_in_entry_order
 
 
 class PriceSource(Protocol):
@@ -169,5 +169,4 @@ def unpriced_instruments(engine: Engine) -> list[Unpriced]:
 
 def _held(engine: Engine) -> set[int]:
     """The ids of the Instruments with an open Position."""
-    # list_transactions is newest first; the FIFO engine wants entry order
-    return {position.instrument_id for position in open_positions(reversed(list_transactions(engine)))}
+    return {position.instrument_id for position in open_positions(transactions_in_entry_order(engine))}

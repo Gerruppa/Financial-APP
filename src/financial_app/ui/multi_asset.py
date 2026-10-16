@@ -10,13 +10,11 @@ from sqlalchemy import Engine
 
 from financial_app.domain.formatting import format_exact, format_percent, format_pln
 from financial_app.domain.instruments import AssetClass, Instrument, InstrumentError, parse_optional_number
-from financial_app.domain.lots import open_positions
 from financial_app.domain.multi_asset import MultiAssetHolding, multi_asset_holdings
 from financial_app.persistence.instruments import list_asset_classes, list_instruments, set_multi_asset_split
 from financial_app.persistence.transactions import list_transactions
-from financial_app.sources.current_prices import TodaysRates, current_prices
 from financial_app.sources.nbp import NbpRates
-from financial_app.sources.prices import last_refresh
+from financial_app.sources.todays_view import todays_view
 from financial_app.ui.dialogs import movable_dialog
 from financial_app.ui.view_scope import ViewScope
 
@@ -130,15 +128,8 @@ class MultiAssetPage:
 
     @ui.refreshable_method
     def content(self) -> None:
-        # list_transactions is newest first; the FIFO engine wants entry order
-        positions = open_positions(list(reversed(list_transactions(self.engine))))
-        instruments = {i.id: i for i in list_instruments(self.engine)}
-        held = [instruments[i] for i in {p.instrument_id for p in positions}]
-        rates = TodaysRates(self.rates)
-        prices = {
-            i: price.pln for i, price in current_prices(self.engine, held, rates, last_refresh(self.engine)).items()
-        }
-        holdings = multi_asset_holdings(positions, instruments, prices, self.scope.account_id)
+        view = todays_view(self.engine, self.rates)
+        holdings = multi_asset_holdings(view.positions, view.instruments, view.pln_prices, self.scope.account_id)
         if not holdings:
             ui.label(
                 "Brak instrumentów Multi-asset w portfelu. Instrument klasy Multi-asset dostaje podział na klasy "

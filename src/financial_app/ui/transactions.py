@@ -86,6 +86,7 @@ from financial_app.persistence.transactions import (
     add_transactions,
     delete_transaction,
     list_transactions,
+    transactions_in_entry_order,
     update_transaction,
 )
 from financial_app.sources.export import FileFormat, export_transactions
@@ -428,7 +429,7 @@ def open_transaction_dialog(
     mf_terms = load_series_terms(engine)
     bond_ids = {i.id for i in all_instruments if i.is_bond_series}
     bond_data = load_bond_data(engine)
-    saved_transactions = list_transactions(engine)
+    saved_transactions = transactions_in_entry_order(engine)
     # An edited Buy of a Bond Series opens in the bond mode, with its type
     edited_series = next(
         (
@@ -572,7 +573,7 @@ def open_transaction_dialog(
             try:
                 day_value = parse_date(day.value or "")
                 held = open_lots(
-                    reversed(saved_transactions),  # in entry order, which settles same-day ties
+                    saved_transactions,  # in entry order, which settles same-day ties
                     account.value,
                     instrument.value,
                     day_value,

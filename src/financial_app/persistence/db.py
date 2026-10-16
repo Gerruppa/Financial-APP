@@ -18,9 +18,14 @@ def open_engine(path: Path) -> Engine:
 def init_db(path: Path) -> Engine:
     """Create the database file if needed and apply all pending migrations."""
     engine = open_engine(path)
+    migrate(engine)
+    return engine
+
+
+def migrate(engine: Engine) -> None:
+    """Apply all pending migrations to the database of ``engine`` (also an in-memory one, for tests)."""
     config = Config()
     config.set_main_option("script_location", str(MIGRATIONS_DIR))
     with engine.begin() as connection:
         config.attributes["connection"] = connection
         command.upgrade(config, "head")
-    return engine

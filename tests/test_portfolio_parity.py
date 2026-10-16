@@ -23,18 +23,21 @@ from sqlalchemy import Engine
 from financial_app.domain.accounts import AccountDraft, AccountType
 from financial_app.domain.currencies import MissingNbpRateError, NbpRate
 from financial_app.domain.instruments import InstrumentDraft
-from financial_app.domain.lots import Position, open_positions
+from financial_app.domain.lots import Position, UnitPrice
 from financial_app.domain.spreadsheet_import import SheetLine, classify_ticker, fingerprints
-from financial_app.domain.transactions import PLN, TransactionType, cash_balances
-from financial_app.persistence.accounts import add_account, list_accounts
+from financial_app.domain.transactions import PLN, TransactionType
+from financial_app.persistence.accounts import add_account
 from financial_app.persistence.db import init_db
 from financial_app.persistence.instruments import list_instruments, update_instrument
 from financial_app.persistence.transactions import list_transactions
 from financial_app.sources.spreadsheet import Decisions, read_sheet_lines, save_import
+from financial_app.sources.todays_view import todays_view
 
 REFERENCE = Path(__file__).resolve().parents[1] / "reference" / "Newest portfolio.xlsx"
 TOLERANCE = Decimal("0.01")
 CASH = "Gotówka"
+# The day the sheet was exported, its prices and rates frozen on
+EXPORTED_ON = date(2026, 10, 9)
 
 BROKER_PLN = (
     "Arkusz liczy koszt z Total PLN (PLN faktycznie przelany przez brokera przy przewalutowaniu), aplikacja z ilości × "
@@ -92,11 +95,12 @@ class AppView:
     positions: dict[tuple[str, str], Position]
     cash: dict[str, Decimal]
     prices: dict[str, Decimal | None]  # Manual Price per Instrument name
-    rates: dict[str, Decimal]
+    pln_prices: dict[str, UnitPrice | None]  # the price in PLN the Portfolio values each held Instrument at
 
 
 class FrozenRates:
-    """NBP Rates frozen at the sheet's own rates: the rate of each row, and the latest rate per currency."""
+    """NBP Rates frozen at the sheet's own rates: the rate of each row, and the latest rate per currency on the export
+    day."""
 
     def __init__(self, table: dict[tuple[str, date], NbpRate], latest: dict[str, NbpRate]) -> None:
         self.table = table
@@ -106,6 +110,9 @@ class FrozenRates:
         if (currency, day) not in self.table:
             raise MissingNbpRateError(f"Brak kursu NBP {currency} dla {day}.")
         return self.table[(currency, day)]
+
+    def today(self) -> date:
+        return EXPORTED_ON
 
     def latest(self, currency: str) -> NbpRate:
         if currency not in self._latest:
@@ -186,11 +193,7 @@ def imported(
         (line.currency, line.day): NbpRate(line.currency, line.rate, line.day - timedelta(days=1), "arkusz")
         for line in sheet_lines
     }
-    latest = {
-        row.currency: NbpRate(row.currency, row.rate, date(2026, 10, 8), "arkusz")
-        for row in sheet_portfolio
-        if row.rate
-    }
+    latest = _latest_rates(sheet_portfolio)
     engine = init_db(tmp_path_factory.mktemp("parity") / "parity.sqlite3")
     currencies: dict[str, set[str]] = defaultdict(lambda: {PLN})
     for line in sheet_lines:
@@ -217,25 +220,22 @@ def imported(
     return engine
 
 
+def _latest_rates(sheet_portfolio: list[SheetRow]) -> dict[str, NbpRate]:
+    """The sheet's "Obecny kurs waluty" per currency, as the NBP Rate published the day before the export."""
+    published = EXPORTED_ON - timedelta(days=1)
+    return {row.currency: NbpRate(row.currency, row.rate, published, "arkusz") for row in sheet_portfolio if row.rate}
+
+
 def app_view(engine: Engine, sheet_portfolio: list[SheetRow]) -> AppView:
-    transactions = list_transactions(engine)
-    accounts = {account.id: account.name for account in list_accounts(engine)}
-    instruments = list_instruments(engine)
-    names = {instrument.id: instrument.name for instrument in instruments}
-    positions = {(accounts[p.account_id], names[p.instrument_id]): p for p in open_positions(reversed(transactions))}
-    cash = {accounts[account_id]: amount for account_id, amount in cash_balances(transactions).items()}
-    prices = {instrument.name: instrument.manual_price for instrument in instruments}
-    rates = {row.currency: row.rate for row in sheet_portfolio if row.rate}
-    return AppView(positions, cash, prices, rates)
-
-
-def _pln(amount: Decimal | None, currency: str, rates: dict[str, Decimal]) -> Decimal | None:
-    """An amount in ``currency`` in PLN at the sheet's latest rate, or None when it cannot be known."""
-    if amount is None:
-        return None
-    if currency == PLN:
-        return amount
-    return amount * rates[currency] if currency in rates else None
+    """The Portfolio as its tab loads it (``todays_view``), at the sheet's latest rates."""
+    view = todays_view(engine, FrozenRates({}, _latest_rates(sheet_portfolio)))
+    accounts = {account.id: account.name for account in view.accounts}
+    names = {instrument.id: instrument.name for instrument in view.instruments.values()}
+    positions = {(accounts[p.account_id], names[p.instrument_id]): p for p in view.positions}
+    cash = {accounts[account_id]: amount for account_id, amount in view.cash.items()}
+    prices = {instrument.name: instrument.manual_price for instrument in view.instruments.values()}
+    pln_prices = {names[instrument_id]: price for instrument_id, price in view.pln_prices.items()}
+    return AppView(positions, cash, prices, pln_prices)
 
 
 def compare(app: AppView, sheet_portfolio: list[SheetRow]) -> list[Difference]:
@@ -257,7 +257,7 @@ def compare(app: AppView, sheet_portfolio: list[SheetRow]) -> list[Difference]:
         if position is None:
             differences.append(Difference(key, "pozycja", row.quantity, None))
             continue
-        price = _pln(app.prices.get(row.key), row.currency, app.rates)
+        price = app.pln_prices.get(row.key)
         check(key, "liczba", row.quantity, position.quantity)
         check(key, "koszt", row.cost, position.cost)
         check(key, "wartość", row.value, None if price is None else position.value(price))

@@ -17,12 +17,8 @@ from financial_app.domain.bond_holdings import LotHolding, SeriesHolding, bond_h
 from financial_app.domain.bond_valuation import BondValue, RateLabel, rate_text
 from financial_app.domain.bonds import BondType
 from financial_app.domain.formatting import format_date, format_pln, format_quantity
-from financial_app.domain.lots import open_positions
-from financial_app.persistence.accounts import list_accounts
-from financial_app.persistence.bond_series import load_bond_data
-from financial_app.persistence.instruments import list_instruments
-from financial_app.persistence.transactions import list_transactions
 from financial_app.sources.nbp import NbpRates
+from financial_app.sources.todays_view import todays_view
 from financial_app.ui.bond_drafts import drafts_list
 from financial_app.ui.view_scope import ViewScope
 
@@ -66,13 +62,10 @@ class BondsPage:
 
     @ui.refreshable_method
     def content(self) -> None:
-        today = self.rates.today()
+        view = todays_view(self.engine, self.rates)
+        today = view.today
         drafts_list(self.engine, today, self.scope.account_id, self.on_saved)
-        # list_transactions is newest first; the FIFO engine wants entry order
-        positions = open_positions(reversed(list_transactions(self.engine)))
-        instruments = {i.id: i for i in list_instruments(self.engine)}
-        accounts = list_accounts(self.engine)
-        bonds = load_bond_data(self.engine)
+        positions, instruments, accounts, bonds = view.positions, view.instruments, view.accounts, view.bonds
         holdings = bond_holdings(positions, instruments, accounts, bonds, today, self.scope.account_id)
         if not holdings:
             ui.label(

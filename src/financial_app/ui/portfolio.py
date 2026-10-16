@@ -17,6 +17,7 @@ from decimal import Decimal
 from nicegui import ui
 from sqlalchemy import Engine
 
+from financial_app.domain.account_value import AccountValue, is_listed
 from financial_app.domain.accounts import Account
 from financial_app.domain.bond_valuation import BondPrice, most_uncertain, rate_text
 from financial_app.domain.formatting import (
@@ -29,16 +30,12 @@ from financial_app.domain.formatting import (
     format_unit_price,
 )
 from financial_app.domain.instruments import Instrument
-from financial_app.domain.lots import ForeignCash, Lot, Position, UnitPrice, foreign_cash, fx_result, open_positions
+from financial_app.domain.lots import ForeignCash, Lot, Position
 from financial_app.domain.prices import SOURCE_NAMES
-from financial_app.domain.transactions import cash_balances, costs_by_account, dividends_by_account
+from financial_app.domain.transactions import costs_by_account, dividends_by_account
 from financial_app.domain.valuation import Badge, InstrumentPrice, PriceStatus
-from financial_app.persistence.accounts import list_accounts
-from financial_app.persistence.instruments import list_instruments
-from financial_app.persistence.transactions import list_transactions
-from financial_app.sources.current_prices import TodaysRates, current_prices
 from financial_app.sources.nbp import NbpRates
-from financial_app.sources.prices import last_refresh
+from financial_app.sources.todays_view import TodaysView, todays_view
 from financial_app.ui.fund_details import fund_details
 from financial_app.ui.view_scope import ViewScope, breadcrumbs
 
@@ -80,76 +77,45 @@ class PortfolioPage:
     @ui.refreshable_method
     def cards(self) -> None:
         breadcrumbs(self.scope)
-        transactions = list_transactions(self.engine)
-        # list_transactions is newest first; the FIFO engine wants entry order
-        positions = open_positions(reversed(transactions))
-        cash = foreign_cash(reversed(transactions))
-        balances = cash_balances(transactions)
-        totals = _Totals(dividends_by_account(transactions), costs_by_account(transactions))
-        held = {position.account_id for position in positions} | {c.account_id for c in cash if c.lots}
-        # Inactive Accounts stay hidden unless they still hold cash or Positions
-        accounts = [a for a in list_accounts(self.engine) if a.active or balances.get(a.id, Decimal(0)) or a.id in held]
-        if self.scope.account_id is not None:
-            accounts = [a for a in list_accounts(self.engine) if a.id == self.scope.account_id]
+        view = todays_view(self.engine, self.rates)
+        totals = _Totals(dividends_by_account(view.transactions), costs_by_account(view.transactions))
+        values = {account.id: view.account_value(account) for account in view.accounts}
+        if self.scope.account_id is None:
+            accounts = [a for a in view.accounts if is_listed(a, values[a.id])]
+        else:
+            accounts = [a for a in view.accounts if a.id == self.scope.account_id]
         if not accounts:
             ui.label("Brak kont. Dodaj konto w zakładce Ustawienia.").classes("text-gray-500")
-        instruments = list_instruments(self.engine)
-        instruments_by_id = {i.id: i for i in instruments}
-        held_instruments = {p.instrument_id for p in positions}
-        rates = TodaysRates(self.rates)
-        held_list = [i for i in instruments if i.id in held_instruments]
-        prices = current_prices(self.engine, held_list, rates, last_refresh(self.engine))
-        for balance in cash:
-            rates(balance.currency)
         for account in accounts:
             own = sorted(
-                (p for p in positions if p.account_id == account.id),
-                key=lambda p: instruments_by_id[p.instrument_id].name.casefold(),
+                (p for p in view.positions if p.account_id == account.id),
+                key=lambda p: view.instruments[p.instrument_id].name.casefold(),
             )
-            own_cash = sorted((c for c in cash if c.account_id == account.id), key=lambda c: c.currency)
-            _account_card(
-                account,
-                balances.get(account.id, Decimal(0)),
-                own,
-                own_cash,
-                prices,
-                rates.known(),
-                instruments_by_id,
-                totals,
-            )
+            own_cash = sorted((c for c in view.foreign if c.account_id == account.id), key=lambda c: c.currency)
+            _account_card(account, values[account.id], own, own_cash, view, totals)
 
 
 def _account_card(
     account: Account,
-    cash: Decimal,
+    value: AccountValue,
     positions: list[Position],
     foreign: list[ForeignCash],
-    prices: dict[int, InstrumentPrice],
-    known_rates: dict[str, Decimal],
-    instruments_by_id: dict[int, Instrument],
+    view: TodaysView,
     totals: _Totals,
 ) -> None:
-    value = (
-        cash
-        + sum((p.value_or_cost(prices[p.instrument_id].pln) for p in positions), Decimal(0))
-        + sum((_cash_value(c, known_rates.get(c.currency)) for c in foreign), Decimal(0))
-    )
-    fx = fx_result(foreign, account.id, known_rates)
-    result = sum((_result(p, prices[p.instrument_id].pln) for p in positions), Decimal(0))
-    if not account.exclude_fx_result:
-        result += fx
     with ui.card().classes("w-full p-0"), ui.expansion(value=True).classes("w-full") as card:
         with card.add_slot("header"), ui.row().classes("w-full items-center"):
             ui.label(account.name).classes("text-lg font-medium")
             ui.badge(account.account_type.label).props("outline")
             ui.space()
             if positions or foreign:
+                result = value.result
                 result_label = ui.label(format_pln(result, signed=True)).classes(_result_color(result))
                 result_label.mark("account-result")
-            ui.label(format_pln(value)).classes("text-lg font-medium")
+            ui.label(format_pln(value.value)).classes("text-lg font-medium")
         with ui.row().classes("w-full items-center"):
             ui.label("Saldo gotówki").classes("text-gray-500")
-            ui.label(format_pln(cash)).classes("font-medium")
+            ui.label(format_pln(value.cash)).classes("font-medium")
         for title, amounts, marker in (
             ("Dywidendy i odsetki", totals.dividends, "account-dividends"),
             ("Prowizje i koszty", totals.costs, "account-costs"),
@@ -159,14 +125,14 @@ def _account_card(
                     ui.label(title).classes("text-gray-500")
                     ui.label(format_pln(amounts[account.id])).classes("font-medium")
         if foreign:
-            _foreign_cash_table(foreign, known_rates)
+            _foreign_cash_table(foreign, view.rates)
             with ui.row().classes("w-full items-center"):
                 ui.label("Wynik walutowy").classes("text-gray-500")
                 excluded = " (wyłączony z wyniku konta)" if account.exclude_fx_result else ""
-                fx_label = ui.label(f"{format_pln(fx, signed=True)}{excluded}").classes(_result_color(fx))
+                fx_label = ui.label(f"{format_pln(value.fx, signed=True)}{excluded}").classes(_result_color(value.fx))
                 fx_label.mark("fx-result")
         if positions:
-            _positions_table(positions, prices, instruments_by_id)
+            _positions_table(positions, view.prices, view.instruments)
 
 
 def _foreign_cash_table(foreign: list[ForeignCash], rates: dict[str, Decimal]) -> None:
@@ -188,11 +154,6 @@ def _foreign_cash_table(foreign: list[ForeignCash], rates: dict[str, Decimal]) -
                 ui.label(format_rate(rate)).classes("text-right")
                 ui.label(format_pln(balance.value(rate))).classes("text-right")
                 ui.label(format_pln(result, signed=True)).classes(f"text-right {_result_color(result)}")
-
-
-def _cash_value(balance: ForeignCash, rate: Decimal | None) -> Decimal:
-    """Foreign cash in PLN at ``rate``; without one, at its cost."""
-    return balance.cost if rate is None else balance.value(rate)
 
 
 def _positions_table(
@@ -309,10 +270,6 @@ def _lots_table(position: Position, instrument: Instrument, bond: BondPrice | No
                     ui.label(format_pln(lot.quantity * bond.of(lot))).classes("text-right")
     details.visible = False
     return details
-
-
-def _result(position: Position, price: UnitPrice | None) -> Decimal:
-    return Decimal(0) if price is None else position.result(price)
 
 
 def _result_color(result: Decimal) -> str:
