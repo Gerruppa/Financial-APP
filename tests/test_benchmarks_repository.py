@@ -11,7 +11,7 @@ from financial_app.domain.accounts import AccountDraft, AccountType
 from financial_app.domain.benchmarks import DEFAULT_BENCHMARKS, Benchmark, BenchmarkError, BenchmarkKind
 from financial_app.domain.instruments import InstrumentDraft
 from financial_app.domain.portfolio_history import DayValue
-from financial_app.domain.prices import STOOQ, YAHOO, Quote
+from financial_app.domain.prices import YAHOO, Quote
 from financial_app.persistence.accounts import add_account, delete_account
 from financial_app.persistence.benchmarks import (
     add_benchmark,
@@ -82,10 +82,10 @@ def test_the_defaults_are_seeded_once_creating_the_missing_instruments(engine: E
     assert benchmarks[0] == Benchmark(BenchmarkKind.CPI)
     by_id = {i.id: i for i in list_instruments(engine)}
     names = [by_id[b.instrument_id].name for b in benchmarks[1:] if b.instrument_id is not None]
-    assert names == ["LON:ACWI", "iShares S&P 500", "AMS:V80A", "WSE:WIG", "WSE:SWIG80TR"]
+    assert names == ["LON:ACWI", "iShares S&P 500", "AMS:V80A", "WSE:ETFBW20TR", "WSE:ETFBS80TR"]
     assert benchmarks[2].instrument_id == cspx
-    wig = next(i for i in by_id.values() if i.name == "WSE:WIG")
-    assert (wig.quote_currency, dict(wig.source_symbols)) == ("PLN", {STOOQ: "wig"})
+    small = next(i for i in by_id.values() if i.name == "WSE:ETFBS80TR")
+    assert (small.quote_currency, dict(small.source_symbols)) == ("PLN", {YAHOO: "ETFBS80TR.WA"})
     assert by_id[benchmarks[1].instrument_id or 0].quote_currency == "GBP"
     assert len(DEFAULT_BENCHMARKS) == 5
 

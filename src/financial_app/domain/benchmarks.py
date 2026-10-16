@@ -84,8 +84,8 @@ class Benchmark:
 
 @dataclass(frozen=True)
 class DefaultBenchmark:
-    """One of the sheet's default benchmark Instruments, created in the catalog when missing: its name, quote
-    currency and Asset Class, and its Yahoo or Stooq symbol (an index Yahoo does not give)."""
+    """One of the default benchmark Instruments, created in the catalog when missing: its name, quote currency and
+    Asset Class, and its Yahoo or Stooq symbol."""
 
     name: str
     currency: str
@@ -94,13 +94,14 @@ class DefaultBenchmark:
     stooq: str = ""
 
 
-# The sheet's defaults besides CPI (spec 6): its Google Finance tickers as names
+# The defaults besides CPI (spec 6.2): the sheet's Google Finance tickers as names; the sheet's WIG and sWIG80TR have
+# no history on Yahoo, so the Beta ETFs tracking WIG20TR and sWIG80TR stand in for them, needing no Stooq key
 DEFAULT_BENCHMARKS = (
     DefaultBenchmark("LON:ACWI", "GBP", "Akcje zagraniczne", yahoo="ACWI.L"),
     DefaultBenchmark("LON:CSPX", "USD", "Akcje zagraniczne", yahoo="CSPX.L"),
     DefaultBenchmark("AMS:V80A", "EUR", "Akcje zagraniczne", yahoo="V80A.AS"),
-    DefaultBenchmark("WSE:WIG", "PLN", "Akcje polskie", stooq="wig"),
-    DefaultBenchmark("WSE:SWIG80TR", "PLN", "Akcje polskie", stooq="swig80tr"),
+    DefaultBenchmark("WSE:ETFBW20TR", "PLN", "Akcje polskie", yahoo="ETFBW20TR.WA"),
+    DefaultBenchmark("WSE:ETFBS80TR", "PLN", "Akcje polskie", yahoo="ETFBS80TR.WA"),
 )
 
 
