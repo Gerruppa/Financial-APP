@@ -50,6 +50,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 
 - `__init__.py`: Docstring marking the domain package as pure-Python calculations with no UI or database imports.
 - `account_ranking.py`: Account ranking and treemap figures for the Total Dashboard: XIRR, TWR, P&L, Net Deposits and costs per Account, sorted with best and worst marked
+- `account_value.py`: Shared definition of an Account's value and result today: cash, Positions, unrealised and FX results for the Portfolio and Dashboard
 - `accounts.py`: Account Types, Tax Regime descriptions, Account field validation, and the refusal naming what still holds an Account from deletion
 - `benchmarks.py`: Benchmarks: CPI, Instrument or Account with a pp/year offset, daily growth factors and the Portfolio-vs-benchmark comparison over a period.
 - `bond_calendar.py`: Calendar of coupons, anniversaries and maturities of held Bond Series over the next 12 months, by View Scope
@@ -167,6 +168,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `prices.py`: Refreshes held Instruments' Quotes from price sources in fallback order and records failures
 - `spreadsheet.py`: Previews and imports Transactions and Instruments from the user's Inwestomat spreadsheet
 - `stooq.py`: Stooq history source for GPW stocks and indices; fetches daily closes via CSV with API key and browser proof-of-work check
+- `todays_view.py`: Loads today's portfolio state once (Transactions, Accounts, Positions, prices, NBP Rates) for the tabs and Dashboard to share
 - `xtb.py`: Reads, previews and applies XTB statement imports, matching accounts and tickers and remembering matches
 - `yahoo.py`: Yahoo Finance source for current quotes and Instrument search; converts GBp pence and parses chart and search responses
 
@@ -210,6 +212,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_account_deletion.py`: Tests deleting an Account that nothing names and the refusals naming what still holds an Account
 - `test_account_ranking_domain.py`: Tests Account ranking figures, sorting, best and worst marks and treemap tiles
 - `test_account_ranking_ui.py`: Tests the Dashboard's Account treemap and ranking, profit waterfall and after-tax toggle
+- `test_account_value_domain.py`: Tests the domain definition of an Account's value and result today
 - `test_accounts_domain.py`: Tests Account Types, Tax Regime registry and AccountDraft validation rules
 - `test_accounts_repository.py`: Tests saving, listing and editing Accounts in SQLite, including unique names
 - `test_accounts_ui.py`: UI tests for Ustawienia Konta: adding, editing and deactivating Accounts without a browser
@@ -321,6 +324,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_symbol_check.py`: Unit tests for the Sprawdź symbol check: quote, currency mismatch warning, and error cases on fake sources
 - `test_symbol_check_ui.py`: UI tests for the Sprawdź buttons in the Instrument dialog, on fake sources without network
 - `test_symbol_fields_ui.py`: UI tests for the Instrument dialog's Source Symbol fields, ordered by the Asset Class's Fallback Order.
+- `test_todays_view.py`: Tests today's View state loaded once for the tabs, on an in-memory database with fixed NBP Rates
 - `test_trades_ui.py`: Tests PLN Buys and Sells end to end through the transaction dialog, Transakcje list and Portfolio.
 - `test_transaction_edit_ui.py`: UI tests for editing and deleting a Transaction from the Transakcje list, including blocked edits
 - `test_transaction_filters_domain.py`: Domain tests for the Transakcje list's column filters, sort order and value options
