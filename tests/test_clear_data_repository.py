@@ -6,7 +6,8 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
-from sqlalchemy import Engine, create_engine
+from sqlalchemy import Engine, create_engine, func, select
+from sqlalchemy.orm import Session
 
 from financial_app.domain.accounts import AccountDraft, AccountType
 from financial_app.domain.currencies import NbpRate
@@ -23,6 +24,20 @@ from financial_app.persistence.instruments import (
     list_instruments,
     rename_asset_class,
     set_fallback_order,
+)
+from financial_app.persistence.models import (
+    AssetClassRow,
+    Base,
+    BenchmarkRow,
+    ClassTargetRow,
+    InstrumentTargetRow,
+    MultiAssetShareRow,
+    OnClear,
+    PriceFailureRow,
+    QuoteHistoryRow,
+    RateCorrectionRow,
+    SkippedBrokerRow,
+    StrategyRow,
 )
 from financial_app.persistence.nbp_rates import cache_rate, cached_rate
 from financial_app.persistence.quotes import latest_quotes, save_quote
@@ -109,6 +124,47 @@ def test_default_asset_classes_match_the_ones_a_new_database_starts_with(engine:
     assert [c.name for c in list_asset_classes(engine)] == DEFAULT_ASSET_CLASSES
 
 
+def _fill_every_removed_table(engine: Engine) -> None:
+    _fill(engine)
+    pzu = add_instrument(engine, InstrumentDraft("PZU", 2, "PLN", source_symbols={YAHOO: "PZU.WA"}))
+    save_quote(engine, pzu.id, Quote(Decimal("45.12"), "PLN", date(2026, 10, 9), YAHOO), datetime(2026, 10, 9, 18))
+    account_id = list_accounts(engine)[0].id
+    with Session(engine) as session, session.begin():
+        strategy = StrategyRow(account_id=account_id)
+        session.add(strategy)
+        session.flush()
+        session.add_all(
+            [
+                ClassTargetRow(strategy_id=strategy.id, asset_class_id=2, percent="100", band="5"),
+                InstrumentTargetRow(strategy_id=strategy.id, instrument_id=pzu.id, percent="100"),
+                BenchmarkRow(kind="account", account_id=account_id, offset="0", shown=True, position=0),
+                QuoteHistoryRow(instrument_id=pzu.id, first_day=date(2026, 1, 2), last_day=date(2026, 10, 9)),
+                PriceFailureRow(instrument_id=pzu.id, source=YAHOO, position=0, reason="timeout"),
+                MultiAssetShareRow(instrument_id=pzu.id, asset_class_id=2, percent="100"),
+                RateCorrectionRow(instrument_id=pzu.id, margin="1.5"),
+                SkippedBrokerRow(external_id="xtb-1", skipped_on=date(2026, 10, 9)),
+            ]
+        )
+
+
+def _rows(engine: Engine, models: list[type[Base]]) -> dict[str, int]:
+    with Session(engine) as session:
+        return {m.__tablename__: session.scalar(select(func.count()).select_from(m)) or 0 for m in models}
+
+
+def test_clearing_empties_every_table_it_removes(engine: Engine) -> None:
+    # The Asset Classes are removed too, then their defaults come back
+    removed = [
+        m.class_ for m in Base.registry.mappers if m.class_.on_clear is OnClear.DELETE and m.class_ is not AssetClassRow
+    ]
+    _fill_every_removed_table(engine)
+    assert 0 not in _rows(engine, removed).values()
+
+    clear_portfolio(engine)
+
+    assert _rows(engine, removed) == dict.fromkeys((m.__tablename__ for m in removed), 0)
+
+
 def test_clearing_keeps_the_nbp_rate_cache(engine: Engine) -> None:
     rate = NbpRate("USD", Decimal("4.0123"), date(2024, 1, 2), "001/A/NBP/2024")
     cache_rate(engine, date(2024, 1, 3), rate)
@@ -150,6 +206,28 @@ def test_a_failed_backup_clears_nothing(engine: Engine, monkeypatch: pytest.Monk
     with pytest.raises(BackupError, match="kopii zapasowej"):
         clear_portfolio(engine)
     assert portfolio_counts(engine) == PortfolioCounts(accounts=1, instruments=1, transactions=2)
+
+
+def test_every_model_declares_whether_clearing_removes_it() -> None:
+    undeclared = [m.class_.__name__ for m in Base.registry.mappers if "on_clear" not in vars(m.class_)]
+
+    assert undeclared == []
+
+
+def test_clearing_keeps_the_rate_caches_the_bond_data_the_settings_and_the_contribution_limits() -> None:
+    kept = {m.class_.__tablename__ for m in Base.registry.mappers if m.class_.on_clear is OnClear.KEEP}
+
+    assert kept == {
+        "nbp_rates",
+        "nbp_rate_history",
+        "nbp_history",
+        "mf_bond_series",
+        "cpi",
+        "nbp_reference_rates",
+        "bond_data_status",
+        "app_settings",
+        "contribution_limits",
+    }
 
 
 def test_a_database_without_a_file_is_not_cleared() -> None:

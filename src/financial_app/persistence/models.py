@@ -1,6 +1,8 @@
 """ORM models. The schema itself is created and evolved only by Alembic migrations."""
 
 import datetime as dt
+from enum import Enum
+from typing import ClassVar
 
 from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, MetaData, String, Text, false
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -15,13 +17,23 @@ NAMING_CONVENTION = {
 }
 
 
+class OnClear(Enum):
+    """Whether clearing the portfolio (Ustawienia > Wyczyść dane) removes a model's rows; every model declares it."""
+
+    DELETE = "delete"
+    KEEP = "keep"
+
+
 class Base(DeclarativeBase):
     metadata = MetaData(naming_convention=NAMING_CONVENTION)
+
+    on_clear: ClassVar[OnClear]
 
 
 class AppSetting(Base):
     """A key/value application setting (e.g. the last View Scope)."""
 
+    on_clear = OnClear.KEEP
     __tablename__ = "app_settings"
 
     key: Mapped[str] = mapped_column(String(100), primary_key=True)
@@ -31,6 +43,7 @@ class AppSetting(Base):
 class AccountRow(Base):
     """An Account (spec 3.1). The ``Row`` suffix keeps it apart from ``domain.accounts.Account``, its in-memory form."""
 
+    on_clear = OnClear.DELETE
     __tablename__ = "accounts"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -51,6 +64,7 @@ class AccountRow(Base):
 class AccountCashCurrency(Base):
     """One Cash Currency of an Account; ``position`` keeps the order the user entered them in."""
 
+    on_clear = OnClear.DELETE
     __tablename__ = "account_cash_currencies"
 
     account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE"), primary_key=True)
@@ -64,6 +78,7 @@ class TransactionRow(Base):
     The Tax Amount is not stored: it follows from the stored NBP Rate.
     """
 
+    on_clear = OnClear.DELETE
     __tablename__ = "transactions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -116,6 +131,7 @@ class TransactionRow(Base):
 class SkippedBrokerRow(Base):
     """A broker's Transaction the user chose not to add in a Reconciliation (L-17), so it is not offered again."""
 
+    on_clear = OnClear.DELETE
     __tablename__ = "skipped_broker_rows"
 
     external_id: Mapped[str] = mapped_column(String(100), primary_key=True)
@@ -126,6 +142,7 @@ class AssetClassRow(Base):
     """An Asset Class (spec 3.2); ``position`` keeps the sheet's order, with classes the user adds at the end.
     ``fallback_order`` is its Fallback Order (spec 4.1): the Price Source keys, comma-separated, empty for none."""
 
+    on_clear = OnClear.DELETE
     __tablename__ = "asset_classes"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -139,6 +156,7 @@ class AssetClassRow(Base):
 class InstrumentRow(Base):
     """An Instrument (spec 3.2); ``domain.instruments.Instrument`` is its in-memory form."""
 
+    on_clear = OnClear.DELETE
     __tablename__ = "instruments"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -167,6 +185,7 @@ class InstrumentRow(Base):
 class SourceSymbolRow(Base):
     """An Instrument's Source Symbol in one Price Source (issue #30); ``source`` is a ``domain.prices`` key."""
 
+    on_clear = OnClear.DELETE
     __tablename__ = "source_symbols"
 
     instrument_id: Mapped[int] = mapped_column(ForeignKey("instruments.id"), primary_key=True)
@@ -178,6 +197,7 @@ class RateCorrectionRow(Base):
     """The user's corrections of a Bond Series' MF rates (spec 3.4.1): exact decimal text, ``rates`` one per period,
     comma-separated, empty where the MF file's rate stands."""
 
+    on_clear = OnClear.DELETE
     __tablename__ = "bond_rate_corrections"
 
     instrument_id: Mapped[int] = mapped_column(ForeignKey("instruments.id"), primary_key=True)
@@ -188,6 +208,7 @@ class RateCorrectionRow(Base):
 class MultiAssetShareRow(Base):
     """One Asset Class's share of an Instrument's Multi-asset Split (issue #75); an Instrument's rows sum to 100."""
 
+    on_clear = OnClear.DELETE
     __tablename__ = "multi_asset_shares"
 
     instrument_id: Mapped[int] = mapped_column(ForeignKey("instruments.id"), primary_key=True)
@@ -202,6 +223,7 @@ class StrategyRow(Base):
     """An Investment Strategy (issue #76): Total's when ``account_id`` is empty, else that Account's own. The
     repository keeps one per Account and one for Total (SQLite lets a unique column hold several NULLs)."""
 
+    on_clear = OnClear.DELETE
     __tablename__ = "strategies"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -214,6 +236,7 @@ class StrategyRow(Base):
 class ClassTargetRow(Base):
     """An Allocation Target of a strategy with its tolerance band (± percentage points)."""
 
+    on_clear = OnClear.DELETE
     __tablename__ = "class_targets"
 
     strategy_id: Mapped[int] = mapped_column(ForeignKey("strategies.id"), primary_key=True)
@@ -226,6 +249,7 @@ class ClassTargetRow(Base):
 class InstrumentTargetRow(Base):
     """An Instrument Target of a strategy: percent of the Instrument's Asset Class."""
 
+    on_clear = OnClear.DELETE
     __tablename__ = "instrument_targets"
 
     strategy_id: Mapped[int] = mapped_column(ForeignKey("strategies.id"), primary_key=True)
@@ -236,6 +260,7 @@ class InstrumentTargetRow(Base):
 class QuoteRow(Base):
     """An Instrument's Quote for ``day`` (issue #30); a later fetch on the same day replaces it."""
 
+    on_clear = OnClear.DELETE
     __tablename__ = "quotes"
 
     instrument_id: Mapped[int] = mapped_column(ForeignKey("instruments.id"), primary_key=True)
@@ -254,6 +279,7 @@ class PriceFailureRow(Base):
     sources were tried in.
     """
 
+    on_clear = OnClear.DELETE
     __tablename__ = "price_failures"
 
     instrument_id: Mapped[int] = mapped_column(ForeignKey("instruments.id"), primary_key=True)
@@ -268,6 +294,7 @@ class NbpRateRow(Base):
     Only final rates are cached: a published table never changes.
     """
 
+    on_clear = OnClear.KEEP
     __tablename__ = "nbp_rates"
 
     currency: Mapped[str] = mapped_column(String(3), primary_key=True)
@@ -283,6 +310,7 @@ class QuoteHistoryRow(Base):
     Days without trading are covered too, so they are not asked for again.
     """
 
+    on_clear = OnClear.DELETE
     __tablename__ = "quote_history"
 
     instrument_id: Mapped[int] = mapped_column(ForeignKey("instruments.id"), primary_key=True)
@@ -293,6 +321,7 @@ class QuoteHistoryRow(Base):
 class NbpRateHistoryRow(Base):
     """The NBP table A mid rate of ``currency`` published on ``day`` (issue #33), for History (Stage 4)."""
 
+    on_clear = OnClear.KEEP
     __tablename__ = "nbp_rate_history"
 
     currency: Mapped[str] = mapped_column(String(3), primary_key=True)
@@ -304,6 +333,7 @@ class NbpRateHistoryRow(Base):
 class NbpHistoryRow(Base):
     """The days ``first_day`` to ``last_day`` whose NBP Rates of ``currency`` were fetched (issue #33)."""
 
+    on_clear = OnClear.KEEP
     __tablename__ = "nbp_history"
 
     currency: Mapped[str] = mapped_column(String(3), primary_key=True)
@@ -317,6 +347,7 @@ class MfBondSeriesRow(Base):
     ``rates`` and ``interest`` hold one decimal per period, comma-separated, empty where MF has published none.
     """
 
+    on_clear = OnClear.KEEP
     __tablename__ = "mf_bond_series"
 
     series: Mapped[str] = mapped_column(String(10), primary_key=True)
@@ -333,6 +364,7 @@ class MfBondSeriesRow(Base):
 class CpiRow(Base):
     """The GUS consumer price indices of a month (spec 3.4.1); each fetch replaces all rows."""
 
+    on_clear = OnClear.KEEP
     __tablename__ = "cpi"
 
     year: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -344,6 +376,7 @@ class CpiRow(Base):
 class ReferenceRateRow(Base):
     """The NBP reference rate in force from ``valid_from`` (spec 3.4.1); each fetch replaces all rows."""
 
+    on_clear = OnClear.KEEP
     __tablename__ = "nbp_reference_rates"
 
     valid_from: Mapped[dt.date] = mapped_column(Date, primary_key=True)
@@ -353,6 +386,7 @@ class ReferenceRateRow(Base):
 class BondDataStatusRow(Base):
     """The last successful fetch of a bond data source and, while it keeps failing, the last failure's reason."""
 
+    on_clear = OnClear.KEEP
     __tablename__ = "bond_data_status"
 
     source: Mapped[str] = mapped_column(String(20), primary_key=True)
@@ -365,6 +399,7 @@ class BenchmarkRow(Base):
     """A Benchmark (issue #91): CPI, an Instrument or an Account (``kind``), with its offset in pp a year (Decimal as
     text), whether the chart shows it, and its place in the list."""
 
+    on_clear = OnClear.DELETE
     __tablename__ = "benchmarks"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -380,6 +415,7 @@ class ContributionLimitRow(Base):
     """A Contribution Limit (issue #95): one per year and limited Account Type, its PLN amount (Decimal as text) or
     ``None`` while the year's row has none entered."""
 
+    on_clear = OnClear.KEEP
     __tablename__ = "contribution_limits"
 
     year: Mapped[int] = mapped_column(Integer, primary_key=True)
