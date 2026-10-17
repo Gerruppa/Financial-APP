@@ -15,16 +15,19 @@ from sqlalchemy import Engine
 
 from financial_app.domain.account_ranking import ranking
 from financial_app.domain.dashboard import AccountRow, CurrencyShare, Totals
-from financial_app.domain.formatting import format_count, format_percent, format_pln
+from financial_app.domain.formatting import format_count, format_day_time, format_percent, format_pln
 from financial_app.domain.portfolio_history import DayValue
+from financial_app.domain.valuation_snapshots import SnapshotChange
 from financial_app.sources.dashboard import todays_dashboard
 from financial_app.sources.nbp import NbpRates
 from financial_app.sources.prices import RefreshStatus, last_refresh, refresh_summary, unpriced_instruments
+from financial_app.sources.valuation_snapshots import change_since_snapshot
 from financial_app.ui.account_ranking import AccountRanking, accounts_treemap
 from financial_app.ui.changes import Change
 from financial_app.ui.charts import dashboard_charts
 from financial_app.ui.contribution_limits import limits_section
 from financial_app.ui.info import card_title
+from financial_app.ui.investment_goal import goal_tile
 from financial_app.ui.periods import PeriodChoice, period_selector
 from financial_app.ui.strategy import PlannedDeposit, strategy_section
 from financial_app.ui.view_scope import ViewScope
@@ -96,6 +99,10 @@ class DashboardPage:
         _prices_line(last_refresh(self.engine), len(unpriced_instruments(self.engine)))
         ui.switch("Po podatku", value=self.after_tax, on_change=self._toggle_after_tax).mark("after-tax")
         _totals(board.totals, self.after_tax)
+        _since_snapshot(change_since_snapshot(self.engine, self.scope.account_id, board.totals, self.period.today()))
+        # The goal's progress follows the "Po podatku" toggle
+        value = board.totals.value_after(self.after_tax)
+        goal_tile(self.engine, self.scope.account_id, value, days, self.period.today(), self.refresh)
         _account_table(board.accounts, self.after_tax)
         limits_section(self.engine, today.transactions, today.accounts, self.rates.today(), self.scope.account_id)
         if self.scope.account_id is None:
@@ -144,6 +151,21 @@ def _totals(totals: Totals, after_tax: bool) -> None:
             with ui.card().classes("gap-1"):
                 card_title(title, TILE_INFO.get(key), f"total-{key}", "text-sm text-gray-500")
                 ui.label(DASH if text is None else text).classes("text-xl font-medium").mark(f"total-{key}")
+
+
+def _since_snapshot(change: SnapshotChange | None) -> None:
+    """The change since the last Valuation Snapshot of an earlier day (issue #115), before tax whatever the toggle;
+    nothing without one."""
+    if change is None:
+        return
+    text = f"Od {format_day_time(change.since)}: {format_pln(change.total, signed=True)}"
+    if change.percent is not None:
+        text += f" ({format_percent(change.percent * 100, signed=True)})"
+    text += (
+        f", w tym rynek {format_pln(change.market, signed=True)}, "
+        f"wpłaty netto {format_pln(change.net_deposits, signed=True)}"
+    )
+    ui.label(text).classes("text-sm text-gray-600").mark("since-snapshot")
 
 
 ACCOUNT_COLUMNS = "grid-template-columns: minmax(8rem, 2fr) repeat(9, minmax(6rem, 1fr)) minmax(8rem, 1.5fr)"

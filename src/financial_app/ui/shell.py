@@ -21,6 +21,7 @@ from financial_app.sources.history import QuoteHistory
 from financial_app.sources.nbp import NbpRates
 from financial_app.sources.portfolio_history import PortfolioHistory
 from financial_app.sources.prices import PriceSource, RefreshResult, last_refresh, refresh_prices, refresh_summary
+from financial_app.sources.valuation_snapshots import take_snapshot
 from financial_app.sources.yahoo import YahooSearch, YahooSource
 from financial_app.ui.benchmarks import BenchmarksPage
 from financial_app.ui.bond_data import bond_data_status
@@ -117,9 +118,17 @@ def build_shell(
     income_page = PassiveIncomePage(engine, rates, scope)
     benchmarks_page = BenchmarksPage(engine, scope, period, lambda: shared.days, lambda: fetch_in_background())
 
+    # A Successful Refresh is snapshotted once History has been computed after it (issue #115, ADR-0008)
+    snapshot_due = False
+
     async def load_history() -> None:
-        """Compute History (or take it already computed) and show it in the switcher."""
+        """Compute History (or take it already computed) and show it in the switcher; a snapshot due is taken."""
+        nonlocal snapshot_due
         await shared.values()
+        # Only History computed since the refresh, not the days of a computation it overtook
+        if snapshot_due and (days := shared.history.computed):
+            snapshot_due = False
+            take_snapshot(engine, rates, days, now())
         events.publish(Change.HISTORY)
 
     def history_outdated() -> None:
@@ -176,6 +185,7 @@ def build_shell(
             switcher.refresh()
 
     async def refresh_now() -> None:
+        nonlocal snapshot_due
         running = _running_refreshes.get(engine)
         if running is None:
             # The sources answer over the network, so the window keeps working meanwhile
@@ -195,6 +205,8 @@ def build_shell(
             price_status.refresh()
         if result is None:  # the app is shutting down
             return
+        # A failed refresh saves nothing, not even the snapshot a success before it left due
+        snapshot_due = result.succeeded
         # The refresh fetches the bond data due today along with the prices
         events.publish(Change.PRICES, Change.BOND_DATA)
         ui.notify(_refresh_message(result), type="warning" if result.failures else "positive")

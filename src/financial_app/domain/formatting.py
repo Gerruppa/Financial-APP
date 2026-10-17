@@ -90,6 +90,11 @@ def format_datetime(value: datetime) -> str:
     return f"{format_date(value)} {value:%H:%M}"
 
 
+def format_day_time(value: datetime) -> str:
+    """Format a time by its day and month to the minute, e.g. '09.10, 18:05'."""
+    return f"{value:%d.%m}, {value:%H:%M}"
+
+
 def format_count(count: int, one: str, few: str, many: str) -> str:
     """``count`` with the Polish plural of a noun, e.g. 1 błąd, 2 błędy, 5 błędów, 22 błędy."""
     if count == 1:

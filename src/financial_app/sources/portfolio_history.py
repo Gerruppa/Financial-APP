@@ -155,6 +155,12 @@ class PortfolioHistory:
             self._cached = values
         return values
 
+    @property
+    def computed(self) -> list[DayValue] | None:
+        """History computed since the last ``invalidate``, ``None`` until then (``values`` may still return the days
+        of a computation it overtook)."""
+        return self._cached
+
     def invalidate(self) -> None:
         """Forget the computed History, after a Transaction save or a price refresh or fetch."""
         self._cached = None

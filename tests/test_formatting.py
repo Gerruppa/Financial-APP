@@ -8,6 +8,7 @@ from financial_app.domain.formatting import (
     format_count,
     format_date,
     format_datetime,
+    format_day_time,
     format_exact,
     format_exact_percent,
     format_month,
@@ -136,6 +137,7 @@ def test_parse_ratio_rejects_other_formats(text: str) -> None:
 
 def test_a_time_is_shown_day_first_to_the_minute() -> None:
     assert format_datetime(datetime(2026, 10, 9, 8, 5, 59)) == "09.10.2026 08:05"
+    assert format_day_time(datetime(2026, 10, 9, 8, 5, 59)) == "09.10, 08:05"
 
 
 @pytest.mark.parametrize(
