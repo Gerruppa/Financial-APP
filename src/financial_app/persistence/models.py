@@ -423,3 +423,18 @@ class ContributionLimitRow(Base):
     year: Mapped[int] = mapped_column(Integer, primary_key=True)
     account_type: Mapped[str] = mapped_column(String(20), primary_key=True)
     amount: Mapped[str | None] = mapped_column(String(20))
+
+
+class ValuationSnapshotRow(Base):
+    """A Valuation Snapshot of one View Scope (issue #115, ADR-0008): Total (``account_id`` ``None``) or an Account,
+    at most one a calendar day (``taken_on``), its value and Net Deposits in PLN (Decimals as text)."""
+
+    on_clear = OnClear.DELETE
+    __tablename__ = "valuation_snapshots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    taken_on: Mapped[dt.date] = mapped_column(Date, index=True)
+    taken_at: Mapped[dt.datetime] = mapped_column(DateTime)
+    account_id: Mapped[int | None] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE"))
+    value: Mapped[str] = mapped_column(String(30))
+    net_deposits: Mapped[str] = mapped_column(String(30))

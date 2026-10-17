@@ -38,6 +38,7 @@ from financial_app.persistence.models import (
     RateCorrectionRow,
     SkippedBrokerRow,
     StrategyRow,
+    ValuationSnapshotRow,
 )
 from financial_app.persistence.nbp_rates import cache_rate, cached_rate
 from financial_app.persistence.quotes import latest_quotes, save_quote
@@ -143,6 +144,13 @@ def _fill_every_removed_table(engine: Engine) -> None:
                 MultiAssetShareRow(instrument_id=pzu.id, asset_class_id=2, percent="100"),
                 RateCorrectionRow(instrument_id=pzu.id, margin="1.5"),
                 SkippedBrokerRow(external_id="xtb-1", skipped_on=date(2026, 10, 9)),
+                ValuationSnapshotRow(
+                    taken_on=date(2026, 10, 9),
+                    taken_at=datetime(2026, 10, 9, 18),
+                    account_id=account_id,
+                    value="1000",
+                    net_deposits="1000",
+                ),
             ]
         )
 
