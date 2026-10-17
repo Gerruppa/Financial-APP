@@ -30,6 +30,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `0006-history-quote-sources-and-split-unadjusting.md`: ADR: History takes Yahoo then Stooq daily quotes and un-adjusts prices for recorded Splits
 - `0007-bond-redemption-picks-its-lot.md`: ADR: early bond redemption names its Lot instead of FIFO, other Instruments keep FIFO
 - `0008-valuation-snapshots-are-stored.md`: ADR explaining why Dashboard Valuation Snapshots are stored, unlike the recomputed History, and the trade-offs
+- `0009-cloud-vps-behind-cloudflare-access.md`: ADR moving the single-user app to an EU VPS behind Cloudflare Tunnel and Access, with the cloud copy as the only data
 
 ## docs/agents/
 
