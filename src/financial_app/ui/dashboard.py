@@ -27,6 +27,7 @@ from financial_app.ui.changes import Change
 from financial_app.ui.charts import dashboard_charts
 from financial_app.ui.contribution_limits import limits_section
 from financial_app.ui.info import card_title
+from financial_app.ui.investment_goal import goal_tile
 from financial_app.ui.periods import PeriodChoice, period_selector
 from financial_app.ui.strategy import PlannedDeposit, strategy_section
 from financial_app.ui.view_scope import ViewScope
@@ -99,6 +100,9 @@ class DashboardPage:
         ui.switch("Po podatku", value=self.after_tax, on_change=self._toggle_after_tax).mark("after-tax")
         _totals(board.totals, self.after_tax)
         _since_snapshot(change_since_snapshot(self.engine, self.scope.account_id, board.totals, self.period.today()))
+        # The goal's progress follows the "Po podatku" toggle
+        value = board.totals.value_after(self.after_tax)
+        goal_tile(self.engine, self.scope.account_id, value, days, self.period.today(), self.refresh)
         _account_table(board.accounts, self.after_tax)
         limits_section(self.engine, today.transactions, today.accounts, self.rates.today(), self.scope.account_id)
         if self.scope.account_id is None:

@@ -71,6 +71,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `inflation.py`: Inflation over a period from GUS monthly CPI, spread across days as the sheet's Benchmarki do, and the real return
 - `instrument_search.py`: Instrument search result types, the swappable search protocol, and filling empty form fields from a chosen result.
 - `instruments.py`: Instrument and Asset Class models, their validation, default Asset Classes, ISIN, metal, distribution policy and Multi-asset Split rules.
+- `investment_goal.py`: Investment Goal for a View Scope: amount or FIRE target, progress, default monthly deposit and real forecast in today's PLN
 - `lots.py`: The single FIFO engine that opens and consumes Lots for Positions and foreign cash, raising uncovered-sale errors.
 - `metrics.py`: Pure History metrics: XIRR, TWR, drawdowns, max drawdown, volatility and daily change per Total or Account
 - `multi_asset.py`: Multi-asset Instruments held in the View Scope, with their PLN value and split value per Asset Class, largest first
@@ -89,6 +90,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `transaction_form.py`: Transaction dialog rules without widgets: fields per Transaction Type and the Transaction they describe, or the field error
 - `transactions.py`: Transaction types, drafts and builders for every kind, plus cash balances and cost and dividend totals per Account.
 - `valuation.py`: Decides each Instrument's price and status from Manual Price or Quote, including metal spot conversion and badges.
+- `valuation_snapshots.py`: Valuation Snapshot figures per View Scope and the change since one, split into market change and Net Deposits in between
 - `view_scope.py`: View Scope logic: Total or one Account, its remembered setting, switcher entries and transaction filtering
 - `xtb_import.py`: Reads XTB xStation statements into entries and broker Transaction drafts; pure, no file or UI access
 
@@ -105,6 +107,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `db.py`: Opens the SQLite engine and applies pending Alembic migrations at start-up.
 - `history.py`: Reads and writes cached Stooq Quote history and NBP Rate history, with the cover of fetched days.
 - `instruments.py`: Saves and reads Asset Classes and Instruments, and deletes Instrument data including its Quotes and failures.
+- `investment_goals.py`: Loads, saves and deletes the Investment Goal of each View Scope in the database
 - `models.py`: SQLAlchemy ORM models describing the database tables; schema changes go through migrations
 - `nbp_rates.py`: SQLite cache of NBP Rates keyed by currency and day
 - `paths.py`: Resolves the user's data, backup and log folders, kept outside the repository
@@ -114,6 +117,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `settings.py`: Reads and writes text application settings by key in the app_settings table
 - `strategies.py`: Reads and saves Investment Strategies for Total and each Account, with their Allocation and Instrument Targets
 - `transactions.py`: Saves, edits, deletes and lists Transactions, replaying positions to block invalid changes
+- `valuation_snapshots.py`: Saves Valuation Snapshots per View Scope and day, and reads the newest snapshot from an earlier day
 
 ## src/financial_app/persistence/migrations/
 
@@ -152,6 +156,8 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `0028_polish_benchmark_etfs.py`: Migration 0028 drops the WSE:WIG and WSE:SWIG80TR default benchmarks left on Stooq so the Beta ETF defaults come in.
 - `0029_contribution_limits.py`: Migration creating the contribution_limits table and seeding 2026 limits
 - `0030_quantity_decimals.py`: Migration adding Instrument quantity_decimals, filled from existing Transaction quantities and set to 8 for crypto
+- `0031_valuation_snapshots.py`: Migration creating the valuation_snapshots table
+- `0032_investment_goals.py`: Migration creating the investment_goals table
 
 ## src/financial_app/sources/
 
@@ -174,6 +180,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `stooq.py`: Stooq history source for GPW stocks and indices; fetches daily closes via CSV with API key and browser proof-of-work check
 - `todays_view.py`: Loads today's portfolio state once (Transactions, Accounts, Positions, prices, NBP Rates) for the tabs and Dashboard to share
 - `transaction_saving.py`: Single save path for Transactions (dialog, sheet import, XTB Reconciliation, bond Drafts) that returns the save's warnings
+- `valuation_snapshots.py`: Takes a Valuation Snapshot after a Successful Refresh and computes the Dashboard's change since the last one
 - `xtb.py`: Reads, previews and applies XTB statement imports, matching accounts and tickers and remembering matches
 - `yahoo.py`: Yahoo Finance source for current quotes and Instrument search; converts GBp pence and parses chart and search responses
 
@@ -190,13 +197,14 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `changes.py`: Window change events: the Change enum, the TODAYS_VALUE set, and ChangeEvents, which redraws each tab or header element that declared the published changes.
 - `charts.py`: Dashboard's nine ECharts charts, the profit waterfall, and shared PLN line and bar chart helpers for other tabs.
 - `contribution_limits.py`: Contribution Limits UI: yearly limits in Ustawienia and this year's Dashboard bars
-- `dashboard.py`: Dashboard tab UI: totals, price status, Account table, exposure, charts, Account treemap and ranking, and the after-tax toggle
+- `dashboard.py`: Dashboard tab UI: totals, price status, Account table, exposure, charts, Account treemap and ranking, Investment Goal tile, and the after-tax toggle
 - `dialogs.py`: Draggable dialog support with no backdrop, so the screen behind stays readable
 - `fund_details.py`: Builds the short fund detail texts (TER, Distribution Policy, domicile) shared by Instrument list and Portfolio
 - `history.py`: Shared per-database History window state: background fetch, progress and failure status, cached days
 - `import_sheet.py`: Ustawienia import section that previews the Transakcje spreadsheet and saves it only after user decisions
 - `info.py`: Hover "i" icon and card title helper that show explanatory text in Dashboard and Wyniki cards
 - `instruments.py`: Ustawienia Klasy aktywów and Instrumenty cards: editable Asset Classes and the Instrument catalog with its dialog
+- `investment_goal.py`: Dashboard Investment Goal tile with progress and real forecast, and a dialog to set the goal as amount or FIRE
 - `multi_asset.py`: Multi-asset tab and split editor: edits an Instrument's Multi-asset Split and lists held Multi-asset Instruments by Asset Class
 - `passive_income.py`: Dochód pasywny tab: year navigation, Monthly Income Goal, tiles, monthly chart and table with progress, forecast coupons.
 - `periods.py`: Period selector UI: preset buttons and custom range inputs, remembered per user and redrawing listeners
@@ -292,6 +300,9 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_instruments_domain.py`: Tests Instrument and Asset Class validation rules, including fund and distribution policy fields.
 - `test_instruments_repository.py`: Tests saving Asset Classes and Instruments in SQLite, including uniqueness and updates.
 - `test_instruments_ui.py`: Tests the Klasy aktywów and Instrumenty sections of Ustawienia, run without a browser.
+- `test_investment_goal_domain.py`: Tests Investment Goal values, progress, default monthly deposit and real forecast
+- `test_investment_goal_repository.py`: Tests saving Investment Goals: one per View Scope, replaced, removed and gone with their Account
+- `test_investment_goal_ui.py`: Tests setting, editing and removing an Investment Goal on the Dashboard per View Scope
 - `test_lots_domain.py`: Tests the FIFO Lot engine and the Positions it produces from Transactions.
 - `test_metrics_domain.py`: Unit tests for History metrics: XIRR, TWR, drawdown and volatility per Total or Account
 - `test_multi_asset_domain.py`: Tests Multi-asset Split rules in the domain: validation, class parts, History, Dashboard allocation and holdings
@@ -346,6 +357,9 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_unpriced_domain.py`: Domain tests for the Instrumenty bez wyceny list: which held Instruments lack an automatic price and why
 - `test_unpriced_ui.py`: UI tests for the Instrumenty bez wyceny section in Ustawienia, including opening and fixing a symbol
 - `test_valuation_domain.py`: Domain tests for Instrument price selection, PLN conversion, staleness badges and metal spot valuation
+- `test_valuation_snapshots_domain.py`: Tests the change since a Valuation Snapshot split into market change and Net Deposits
+- `test_valuation_snapshots_repository.py`: Tests saving Valuation Snapshots: one per View Scope and day, and reading the newest earlier one
+- `test_valuation_snapshots_ui.py`: Tests Valuation Snapshots in the window: snapshot after a Successful Refresh and the Dashboard change since one
 - `test_view_scope_domain.py`: Tests the View Scope domain: Total or one Account, its text setting, and the Accounts the switcher offers.
 - `test_view_scope_ui.py`: UI tests for the View Scope switcher, breadcrumbs, scope-following tabs and the period selector.
 - `test_windowless.py`: Tests that windowless launches redirect stdout and stderr to a log file while console launches stay untouched

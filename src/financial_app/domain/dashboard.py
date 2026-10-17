@@ -57,6 +57,10 @@ class Totals:
         """The value less the Net Deposits, as the sheet's "Zysk / strata"; ``None`` while History is computed."""
         return None if self.net_deposits is None else self.value - self.net_deposits
 
+    def value_after(self, after_tax: bool) -> Decimal:
+        """The value, less the estimated tax when ``after_tax``."""
+        return self.value - self.estimated_tax if after_tax else self.value
+
     def unrealized_after(self, after_tax: bool) -> Decimal:
         """The unrealised result, less the estimated tax when ``after_tax``."""
         return self.unrealized - self.estimated_tax if after_tax else self.unrealized

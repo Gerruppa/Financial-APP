@@ -205,8 +205,8 @@ def build_shell(
             price_status.refresh()
         if result is None:  # the app is shutting down
             return
-        if result.succeeded:
-            snapshot_due = True
+        # A failed refresh saves nothing, not even the snapshot a success before it left due
+        snapshot_due = result.succeeded
         # The refresh fetches the bond data due today along with the prices
         events.publish(Change.PRICES, Change.BOND_DATA)
         ui.notify(_refresh_message(result), type="warning" if result.failures else "positive")

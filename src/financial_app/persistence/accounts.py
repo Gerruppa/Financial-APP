@@ -13,6 +13,7 @@ from financial_app.persistence.models import (
     AccountRow,
     AppSetting,
     BenchmarkRow,
+    InvestmentGoalRow,
     StrategyRow,
     TransactionRow,
     ValuationSnapshotRow,
@@ -55,8 +56,8 @@ def account_holders(engine: Engine, account_id: int) -> AccountHolders:
 
 def delete_account(engine: Engine, account_id: int) -> None:
     """Delete an Account nothing names any more, else raise ``AccountError`` saying what holds it (L-28). A View
-    Scope remembered on it goes back to Total, and a Benchmark comparing against it and its Valuation Snapshots go
-    with it. An Account already
+    Scope remembered on it goes back to Total, and a Benchmark comparing against it, its Valuation Snapshots and
+    its Investment Goal go with it. An Account already
     gone (deleted in another window) is left so."""
     with Session(engine) as session, session.begin():
         row = session.get(AccountRow, account_id)
@@ -68,6 +69,7 @@ def delete_account(engine: Engine, account_id: int) -> None:
         session.execute(delete(BenchmarkRow).where(BenchmarkRow.account_id == account_id))
         # SQLite runs without foreign keys enforced, so ON DELETE CASCADE alone would leave them
         session.execute(delete(ValuationSnapshotRow).where(ValuationSnapshotRow.account_id == account_id))
+        session.execute(delete(InvestmentGoalRow).where(InvestmentGoalRow.account_id == account_id))
         session.delete(row)
         session.execute(
             delete(AppSetting).where(AppSetting.key == VIEW_SCOPE, AppSetting.value == scope_setting(account_id))

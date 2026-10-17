@@ -438,3 +438,22 @@ class ValuationSnapshotRow(Base):
     account_id: Mapped[int | None] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE"))
     value: Mapped[str] = mapped_column(String(30))
     net_deposits: Mapped[str] = mapped_column(String(30))
+
+
+class InvestmentGoalRow(Base):
+    """The Investment Goal of one View Scope (issue #96): Total (``account_id`` ``None``) or an Account, the amount
+    or the FIRE expenses and withdrawal rate (``mode``), the optional target date and the forecast's assumptions
+    (Decimals as text; ``monthly_deposit`` ``None`` for the scope's average)."""
+
+    on_clear = OnClear.DELETE
+    __tablename__ = "investment_goals"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    account_id: Mapped[int | None] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE"))
+    mode: Mapped[str] = mapped_column(String(20))
+    amount: Mapped[str | None] = mapped_column(String(30))
+    yearly_expenses: Mapped[str | None] = mapped_column(String(30))
+    withdrawal_rate: Mapped[str] = mapped_column(String(20))
+    target_date: Mapped[dt.date | None] = mapped_column(Date)
+    real_return: Mapped[str] = mapped_column(String(20))
+    monthly_deposit: Mapped[str | None] = mapped_column(String(30))
