@@ -14,7 +14,7 @@
   "docs/adr/0006-history-quote-sources-and-split-unadjusting.md": "5846c28b",
   "docs/adr/0007-bond-redemption-picks-its-lot.md": "25d465d8",
   "docs/adr/0008-valuation-snapshots-are-stored.md": "a3089b71",
-  "docs/adr/0009-cloud-vps-behind-cloudflare-access.md": "8069f35f",
+  "docs/adr/0009-cloud-vps-behind-cloudflare-access.md": "a30da268",
   "docs/agents/domain.md": "35249041",
   "docs/agents/issue-tracker.md": "b258aeb3",
   "docs/agents/triage-labels.md": "b716855d",
