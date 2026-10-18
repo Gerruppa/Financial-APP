@@ -52,6 +52,10 @@ _Avoid_: allocation, look-through
 What a screen is computed for: **Total** (all Accounts) or a single Account. Accounts are the sub-portfolios; there is no grouping level between them and Total.
 _Avoid_: sub-portfolio, portfolio group, filter
 
+**View Profile** (Profil widoku):
+Which Dashboard tiles, sections and charts and which tabs the window shows, set in Ustawienia under Wygląd i widoczność: **Podstawowy** (a few tiles, the Account table, the value and allocation charts, only the main tabs), **Pełny** (everything, the default) or **Własny** (any other choice). One for every View Scope; hiding changes only the view, never a calculation. Dashboard, Portfolio, Transakcje and Ustawienia are always in the menu, and a hidden tab still opens at its address.
+_Avoid_: theme, layout mode
+
 **Investment Strategy** (Strategia inwestycyjna):
 The set of Allocation Targets, optionally refined by Instrument Targets inside each Asset Class. Total has one; each Account may optionally have its own.
 _Avoid_: model portfolio, plan

@@ -70,6 +70,8 @@ _WATERFALL_BAR = f"""(params, api) => {{
 _GAIN, _LOSS, _RESULT = "#2e7d32", "#c62828", "#3f51b5"
 
 # What each Dashboard chart shows and how to read it, behind the "i" in its card's corner
+# The charts drawn from History, which wait for it
+HISTORY_CHARTS = ("class-shares", "value", "profit", "xirr", "drawdown")
 CHART_INFO = {
     "waterfall": (
         "Skąd wziął się Twój wynik od pierwszej transakcji. Każdy słupek zaczyna się tam, gdzie skończył się "
@@ -132,10 +134,12 @@ def dashboard_charts(
     period: tuple[date, date],
     targets: Mapping[str, Decimal] | None = None,
     sources: ProfitSources | None = None,
+    shows: Callable[[str], bool] = lambda key: True,
 ) -> None:
-    """The charts in a grid of cards; those from History wait for it, ``None`` while it is computed. ``targets`` are
-    the View Scope's Allocation Targets (percent by Asset Class name), shown beside the allocation; ``sources`` the
-    result by source the waterfall shows (the board's, unless after tax)."""
+    """The charts ``shows`` shows by their ``chart-`` key, in a grid of cards; those from History wait for it,
+    ``None`` while it is computed. ``targets`` are the View Scope's Allocation Targets (percent by Asset Class name),
+    shown beside the allocation; ``sources`` the result by source the waterfall shows (the board's, unless after
+    tax)."""
     first, last = period
     with (
         ui.element("div")
@@ -143,24 +147,36 @@ def dashboard_charts(
         .style("grid-template-columns: repeat(auto-fill, minmax(26rem, 1fr))")
         .mark("dashboard-charts")
     ):
-        _card("Wynik według źródeł", "waterfall", _waterfall(sources or board.sources))
-        _card(
-            "Dywidendy i odsetki w latach",
-            "dividends",
-            _dividends(transactions, account_names, first, last, account_id),
-        )
-        _card("Waluty w portfelu", "currencies", _currencies(board))
-        _card("Wartość kont", "accounts", _accounts(board))
-        _card("Alokacja", "allocation", _allocation(board, targets or {}))
+        if shows("chart-waterfall"):
+            _card("Wynik według źródeł", "waterfall", _waterfall(sources or board.sources))
+        if shows("chart-dividends"):
+            _card(
+                "Dywidendy i odsetki w latach",
+                "dividends",
+                _dividends(transactions, account_names, first, last, account_id),
+            )
+        if shows("chart-currencies"):
+            _card("Waluty w portfelu", "currencies", _currencies(board))
+        if shows("chart-accounts"):
+            _card("Wartość kont", "accounts", _accounts(board))
+        if shows("chart-allocation"):
+            _card("Alokacja", "allocation", _allocation(board, targets or {}))
+        if not any(shows(f"chart-{name}") for name in HISTORY_CHARTS):
+            return
         if history is None:
             with ui.card().classes("w-full").mark("chart-history-pending"):
                 ui.label("Wykresy historii: wyliczanie historii…").classes("text-gray-500")
             return
-        _class_shares_card(history, first, last, account_id)
-        _card("Wartość konta vs wpłaty netto", "value", _value(history, first, last, account_id), timeline=True)
-        _card("Zysk / strata", "profit", _profit(history, first, last, account_id), timeline=True)
-        _card("XIRR", "xirr", _xirr(history, first, last, account_id), timeline=True)
-        drawdown_chart(history, first, last, account_id)
+        if shows("chart-class-shares"):
+            _class_shares_card(history, first, last, account_id)
+        if shows("chart-value"):
+            _card("Wartość konta vs wpłaty netto", "value", _value(history, first, last, account_id), timeline=True)
+        if shows("chart-profit"):
+            _card("Zysk / strata", "profit", _profit(history, first, last, account_id), timeline=True)
+        if shows("chart-xirr"):
+            _card("XIRR", "xirr", _xirr(history, first, last, account_id), timeline=True)
+        if shows("chart-drawdown"):
+            drawdown_chart(history, first, last, account_id)
 
 
 def drawdown_chart(

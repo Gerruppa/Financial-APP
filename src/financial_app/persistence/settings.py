@@ -14,6 +14,9 @@ PERIOD = "period"
 BENCHMARKS_SEEDED = "benchmarks_seeded"
 # The Monthly Income Goal of the passive-income calendar in PLN, as typed (issue #93)
 PASSIVE_INCOME_GOAL = "passive_income_goal"
+# The Dashboard elements and tabs hidden in Wygląd i widoczność, a JSON list of their keys (issue #155); clearing the
+# data keeps it, as it is how the window looks rather than data
+UI_HIDDEN = "ui.hidden"
 # The XTB import's remembered matches (L-17): an XTB account number's Account id, a ticker's Instrument id; clearing
 # the data removes every key starting with ``XTB_PREFIX``, as they name ids new rows may take again
 XTB_PREFIX = "xtb_"

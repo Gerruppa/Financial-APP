@@ -16,6 +16,6 @@ def test_the_glossary_indexes_every_term_of_context_md() -> None:
     defined = {(m["polish"] or m["english"], m["english"]) for m in TERM.finditer(context)}
     indexed = [(m["polish"], m["english"]) for m in ROW.finditer(glossary)]
 
-    assert len(defined) == 56
+    assert len(defined) == 57
     assert sorted(indexed) == sorted(defined), "GLOSSARY.md differs from the terms of CONTEXT.md"
     assert len(indexed) == len(set(indexed))

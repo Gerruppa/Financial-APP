@@ -1,5 +1,6 @@
 """The Ustawienia tab: Accounts, Asset Classes, Instruments, the price sources' settings, the sheet import (spec
-section 5, issue #20), the Instruments without an automatic price (issue #40) and clearing the data."""
+section 5, issue #20), the Instruments without an automatic price (issue #40), Wygląd i widoczność (issue #155) and
+clearing the data."""
 
 from collections.abc import Callable, Mapping
 
@@ -17,6 +18,7 @@ from financial_app.ui.price_sources import PriceSourcesSection
 from financial_app.ui.recurring_rules import RecurringRulesSection
 from financial_app.ui.reset import ClearDataSection
 from financial_app.ui.unpriced import UnpricedSection
+from financial_app.ui.visibility import Layout, VisibilitySection
 from financial_app.ui.xtb_import import XtbImportSection
 
 
@@ -30,12 +32,14 @@ def build_settings_page(
     on_transactions_changed: Callable[[], None] | None = None,
     on_account_deleted: Callable[[int], None] | None = None,
     on_rules_changed: Callable[[], None] | None = None,
+    layout: Layout | None = None,
 ) -> None:
     """``unpriced`` is kept by the shell, which redraws it on the changes it declares; ``on_instruments_changed`` is
     called after an Instrument or Asset Class is saved; ``sources`` check the Source Symbols typed in the Instrument
     dialog. ``on_transactions_changed`` redraws the other tabs after an XTB Reconciliation is applied;
     ``on_account_deleted`` gets the id of an Account deleted in Konta; ``on_rules_changed`` redraws the Recurring
-    Rules' Drafts after a rule or its skips change."""
+    Rules' Drafts after a rule or its skips change; ``layout`` is the window's hidden elements, which the shell
+    redraws on."""
     ui.label("Ustawienia").classes("text-2xl font-bold")
     limits = ContributionLimitsSection(engine)
     rules = RecurringRulesSection(engine, rates.today, on_changed=on_rules_changed)
@@ -74,6 +78,7 @@ def build_settings_page(
         rules.refresh()
         _all(on_rules_changed)  # the cleared rules' Drafts are no longer counted
 
+    VisibilitySection(layout or Layout(engine)).build()
     ClearDataSection(engine, on_cleared=redraw).build()
 
 
