@@ -73,7 +73,7 @@ def _state(kind: TransactionType, account: int = IKE, **fields: object) -> FormS
     return FormState(account, kind, "02.03.2026", texts, **choices)  # type: ignore[arg-type]
 
 
-def test_only_active_accounts_holding_pln_are_offered_unless_the_edited_transaction_is_on_one() -> None:
+def test_only_active_accounts_are_offered_unless_the_edited_transaction_is_on_one() -> None:
     assert list(_form().accounts) == [IKE, XTB, BONDS]
 
     edited = Transaction(OLD, date(2025, 1, 2), TransactionType.DEPOSIT, Decimal(100), id=1)
@@ -96,7 +96,8 @@ def test_each_type_shows_its_own_fields() -> None:
     assert (deposit.amount.visible, deposit.instrument_fields, deposit.target.visible) == (True, False, False)
 
     buy = form.layout(_state(TransactionType.BUY, instrument_id=CDR))
-    assert (buy.amount.visible, buy.quantity.visible, buy.price.visible, buy.commission) == (False, True, True, True)
+    assert (buy.amount.visible, buy.quantity.visible, buy.price.visible) == (False, True, True)
+    assert buy.commission == Shown(True, "Prowizja (zł)")
     assert (buy.price.label, buy.fx_rate.visible, buy.bond_mode) == ("Cena (zł)", False, True)
 
     split = form.layout(_state(TransactionType.SPLIT, instrument_id=CDR))

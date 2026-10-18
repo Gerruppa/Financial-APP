@@ -362,7 +362,10 @@ def foreign_cash(transactions: Iterable[TransactionDraft]) -> list[ForeignCash]:
 
     Cash coming in (an Exchange from PLN, a Sell paid into foreign cash) opens a Lot at its PLN value; cash going
     out (an Exchange to PLN, a Buy paid from foreign cash) closes the oldest Lots, and the difference between its PLN
-    value and their cost is the realised FX result. A PLN commission never touches foreign cash (spec 3.5).
+    value and their cost is the realised FX result. A PLN commission never touches foreign cash (spec 3.5); one in the
+    foreign currency, on an Account without PLN, is spent from it with the trade. A Cash Transfer in a foreign currency
+    (issue #125) moves the oldest Lots to its target with their dates and costs, realising nothing, like a Security
+    Transfer moves an Instrument's.
     ``transactions`` come in entry order, which settles same-day ties after incoming-before-outgoing.
     """
     flows = sorted(
@@ -373,7 +376,15 @@ def foreign_cash(transactions: Iterable[TransactionDraft]) -> list[ForeignCash]:
     realized: dict[tuple[int, str], Decimal] = {}
     for flow in flows:
         key = (flow.account_id, flow.currency)
-        result = _net(lots.setdefault(key, []), Lot(flow.date, flow.quantity, flow.cost, flow.tax_cost))
+        flowing = Lot(flow.date, flow.quantity, flow.cost, flow.tax_cost)
+        if flow.target_account_id is None:
+            result = _net(lots.setdefault(key, []), flowing)
+        else:
+            moved = _move_out(lots.setdefault(key, []), flowing)
+            target_key = (flow.target_account_id, flow.currency)
+            received = _receive(lots.setdefault(target_key, []), moved)
+            realized[target_key] = realized.get(target_key, Decimal(0)) + received
+            result = Decimal(0)
         realized[key] = realized.get(key, Decimal(0)) + result
     return [
         ForeignCash(account_id, currency, tuple(open_lots), realized[(account_id, currency)])
@@ -404,6 +415,8 @@ class _Flow:
     quantity: Decimal
     cost: Decimal
     tax_cost: Decimal
+    # A Cash Transfer's target, to which the cash moves with its Lots (issue #125)
+    target_account_id: int | None = None
 
 
 def _foreign_flow(t: TransactionDraft) -> _Flow | None:
@@ -413,12 +426,47 @@ def _foreign_flow(t: TransactionDraft) -> _Flow | None:
     if t.transaction_type is TransactionType.CURRENCY_EXCHANGE:
         value = tax_value = t.actual_amount
     else:
-        # The Actual and Tax Amounts without the PLN commission, which is paid from PLN
-        commission = t.commission if t.transaction_type is TransactionType.BUY else -t.commission
+        # The Actual and Tax Amounts without the PLN commission, which is paid from PLN; one in the foreign cash
+        # (issue #124) is part of the flow
+        commission = t.commission_from_pln if t.transaction_type is TransactionType.BUY else -t.commission_from_pln
         value = t.actual_amount - commission
         tax_value = t.tax_amount - commission
     sign = 1 if change > 0 else -1
-    return _Flow(t.account_id, t.cash_currency, t.date, change, sign * value, sign * tax_value)
+    target = t.target_account_id if t.transaction_type is TransactionType.CASH_TRANSFER else None
+    return _Flow(t.account_id, t.cash_currency, t.date, change, sign * value, sign * tax_value, target)
+
+
+def _move_out(lots: list[Lot], outgoing: Lot) -> list[Lot]:
+    """Take the oldest Lots for the cash ``outgoing`` (negative) moves to another Account and return them, dates and
+    costs kept. A shortfall moves at the flow's own PLN value, leaving a negative Lot behind (spec 3.3, issue #125)."""
+    units = -outgoing.quantity
+    moved: list[Lot] = []
+    while units and lots and lots[0].quantity > 0:
+        taken, left = _split(lots[0], min(units, lots[0].quantity))
+        if left.quantity:
+            lots[0] = left
+        else:
+            lots.pop(0)
+        moved.append(taken)
+        units -= taken.quantity
+    if units:
+        shortfall = outgoing.part(units / -outgoing.quantity)
+        _net(lots, shortfall)  # no positive Lot is left to close, so it stays as a negative one
+        moved.append(Lot(shortfall.date, -shortfall.quantity, -shortfall.cost, -shortfall.tax_cost))
+    return moved
+
+
+def _receive(lots: list[Lot], moved: list[Lot]) -> Decimal:
+    """Add the ``moved`` Lots to the target's cash, where they take their place by date; like incoming cash, they first
+    close a negative Lot, whose realised result is returned."""
+    realized = Decimal(0)
+    for lot in moved:
+        if lots and lots[0].quantity < 0:
+            realized += _net(lots, lot)
+        else:
+            # Stable, so a moved Lot dated like one already there comes after it
+            lots[:] = sorted([*lots, lot], key=lambda held: held.date)
+    return realized
 
 
 def _net(lots: list[Lot], incoming: Lot) -> Decimal:

@@ -21,7 +21,7 @@ The most that may be paid in a calendar year into the Accounts of one Account Ty
 _Avoid_: cap, allowance, quota
 
 **Cash Currency** (Waluta rachunku):
-A currency in which an Account can hold cash. An Account with only PLN converts every foreign-currency trade automatically.
+A currency in which an Account can hold cash. An Account with only PLN converts every foreign-currency trade automatically; an Account without PLN pays everything, commissions included, from its foreign cash.
 _Avoid_: sub-account, currency account
 
 **FX Conversion Fee** (Opłata za przewalutowanie):
@@ -81,6 +81,10 @@ _Avoid_: discount, haircut
 **Transaction** (Transakcja):
 One user-recorded event on an Account: Deposit, Withdrawal, Buy, Sell, Dividend, Cost, Split, Currency Exchange, Cash Transfer, Security Transfer or DRIP.
 _Avoid_: operation, trade, entry
+
+**Recurring Rule** (Reguła cykliczna):
+A Deposit or Buy the user repeats on an Account (monthly, quarterly, half-yearly or yearly, on a day of the month), with its planned amount. Each of its occurrences due by today and not matched by a Transaction is a Draft; an occurrence can be skipped for good.
+_Avoid_: standing order, schedule, subscription
 
 **Dividend** (Dywidenda / odsetki):
 A payout of an Instrument, or interest (with or without an Instrument), recorded with its gross amount and the withholding tax taken at source, both in its own currency. The net amount goes into PLN cash (converted) or foreign cash of the same currency. A Bond Series' coupon is recorded as interest naming the Lot it was paid on.
@@ -173,7 +177,7 @@ What redeeming one bond of a Bond Series' Lot today would pay, a Lot's being tha
 _Avoid_: after-tax value, redemption value
 
 **Draft** (Szkic):
-A Transaction the app proposes for confirmation (a maturity redemption, a Rollover or a bond coupon), computed from what is due and not yet recorded, never stored; confirming it saves an ordinary Transaction.
+A Transaction the app proposes for confirmation (a maturity redemption, a Rollover, a bond coupon or a Recurring Rule's occurrence), computed from what is due and not yet recorded, never stored; confirming it saves an ordinary Transaction.
 _Avoid_: pending transaction, suggestion
 
 **Rollover** (Zamiana):

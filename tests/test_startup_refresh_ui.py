@@ -23,6 +23,7 @@ from financial_app.sources.history import QuoteHistory
 from financial_app.sources.nbp import NbpRates
 from financial_app.sources.portfolio_history import PortfolioHistory
 from financial_app.sources.prices import refresh_prices
+from financial_app.ui.history import shared_history
 from financial_app.ui.shell import build_shell
 
 NBSP = "\N{NO-BREAK SPACE}"
@@ -74,6 +75,14 @@ def _shell(engine: Engine, yahoo: FakeYahoo, now: datetime) -> Callable[[], None
 
 async def _inline(function: Callable[..., list[DayValue]], *args: object) -> list[DayValue]:
     return function(*args)
+
+
+async def _wait_for_history_fetch(engine: Engine) -> None:
+    """Wait for the History fetch the start-up refresh went on to, once the refresh shows (issue #128): it runs in a
+    worker thread behind every tab's redraw, so it can outlast ``should_see``'s retries."""
+    fetching = shared_history(engine, lambda: pytest.fail("the window made no History")).fetching
+    if fetching is not None:
+        await fetching
 
 
 async def test_a_start_after_the_close_refreshes_and_the_portfolio_shows_the_quote(engine: Engine) -> None:
@@ -170,6 +179,8 @@ async def test_after_the_refresh_the_history_is_fetched_and_its_failures_listed(
     async with user_simulation(_shell(engine, FakeYahoo({"PZU.WA": "45.12"}), FRIDAY_EVENING)) as user:
         await user.open("/")
 
+        await user.should_see("Wyceny: 09.10.2026 19:00")
+        await _wait_for_history_fetch(engine)
         await user.should_see("Historia: 1 błąd")
         user.find(marker="history-status").click()
         with user.scope(marker="history-errors"):

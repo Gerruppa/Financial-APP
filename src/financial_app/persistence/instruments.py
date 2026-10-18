@@ -27,6 +27,7 @@ from financial_app.persistence.models import (
     MultiAssetShareRow,
     PriceFailureRow,
     QuoteRow,
+    RecurringRuleRow,
     SourceSymbolRow,
     TransactionRow,
 )
@@ -185,12 +186,14 @@ def set_multi_asset_split(engine: Engine, instrument_id: int, split: Mapping[int
 
 
 def delete_instrument(engine: Engine, instrument_id: int) -> None:
-    """Remove an Instrument that no Transaction uses, with its Instrument Targets and Benchmarks; one with Transactions
-    is kept."""
+    """Remove an Instrument that no Transaction or Recurring Rule uses, with its Instrument Targets and Benchmarks;
+    one with Transactions or bought by a Recurring Rule is kept."""
     with Session(engine) as session, session.begin():
         row = session.get_one(InstrumentRow, instrument_id)
         if session.scalar(select(TransactionRow.id).where(TransactionRow.instrument_id == instrument_id).limit(1)):
             raise InstrumentError(f"Nie można usunąć instrumentu „{row.name}”, bo ma transakcje.")
+        if session.scalar(select(RecurringRuleRow.id).where(RecurringRuleRow.instrument_id == instrument_id).limit(1)):
+            raise InstrumentError(f"Nie można usunąć instrumentu „{row.name}”, bo kupuje go reguła cykliczna.")
         forget_quote_history(session, instrument_id)
         session.execute(delete(QuoteRow).where(QuoteRow.instrument_id == instrument_id))
         session.execute(delete(PriceFailureRow).where(PriceFailureRow.instrument_id == instrument_id))

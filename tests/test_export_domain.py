@@ -66,6 +66,20 @@ def test_a_foreign_buy_exports_its_actual_and_tax_amounts_and_rate() -> None:
     assert row["Komentarz"] == "ręczny zakup"
 
 
+def test_the_commission_exports_with_its_currency() -> None:
+    usd_commission = buy_or_sell(
+        1, DAY, TransactionType.BUY, 10, Decimal(2), Decimal("100"), Decimal("1.5"),
+        nbp_rate=USD, cash_currency="USD", commission_currency="USD",
+    )  # fmt: skip
+    pln_commission = buy_or_sell(1, DAY, TransactionType.BUY, 11, Decimal(3), Decimal("10"), Decimal("5"))
+
+    row = _row([saved(usd_commission, 1)])
+    assert (row["Prowizja"], row["Waluta prowizji"]) == (Decimal("1.5"), "USD")
+    assert _row([saved(pln_commission, 2)])["Waluta prowizji"] == PLN
+    deposit = TransactionDraft(1, DAY, TransactionType.DEPOSIT, Decimal("1000"))
+    assert _row([saved(deposit, 3)])["Waluta prowizji"] is None
+
+
 def test_every_transaction_type_exports_one_row() -> None:
     drafts = [
         TransactionDraft(1, DAY, TransactionType.DEPOSIT, Decimal("1000")),

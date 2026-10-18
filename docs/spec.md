@@ -44,7 +44,7 @@ Re-implement the inwestomat.eu "Portfolio tracker" Google Sheet (v2.0.1, 01.07.2
 - Currencies: base PLN; any NBP table-A currency. Base-currency change is designed for but not built (Q16).
 
 ### 3.3 Transactions (Q22, Q23, Q37, Q38, Q50)
-Types: Deposit (Wpłata), Withdrawal (Wypłata), Buy (Zakup), Sell (Sprzedaż), Dividend/Interest (gross, withholding tax, net), Cost (Koszty), Split (X:Y), Currency Exchange (Wymiana walut), Cash Transfer, Security Transfer (keeps Lot dates and costs), DRIP.
+Types: Deposit (Wpłata), Withdrawal (Wypłata), Buy (Zakup), Sell (Sprzedaż), Dividend/Interest (gross, withholding tax, net), Cost (Koszty), Split (X:Y), Currency Exchange (Wymiana walut), Cash Transfer (PLN, or a foreign Cash Currency both Accounts hold, worth its amount at NBP D-1, moving its cash Lots with their dates and costs, #125), Security Transfer (keeps Lot dates and costs), DRIP.
 
 Each Transaction stores:
 - account, date, instrument, quantity, price (instrument currency; a Catalyst bond's price per bond, its percent of nominal times the nominal, L-23), commission (any currency), comment;
@@ -62,6 +62,14 @@ FX conversion on a PLN-only Account (Q49, Q50, Q50b, Q56, prototype verdict): co
 Validation at save time (Q36):
 - Block: selling more than held on that Account at that date; Split before the first Buy or malformed ratio; missing NBP rate (never silently 0 PLN).
 - Warn only: insufficient cash (allows entering history in any order) (Q19).
+
+### 3.3.1 Recurring Rules (#97, 2026-10-17)
+- **Rule**: a Recurring Rule has a name, an Account, a type (Deposit or Buy; Cost and Cash Transfer may follow by the same mechanism, nothing else), the Instrument of a Buy, an amount in one of the Account's Cash Currencies, a frequency (monthly, quarterly, half-yearly, yearly, counted from the start date's month), a day of the month, a start date, an optional end date and an active flag. It is stored (with its skipped occurrences); clearing the data removes both, and so does deleting its Account.
+- **Occurrences**: from the start date to the earlier of today and the end date; a day past the month's end falls on its last day, and one on a Saturday or Sunday moves to the next Monday (no public holidays), possibly into the next month. A new rule starts at its next occurrence by default, so it brings no backlog. An inactive rule has none.
+- **Matching**: an occurrence is covered by the Transaction saved from its Draft (the Transaction stores the rule and the occurrence date, so editing it later changes nothing; deleting the rule leaves the Transaction, unlinked). Otherwise any Transaction entered by hand or imported (XTB) on the same Account, of the same type and (for a Buy) Instrument, within ±7 days of the occurrence and not linked to an occurrence covers it, the amount not compared; occurrences take the nearest free Transaction, oldest first, one Transaction covering at most one occurrence. Computed, never stored.
+- **Drafts**: each uncovered, unskipped occurrence is a Draft, kept apart from the bond Drafts: a list "Transakcje cykliczne do zatwierdzenia" above the Transakcje tab's table, oldest first, following the View Scope, and a header button "Cykliczne do zatwierdzenia: n" over every Account that opens it; the bond list and its "Do zatwierdzenia: n" stay as they are. A row shows the day, the rule's name, Account, type, Instrument and amount. A Deposit has "Zatwierdź" (saves it on the occurrence day with the rule's amount and currency, Origin manual) and "Edytuj…" (the "+" dialog prefilled with the same, saving on its own "Zapisz"); a Buy only "Edytuj…", the dialog prefilled with the Account, Instrument and day, its quantity and price left empty. "Pomiń" skips the occurrence for good. There is no "confirm all".
+- **Rules in Ustawienia**: a card "Transakcje cykliczne", a table of the rules (name, Account, type, Instrument, amount, frequency, next occurrence, active) with add, edit, switch off and delete; the rule's dialog lists its skipped occurrences with "Przywróć" and has "Pomiń zaległe" to skip every uncovered occurrence before today. A Deposit or Buy in the Transakcje tab offers "Powtarzaj…", a new rule prefilled from it (a Buy's amount being its Actual Amount), starting at the next occurrence after today (after the Transaction, if dated ahead), so that repeating an old Transaction brings no overdue Drafts.
+- **Out of scope**: Drafts do not count towards Contribution Limits; the Investment Goal does not read the rules yet.
 
 ### 3.4 Bonds (Q17, Q34, Q45)
 - Instrument = **Bond Series** in MF convention `TYPYMMRR` (type + maturity month + 2-digit maturity year, e.g. EDO bought 07.2025 → `EDO0735`). A series is sold in one month only, so its first-year rate, margin and the rates of later periods belong to the Series; each purchase is its own Lot with its date (its anniversaries count from it), quantity and price (100, or the Rollover price).
@@ -102,7 +110,7 @@ Validation at save time (Q36):
 - Lot key: Account + Instrument. Same-day order: Split, Buy, Security Transfer, Sell, DRIP/Deposit.
 - Buy fee capitalised into Lot cost; each Lot carries Actual cost and Tax cost (qty × price × NBP D-1 + fee in PLN).
 - Splits rescale open Lots (qty × X/Y, unit price × Y/X); fees are not rescaled.
-- Cash Balance per Account and Cash Currency; foreign cash held as Lots with PLN cost → FX result per Account, excludable by the Account flag. Commission paid in PLN is not counted in the foreign-cash quantity.
+- Cash Balance per Account and Cash Currency; foreign cash held as Lots with PLN cost → FX result per Account, excludable by the Account flag. Commission paid in PLN is not counted in the foreign-cash quantity. An Account without PLN (#124) pays its commission from the foreign cash the trade is paid from, so it is counted there, valued at the trade's rate (the Tax Amount at NBP D-1); it has no Currency Exchange, PLN Cash Transfer or broker conversion. A Cash Transfer in a foreign currency (#125) moves the source's oldest cash Lots to the target with their dates and costs, realising no FX result; a shortfall arrives at the NBP value, leaving a negative Lot behind.
 - Dividend attribution to sold pairs (Sell Summary): pro-rata by quantity held on the dividend date, with split-adjusted units.
 
 ## 4. Price sources (Q12, Q35, ADR-0005)

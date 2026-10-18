@@ -66,11 +66,18 @@ def update_transaction(engine: Engine, transaction_id: int, draft: TransactionDr
     """Replace the Transaction's fields with ``draft``; it keeps its id and so its place in the same-day order.
 
     Blocked with InsufficientQuantityError if a Sell, this one or a later one, would lose its cover.
-    An imported Transaction keeps its Origin and fingerprint, so that importing its file again still skips it.
+    An imported Transaction keeps its Origin and fingerprint, so that importing its file again still skips it, and a
+    confirmed Recurring Rule Draft the occurrence it covers (issue #97).
     """
     with Session(engine) as session, session.begin():
         row = get_row(session, transaction_id)
-        draft = replace(draft, origin=Origin(row.origin), external_id=row.external_id)
+        draft = replace(
+            draft,
+            origin=Origin(row.origin),
+            external_id=row.external_id,
+            recurring_rule_id=row.recurring_rule_id,
+            recurring_occurrence=row.recurring_occurrence,
+        )
         check_references(session, draft)
         _check_coverage(session, draft, replacing=row)
         fill_row(row, draft)
@@ -105,11 +112,21 @@ def check_references(session: Session, draft: TransactionDraft) -> None:
     account = session.get(AccountRow, draft.account_id)
     if account is None:
         raise TransactionError("Wybrane konto nie istnieje.")
-    held = {cash.currency for cash in account.cash_currencies}
+    held = _currencies(account)
     if draft.cash_currency != PLN and draft.cash_currency not in held:
         raise TransactionError(f"Konto {account.name} nie ma waluty rachunku {draft.cash_currency}.")
-    if draft.target_account_id is not None and session.get(AccountRow, draft.target_account_id) is None:
-        raise TransactionError("Wybrane konto docelowe nie istnieje.")
+    # An Account without PLN takes no PLN (#124), nor a Cash Transfer's target cash it does not hold (#125), whatever
+    # the source: the dialog, an import
+    moves_pln = draft.cash_change or draft.transaction_type is TransactionType.CURRENCY_EXCHANGE
+    if moves_pln and PLN not in held:
+        raise TransactionError(f"Konto {account.name} nie ma waluty rachunku PLN.")
+    if draft.target_account_id is not None:
+        target = session.get(AccountRow, draft.target_account_id)
+        if target is None:
+            raise TransactionError("Wybrane konto docelowe nie istnieje.")
+        currency = draft.cash_currency
+        if draft.transaction_type is TransactionType.CASH_TRANSFER and currency not in _currencies(target):
+            raise TransactionError(f"Konto {target.name} nie ma waluty rachunku {currency}.")
     if draft.instrument_id is not None:
         instrument = session.get(InstrumentRow, draft.instrument_id)
         if instrument is None:
@@ -152,6 +169,10 @@ def _check_coverage(session: Session, draft: TransactionDraft | None, replacing:
     open_positions(t for t in transactions if t is not None)
 
 
+def _currencies(account: AccountRow) -> set[str]:
+    return {cash.currency for cash in account.cash_currencies}
+
+
 def fill_row(row: TransactionRow, draft: TransactionDraft) -> None:
     row.account_id = draft.account_id
     row.date = draft.date
@@ -162,6 +183,7 @@ def fill_row(row: TransactionRow, draft: TransactionDraft) -> None:
     row.quantity = _text(draft.quantity)
     row.price = _text(draft.price)
     row.commission = str(draft.commission) if draft.transaction_type.is_buy_or_sell else None
+    row.commission_currency = draft.commission_currency
     row.fx_rate = _text(draft.fx_rate)
     nbp = draft.nbp_rate
     row.nbp_currency = None if nbp is None else nbp.currency
@@ -181,6 +203,8 @@ def fill_row(row: TransactionRow, draft: TransactionDraft) -> None:
     row.origin = draft.origin.value
     row.external_id = draft.external_id
     row.lot_id = draft.lot_id
+    row.recurring_rule_id = draft.recurring_rule_id
+    row.recurring_occurrence = draft.recurring_occurrence
 
 
 def _text(value: Decimal | None) -> str | None:
@@ -203,6 +227,7 @@ def to_transaction(row: TransactionRow) -> Transaction:
         quantity=_decimal(row.quantity),
         price=_decimal(row.price),
         commission=Decimal(row.commission or 0),
+        commission_currency=row.commission_currency,
         fx_rate=_decimal(row.fx_rate),
         nbp_rate=_nbp_rate(row),
         cash_currency=row.cash_currency,
@@ -215,6 +240,8 @@ def to_transaction(row: TransactionRow) -> Transaction:
         origin=Origin(row.origin),
         external_id=row.external_id,
         lot_id=row.lot_id,
+        recurring_rule_id=row.recurring_rule_id,
+        recurring_occurrence=row.recurring_occurrence,
     )
 
 

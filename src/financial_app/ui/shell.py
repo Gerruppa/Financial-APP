@@ -21,6 +21,7 @@ from financial_app.sources.history import QuoteHistory
 from financial_app.sources.nbp import NbpRates
 from financial_app.sources.portfolio_history import PortfolioHistory
 from financial_app.sources.prices import PriceSource, RefreshResult, last_refresh, refresh_prices, refresh_summary
+from financial_app.sources.valuation_snapshots import take_snapshot
 from financial_app.sources.yahoo import YahooSearch, YahooSource
 from financial_app.ui.benchmarks import BenchmarksPage
 from financial_app.ui.bond_data import bond_data_status
@@ -34,6 +35,7 @@ from financial_app.ui.multi_asset import MultiAssetPage
 from financial_app.ui.passive_income import PassiveIncomePage
 from financial_app.ui.periods import PeriodChoice
 from financial_app.ui.portfolio import PortfolioPage
+from financial_app.ui.recurring_drafts import recurring_drafts_count
 from financial_app.ui.results import ResultsPage
 from financial_app.ui.sale_summary import SaleSummaryPage
 from financial_app.ui.settings import build_settings_page
@@ -109,7 +111,7 @@ def build_shell(
     dashboard_page = DashboardPage(engine, rates, scope, period, lambda: shared.days, planned)
     strategy_page = StrategyPage(engine, rates, scope, planned)
     results_page = ResultsPage(engine, scope, period, lambda: shared.days)
-    transactions_page = TransactionsPage(engine, rates, scope)
+    transactions_page = TransactionsPage(engine, rates, scope, events.publish)
     portfolio_page = PortfolioPage(engine, rates, scope)
     bonds_page = BondsPage(engine, rates, scope, on_saved=lambda: events.publish(Change.TRANSACTIONS))
     unpriced = UnpricedSection(engine)
@@ -117,9 +119,17 @@ def build_shell(
     income_page = PassiveIncomePage(engine, rates, scope)
     benchmarks_page = BenchmarksPage(engine, scope, period, lambda: shared.days, lambda: fetch_in_background())
 
+    # A Successful Refresh is snapshotted once History has been computed after it (issue #115, ADR-0008)
+    snapshot_due = False
+
     async def load_history() -> None:
-        """Compute History (or take it already computed) and show it in the switcher."""
+        """Compute History (or take it already computed) and show it in the switcher; a snapshot due is taken."""
+        nonlocal snapshot_due
         await shared.values()
+        # Only History computed since the refresh, not the days of a computation it overtook
+        if snapshot_due and (days := shared.history.computed):
+            snapshot_due = False
+            take_snapshot(engine, rates, days, now())
         events.publish(Change.HISTORY)
 
     def history_outdated() -> None:
@@ -174,8 +184,11 @@ def build_shell(
             scope.switch(None)
         else:
             switcher.refresh()
+        # Its Recurring Rules went with it, so their Drafts are no longer counted
+        events.publish(Change.RECURRING_RULES)
 
     async def refresh_now() -> None:
+        nonlocal snapshot_due
         running = _running_refreshes.get(engine)
         if running is None:
             # The sources answer over the network, so the window keeps working meanwhile
@@ -195,6 +208,8 @@ def build_shell(
             price_status.refresh()
         if result is None:  # the app is shutting down
             return
+        # A failed refresh saves nothing, not even the snapshot a success before it left due
+        snapshot_due = result.succeeded
         # The refresh fetches the bond data due today along with the prices
         events.publish(Change.PRICES, Change.BOND_DATA)
         ui.notify(_refresh_message(result), type="warning" if result.failures else "positive")
@@ -221,6 +236,10 @@ def build_shell(
         drafts_state = ui.refreshable(lambda: drafts_count(engine, rates.today()))
         drafts_state()
         events.subscribe(drafts_state.refresh, {Change.TRANSACTIONS, Change.PRICES, Change.BOND_DATA})
+        # The Recurring Rules' Drafts are counted apart from the bonds' (issue #97)
+        recurring_state = ui.refreshable(lambda: recurring_drafts_count(engine, rates.today()))
+        recurring_state()
+        events.subscribe(recurring_state.refresh, {Change.TRANSACTIONS, Change.RECURRING_RULES})
         history_state = ui.refreshable(lambda: history_status(engine, shared))
         history_state()
         bond_state = ui.refreshable(lambda: bond_data_status(engine))
@@ -278,7 +297,15 @@ def build_shell(
     pages["/sprzedaz"] = lambda: scope_pages(sale_page.build)
     pages["/dochod-pasywny"] = lambda: scope_pages(income_page.build)
     pages[SETTINGS_PATH] = lambda: build_settings_page(
-        engine, rates, search, sources, unpriced, instruments_changed, transactions_changed, account_deleted
+        engine,
+        rates,
+        search,
+        sources,
+        unpriced,
+        instruments_changed,
+        transactions_changed,
+        account_deleted,
+        lambda: events.publish(Change.RECURRING_RULES),
     )
     pages = {path: showing_add_button(build, path != SETTINGS_PATH) for path, build in pages.items()}
     ui.sub_pages(pages).classes("w-full").mark("page-content")

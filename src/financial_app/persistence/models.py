@@ -94,6 +94,8 @@ class TransactionRow(Base):
     quantity: Mapped[str | None] = mapped_column(String(30))
     price: Mapped[str | None] = mapped_column(String(30))
     commission: Mapped[str | None] = mapped_column(String(30))
+    # PLN, or the foreign ``cash_currency`` a trade on an Account without PLN is paid from (issue #124)
+    commission_currency: Mapped[str] = mapped_column(String(3), server_default="PLN")
     # Foreign-currency Buy, Sell, Dividend and DRIP only: the user's own rate (None means the NBP Rate) and the NBP
     # Rate (D-1)
     fx_rate: Mapped[str | None] = mapped_column(String(30))
@@ -126,6 +128,9 @@ class TransactionRow(Base):
     # user resolved it; a reconciled Transaction is not offered for pairing again
     broker_id: Mapped[str | None] = mapped_column(String(100), unique=True)
     reconciled_on: Mapped[dt.date | None] = mapped_column(Date)
+    # A confirmed Recurring Rule Draft (issue #97): the rule and the occurrence it covers; deleting the rule unlinks it
+    recurring_rule_id: Mapped[int | None] = mapped_column(ForeignKey("recurring_rules.id", ondelete="SET NULL"))
+    recurring_occurrence: Mapped[dt.date | None] = mapped_column(Date)
 
 
 class SkippedBrokerRow(Base):
@@ -423,3 +428,69 @@ class ContributionLimitRow(Base):
     year: Mapped[int] = mapped_column(Integer, primary_key=True)
     account_type: Mapped[str] = mapped_column(String(20), primary_key=True)
     amount: Mapped[str | None] = mapped_column(String(20))
+
+
+class ValuationSnapshotRow(Base):
+    """A Valuation Snapshot of one View Scope (issue #115, ADR-0008): Total (``account_id`` ``None``) or an Account,
+    at most one a calendar day (``taken_on``), its value and Net Deposits in PLN (Decimals as text)."""
+
+    on_clear = OnClear.DELETE
+    __tablename__ = "valuation_snapshots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    taken_on: Mapped[dt.date] = mapped_column(Date, index=True)
+    taken_at: Mapped[dt.datetime] = mapped_column(DateTime)
+    account_id: Mapped[int | None] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE"))
+    value: Mapped[str] = mapped_column(String(30))
+    net_deposits: Mapped[str] = mapped_column(String(30))
+
+
+class InvestmentGoalRow(Base):
+    """The Investment Goal of one View Scope (issue #96): Total (``account_id`` ``None``) or an Account, the amount
+    or the FIRE expenses and withdrawal rate (``mode``), the optional target date and the forecast's assumptions
+    (Decimals as text; ``monthly_deposit`` ``None`` for the scope's average)."""
+
+    on_clear = OnClear.DELETE
+    __tablename__ = "investment_goals"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    account_id: Mapped[int | None] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE"))
+    mode: Mapped[str] = mapped_column(String(20))
+    amount: Mapped[str | None] = mapped_column(String(30))
+    yearly_expenses: Mapped[str | None] = mapped_column(String(30))
+    withdrawal_rate: Mapped[str] = mapped_column(String(20))
+    target_date: Mapped[dt.date | None] = mapped_column(Date)
+    real_return: Mapped[str] = mapped_column(String(20))
+    monthly_deposit: Mapped[str | None] = mapped_column(String(30))
+
+
+class RecurringRuleRow(Base):
+    """A Recurring Rule (issue #97, spec 3.3.1): a Deposit or Buy of ``amount`` (Decimal as text) in ``currency``
+    falling due on ``day_of_month`` every ``frequency`` from ``start_date``; ``domain.recurring.RecurringRule`` is its
+    in-memory form."""
+
+    on_clear = OnClear.DELETE
+    __tablename__ = "recurring_rules"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(100))
+    account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE"), index=True)
+    transaction_type: Mapped[str] = mapped_column(String(20))
+    instrument_id: Mapped[int | None] = mapped_column(ForeignKey("instruments.id"))
+    amount: Mapped[str] = mapped_column(String(30))
+    currency: Mapped[str] = mapped_column(String(3))
+    frequency: Mapped[str] = mapped_column(String(20))
+    day_of_month: Mapped[int] = mapped_column(Integer)
+    start_date: Mapped[dt.date] = mapped_column(Date)
+    end_date: Mapped[dt.date | None] = mapped_column(Date)
+    active: Mapped[bool] = mapped_column(Boolean)
+
+
+class RecurringRuleSkipRow(Base):
+    """An occurrence of a Recurring Rule the user skipped (issue #97), so it is no Draft any more."""
+
+    on_clear = OnClear.DELETE
+    __tablename__ = "recurring_rule_skips"
+
+    rule_id: Mapped[int] = mapped_column(ForeignKey("recurring_rules.id", ondelete="CASCADE"), primary_key=True)
+    occurrence_date: Mapped[dt.date] = mapped_column(Date, primary_key=True)
