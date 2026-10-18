@@ -27,7 +27,7 @@ from financial_app.domain.formatting import (
     parse_number,
 )
 from financial_app.domain.instruments import InstrumentError
-from financial_app.domain.recurring import RecurringDraft, repeating
+from financial_app.domain.recurring import RECURRING_TYPES, RecurringDraft, repeating
 from financial_app.domain.transaction_filters import (
     CHOICE_COLUMNS,
     NEWEST_FIRST,
@@ -775,8 +775,11 @@ def open_transaction_dialog(
             if transaction is not None:
                 delete_button = ui.button("Usuń", on_click=lambda: _confirm_delete(delete))
                 delete_button.props("flat color=negative").mark("delete-transaction")
-            repeatable = (TransactionType.DEPOSIT, TransactionType.BUY)
-            if transaction is not None and on_rules_changed is not None and transaction.transaction_type in repeatable:
+            if (
+                transaction is not None
+                and on_rules_changed is not None
+                and transaction.transaction_type in RECURRING_TYPES
+            ):
 
                 def repeat() -> None:
                     assert transaction is not None and on_rules_changed is not None

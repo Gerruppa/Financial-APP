@@ -6,23 +6,26 @@ never stored: only the rules and their skips are.
 """
 
 import calendar
-from collections.abc import Collection, Iterable, Iterator, Sequence
+from collections.abc import Collection, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import date, timedelta
 from decimal import Decimal
 from enum import StrEnum
 
+from financial_app.domain.bonds import BondType
 from financial_app.domain.currencies import NbpRate
 from financial_app.domain.transactions import (
     PLN,
     Transaction,
     TransactionDraft,
     TransactionType,
+    cash_transfer,
+    cost,
     deposit_or_withdrawal,
 )
 
-# The Transaction Types a rule may repeat (spec 3.3.1 point 3)
-RECURRING_TYPES = (TransactionType.DEPOSIT, TransactionType.BUY)
+# The Transaction Types a rule may repeat (spec 3.3.1 point 3, #147)
+RECURRING_TYPES = (TransactionType.DEPOSIT, TransactionType.BUY, TransactionType.COST, TransactionType.CASH_TRANSFER)
 # How far from an occurrence a Transaction entered by hand or imported may lie and still cover it
 MATCH_WINDOW = timedelta(days=7)
 SATURDAY = 5
@@ -51,8 +54,9 @@ class Frequency(StrEnum):
 
 @dataclass(frozen=True)
 class RecurringRuleDraft:
-    """A Recurring Rule's fields, checked on creation: a Deposit of ``amount`` in ``currency`` (one of the Account's
-    Cash Currencies, which the repository checks), or a Buy of the Instrument for about ``amount``. It falls due on
+    """A Recurring Rule's fields, checked on creation: a Deposit or Cost of ``amount`` in ``currency`` (one of the
+    Account's Cash Currencies, which the repository checks), a Cash Transfer of it to ``target_account_id``, or a Buy
+    of the Instrument for about ``amount``. It falls due on
     ``day_of_month`` (the month's last day when shorter) every ``frequency`` from the month of ``start_date``, the
     first occurrence, up to ``end_date``; a Saturday or Sunday moves to the next Monday."""
 
@@ -67,18 +71,24 @@ class RecurringRuleDraft:
     end_date: date | None = None
     instrument_id: int | None = None
     active: bool = True
+    target_account_id: int | None = None
 
     def __post_init__(self) -> None:
         if not self.name.strip():
             raise RecurringRuleError("Podaj nazwę reguły.")
         if self.transaction_type not in RECURRING_TYPES:
-            raise RecurringRuleError("Reguła cykliczna może być tylko wpłatą albo kupnem.")
+            raise RecurringRuleError("Reguła cykliczna może być tylko wpłatą, kupnem, kosztem albo transferem gotówki.")
         if not self.amount > 0:
             raise RecurringRuleError("Kwota musi być większa od zera.")
         if not 1 <= self.day_of_month <= 31:
             raise RecurringRuleError("Dzień miesiąca musi być od 1 do 31.")
         if self.transaction_type is TransactionType.BUY and self.instrument_id is None:
             raise RecurringRuleError("Wybierz instrument.")
+        if self.transaction_type is TransactionType.CASH_TRANSFER:
+            if self.target_account_id is None:
+                raise RecurringRuleError("Wybierz konto docelowe.")
+            if self.target_account_id == self.account_id:
+                raise RecurringRuleError("Konto docelowe musi być inne niż źródłowe.")
         if self.end_date is not None and self.end_date < self.start_date:
             raise RecurringRuleError("Data końca nie może być przed datą początku.")
 
@@ -102,6 +112,7 @@ class RuleDefaults:
     currency: str = PLN
     instrument_id: int | None = None
     frequency: Frequency = Frequency.MONTHLY
+    target_account_id: int | None = None
 
 
 def new_rule_defaults(today: date, account_id: int | None) -> RuleDefaults:
@@ -115,11 +126,11 @@ def new_rule_defaults(today: date, account_id: int | None) -> RuleDefaults:
 
 
 def repeating(transaction: Transaction, today: date) -> RuleDefaults:
-    """A monthly rule repeating a Deposit or Buy on its day of the month, from the next occurrence after today (or
-    after the Transaction, if dated ahead), so that an old one brings no backlog of Drafts: a Deposit's amount in its
-    currency, a Buy's Actual Amount in PLN."""
+    """A monthly rule repeating a Deposit, Buy, Cost or Cash Transfer on its day of the month, from the next
+    occurrence after today (or after the Transaction, if dated ahead), so that an old one brings no backlog of Drafts:
+    a Buy's Actual Amount in PLN, any other's amount in its currency, a Cash Transfer's to its target Account."""
     day = transaction.date.day
-    foreign = transaction.transaction_type is TransactionType.DEPOSIT and transaction.cash_currency != PLN
+    foreign = transaction.transaction_type is not TransactionType.BUY and transaction.cash_currency != PLN
     return RuleDefaults(
         transaction.account_id,
         transaction.transaction_type,
@@ -128,6 +139,7 @@ def repeating(transaction: Transaction, today: date) -> RuleDefaults:
         amount=transaction.quantity if foreign else transaction.actual_amount,
         currency=transaction.cash_currency if foreign else PLN,
         instrument_id=transaction.instrument_id if transaction.transaction_type is TransactionType.BUY else None,
+        target_account_id=transaction.target_account_id,
     )
 
 
@@ -186,22 +198,35 @@ class RecurringDraft:
         """``draft`` naming this occurrence, so that it covers it whatever its day or amount."""
         return replace(draft, recurring_rule_id=self.rule.id, recurring_occurrence=self.due)
 
-    def deposit(self, nbp_rate: NbpRate | None) -> TransactionDraft:
-        """The Deposit "Zatwierdź" saves: the rule's amount and currency on the occurrence, a foreign one at the NBP
-        Rate (D-1), named after the rule."""
+    def transaction(self, nbp_rate: NbpRate | None) -> TransactionDraft:
+        """The Deposit, Cost or Cash Transfer "Zatwierdź" saves: the rule's amount and currency on the occurrence, a
+        foreign one at the NBP Rate (D-1), named after the rule. A Buy goes through the transaction dialog instead."""
         rule = self.rule
-        assert rule.transaction_type is TransactionType.DEPOSIT
-        return self.link(
-            deposit_or_withdrawal(
-                rule.account_id,
-                self.due,
-                TransactionType.DEPOSIT,
-                rule.amount,
-                rule.name,
-                cash_currency=rule.currency,
-                nbp_rate=nbp_rate,
-            )
-        )
+        currency = rule.currency
+        match rule.transaction_type:
+            case TransactionType.DEPOSIT:
+                kind = TransactionType.DEPOSIT
+                saved = deposit_or_withdrawal(
+                    rule.account_id, self.due, kind, rule.amount, rule.name, cash_currency=currency, nbp_rate=nbp_rate
+                )
+            case TransactionType.COST:
+                saved = cost(
+                    rule.account_id, self.due, rule.amount, rule.name, cash_currency=currency, nbp_rate=nbp_rate
+                )
+            case TransactionType.CASH_TRANSFER:
+                assert rule.target_account_id is not None
+                saved = cash_transfer(
+                    rule.account_id,
+                    self.due,
+                    rule.target_account_id,
+                    rule.amount,
+                    rule.name,
+                    cash_currency=currency,
+                    nbp_rate=nbp_rate,
+                )
+            case _:
+                raise AssertionError(rule.transaction_type)
+        return self.link(saved)
 
 
 def recurring_drafts(
@@ -210,14 +235,24 @@ def recurring_drafts(
     skipped: Collection[tuple[int, date]],
     today: date,
     account_id: int | None = None,
+    bond_types: Mapping[int, BondType] | None = None,
 ) -> list[RecurringDraft]:
-    """The Drafts due by ``today`` in the View Scope (``account_id``, ``None`` for Total), oldest first.
+    """The Drafts due by ``today`` in the View Scope (``account_id``, ``None`` for Total; a Cash Transfer's in the
+    View of either Account), oldest first.
 
     An occurrence is covered by a Transaction linked to it, else by one entered by hand or imported (no link) on the
-    rule's Account, of its type and, for a Buy, its Instrument, dated within ``MATCH_WINDOW`` of it: the occurrences
-    of every rule, oldest first, each take the nearest such Transaction still free, so one covers one occurrence.
-    Amounts are never compared. ``skipped`` holds the (rule id, occurrence) pairs the user skipped.
+    rule's Account, of its type, for a Buy of its Instrument (of a Bond Series: of any Series of its bond type, which
+    ``bond_types`` gives by Instrument id, #149) and for a Cash Transfer to its target Account, dated within
+    ``MATCH_WINDOW`` of it: the occurrences of every rule, oldest first, each take the nearest such Transaction still
+    free, so one covers one occurrence. Amounts are never compared. ``skipped`` holds the (rule id, occurrence) pairs
+    the user skipped.
     """
+    bonds = bond_types or {}
+
+    def bought(instrument_id: int | None) -> int | BondType | None:
+        # Each month sells a new Series of a bond type, so a Series stands for its type
+        return None if instrument_id is None else bonds.get(instrument_id, instrument_id)
+
     linked: set[tuple[int, date | None]] = {
         (t.recurring_rule_id, t.recurring_occurrence) for t in transactions if t.recurring_rule_id is not None
     }
@@ -239,11 +274,15 @@ def recurring_drafts(
             for t in free
             if t.account_id == rule.account_id
             and t.transaction_type is rule.transaction_type
-            and (rule.transaction_type is not TransactionType.BUY or t.instrument_id == rule.instrument_id)
+            and (
+                rule.transaction_type is not TransactionType.BUY
+                or bought(t.instrument_id) == bought(rule.instrument_id)
+            )
+            and t.target_account_id == rule.target_account_id
             and abs(t.date - day) <= MATCH_WINDOW
         ]
         if candidates:
             free.remove(min(candidates, key=lambda t: (abs(t.date - day), t.date, t.id)))
         else:
             drafts.append(RecurringDraft(rule, day))
-    return [d for d in drafts if account_id is None or d.rule.account_id == account_id]
+    return [d for d in drafts if account_id is None or account_id in (d.rule.account_id, d.rule.target_account_id)]

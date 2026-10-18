@@ -465,9 +465,9 @@ class InvestmentGoalRow(Base):
 
 
 class RecurringRuleRow(Base):
-    """A Recurring Rule (issue #97, spec 3.3.1): a Deposit or Buy of ``amount`` (Decimal as text) in ``currency``
-    falling due on ``day_of_month`` every ``frequency`` from ``start_date``; ``domain.recurring.RecurringRule`` is its
-    in-memory form."""
+    """A Recurring Rule (issue #97, spec 3.3.1): a Deposit, Buy, Cost or Cash Transfer (to ``target_account_id``, #147)
+    of ``amount`` (Decimal as text) in ``currency`` falling due on ``day_of_month`` every ``frequency`` from
+    ``start_date``; ``domain.recurring.RecurringRule`` is its in-memory form."""
 
     on_clear = OnClear.DELETE
     __tablename__ = "recurring_rules"
@@ -484,6 +484,7 @@ class RecurringRuleRow(Base):
     start_date: Mapped[dt.date] = mapped_column(Date)
     end_date: Mapped[dt.date | None] = mapped_column(Date)
     active: Mapped[bool] = mapped_column(Boolean)
+    target_account_id: Mapped[int | None] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE"), index=True)
 
 
 class RecurringRuleSkipRow(Base):

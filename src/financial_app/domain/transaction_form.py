@@ -205,7 +205,8 @@ class FormState:
 @dataclass(frozen=True)
 class FormPrefill:
     """What a new Transaction's form opens with instead of being empty, e.g. a Recurring Rule's Draft (issue #97): a
-    Deposit's amount and currency, or a Buy's Instrument with its quantity and price left to type."""
+    Deposit's, Cost's or Cash Transfer's amount, currency and target Account, or a Buy's Instrument with its quantity
+    and price left to type."""
 
     account_id: int
     kind: TransactionType
@@ -214,6 +215,7 @@ class FormPrefill:
     cash_currency: str = PLN
     instrument_id: int | None = None
     comment: str = ""
+    target_id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -342,6 +344,7 @@ class TransactionForm:
                 kind=prefill.kind,
                 day=format_date(prefill.day),
                 texts=FormTexts(amount=prefill.amount, comment=prefill.comment),
+                target_id=prefill.target_id,
                 instrument_id=prefill.instrument_id,
                 # A rule buying a Bond Series buys the Series its type and the day give
                 bond_mode=bond_type is not None,

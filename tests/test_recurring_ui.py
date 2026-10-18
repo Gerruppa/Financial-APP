@@ -13,7 +13,7 @@ from sqlalchemy import Engine
 from financial_app.domain.accounts import AccountDraft, AccountType
 from financial_app.domain.instruments import InstrumentDraft
 from financial_app.domain.recurring import Frequency, RecurringRuleDraft
-from financial_app.domain.transactions import TransactionType, buy_or_sell, deposit_or_withdrawal
+from financial_app.domain.transactions import TransactionType, buy_or_sell, cost, deposit_or_withdrawal
 from financial_app.persistence.accounts import add_account
 from financial_app.persistence.db import init_db
 from financial_app.persistence.instruments import add_instrument, list_asset_classes
@@ -314,6 +314,90 @@ async def test_the_header_count_forgets_the_drafts_of_cleared_data(engine: Engin
         user.find(marker="clear-data-phrase").type("USUŃ WSZYSTKO")
         user.find(marker="clear-data-confirm").click()
         await user.should_not_see(marker="recurring-drafts-count")
+
+
+@pytest.fixture
+def broker(engine: Engine) -> int:
+    return add_account(engine, AccountDraft("Maklerskie", "mBank", AccountType.REGULAR, ("PLN",))).id
+
+
+async def test_a_cash_transfer_rule_is_added_with_its_target_account(engine: Engine, account: int, broker: int) -> None:
+    async with user_simulation(lambda: _shell(engine)) as user:
+        await user.open("/ustawienia")
+        user.find(marker="add-recurring-rule").click()
+        await user.should_see(marker="rule-name")
+        _type(user, "rule-name", "Na maklerskie")
+        _choose(user, "rule-account", account)
+        _choose(user, "rule-type", TransactionType.CASH_TRANSFER.value)
+        _type(user, "rule-amount", "300")
+        user.find(marker="save-rule").click()
+        await user.should_see("Wybierz konto docelowe.")
+        _choose(user, "rule-target", broker)
+        user.find(marker="save-rule").click()
+        await user.should_see(marker="recurring-rule")
+        with user.scope(marker="recurring-rule"):
+            await user.should_see("IKE → Maklerskie")
+    [rule] = list_rules(engine)
+    assert (rule.transaction_type, rule.account_id, rule.target_account_id) == (
+        TransactionType.CASH_TRANSFER,
+        account,
+        broker,
+    )
+
+
+async def test_cost_and_cash_transfer_drafts_are_confirmed(engine: Engine, account: int, broker: int) -> None:
+    add_transaction(engine, deposit_or_withdrawal(account, date(2026, 1, 2), TransactionType.DEPOSIT, Decimal(5000)))
+    october = date(2026, 10, 1)
+    add_rule(engine, _deposits(account, name="Opłata", transaction_type=TransactionType.COST, start_date=october))
+    move = {"transaction_type": TransactionType.CASH_TRANSFER, "target_account_id": broker, "day_of_month": 5}
+    add_rule(engine, _deposits(account, name="Na maklerskie", start_date=october, **move))
+    async with user_simulation(lambda: _shell(engine)) as user:
+        await user.open("/transakcje")
+        await user.should_see(marker="recurring-drafts-count", content="Cykliczne do zatwierdzenia: 2")
+        _click_in_row(user, "confirm-recurring", "05.10.2026")
+        _click_in_row(user, "confirm-recurring", "12.10.2026")
+        await user.should_not_see(marker="recurring-drafts")
+    saved = {t.transaction_type: t for t in list_transactions(engine)}
+    assert saved[TransactionType.COST].actual_amount == Decimal(1000)
+    assert saved[TransactionType.CASH_TRANSFER].target_account_id == broker
+
+
+async def test_a_cash_transfer_draft_opens_the_dialog_with_its_target_account(
+    engine: Engine, account: int, broker: int
+) -> None:
+    add_transaction(engine, deposit_or_withdrawal(account, date(2026, 1, 2), TransactionType.DEPOSIT, Decimal(5000)))
+    move = {"transaction_type": TransactionType.CASH_TRANSFER, "target_account_id": broker}
+    add_rule(engine, _deposits(account, name="Na maklerskie", start_date=date(2026, 10, 1), **move))
+    async with user_simulation(lambda: _shell(engine)) as user:
+        await user.open("/transakcje")
+        with user.scope(marker="recurring-draft"):
+            await user.should_see("Transfer gotówki → Maklerskie")
+        user.find(marker="edit-recurring").click()
+        await user.should_see(marker="transaction-target-account")
+        assert _selected(user, "transaction-target-account") == broker
+        assert _value(user, "transaction-amount") == f"1{NBSP}000,00"
+
+
+async def test_a_bond_rule_shows_its_bond_type_not_one_series(engine: Engine, account: int) -> None:
+    treasury = next(c for c in list_asset_classes(engine) if c.name == "Obligacje skarbowe polskie")
+    edo = add_instrument(engine, InstrumentDraft("EDO0936", treasury.id, "PLN")).id
+    add_rule(engine, _deposits(account, name="EDO co miesiąc", transaction_type=TransactionType.BUY, instrument_id=edo))
+    async with user_simulation(lambda: _shell(engine)) as user:
+        await user.open("/ustawienia")
+        with user.scope(marker="recurring-rule"):
+            await user.should_see("IKE · EDO · ")
+            await user.should_not_see("EDO0936")
+
+
+async def test_repeat_is_offered_for_a_cost(engine: Engine, account: int) -> None:
+    add_transaction(engine, cost(account, date(2026, 3, 5), Decimal(5)))
+    async with user_simulation(lambda: _shell(engine)) as user:
+        await user.open("/transakcje")
+        user.find(marker="transaction-row").click()
+        user.find(marker="repeat-transaction").click()
+        await user.should_see(marker="rule-name")
+        assert _selected(user, "rule-type") == TransactionType.COST.value
+        assert _value(user, "rule-amount") == "5,00"
 
 
 async def test_a_new_rules_start_follows_its_day_and_frequency_until_typed(engine: Engine, account: int) -> None:
