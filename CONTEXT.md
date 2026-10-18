@@ -83,7 +83,7 @@ One user-recorded event on an Account: Deposit, Withdrawal, Buy, Sell, Dividend,
 _Avoid_: operation, trade, entry
 
 **Recurring Rule** (Reguła cykliczna):
-A Deposit or Buy the user repeats on an Account (monthly, quarterly, half-yearly or yearly, on a day of the month), with its planned amount. Each of its occurrences due by today and not matched by a Transaction is a Draft; an occurrence can be skipped for good.
+A Deposit, Buy, Cost or Cash Transfer the user repeats on an Account (monthly, quarterly, half-yearly or yearly, on a day of the month), with its planned amount; a Buy of a Bond Series repeats its bond type, whichever month's Series it buys. Each of its occurrences due by today and not matched by a Transaction is a Draft; an occurrence can be skipped for good.
 _Avoid_: standing order, schedule, subscription
 
 **Dividend** (Dywidenda / odsetki):
