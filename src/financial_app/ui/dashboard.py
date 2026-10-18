@@ -102,7 +102,7 @@ class DashboardPage:
         _since_snapshot(change_since_snapshot(self.engine, self.scope.account_id, board.totals, self.period.today()))
         # The goal's progress follows the "Po podatku" toggle
         value = board.totals.value_after(self.after_tax)
-        goal_tile(self.engine, self.scope.account_id, value, days, self.period.today(), self.refresh)
+        goal_tile(self.engine, self.rates, self.scope.account_id, value, days, self.period.today(), self.refresh)
         _account_table(board.accounts, self.after_tax)
         limits_section(self.engine, today.transactions, today.accounts, self.rates.today(), self.scope.account_id)
         if self.scope.account_id is None:

@@ -14,10 +14,12 @@ from sqlalchemy import Engine
 from financial_app.domain.accounts import AccountDraft, AccountType
 from financial_app.domain.investment_goal import GoalMode, InvestmentGoal
 from financial_app.domain.portfolio_history import DayValue
+from financial_app.domain.recurring import Frequency, RecurringRuleDraft
 from financial_app.domain.transactions import TransactionDraft, TransactionType
 from financial_app.persistence.accounts import add_account
 from financial_app.persistence.db import init_db
 from financial_app.persistence.investment_goals import load_goal, save_goal
+from financial_app.persistence.recurring_rules import add_rule
 from financial_app.persistence.transactions import add_transactions
 from financial_app.sources.history import QuoteHistory
 from financial_app.sources.nbp import NbpRates
@@ -83,6 +85,46 @@ async def test_a_goal_is_set_on_the_dashboard_and_shows_its_progress_and_forecas
         await user.should_see(marker="goal-forecast", content="Prognoza: cel w 02.2049")
 
     assert load_goal(engine, None) == InvestmentGoal(None, GoalMode.AMOUNT, amount=Decimal(1_000_000))
+
+
+async def test_the_default_monthly_deposit_comes_from_the_recurring_rules_of_the_view(engine: Engine) -> None:
+    # IKE: 3 000 zł a quarter in; 500 zł a month moved there from XTB
+    add_rule(
+        engine,
+        RecurringRuleDraft(
+            "IKE", 1, TransactionType.DEPOSIT, Decimal(3000), "PLN", Frequency.QUARTERLY, 10, date(2026, 11, 10)
+        ),
+    )
+    add_rule(
+        engine,
+        RecurringRuleDraft(
+            "Na IKE",
+            2,
+            TransactionType.CASH_TRANSFER,
+            Decimal(500),
+            "PLN",
+            Frequency.MONTHLY,
+            10,
+            date(2026, 11, 10),
+            target_account_id=1,
+        ),
+    )
+
+    async with user_simulation(_shell(engine)) as user:
+        await user.open("/")
+        await user.should_see(marker="total-net-deposits", content=_pln("120 000,00"))
+        user.find(marker="set-goal").click()
+        await user.should_see(marker="goal-dialog")
+        await user.should_see(marker="goal-monthly-default", content=f"z reguł cyklicznych: {_pln('1 000,00')}")
+        user.find(marker="goal-amount").type("1 000 000")
+        user.find(marker="goal-save").click()
+        await user.should_see(marker="goal-forecast", content=f"przy wpłatach {_pln('1 000,00')} miesięcznie")
+
+        # IKE: its own Deposits and the Cash Transfers into it
+        await _switch_scope(user, "scope-1")
+        await user.should_see(marker="set-goal")
+        user.find(marker="set-goal").click()
+        await user.should_see(marker="goal-monthly-default", content=f"z reguł cyklicznych: {_pln('1 500,00')}")
 
 
 async def test_a_fire_goal_already_reached_and_a_target_date_out_of_reach(engine: Engine) -> None:
