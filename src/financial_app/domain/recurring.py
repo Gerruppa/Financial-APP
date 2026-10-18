@@ -114,16 +114,17 @@ def new_rule_defaults(today: date, account_id: int | None) -> RuleDefaults:
     )
 
 
-def repeating(transaction: Transaction) -> RuleDefaults:
-    """A monthly rule repeating a Deposit or Buy on its day of the month, from the next occurrence after it: a
-    Deposit's amount in its currency, a Buy's Actual Amount in PLN."""
+def repeating(transaction: Transaction, today: date) -> RuleDefaults:
+    """A monthly rule repeating a Deposit or Buy on its day of the month, from the next occurrence after today (or
+    after the Transaction, if dated ahead), so that an old one brings no backlog of Drafts: a Deposit's amount in its
+    currency, a Buy's Actual Amount in PLN."""
     day = transaction.date.day
     foreign = transaction.transaction_type is TransactionType.DEPOSIT and transaction.cash_currency != PLN
     return RuleDefaults(
         transaction.account_id,
         transaction.transaction_type,
         day,
-        first_occurrence_after(day, Frequency.MONTHLY, transaction.date),
+        first_occurrence_after(day, Frequency.MONTHLY, max(transaction.date, today)),
         amount=transaction.quantity if foreign else transaction.actual_amount,
         currency=transaction.cash_currency if foreign else PLN,
         instrument_id=transaction.instrument_id if transaction.transaction_type is TransactionType.BUY else None,
@@ -160,7 +161,7 @@ def occurrences(rule: RecurringRuleDraft, until: date) -> list[date]:
 
 def first_occurrence_after(day_of_month: int, frequency: Frequency, day: date) -> date:
     """The first occurrence after ``day`` of a schedule starting in its month: a new rule's default start, so that it
-    begins with no backlog of Drafts, or the start of one repeating a Transaction of that ``day``."""
+    begins with no backlog of Drafts, also when it repeats a Transaction."""
     return next(due for due in _schedule(day_of_month, frequency, day) if due > day)
 
 

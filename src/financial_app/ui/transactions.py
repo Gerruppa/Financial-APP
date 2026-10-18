@@ -775,7 +775,8 @@ def open_transaction_dialog(
                 def repeat() -> None:
                     assert transaction is not None and on_rules_changed is not None
                     dialog.close()
-                    open_rule_dialog(engine, rates.today(), on_rules_changed, defaults=repeating(transaction))
+                    today = rates.today()
+                    open_rule_dialog(engine, today, on_rules_changed, defaults=repeating(transaction, today))
 
                 ui.button("Powtarzaj…", on_click=repeat).props("flat no-caps").mark("repeat-transaction").tooltip(
                     "Nowa reguła cykliczna na wzór tej transakcji"

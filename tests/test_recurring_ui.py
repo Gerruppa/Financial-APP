@@ -270,7 +270,7 @@ async def test_a_buy_entered_by_hand_near_an_occurrence_leaves_no_draft(engine: 
 
 
 async def test_repeat_opens_a_new_rule_filled_from_a_transaction(engine: Engine, account: int) -> None:
-    add_transaction(engine, deposit_or_withdrawal(account, date(2026, 10, 5), TransactionType.DEPOSIT, Decimal(750)))
+    add_transaction(engine, deposit_or_withdrawal(account, date(2026, 3, 5), TransactionType.DEPOSIT, Decimal(750)))
     async with user_simulation(lambda: _shell(engine)) as user:
         await user.open("/transakcje")
         user.find(marker="transaction-row").click()
@@ -278,7 +278,7 @@ async def test_repeat_opens_a_new_rule_filled_from_a_transaction(engine: Engine,
         await user.should_see(marker="rule-name")
         assert _value(user, "rule-amount") == "750,00"
         assert _value(user, "rule-day") == "5"
-        # The next occurrence after the Transaction: 05.11.2026, a Thursday
+        # The next occurrence after today, not after the March Transaction: 05.11.2026, a Thursday
         assert _value(user, "rule-start") == "05.11.2026"
         _type(user, "rule-name", "Wpłata IKE")
         user.find(marker="save-rule").click()

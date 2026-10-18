@@ -16,6 +16,7 @@ from financial_app.domain.recurring import (
     next_occurrence,
     occurrences,
     recurring_drafts,
+    repeating,
 )
 from financial_app.domain.transactions import (
     Transaction,
@@ -116,6 +117,14 @@ def test_a_new_rule_starts_at_its_first_occurrence_after_the_day() -> None:
     assert first_occurrence_after(10, Frequency.MONTHLY, date(2026, 10, 11)) == date(2026, 10, 12)
     assert first_occurrence_after(10, Frequency.MONTHLY, date(2026, 10, 12)) == date(2026, 11, 10)
     assert first_occurrence_after(5, Frequency.QUARTERLY, date(2026, 10, 15)) == date(2027, 1, 5)
+
+
+def test_repeating_starts_after_today_however_old_the_transaction() -> None:
+    old = deposit(1, date(2026, 3, 5))
+    assert repeating(old, date(2026, 10, 15)).start_date == date(2026, 11, 5)
+    # One dated ahead starts after itself
+    ahead = deposit(2, date(2026, 10, 20))
+    assert repeating(ahead, date(2026, 10, 15)).start_date == date(2026, 11, 20)
 
 
 @pytest.mark.parametrize(
