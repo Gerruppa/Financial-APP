@@ -7,12 +7,14 @@ drawdown. The waterfall is the result since the first Transaction, as in the til
 rounded to the grosz and shares as percent; ECharts formats them in Polish.
 """
 
+import copy
 from collections.abc import Callable, Mapping, Sequence
 from datetime import date
 from decimal import Decimal
 from typing import Any
 
 from nicegui import ui
+from nicegui.events import EChartPointClickEventArguments
 
 from financial_app.domain.charts import (
     Grouping,
@@ -155,9 +157,9 @@ def dashboard_charts(
                 ui.label("Wykresy historii: wyliczanie historii…").classes("text-gray-500")
             return
         _class_shares_card(history, first, last, account_id)
-        _card("Wartość konta vs wpłaty netto", "value", _value(history, first, last, account_id))
-        _card("Zysk / strata", "profit", _profit(history, first, last, account_id))
-        _card("XIRR", "xirr", _xirr(history, first, last, account_id))
+        _card("Wartość konta vs wpłaty netto", "value", _value(history, first, last, account_id), timeline=True)
+        _card("Zysk / strata", "profit", _profit(history, first, last, account_id), timeline=True)
+        _card("XIRR", "xirr", _xirr(history, first, last, account_id), timeline=True)
         drawdown_chart(history, first, last, account_id)
 
 
@@ -165,13 +167,13 @@ def drawdown_chart(
     history: Sequence[DayValue], first: date, last: date, account_id: int | None, name: str = "drawdown"
 ) -> None:
     """The drawdown of the TWR from the "from" day, in a card marked ``chart-<name>``; also on the Wyniki tab."""
-    _card("Drawdown", name, _drawdown(history, first, last, account_id), CHART_INFO["drawdown"])
+    _card("Drawdown", name, _drawdown(history, first, last, account_id), CHART_INFO["drawdown"], timeline=True)
 
 
 def pln_lines_chart(title: str, name: str, days: Sequence[date], series: Mapping[str, Sequence[Decimal]]) -> None:
     """Lines of PLN amounts by day in a card marked ``chart-<name>`` (the Benchmarki tab's, issue #91)."""
     amounts = {label: [_pln(amount) for amount in values] for label, values in series.items()}
-    _card(title, name, _lines(days, amounts, PLN_FORMATTER, _AXIS_PLN))
+    _card(title, name, _lines(days, amounts, PLN_FORMATTER, _AXIS_PLN), timeline=True)
 
 
 def pln_bars_chart(
@@ -201,12 +203,51 @@ def pln_bars_chart(
     _card(title, name, options)
 
 
-def _card(title: str, name: str, options: dict[str, Any], info: str | None = None) -> None:
+def _card(title: str, name: str, options: dict[str, Any], info: str | None = None, timeline: bool = False) -> None:
     """A chart in a card marked ``chart-<name>``, with an "i" (marked ``info-<name>``) showing ``info``, by default
-    its ``CHART_INFO``."""
-    with ui.card().classes("w-full gap-1"):
+    its ``CHART_INFO``, and the zoom button in its corner."""
+    with ui.card().classes("relative w-full gap-1"):
         card_title(title, info or CHART_INFO.get(name), name)
         ui.echart(options).classes("w-full h-72").mark(f"chart-{name}")
+        zoom_button(title, name, options, timeline=timeline)
+
+
+def zoom_button(
+    title: str,
+    name: str,
+    options: dict[str, Any],
+    on_point_click: Callable[[EChartPointClickEventArguments], None] | None = None,
+    timeline: bool = False,
+) -> None:
+    """The button (marked ``zoom-<name>``) in its card's bottom right corner opening the chart in a dialog nearly
+    the size of the window (issue #154); the dialog is built on the click and deleted once closed. A click on a
+    point of the zoomed chart closes it before ``on_point_click``; a ``timeline`` (a chart over time) gets a slider
+    and the mouse wheel to zoom into a part of its period."""
+
+    def zoom() -> None:
+        zoomed = copy.deepcopy(options)
+        if timeline:
+            # The slider sits above the legend at the bottom
+            zoomed["dataZoom"] = [{"type": "inside"}, {"type": "slider", "bottom": 32}]
+            zoomed["grid"] = {**zoomed.get("grid", {}), "bottom": 90}
+
+        def clicked(event: EChartPointClickEventArguments) -> None:
+            dialog.close()
+            if on_point_click is not None:
+                on_point_click(event)
+
+        with ui.dialog(value=True) as dialog, ui.card().style("width: 95vw; max-width: 95vw; height: 90vh"):
+            dialog.on_value_change(lambda event: None if event.value else dialog.delete())
+            with ui.row().classes("w-full items-center"):
+                ui.label(title).classes("text-lg font-medium")
+                ui.space()
+                ui.button(icon="close", on_click=dialog.close).props("flat round dense").mark("zoom-close")
+            chart = ui.echart(zoomed, on_point_click=clicked if on_point_click else None)
+            chart.classes("w-full flex-1 min-h-0").mark(f"chart-{name}-zoomed")
+
+    button = ui.button(icon="open_in_full", on_click=zoom).props("flat round dense size=sm color=grey-7")
+    button.classes("absolute bottom-1 right-1").mark(f"zoom-{name}")
+    button.tooltip("Powiększ wykres")
 
 
 def _class_shares_card(history: Sequence[DayValue], first: date, last: date, account_id: int | None) -> None:
@@ -238,8 +279,9 @@ def _class_shares_card(history: Sequence[DayValue], first: date, last: date, acc
             ],
         }
         ui.echart(options).classes("w-full h-72").mark("chart-class-shares")
+        zoom_button("Udział aktywów w czasie", "class-shares", options, timeline=True)
 
-    with ui.card().classes("w-full gap-1"):
+    with ui.card().classes("relative w-full gap-1"):
         card_title("Udział aktywów w czasie", CHART_INFO["class-shares"], "class-shares")
         shown(Grouping.MONTH)
 
