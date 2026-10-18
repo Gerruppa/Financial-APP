@@ -20,6 +20,7 @@ COLUMNS = (
     "Ilość",
     "Cena",
     "Prowizja",
+    "Waluta prowizji",
     "Kwota rzeczywista (PLN)",
     "Kwota podatkowa (PLN)",
     "Kurs NBP",
@@ -32,7 +33,8 @@ def export_rows(
     transactions: Sequence[Transaction], account_names: Mapping[int, str], instruments: Mapping[int, Instrument]
 ) -> list[tuple[object, ...]]:
     """One row per Transaction, in ``COLUMNS`` order. Missing values are None; a Transaction without an Instrument is
-    in the currency of its cash. The Actual and Tax Amounts are always in PLN."""
+    in the currency of its cash. A Buy's or Sell's commission is in PLN, or on an Account without PLN in the cash it
+    is paid from (#124). The Actual and Tax Amounts are always in PLN."""
     rows: list[tuple[object, ...]] = []
     for t in transactions:
         instrument = instruments[t.instrument_id] if t.instrument_id is not None else None
@@ -48,6 +50,7 @@ def export_rows(
                 t.quantity,
                 t.price,
                 t.commission,
+                t.commission_currency if t.transaction_type.is_buy_or_sell else None,
                 t.actual_amount,
                 t.tax_amount,
                 None if t.nbp_rate is None else t.nbp_rate.rate,

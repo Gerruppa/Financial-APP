@@ -115,8 +115,17 @@ def check_references(session: Session, draft: TransactionDraft) -> None:
     held = {cash.currency for cash in account.cash_currencies}
     if draft.cash_currency != PLN and draft.cash_currency not in held:
         raise TransactionError(f"Konto {account.name} nie ma waluty rachunku {draft.cash_currency}.")
-    if draft.target_account_id is not None and session.get(AccountRow, draft.target_account_id) is None:
-        raise TransactionError("Wybrane konto docelowe nie istnieje.")
+    # Neither an Account without PLN nor a Cash Transfer's target without it takes PLN (#124), whatever the source:
+    # the dialog, an import
+    moves_pln = draft.cash_change or draft.transaction_type is TransactionType.CURRENCY_EXCHANGE
+    if moves_pln and PLN not in held:
+        raise TransactionError(f"Konto {account.name} nie ma waluty rachunku PLN.")
+    if draft.target_account_id is not None:
+        target = session.get(AccountRow, draft.target_account_id)
+        if target is None:
+            raise TransactionError("Wybrane konto docelowe nie istnieje.")
+        if draft.cash_change and PLN not in {cash.currency for cash in target.cash_currencies}:
+            raise TransactionError(f"Konto {target.name} nie ma waluty rachunku PLN.")
     if draft.instrument_id is not None:
         instrument = session.get(InstrumentRow, draft.instrument_id)
         if instrument is None:
