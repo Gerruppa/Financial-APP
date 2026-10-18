@@ -6,7 +6,7 @@ Status: agreed with the product owner on 2026-10-08 (design interview Q1–Q55).
 
 Re-implement the inwestomat.eu "Portfolio tracker" Google Sheet (v2.0.1, 01.07.2026; source copy and Apps Script in `reference/`, git-ignored) as a local desktop application with the **same functionality and calculation logic** and a better UI (forms, validation, filtering), then extend it beyond the sheet.
 
-- Single user, local Windows PC, no login (Q1, Q8, Q29). Architecture must allow a later move to multiple users / a server (ADR-0001).
+- Single user, local Windows PC, no login (Q1, Q8, Q29). Architecture must allow a later move to multiple users / a server (ADR-0001). Stage 7 moves the app to an EU VPS behind Cloudflare Access, still single-user; the cloud copy becomes the only copy of the data (ADR-0009).
 - UI in Polish; code, DB names and technical docs in English (Q6).
 - Spreadsheet bugs are fixed, not replicated; every fix that changes a number is a documented deviation (Q33, ADR-0004).
 - Not needed: spreadsheet version check, migration between sheet versions, Apps Script triggers (Q37).
@@ -258,3 +258,4 @@ Shell (UI prototype verdict, branch `prototype/ui-shell`, issue #1): **left navi
 | 4 Dashboard, History, Results | View Scope switcher (Total / Accounts) across all tabs, period selector, recomputed History, 11 charts, treemap and Account ranking, profit-by-source waterfall, after-tax toggle, Investment Strategy for Total and Accounts with tolerance bands (Dashboard section + Strategie inwestycyjne tab), Multi-asset, currency exposure, XIRR/TWR/drawdown, Wyniki tab, Historia parity check | Full Dashboard |
 | 5 Reports | Benchmarks (with +pp offset, Account as benchmark), Sell Summary with closed-position statistics (win rate, holding time, best/worst), passive-income calendar (dividends and bond interest, received and forecast, monthly income goal) | Full parity with sheet v2.0.1 |
 | 6 Beyond the sheet | PIT-38 / PIT/ZG with year-end tax-loss optimiser, contribution limits, XTB importer + Reconciliation, investment goal / FIRE per scope, recurring transactions (drafts to confirm), Account comparison mode, .exe installer, OKI tax when law is final. Parked ideas: virtual portfolio, net worth with liabilities, tags, price alerts, portfolio health score | Extensions |
+| 7 Cloud (#131–#142, ADR-0009) | Server mode beside the native window, Cloudflare Access token check, secrets from the environment, file import by upload, several open clients, scheduled background refresh, Docker on an EU VPS behind a Cloudflare Tunnel, encrypted off-server backups, moving the local database, phone layout and PWA | The app reached from a browser and a phone |
