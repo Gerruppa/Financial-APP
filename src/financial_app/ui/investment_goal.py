@@ -8,7 +8,6 @@ from decimal import Decimal
 from nicegui import ui
 from sqlalchemy import Engine
 
-from financial_app.domain.currencies import MissingNbpRateError
 from financial_app.domain.formatting import format_date, format_month, format_percent, format_pln
 from financial_app.domain.investment_goal import (
     AVERAGE_MONTHS,
@@ -23,11 +22,9 @@ from financial_app.domain.investment_goal import (
     rules_monthly_deposits,
 )
 from financial_app.domain.portfolio_history import DayValue
-from financial_app.domain.recurring import RecurringRule
-from financial_app.domain.transactions import PLN
 from financial_app.persistence.investment_goals import delete_goal, load_goal, save_goal
 from financial_app.persistence.recurring_rules import list_rules
-from financial_app.sources.current_prices import LatestRates
+from financial_app.sources.current_prices import LatestRates, TodaysRates
 from financial_app.ui.dialogs import movable_dialog
 from financial_app.ui.info import card_title
 
@@ -56,15 +53,18 @@ def goal_tile(
     button."""
     goal = load_goal(engine, account_id)
     rules = list_rules(engine)
-    from_rules = rules_monthly_deposits(rules, account_id, today, _latest_rates(rules, rates))
+    known = TodaysRates(rates)
+    for rule in rules:
+        known(rule.currency)
+    from_rules = rules_monthly_deposits(rules, account_id, today, known.known())
+    default_monthly: Decimal | None
     if from_rules is not None:
-        average: Decimal | None = from_rules
-        default = f"z reguł cyklicznych: {format_pln(from_rules)}"
+        default_monthly, default = from_rules, f"z reguł cyklicznych: {format_pln(from_rules)}"
     elif history is None:
-        average, default = None, "historia jeszcze się liczy"
+        default_monthly, default = None, "historia jeszcze się liczy"
     else:
-        average = average_monthly_deposits(history, account_id, today)
-        default = f"średnia z {AVERAGE_MONTHS} miesięcy: {format_pln(average)}"
+        default_monthly = average_monthly_deposits(history, account_id, today)
+        default = f"średnia z {AVERAGE_MONTHS} miesięcy: {format_pln(default_monthly)}"
 
     def edit() -> None:
         _goal_dialog(engine, account_id, goal, default, on_saved)
@@ -77,7 +77,7 @@ def goal_tile(
         if goal is None:
             ui.button("Ustaw cel", icon="flag", on_click=edit).props("flat no-caps").mark("set-goal")
             return
-        monthly = goal.monthly_deposit if goal.monthly_deposit is not None else average
+        monthly = goal.monthly_deposit if goal.monthly_deposit is not None else default_monthly
         result = forecast(goal, value, monthly or Decimal(0), today)
         percent = format_percent(result.progress * 100, decimals=0)
         ui.label(f"Cel: {format_pln(result.target)} · {percent}").classes("text-xl font-medium").mark("goal-progress")
@@ -104,17 +104,6 @@ def goal_tile(
                     f"Do {format_date(goal.target_date)} potrzeba {format_pln(result.required_monthly)} miesięcznie"
                 )
             ui.label(required).classes("text-sm text-gray-600").mark("goal-required")
-
-
-def _latest_rates(rules: Sequence[RecurringRule], rates: LatestRates) -> dict[str, Decimal]:
-    """The latest NBP Rate of each foreign currency of ``rules`` there is one for."""
-    found = {}
-    for currency in {rule.currency for rule in rules} - {PLN}:
-        try:
-            found[currency] = rates.latest(currency).rate
-        except MissingNbpRateError:
-            pass
-    return found
 
 
 def _goal_dialog(
