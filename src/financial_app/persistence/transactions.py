@@ -66,11 +66,18 @@ def update_transaction(engine: Engine, transaction_id: int, draft: TransactionDr
     """Replace the Transaction's fields with ``draft``; it keeps its id and so its place in the same-day order.
 
     Blocked with InsufficientQuantityError if a Sell, this one or a later one, would lose its cover.
-    An imported Transaction keeps its Origin and fingerprint, so that importing its file again still skips it.
+    An imported Transaction keeps its Origin and fingerprint, so that importing its file again still skips it, and a
+    confirmed Recurring Rule Draft the occurrence it covers (issue #97).
     """
     with Session(engine) as session, session.begin():
         row = get_row(session, transaction_id)
-        draft = replace(draft, origin=Origin(row.origin), external_id=row.external_id)
+        draft = replace(
+            draft,
+            origin=Origin(row.origin),
+            external_id=row.external_id,
+            recurring_rule_id=row.recurring_rule_id,
+            recurring_occurrence=row.recurring_occurrence,
+        )
         check_references(session, draft)
         _check_coverage(session, draft, replacing=row)
         fill_row(row, draft)
@@ -181,6 +188,8 @@ def fill_row(row: TransactionRow, draft: TransactionDraft) -> None:
     row.origin = draft.origin.value
     row.external_id = draft.external_id
     row.lot_id = draft.lot_id
+    row.recurring_rule_id = draft.recurring_rule_id
+    row.recurring_occurrence = draft.recurring_occurrence
 
 
 def _text(value: Decimal | None) -> str | None:
@@ -215,6 +224,8 @@ def to_transaction(row: TransactionRow) -> Transaction:
         origin=Origin(row.origin),
         external_id=row.external_id,
         lot_id=row.lot_id,
+        recurring_rule_id=row.recurring_rule_id,
+        recurring_occurrence=row.recurring_occurrence,
     )
 
 

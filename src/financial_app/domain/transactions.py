@@ -6,6 +6,7 @@ cash), Currency Exchanges
 between PLN and a foreign Cash Currency, Dividends (and interest) paid into PLN or foreign cash, and DRIPs.
 """
 
+import datetime as dt
 from collections.abc import Iterable
 from dataclasses import dataclass, field, fields
 from datetime import date
@@ -192,8 +193,13 @@ class TransactionDraft:
     # A Sell: the id of the Transaction that opened the Lot it takes its units from, instead of FIFO (ADR-0007); an
     # interest Dividend: that of the Lot whose coupon it is
     lot_id: int | None = field(default=None, kw_only=True)
+    # A confirmed Recurring Rule Draft (issue #97): the rule and the occurrence it covers, whatever its day or amount
+    recurring_rule_id: int | None = field(default=None, kw_only=True)
+    recurring_occurrence: dt.date | None = field(default=None, kw_only=True)
 
     def __post_init__(self) -> None:
+        if (self.recurring_rule_id is None) != (self.recurring_occurrence is None):
+            raise TransactionError("Powiązanie z regułą cykliczną wymaga reguły i terminu.")
         if not self.transaction_type.has_amount:
             if self.actual_amount:
                 raise TransactionError(f"{self.transaction_type.label} nie ma kwoty.")

@@ -199,6 +199,20 @@ class FormState:
 
 
 @dataclass(frozen=True)
+class FormPrefill:
+    """What a new Transaction's form opens with instead of being empty, e.g. a Recurring Rule's Draft (issue #97): a
+    Deposit's amount and currency, or a Buy's Instrument with its quantity and price left to type."""
+
+    account_id: int
+    kind: TransactionType
+    day: date
+    amount: str = ""
+    cash_currency: str = PLN
+    instrument_id: int | None = None
+    comment: str = ""
+
+
+@dataclass(frozen=True)
 class Shown:
     """A field: whether it shows, its label and hint."""
 
@@ -314,8 +328,23 @@ class TransactionForm:
         )
         self._type_series: dict[BondType, dict[str, str]] = {}  # the Series offered for each type, built once
 
-    def initial_state(self, today: date) -> FormState:
-        """The form as it opens: empty for a new Transaction, else filled from the edited one."""
+    def initial_state(self, today: date, prefill: FormPrefill | None = None) -> FormState:
+        """The form as it opens: empty for a new Transaction or filled with ``prefill``, else filled from the edited
+        one."""
+        if prefill is not None and self.edited is None and prefill.account_id in self.accounts:
+            bought = self._instruments.get(prefill.instrument_id) if prefill.instrument_id is not None else None
+            bond_type = bond_type_of(bought.name) if bought is not None and bought.is_bond_series else None
+            return FormState(
+                account_id=prefill.account_id,
+                kind=prefill.kind,
+                day=format_date(prefill.day),
+                texts=FormTexts(amount=prefill.amount, comment=prefill.comment),
+                instrument_id=prefill.instrument_id,
+                # A rule buying a Bond Series buys the Series its type and the day give
+                bond_mode=bond_type is not None,
+                bond_type=bond_type or BondType.EDO,
+                cash_currency=prefill.cash_currency,
+            )
         edited = self.edited
         account_id = edited.account_id if edited else next(iter(self.accounts))
         texts = FormTexts.of(edited)
