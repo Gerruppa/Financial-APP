@@ -23,6 +23,7 @@ from financial_app.domain.recurring import (
     RecurringRuleDraft,
     RecurringRuleError,
     RuleDefaults,
+    first_occurrence_after,
     new_rule_defaults,
     next_occurrence,
 )
@@ -215,6 +216,24 @@ def open_rule_dialog(
         show()
         for field in (kind, account):
             field.on_value_change(show)
+
+        # A new rule's start follows its day and frequency to their next occurrence, until the user types a start
+        proposed = [first.value]
+
+        def propose_start() -> None:
+            if rule is not None or defaults is not None or first.value != proposed[0]:
+                return
+            try:
+                day_of_month = int((day.value or "").strip())
+            except ValueError:
+                return
+            if 1 <= day_of_month <= 31:
+                first.value = proposed[0] = format_date(
+                    first_occurrence_after(day_of_month, Frequency(frequency.value), today)
+                )
+
+        day.on_value_change(propose_start)
+        frequency.on_value_change(propose_start)
 
         def draft() -> RecurringRuleDraft:
             try:

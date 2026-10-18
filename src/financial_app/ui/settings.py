@@ -72,6 +72,7 @@ def build_settings_page(
         xtb_import.reset()
         limits.refresh()
         rules.refresh()
+        _all(on_rules_changed)  # the cleared rules' Drafts are no longer counted
 
     ClearDataSection(engine, on_cleared=redraw).build()
 

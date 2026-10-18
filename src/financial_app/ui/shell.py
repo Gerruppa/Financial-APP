@@ -184,6 +184,8 @@ def build_shell(
             scope.switch(None)
         else:
             switcher.refresh()
+        # Its Recurring Rules went with it, so their Drafts are no longer counted
+        events.publish(Change.RECURRING_RULES)
 
     async def refresh_now() -> None:
         nonlocal snapshot_due

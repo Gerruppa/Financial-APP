@@ -287,3 +287,46 @@ async def test_repeat_opens_a_new_rule_filled_from_a_transaction(engine: Engine,
         assert not next(a for a in name.ancestors() if isinstance(a, ui.dialog)).value
     [rule] = list_rules(engine)
     assert (rule.amount, rule.day_of_month, rule.start_date) == (Decimal(750), 5, date(2026, 11, 5))
+
+
+async def test_the_header_count_forgets_the_drafts_of_a_deleted_account(engine: Engine, account: int) -> None:
+    add_rule(engine, _deposits(account))
+    async with user_simulation(lambda: _shell(engine)) as user:
+        await user.open("/ustawienia")
+        await user.should_see(marker="recurring-drafts-count")
+        user.find(marker="edit-account").click()
+        user.find(marker="delete-account").click()
+        user.find(marker="confirm-delete-account").click()
+        await user.should_not_see(marker="recurring-drafts-count")
+    assert list_rules(engine) == []
+
+
+async def test_the_header_count_forgets_the_drafts_of_cleared_data(engine: Engine, account: int) -> None:
+    add_rule(engine, _deposits(account))
+    async with user_simulation(lambda: _shell(engine)) as user:
+        await user.open("/ustawienia")
+        await user.should_see(marker="recurring-drafts-count")
+        user.find(marker="clear-data").click()
+        user.find(marker="clear-data-next").click()
+        for dialog in user.find(ui.dialog).elements:
+            if isinstance(dialog, ui.dialog) and not dialog.value:
+                dialog.delete()  # the browser deletes the hidden warning; the simulation does not
+        user.find(marker="clear-data-phrase").type("USUŃ WSZYSTKO")
+        user.find(marker="clear-data-confirm").click()
+        await user.should_not_see(marker="recurring-drafts-count")
+
+
+async def test_a_new_rules_start_follows_its_day_and_frequency_until_typed(engine: Engine, account: int) -> None:
+    async with user_simulation(lambda: _shell(engine)) as user:
+        await user.open("/ustawienia")
+        user.find(marker="add-recurring-rule").click()
+        await user.should_see(marker="rule-start")
+        # Today's day, 15: 15.11.2026 is a Sunday, so the first occurrence is Monday 16.11
+        assert _value(user, "rule-start") == "16.11.2026"
+        _type(user, "rule-day", "5")
+        assert _value(user, "rule-start") == "05.11.2026"
+        _choose(user, "rule-frequency", Frequency.QUARTERLY.value)
+        assert _value(user, "rule-start") == "05.01.2027"
+        _type(user, "rule-start", "05.02.2027")
+        _type(user, "rule-day", "6")
+        assert _value(user, "rule-start") == "05.02.2027"
