@@ -37,7 +37,7 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [tool.setuptools.package-data]
-financial_app = ["persistence/migrations/*.py", "persistence/migrations/versions/*.py"]
+financial_app = ["persistence/migrations/*.py", "persistence/migrations/versions/*.py", "ui/*.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

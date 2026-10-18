@@ -27,6 +27,7 @@ from financial_app.ui.account_ranking import AccountRanking, accounts_treemap
 from financial_app.ui.changes import Change
 from financial_app.ui.charts import dashboard_charts
 from financial_app.ui.contribution_limits import limits_section
+from financial_app.ui.help import HELP_PATH
 from financial_app.ui.info import card_title
 from financial_app.ui.investment_goal import goal_tile
 from financial_app.ui.periods import PeriodChoice, period_selector
@@ -100,6 +101,8 @@ class DashboardPage:
         today = todays_dashboard(self.engine, self.rates, self.scope.account_id, days, period)
         board = today.board
         shows = self.layout.shows
+        if not today.transactions:
+            _first_steps()
         _prices_line(last_refresh(self.engine), len(unpriced_instruments(self.engine)))
         ui.switch("Po podatku", value=self.after_tax, on_change=self._toggle_after_tax).mark("after-tax")
         _totals(board.totals, self.after_tax, shows)
@@ -246,6 +249,16 @@ def _currency_exposure(currencies: tuple[CurrencyShare, ...]) -> None:
                 ui.label(currency.currency)
                 ui.label(format_pln(currency.value)).classes("text-right")
                 ui.label(format_percent(currency.share * 100)).classes("text-right")
+
+
+def _first_steps() -> None:
+    """A banner on a database with no Transaction yet, leading to Pomoc (issue #156)."""
+    with ui.card().classes("w-full bg-indigo-50").mark("first-steps"):
+        with ui.row().classes("w-full items-center"):
+            ui.icon("help", color="indigo").classes("text-2xl")
+            ui.label("Pierwszy raz? Zobacz, od czego zacząć: konto, instrumenty, transakcje.").classes("grow")
+            help_button = ui.button("Pomoc", icon="arrow_forward", on_click=lambda: ui.navigate.to(HELP_PATH))
+            help_button.props("flat no-caps").mark("first-steps-help")
 
 
 def _prices_line(refresh: RefreshStatus | None, unpriced: int) -> None:

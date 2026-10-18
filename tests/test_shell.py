@@ -20,6 +20,7 @@ TABS = [
     "Podsumowanie sprzedaży",
     "Dochód pasywny",
     "Ustawienia",
+    "Pomoc",
 ]
 
 
