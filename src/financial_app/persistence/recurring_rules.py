@@ -4,9 +4,10 @@ the rules, skips and saved Transactions, and confirmed as ordinary Transactions.
 from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import Engine, delete, select, update
+from sqlalchemy import Engine, delete, or_, select, update
 from sqlalchemy.orm import Session
 
+from financial_app.domain.bonds import bond_type_of
 from financial_app.domain.recurring import (
     Frequency,
     RecurringDraft,
@@ -17,6 +18,7 @@ from financial_app.domain.recurring import (
 )
 from financial_app.domain.transaction_form import RateLookup
 from financial_app.domain.transactions import PLN, Transaction, TransactionType
+from financial_app.persistence.instruments import list_instruments
 from financial_app.persistence.models import (
     AccountRow,
     InstrumentRow,
@@ -67,8 +69,14 @@ def delete_rule(engine: Engine, rule_id: int) -> None:
 
 
 def delete_rules_of_account(session: Session, account_id: int) -> None:
-    """Delete an Account's rules with their skips, in the Account's own deletion."""
-    rule_ids = list(session.scalars(select(RecurringRuleRow.id).where(RecurringRuleRow.account_id == account_id)))
+    """Delete an Account's rules, also the Cash Transfers to it, with their skips, in the Account's own deletion."""
+    rule_ids = list(
+        session.scalars(
+            select(RecurringRuleRow.id).where(
+                or_(RecurringRuleRow.account_id == account_id, RecurringRuleRow.target_account_id == account_id)
+            )
+        )
+    )
     _delete_rules(session, rule_ids)
 
 
@@ -125,15 +133,23 @@ def pending_recurring_drafts(engine: Engine, today: date, account_id: int | None
     """The Drafts due by ``today`` in the View Scope (``account_id``, ``None`` for Total), oldest first."""
     with Session(engine) as session:
         skipped = {(row.rule_id, row.occurrence_date) for row in session.scalars(select(RecurringRuleSkipRow))}
-    return recurring_drafts(list_rules(engine), transactions_in_entry_order(engine), skipped, today, account_id)
+    bond_types = {
+        instrument.id: bond_type
+        for instrument in list_instruments(engine)
+        if instrument.is_bond_series and (bond_type := bond_type_of(instrument.name)) is not None
+    }
+    return recurring_drafts(
+        list_rules(engine), transactions_in_entry_order(engine), skipped, today, account_id, bond_types
+    )
 
 
 def confirm_recurring_draft(engine: Engine, draft: RecurringDraft, rates: RateLookup) -> Transaction:
-    """Save a Deposit Draft as it stands: the rule's amount on the occurrence, a foreign one at the NBP Rate (D-1)
-    that ``rates`` gives, linked to the occurrence. A Buy Draft goes through the transaction dialog instead."""
+    """Save a Deposit, Cost or Cash Transfer Draft as it stands: the rule's amount on the occurrence, a foreign one at
+    the NBP Rate (D-1) that ``rates`` gives, linked to the occurrence. A Buy Draft goes through the transaction dialog
+    instead."""
     currency = draft.rule.currency
     nbp_rate = None if currency == PLN else rates(currency, draft.due)
-    return add_transaction(engine, draft.deposit(nbp_rate))
+    return add_transaction(engine, draft.transaction(nbp_rate))
 
 
 def _check_references(session: Session, draft: RecurringRuleDraft) -> None:
@@ -145,6 +161,12 @@ def _check_references(session: Session, draft: RecurringRuleDraft) -> None:
         raise RecurringRuleError(f"Konto {account.name} nie ma waluty rachunku {draft.currency}.")
     if draft.instrument_id is not None and session.get(InstrumentRow, draft.instrument_id) is None:
         raise RecurringRuleError("Wybrany instrument nie istnieje.")
+    if draft.transaction_type is TransactionType.CASH_TRANSFER and draft.target_account_id is not None:
+        target = session.get(AccountRow, draft.target_account_id)
+        if target is None:
+            raise RecurringRuleError("Wybrane konto docelowe nie istnieje.")
+        if draft.currency not in {cash.currency for cash in target.cash_currencies}:
+            raise RecurringRuleError(f"Konto {target.name} nie ma waluty rachunku {draft.currency}.")
 
 
 def _get_row(session: Session, rule_id: int) -> RecurringRuleRow:
@@ -160,6 +182,7 @@ def _fill(row: RecurringRuleRow, draft: RecurringRuleDraft) -> None:
     row.transaction_type = draft.transaction_type.value
     # A Deposit names no Instrument, whatever the dialog held before its type changed
     row.instrument_id = draft.instrument_id if draft.transaction_type is TransactionType.BUY else None
+    row.target_account_id = draft.target_account_id if draft.transaction_type is TransactionType.CASH_TRANSFER else None
     row.amount = str(draft.amount)
     row.currency = draft.currency
     row.frequency = draft.frequency.value
@@ -182,5 +205,6 @@ def _to_rule(row: RecurringRuleRow) -> RecurringRule:
         end_date=row.end_date,
         instrument_id=row.instrument_id,
         active=row.active,
+        target_account_id=row.target_account_id,
         id=row.id,
     )

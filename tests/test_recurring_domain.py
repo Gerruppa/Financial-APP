@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 
+from financial_app.domain.bonds import BondType
 from financial_app.domain.recurring import (
     Frequency,
     RecurringDraft,
@@ -23,6 +24,8 @@ from financial_app.domain.transactions import (
     TransactionDraft,
     TransactionType,
     buy_or_sell,
+    cash_transfer,
+    cost,
     deposit_or_withdrawal,
 )
 
@@ -135,7 +138,15 @@ def test_repeating_starts_after_today_however_old_the_transaction() -> None:
         ({"day_of_month": 32}, "Dzień miesiąca musi być od 1 do 31."),
         ({"transaction_type": TransactionType.BUY}, "Wybierz instrument."),
         ({"end_date": date(2025, 12, 31)}, "Data końca nie może być przed datą początku."),
-        ({"transaction_type": TransactionType.SELL}, "Reguła cykliczna może być tylko wpłatą albo kupnem."),
+        (
+            {"transaction_type": TransactionType.SELL},
+            "Reguła cykliczna może być tylko wpłatą, kupnem, kosztem albo transferem gotówki.",
+        ),
+        ({"transaction_type": TransactionType.CASH_TRANSFER}, "Wybierz konto docelowe."),
+        (
+            {"transaction_type": TransactionType.CASH_TRANSFER, "target_account_id": 1},
+            "Konto docelowe musi być inne niż źródłowe.",
+        ),
     ],
 )
 def test_a_rule_is_checked_with_polish_messages(fields: dict[str, Any], message: str) -> None:
@@ -227,7 +238,7 @@ def test_drafts_follow_the_view_scope_oldest_first() -> None:
 
 def test_confirming_a_deposit_draft_saves_the_rules_amount_on_the_occurrence_with_its_link() -> None:
     draft = RecurringDraft(rule(), date(2026, 4, 10))
-    assert draft.deposit(None) == TransactionDraft(
+    assert draft.transaction(None) == TransactionDraft(
         1,
         date(2026, 4, 10),
         TransactionType.DEPOSIT,
@@ -235,6 +246,72 @@ def test_confirming_a_deposit_draft_saves_the_rules_amount_on_the_occurrence_wit
         "Wpłata IKE",
         recurring_rule_id=1,
         recurring_occurrence=date(2026, 4, 10),
+    )
+
+
+def transfer_rule(**fields: Any) -> RecurringRule:
+    values: dict[str, Any] = {
+        "name": "Na IKE",
+        "transaction_type": TransactionType.CASH_TRANSFER,
+        "target_account_id": 2,
+        "start": date(2026, 4, 1),
+    }
+    return rule(**values | fields)
+
+
+def test_a_cost_within_seven_days_covers_a_cost_rules_occurrence() -> None:
+    fee = rule(transaction_type=TransactionType.COST, amount=Decimal(5), start=date(2026, 3, 1))
+    paid = cost(1, date(2026, 3, 12), Decimal(5)).with_id(1)
+    assert due(recurring_drafts([fee], [paid, deposit(2, date(2026, 4, 10))], set(), TODAY)) == [(1, date(2026, 4, 10))]
+
+
+def test_a_cash_transfer_covers_an_occurrence_only_to_the_rules_target_account() -> None:
+    elsewhere = cash_transfer(1, date(2026, 4, 10), 3, Decimal(700)).with_id(1)
+    assert due(recurring_drafts([transfer_rule()], [elsewhere], set(), TODAY)) == [(1, date(2026, 4, 10))]
+    moved = cash_transfer(1, date(2026, 4, 8), 2, Decimal(700)).with_id(2)
+    assert due(recurring_drafts([transfer_rule()], [elsewhere, moved], set(), TODAY)) == []
+
+
+def test_a_cash_transfer_draft_shows_in_the_view_of_either_account() -> None:
+    drafts = [transfer_rule()]
+    assert due(recurring_drafts(drafts, [], set(), TODAY, account_id=1)) == [(1, date(2026, 4, 10))]
+    assert due(recurring_drafts(drafts, [], set(), TODAY, account_id=2)) == [(1, date(2026, 4, 10))]
+    assert recurring_drafts(drafts, [], set(), TODAY, account_id=3) == []
+
+
+def test_a_bond_series_buy_rule_is_covered_by_a_buy_of_any_series_of_its_bond_type() -> None:
+    # 7 is EDO0336 (the rule's), 8 EDO0436, 9 COI0330
+    bonds = {7: BondType.EDO, 8: BondType.EDO, 9: BondType.COI}
+    edo = rule(transaction_type=TransactionType.BUY, instrument_id=7, start=date(2026, 3, 1))
+    next_series = buy_or_sell(1, date(2026, 4, 10), TransactionType.BUY, 8, Decimal(10), Decimal(100)).with_id(1)
+    coi = buy_or_sell(1, date(2026, 3, 10), TransactionType.BUY, 9, Decimal(10), Decimal(100)).with_id(2)
+    assert due(recurring_drafts([edo], [next_series, coi], set(), TODAY, bond_types=bonds)) == [(1, date(2026, 3, 10))]
+
+
+def test_confirming_a_cost_or_cash_transfer_draft_saves_it_with_the_rules_amount_and_target() -> None:
+    fee = RecurringDraft(rule(transaction_type=TransactionType.COST, amount=Decimal(5)), date(2026, 4, 10))
+    assert fee.transaction(None) == fee.link(cost(1, date(2026, 4, 10), Decimal(5), "Wpłata IKE"))
+    moved = RecurringDraft(transfer_rule(), date(2026, 4, 10))
+    assert moved.transaction(None) == moved.link(cash_transfer(1, date(2026, 4, 10), 2, Decimal(1000), "Na IKE"))
+    assert (moved.transaction(None).recurring_rule_id, moved.transaction(None).recurring_occurrence) == (
+        1,
+        date(2026, 4, 10),
+    )
+
+
+def test_repeating_a_cost_or_cash_transfer_carries_its_amount_currency_and_target() -> None:
+    fee = repeating(cost(1, date(2026, 3, 5), Decimal(5)).with_id(1), TODAY)
+    assert (fee.transaction_type, fee.amount, fee.currency, fee.target_account_id) == (
+        TransactionType.COST,
+        Decimal(5),
+        "PLN",
+        None,
+    )
+    moved = repeating(cash_transfer(1, date(2026, 3, 5), 2, Decimal(700)).with_id(2), TODAY)
+    assert (moved.transaction_type, moved.amount, moved.target_account_id) == (
+        TransactionType.CASH_TRANSFER,
+        Decimal(700),
+        2,
     )
 
 

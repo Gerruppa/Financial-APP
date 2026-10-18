@@ -1,6 +1,6 @@
 """The "Transakcje cykliczne do zatwierdzenia" list of the Transakcje tab and its count in the header (issue #97, spec
-3.3.1 point 8): each occurrence of a Recurring Rule that no Transaction covers, confirmed at once ("Zatwierdź", a
-Deposit only), through the transaction dialog ("Edytuj…") or skipped ("Pomiń")."""
+3.3.1 point 8): each occurrence of a Recurring Rule that no Transaction covers, confirmed at once ("Zatwierdź", all
+but a Buy), through the transaction dialog ("Edytuj…") or skipped ("Pomiń")."""
 
 from collections.abc import Callable
 from datetime import date
@@ -14,7 +14,6 @@ from financial_app.domain.recurring import RecurringDraft
 from financial_app.domain.transaction_form import FormPrefill
 from financial_app.domain.transactions import TransactionError, TransactionType
 from financial_app.persistence.accounts import list_accounts
-from financial_app.persistence.instruments import list_instruments
 from financial_app.persistence.recurring_rules import (
     confirm_recurring_draft,
     pending_recurring_drafts,
@@ -22,12 +21,13 @@ from financial_app.persistence.recurring_rules import (
 )
 from financial_app.sources.nbp import NbpRates
 from financial_app.sources.transaction_saving import checked_save
+from financial_app.ui.recurring_rules import instrument_labels
 from financial_app.ui.save_warnings import show_warnings
 
 
 def prefill_of(draft: RecurringDraft) -> FormPrefill:
-    """The transaction dialog for a Draft: a Deposit with the rule's amount, a Buy with its Instrument and the quantity
-    and price left empty, as only the purchase tells them."""
+    """The transaction dialog for a Draft: a Deposit, Cost or Cash Transfer (to its target Account) with the rule's
+    amount, a Buy with its Instrument and the quantity and price left empty, as only the purchase tells them."""
     rule = draft.rule
     if rule.transaction_type is TransactionType.BUY:
         return FormPrefill(rule.account_id, rule.transaction_type, draft.due, instrument_id=rule.instrument_id)
@@ -38,6 +38,7 @@ def prefill_of(draft: RecurringDraft) -> FormPrefill:
         amount=format_exact(rule.amount),
         cash_currency=rule.currency,
         comment=rule.name,
+        target_id=rule.target_account_id,
     )
 
 
@@ -55,7 +56,7 @@ def recurring_drafts_list(
     if not drafts:
         return
     accounts = {account.id: account.name for account in list_accounts(engine)}
-    instruments = {instrument.id: instrument.name for instrument in list_instruments(engine)}
+    instruments = instrument_labels(engine)
     with ui.card().classes("w-full max-w-6xl mb-4 bg-amber-50").mark("recurring-drafts"):
         ui.label("Transakcje cykliczne do zatwierdzenia").classes("text-lg font-bold")
         for draft in drafts:
@@ -66,6 +67,8 @@ def recurring_drafts_list(
                     title = rule.name if account_id is not None else f"{rule.name} · {accounts[rule.account_id]}"
                     ui.label(title).classes("font-medium")
                     what = [rule.transaction_type.label]
+                    if rule.target_account_id is not None:
+                        what[0] += f" → {accounts[rule.target_account_id]}"
                     if rule.instrument_id is not None:
                         what.append(instruments[rule.instrument_id])
                     ui.label(" · ".join(what)).classes("text-sm text-gray-600")

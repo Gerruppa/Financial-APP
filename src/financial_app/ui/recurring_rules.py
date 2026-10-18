@@ -8,6 +8,7 @@ from datetime import date
 from nicegui import ui
 from sqlalchemy import Engine
 
+from financial_app.domain.bonds import bond_type_of
 from financial_app.domain.formatting import (
     format_amount,
     format_count,
@@ -46,6 +47,22 @@ TYPE_OPTIONS = {kind.value: kind.label for kind in RECURRING_TYPES}
 FREQUENCY_OPTIONS = {frequency.value: frequency.label for frequency in Frequency}
 
 
+def instrument_labels(engine: Engine) -> dict[int, str]:
+    """Each Instrument's name as a rule shows it: a Bond Series by its bond type, as a rule buys whichever month's
+    Series of it (#149)."""
+    return {
+        instrument.id: str(bond_type_of(instrument.name)) if instrument.is_bond_series else instrument.name
+        for instrument in list_instruments(engine)
+    }
+
+
+def accounts_of(rule: RecurringRule, accounts: dict[int, str]) -> str:
+    """The rule's Account, and a Cash Transfer's target after an arrow."""
+    if rule.target_account_id is None:
+        return accounts[rule.account_id]
+    return f"{accounts[rule.account_id]} → {accounts[rule.target_account_id]}"
+
+
 @dataclass
 class RecurringRulesSection:
     """The Transakcje cykliczne card; ``on_changed`` runs after a rule is saved, switched, deleted or its skips
@@ -80,7 +97,7 @@ class RecurringRulesSection:
             ui.label("Nie dodano jeszcze żadnej reguły.").classes("text-gray-500")
             return
         accounts = {account.id: account.name for account in list_accounts(self.engine)}
-        instruments = {instrument.id: instrument.name for instrument in list_instruments(self.engine)}
+        instruments = instrument_labels(self.engine)
         for rule in rules:
             self._rule_row(rule, accounts, instruments)
 
@@ -92,7 +109,7 @@ class RecurringRulesSection:
                     ui.badge(rule.transaction_type.label).props("outline")
                     if not rule.active:
                         ui.badge("wyłączona", color="grey")
-                what = [accounts[rule.account_id]]
+                what = [accounts_of(rule, accounts)]
                 if rule.instrument_id is not None:
                     what.append(instruments[rule.instrument_id])
                 what.append(format_amount(rule.amount, rule.currency))
@@ -162,6 +179,7 @@ def open_rule_dialog(
             rule.currency,
             rule.instrument_id,
             rule.frequency,
+            rule.target_account_id,
         )
     else:
         start = defaults or new_rule_defaults(today, next(iter(accounts), None))
@@ -185,6 +203,7 @@ def open_rule_dialog(
         account.classes("w-full").mark("rule-account")
         kind = ui.select(TYPE_OPTIONS, label="Typ", value=start.transaction_type.value).classes("w-full")
         kind.mark("rule-type")
+        target = ui.select({}, label="Konto docelowe", value=None).classes("w-full").mark("rule-target")
         instruments = {i.id: i.name for i in list_instruments(engine)}
         instrument = ui.select(instruments, label="Instrument", value=start.instrument_id, with_input=True)
         instrument.classes("w-full").mark("rule-instrument")
@@ -205,9 +224,16 @@ def open_rule_dialog(
         active = ui.switch("Aktywna", value=rule.active if rule else True).mark("rule-active")
         error = ui.label().classes("text-negative").mark("rule-error")
 
+        targets = {a.id: a.name for a in list_accounts(engine) if a.active or a.id == start.target_account_id}
+
         def show() -> None:
             buying = kind.value == TransactionType.BUY.value
             instrument.visible = buying
+            # A Cash Transfer goes to another Account than its own
+            target.visible = kind.value == TransactionType.CASH_TRANSFER.value
+            others = {key: label for key, label in targets.items() if key != account.value}
+            chosen = target.value if target.value is not None else start.target_account_id
+            target.set_options(others, value=chosen if chosen in others else None)
             amount.props(f'label="{"Planowana kwota" if buying else "Kwota"}"')
             held = accounts[account.value].cash_currencies
             options = list(held) or [PLN]
@@ -262,6 +288,7 @@ def open_rule_dialog(
                 end_date=parsed_end,
                 instrument_id=instrument.value if buying else None,
                 active=bool(active.value),
+                target_account_id=target.value if kind.value == TransactionType.CASH_TRANSFER.value else None,
             )
 
         def save() -> None:

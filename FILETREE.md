@@ -163,6 +163,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `0032_investment_goals.py`: Migration creating the investment_goals table
 - `0033_recurring_rules.py`: Migration 0033: creates recurring rule and skip tables and the Transaction columns linking to a rule
 - `0034_commission_currency.py`: Migration adding the transactions commission_currency column, defaulting to PLN, for commissions paid in foreign cash.
+- `0035_recurring_rule_target.py`: Migration adding the nullable target_account_id column to recurring_rules for Cash Transfer Recurring Rules.
 
 ## src/financial_app/sources/
 
