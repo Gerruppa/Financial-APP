@@ -11,6 +11,7 @@ from sqlalchemy import Engine
 from financial_app.domain.formatting import format_datetime
 from financial_app.domain.instrument_search import CombinedSearch, InstrumentSearch
 from financial_app.domain.prices import ANALIZY, BANKIER, BOSSA, SOURCE_NAMES, YAHOO, refresh_due, source_reason
+from financial_app.domain.ui_visibility import tab_key
 from financial_app.persistence.bond_data import bond_data_statuses
 from financial_app.persistence.quotes import last_successful_refresh
 from financial_app.sources.analizy import AnalizySearch, AnalizySource
@@ -43,6 +44,7 @@ from financial_app.ui.strategy import PlannedDeposit, StrategyPage, out_of_band_
 from financial_app.ui.transactions import TransactionsPage, open_transaction_dialog
 from financial_app.ui.unpriced import UnpricedSection
 from financial_app.ui.view_scope import ScopeSwitcher, ViewScope, breadcrumbs
+from financial_app.ui.visibility import Layout
 
 APP_TITLE = "Moje inwestycje"
 
@@ -108,7 +110,9 @@ def build_shell(
     scope = ViewScope(engine)
     period = PeriodChoice(engine, lambda: now().date())
     planned = PlannedDeposit()
-    dashboard_page = DashboardPage(engine, rates, scope, period, lambda: shared.days, planned)
+    layout = Layout(engine)
+    layout.on_change(lambda: events.publish(Change.LAYOUT))
+    dashboard_page = DashboardPage(engine, rates, scope, period, lambda: shared.days, layout, planned)
     strategy_page = StrategyPage(engine, rates, scope, planned)
     results_page = ResultsPage(engine, scope, period, lambda: shared.days)
     transactions_page = TransactionsPage(engine, rates, scope, events.publish)
@@ -254,11 +258,18 @@ def build_shell(
         switcher = ScopeSwitcher(scope, lambda: shared.days)
         events.subscribe(switcher.refresh, switcher.CHANGES)
 
-    with ui.left_drawer(value=True).classes("bg-indigo-950").props("width=260").mark("nav-menu"):
+    # A tab hidden in Wygląd i widoczność leaves the menu, yet its address still opens it
+    @ui.refreshable
+    def menu() -> None:
         for tab in TABS:
-            ui.button(tab.label, icon=tab.icon, on_click=lambda path=tab.path: ui.navigate.to(path)).props(
-                "flat align=left no-caps no-wrap color=white"
-            ).classes("w-full")
+            if layout.shows(tab_key(tab.path)):
+                ui.button(tab.label, icon=tab.icon, on_click=lambda path=tab.path: ui.navigate.to(path)).props(
+                    "flat align=left no-caps no-wrap color=white"
+                ).classes("w-full")
+
+    with ui.left_drawer(value=True).classes("bg-indigo-950").props("width=260").mark("nav-menu"):
+        menu()
+    events.subscribe(menu.refresh, {Change.LAYOUT})
 
     with ui.page_sticky(position="bottom-right", x_offset=24, y_offset=24):
         add_button = ui.button(
@@ -306,6 +317,7 @@ def build_shell(
         transactions_changed,
         account_deleted,
         lambda: events.publish(Change.RECURRING_RULES),
+        layout,
     )
     pages = {path: showing_add_button(build, path != SETTINGS_PATH) for path, build in pages.items()}
     ui.sub_pages(pages).classes("w-full").mark("page-content")

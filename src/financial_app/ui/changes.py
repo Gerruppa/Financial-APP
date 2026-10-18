@@ -14,6 +14,7 @@ class Change(Enum):
     HISTORY = auto()  # History outdated or computed
     INSTRUMENTS = auto()  # an Instrument's Asset Class or Multi-asset Split changed
     RECURRING_RULES = auto()  # a Recurring Rule or its skipped occurrences changed
+    LAYOUT = auto()  # an element or tab shown or hidden in Wygląd i widoczność
 
 
 # What a tab valuing the View Scope's holdings today redraws on

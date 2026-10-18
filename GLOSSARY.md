@@ -38,6 +38,7 @@ The Polish UI labels with the English terms the code and the docs use, in Polish
 | Podział Multi-asset | [Multi-asset Split](CONTEXT.md#accounts-and-instruments) | Accounts and instruments |
 | Polityka dywidendowa | [Distribution Policy](CONTEXT.md#transactions-and-holdings) | Transactions and holdings |
 | Pozycja | [Position](CONTEXT.md#transactions-and-holdings) | Transactions and holdings |
+| Profil widoku | [View Profile](CONTEXT.md#accounts-and-instruments) | Accounts and instruments |
 | Reguła cykliczna | [Recurring Rule](CONTEXT.md#transactions-and-holdings) | Transactions and holdings |
 | Saldo gotówki | [Cash Balance](CONTEXT.md#transactions-and-holdings) | Transactions and holdings |
 | Seria obligacji | [Bond Series](CONTEXT.md#bonds) | Bonds |

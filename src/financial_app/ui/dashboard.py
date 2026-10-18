@@ -3,7 +3,8 @@ scope the Accounts treemap and ranking.
 
 Positions are valued like in the Portfolio (``domain.valuation``, foreign ones at the NBP Rate from the last business
 day before today); Net Deposits come from History, "—" while it is computed. The "po podatku" toggle (not remembered)
-takes the estimated Belka on Regular Accounts' unrealised gains off their results.
+takes the estimated Belka on Regular Accounts' unrealised gains off their results. The tiles, sections and charts
+hidden in Wygląd i widoczność (``layout``, issue #155) are left out.
 """
 
 from collections.abc import Callable
@@ -29,8 +30,9 @@ from financial_app.ui.contribution_limits import limits_section
 from financial_app.ui.info import card_title
 from financial_app.ui.investment_goal import goal_tile
 from financial_app.ui.periods import PeriodChoice, period_selector
-from financial_app.ui.strategy import PlannedDeposit, strategy_section
+from financial_app.ui.strategy import PlannedDeposit, scope_strategy, strategy_section
 from financial_app.ui.view_scope import ViewScope
+from financial_app.ui.visibility import Layout
 
 DASH = "—"
 # Behind the "i" of the tiles and tables that need explaining, by their marker
@@ -66,13 +68,14 @@ class DashboardPage:
     computed. It never offers editing controls."""
 
     # The changes it redraws on (ui/changes.py)
-    CHANGES = frozenset({Change.SCOPE, Change.HISTORY})
+    CHANGES = frozenset({Change.SCOPE, Change.HISTORY, Change.LAYOUT})
 
     engine: Engine
     rates: NbpRates
     scope: ViewScope
     period: PeriodChoice
     history: Callable[[], list[DayValue] | None]
+    layout: Layout
     planned: PlannedDeposit = field(default_factory=PlannedDeposit)
     after_tax: bool = False
     ranking: AccountRanking = field(default_factory=AccountRanking)
@@ -96,26 +99,37 @@ class DashboardPage:
         period = self.period.dates()
         today = todays_dashboard(self.engine, self.rates, self.scope.account_id, days, period)
         board = today.board
+        shows = self.layout.shows
         _prices_line(last_refresh(self.engine), len(unpriced_instruments(self.engine)))
         ui.switch("Po podatku", value=self.after_tax, on_change=self._toggle_after_tax).mark("after-tax")
-        _totals(board.totals, self.after_tax)
-        _since_snapshot(change_since_snapshot(self.engine, self.scope.account_id, board.totals, self.period.today()))
-        # The goal's progress follows the "Po podatku" toggle
-        value = board.totals.value_after(self.after_tax)
-        goal_tile(self.engine, self.rates, self.scope.account_id, value, days, self.period.today(), self.refresh)
-        _account_table(board.accounts, self.after_tax)
-        limits_section(self.engine, today.transactions, today.accounts, self.rates.today(), self.scope.account_id)
-        if self.scope.account_id is None:
+        _totals(board.totals, self.after_tax, shows)
+        if shows("since-snapshot"):
+            snapshot = change_since_snapshot(self.engine, self.scope.account_id, board.totals, self.period.today())
+            _since_snapshot(snapshot)
+        if shows("investment-goal"):
+            # The goal's progress follows the "Po podatku" toggle
+            value = board.totals.value_after(self.after_tax)
+            goal_tile(self.engine, self.rates, self.scope.account_id, value, days, self.period.today(), self.refresh)
+        if shows("account-table"):
+            _account_table(board.accounts, self.after_tax)
+        if shows("contribution-limits"):
+            limits_section(self.engine, today.transactions, today.accounts, self.rates.today(), self.scope.account_id)
+        if self.scope.account_id is None and shows("account-ranking"):
             rows = ranking(board.accounts, self.after_tax)
             accounts_treemap(rows, self.scope.switch)
             self.ranking.build(rows)
-        _currency_exposure(board.currencies)
-        strategy = strategy_section(self.engine, today, self.scope.account_id, self.planned)
+        if shows("currency-exposure"):
+            _currency_exposure(board.currencies)
+        # The allocation chart shows the strategy's targets even with its section hidden
+        if shows("strategy"):
+            strategy = strategy_section(self.engine, today, self.scope.account_id, self.planned)
+        else:
+            strategy = scope_strategy(self.engine, today, self.scope.account_id, self.planned.amount)
         targets = {row.asset_class: row.target.percent for row in strategy.view.rows if row.target is not None}
         account_names = {account.id: account.name for account in today.accounts}
         sources = board.sources.after_tax(board.totals.estimated_tax) if self.after_tax else board.sources
         dashboard_charts(
-            board, today.transactions, account_names, days, self.scope.account_id, period, targets, sources
+            board, today.transactions, account_names, days, self.scope.account_id, period, targets, sources, shows
         )
 
     def _toggle_after_tax(self, event: ValueChangeEventArguments[bool | None]) -> None:
@@ -123,8 +137,9 @@ class DashboardPage:
         self.refresh()
 
 
-def _totals(totals: Totals, after_tax: bool) -> None:
-    """The tiles; ``after_tax`` adds the estimated Belka and takes it off the unrealised result."""
+def _totals(totals: Totals, after_tax: bool, shows: Callable[[str], bool]) -> None:
+    """The tiles ``shows`` shows by their ``tile-`` key; ``after_tax`` adds the estimated Belka and takes it off the
+    unrealised result."""
     tiles: list[tuple[str, str, str | None]] = [
         ("net-deposits", "Wpłaty netto", None if totals.net_deposits is None else format_pln(totals.net_deposits)),
         ("value", "Wartość konta", format_pln(totals.value)),
@@ -142,6 +157,9 @@ def _totals(totals: Totals, after_tax: bool) -> None:
     ]
     if after_tax:
         tiles.append(("estimated-tax", "Szacowany podatek i opłaty", format_pln(totals.estimated_tax)))
+    tiles = [tile for tile in tiles if shows(f"tile-{tile[0]}")]
+    if not tiles:
+        return
     with (
         ui.element("div")
         .classes("grid w-full gap-4")
