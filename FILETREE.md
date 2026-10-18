@@ -161,6 +161,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `0031_valuation_snapshots.py`: Migration creating the valuation_snapshots table
 - `0032_investment_goals.py`: Migration creating the investment_goals table
 - `0033_recurring_rules.py`: Migration 0033: creates recurring rule and skip tables and the Transaction columns linking to a rule
+- `0034_commission_currency.py`: Migration adding the transactions commission_currency column, defaulting to PLN, for commissions paid in foreign cash.
 
 ## src/financial_app/sources/
 
@@ -236,6 +237,10 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_accounts_domain.py`: Tests Account Types, Tax Regime registry and AccountDraft validation rules
 - `test_accounts_repository.py`: Tests saving, listing and editing Accounts in SQLite, including unique names
 - `test_accounts_ui.py`: UI tests for Ustawienia Konta: adding, editing and deactivating Accounts without a browser
+- `test_accounts_without_pln_domain.py`: Tests domain rules for commissions paid from foreign cash on an Account without PLN: FIFO cash, valuation, balances.
+- `test_accounts_without_pln_form.py`: Tests the transaction dialog rules on an Account without PLN: offered transaction kinds and commission currency.
+- `test_accounts_without_pln_repository.py`: Tests saving and listing a trade whose commission is paid in foreign cash on an Account without PLN.
+- `test_accounts_without_pln_ui.py`: End-to-end UI test of a Buy on an Account without PLN, paying the commission from its foreign cash.
 - `test_analizy_history.py`: Tests fund and PPK valuation history from analizy.pl on saved responses, and the source order for History
 - `test_analizy_search.py`: Tests for analizy.pl fund and PPK search on saved, trimmed responses without network
 - `test_analizy_source.py`: Tests the analizy.pl fund and PPK quote source against saved API responses

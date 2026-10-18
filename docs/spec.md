@@ -110,7 +110,7 @@ Validation at save time (Q36):
 - Lot key: Account + Instrument. Same-day order: Split, Buy, Security Transfer, Sell, DRIP/Deposit.
 - Buy fee capitalised into Lot cost; each Lot carries Actual cost and Tax cost (qty × price × NBP D-1 + fee in PLN).
 - Splits rescale open Lots (qty × X/Y, unit price × Y/X); fees are not rescaled.
-- Cash Balance per Account and Cash Currency; foreign cash held as Lots with PLN cost → FX result per Account, excludable by the Account flag. Commission paid in PLN is not counted in the foreign-cash quantity.
+- Cash Balance per Account and Cash Currency; foreign cash held as Lots with PLN cost → FX result per Account, excludable by the Account flag. Commission paid in PLN is not counted in the foreign-cash quantity. An Account without PLN (#124) pays its commission from the foreign cash the trade is paid from, so it is counted there, valued at the trade's rate (the Tax Amount at NBP D-1); it has no Currency Exchange, Cash Transfer or broker conversion.
 - Dividend attribution to sold pairs (Sell Summary): pro-rata by quantity held on the dividend date, with split-adjusted units.
 
 ## 4. Price sources (Q12, Q35, ADR-0005)

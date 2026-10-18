@@ -94,6 +94,8 @@ class TransactionRow(Base):
     quantity: Mapped[str | None] = mapped_column(String(30))
     price: Mapped[str | None] = mapped_column(String(30))
     commission: Mapped[str | None] = mapped_column(String(30))
+    # PLN, or the foreign ``cash_currency`` a trade on an Account without PLN is paid from (issue #124)
+    commission_currency: Mapped[str] = mapped_column(String(3), server_default="PLN")
     # Foreign-currency Buy, Sell, Dividend and DRIP only: the user's own rate (None means the NBP Rate) and the NBP
     # Rate (D-1)
     fx_rate: Mapped[str | None] = mapped_column(String(30))
