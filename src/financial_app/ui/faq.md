@@ -53,16 +53,16 @@ Wpłaty pomniejszone o wypłaty to **Wpłaty netto**: ile własnych pieniędzy w
 ## Jak kupić akcję albo ETF? {#zakup}
 Przejdź do: /transakcje
 
-1. Najpierw dodaj instrument: **Ustawienia** → **Instrumenty** → **Dodaj instrument**. Wyszukaj go po ISIN, nazwie albo symbolu i wybierz wynik; aplikacja uzupełni **Klasę aktywów**, **Walutę notowania** i symbole źródeł wycen.
+1. Najpierw dodaj instrument: **Ustawienia** → **Instrumenty** → **Dodaj instrument**. Wyszukaj go po ISIN, nazwie albo symbolu i wybierz wynik; aplikacja uzupełni pola **Klasa aktywów**, **Waluta notowania** i symbole źródeł wycen.
 2. Kliknij **„+”**, wybierz **Konto** i **Typ** „Zakup”.
 3. Wybierz instrument, wpisz **Liczbę**, **Cenę** i **Prowizję**, potem **Zapisz**.
 
-Przy instrumencie w walucie obcej podajesz cenę w tej walucie. Jeśli konto trzyma tę walutę, wybierzesz, z czego płacisz (**Płatność**); jeśli broker przewalutowuje za Ciebie, zaznacz prowizję za przewalutowanie albo wpisz **Kwotę pobraną przez brokera (zł)**.
+Przy instrumencie w walucie obcej podajesz cenę w tej walucie. Jeśli konto trzyma tę walutę, wybierzesz, z czego płacisz (**Płatność**); jeśli broker przewalutowuje za Ciebie, zaznacz prowizję za przewalutowanie albo wypełnij pole **Kwota pobrana przez brokera (zł)**.
 
 ## Jak kupić bitcoina albo inną kryptowalutę? {#kryptowaluty}
 Przejdź do: /transakcje
 
-1. **Ustawienia** → **Instrumenty** → **Dodaj instrument**. Wyszukaj np. „bitcoin” albo wpisz **Symbol Yahoo** „BTC-USD”. Wybierz **Klasę aktywów** „Kryptowaluty”.
+1. **Ustawienia** → **Instrumenty** → **Dodaj instrument**. Wyszukaj np. „bitcoin” albo wpisz **Symbol Yahoo** „BTC-USD”. W polu **Klasa aktywów** wybierz „Kryptowaluty”.
 2. W polu **Miejsca po przecinku w liczbie** ustaw, ile miejsc po przecinku ma ilość (do 8), np. 8 dla 0,00125 BTC.
 3. Kliknij **„+”**, wybierz **Typ** „Zakup”, ten instrument, ułamkową **Liczbę** i **Cenę**, potem **Zapisz**.
 
@@ -138,7 +138,7 @@ Przejdź do: /ustawienia
 W **Ustawieniach** sekcja **Instrumenty bez wyceny** wymienia posiadane instrumenty bez automatycznej ceny i powód: brak symbolu w źródle, błąd przy ostatnim odświeżeniu albo brak notowania. Kliknij wiersz, aby otworzyć instrument, i:
 
 - wpisz **Symbol w źródle** (np. **Symbol Yahoo** „ISAC.L”, **Symbol Bossa** „CDR”); przycisk **Sprawdź** od razu pobiera cenę na próbę;
-- albo wpisz **Cenę ręczną**, jeśli żadne źródło nie notuje instrumentu (np. lokata, nieruchomość).
+- albo wypełnij pole **Cena ręczna**, jeśli żadne źródło nie notuje instrumentu (np. lokata, nieruchomość).
 
 Potem odśwież wyceny ikoną w nagłówku.
 

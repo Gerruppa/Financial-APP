@@ -28,36 +28,47 @@ class Question:
     goto: str | None = None
 
 
-@dataclass
+@dataclass(frozen=True)
 class Section:
     title: str
-    questions: list[Question] = field(default_factory=list)
+    questions: tuple[Question, ...]
+
+
+@dataclass
+class _Reading:
+    """The question being read: its heading, slug, the tab it names and its answer's lines so far."""
+
+    title: str
+    slug: str
+    goto: str | None = None
+    lines: list[str] = field(default_factory=list)
+
+    def question(self) -> Question:
+        answer = "\n".join(self.lines).strip()
+        if not answer:
+            raise FaqError(f"Pytanie „{self.title}” ma pustą odpowiedź.")
+        return Question(self.slug, self.title, answer, self.goto)
 
 
 def parse_faq(text: str) -> list[Section]:
     """The sections in the text's order; each needs a question, and each question a slug of its own and an answer."""
-    sections: list[Section] = []
-    # The question being read: its heading, slug, goto and answer lines
-    current: tuple[str, str, str | None, list[str]] | None = None
+    # Each section's title with its questions read so far
+    read: list[tuple[str, list[Question]]] = []
+    current: _Reading | None = None
     slugs: set[str] = set()
 
     def finish() -> None:
-        if current is None:
-            return
-        title, slug, goto, lines = current
-        answer = "\n".join(lines).strip()
-        if not answer:
-            raise FaqError(f"Pytanie „{title}” ma pustą odpowiedź.")
-        sections[-1].questions.append(Question(slug, title, answer, goto))
+        if current is not None:
+            read[-1][1].append(current.question())
 
     for line in text.splitlines():
         if heading := _SECTION.match(line):
             finish()
             current = None
-            sections.append(Section(heading["title"]))
+            read.append((heading["title"], []))
         elif asked := _QUESTION.match(line):
             finish()
-            if not sections:
+            if not read:
                 raise FaqError(f"Pytanie „{asked['title']}” stoi przed pierwszą sekcją.")
             title, slug = asked["title"], asked["slug"]
             if slug is None:
@@ -65,22 +76,21 @@ def parse_faq(text: str) -> list[Section]:
             if slug in slugs:
                 raise FaqError(f"Slug #{slug} powtarza się.")
             slugs.add(slug)
-            current = (title, slug, None, [])
+            current = _Reading(title, slug)
         elif current is not None:
-            title, slug, goto, lines = current
-            if (target := _GOTO.match(line)) and goto is None and not any(lines):
-                current = (title, slug, target["path"], lines)
+            if (target := _GOTO.match(line)) and current.goto is None and not any(current.lines):
+                current.goto = target["path"]
             else:
-                lines.append(line)
+                current.lines.append(line)
         elif line.strip():
             raise FaqError(f"Tekst „{line.strip()}” stoi przed pierwszą sekcją.")
     finish()
-    if not sections:
+    if not read:
         raise FaqError("FAQ nie ma żadnej sekcji.")
-    for section in sections:
-        if not section.questions:
-            raise FaqError(f"Sekcja „{section.title}” nie ma pytań.")
-    return sections
+    for title, questions in read:
+        if not questions:
+            raise FaqError(f"Sekcja „{title}” nie ma pytań.")
+    return [Section(title, tuple(questions)) for title, questions in read]
 
 
 def matching(sections: Iterable[Section], query: str) -> list[Question]:
