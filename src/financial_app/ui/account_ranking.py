@@ -21,7 +21,7 @@ from financial_app.domain.account_ranking import (
     treemap_tiles,
 )
 from financial_app.domain.formatting import format_percent, format_pln
-from financial_app.ui.charts import PLN_FORMATTER
+from financial_app.ui.charts import PLN_FORMATTER, zoom_button
 from financial_app.ui.info import card_title
 
 DASH = "—"
@@ -78,9 +78,10 @@ def accounts_treemap(rows: Sequence[RankingRow], switch: Callable[[int], None]) 
         if event.name in ids:
             switch(ids[event.name])
 
-    with ui.card().classes("w-full gap-1"):
+    with ui.card().classes("relative w-full gap-1"):
         card_title("Konta", TREEMAP_INFO, "accounts-treemap")
         ui.echart(options, on_point_click=clicked).classes("w-full h-72").mark("chart-accounts-treemap")
+        zoom_button("Konta", "accounts-treemap", options, clicked)
 
 
 def _colour(share: Decimal | None) -> str:
