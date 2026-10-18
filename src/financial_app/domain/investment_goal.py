@@ -2,11 +2,11 @@
 FIRE from yearly expenses and a safe withdrawal rate, and its real forecast in today's złoty.
 
 The forecast compounds the expected real yearly return monthly and adds the monthly deposit at each month's end; by
-default that deposit is the View Scope's average monthly Net Deposits over the last twelve months (or the shorter
-History there is).
+default that deposit is what the View Scope's active Recurring Rules plan a month (#148), and without such a rule its
+average monthly Net Deposits over the last twelve months (or the shorter History there is).
 """
 
-from collections.abc import Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
@@ -15,6 +15,8 @@ from enum import StrEnum
 from financial_app.domain.bonds import add_months
 from financial_app.domain.formatting import format_date, format_exact, format_number, parse_date, parse_number
 from financial_app.domain.portfolio_history import DayValue
+from financial_app.domain.recurring import RecurringRule
+from financial_app.domain.transactions import PLN, TransactionType
 
 # Percent: 4% gives the FIRE goal of 25 × the yearly expenses
 DEFAULT_WITHDRAWAL_RATE = Decimal(4)
@@ -164,6 +166,33 @@ def average_monthly_deposits(history: Sequence[DayValue], account_id: int | None
     else:
         base, months = Decimal(0), max(Decimal((today - history[0].day).days) / DAYS_A_MONTH, Decimal(1))
     return (net_deposits(history[-1]) - base) / months
+
+
+def rules_monthly_deposits(
+    rules: Iterable[RecurringRule], account_id: int | None, today: date, rates: Mapping[str, Decimal]
+) -> Decimal | None:
+    """The Net Deposits a month the View Scope's Recurring Rules plan (#148), in PLN at ``rates`` (PLN per unit
+    of a foreign currency; a rule in a currency without one is left out); ``None`` without such a rule.
+
+    Only active rules not ended before ``today`` count, one starting ahead too. Total counts the Deposit rules; an
+    Account's View its own Deposit rules, plus the Cash Transfer rules into it and less those out of it, as
+    ``DayValue.account_net_deposits`` does. A Buy spends cash already deposited and a Cost leaves Net Deposits alone.
+    """
+
+    def sign(rule: RecurringRule) -> int:
+        if rule.transaction_type is TransactionType.DEPOSIT:
+            return 1 if account_id in (None, rule.account_id) else 0
+        if rule.transaction_type is TransactionType.CASH_TRANSFER and account_id is not None:
+            return (account_id == rule.target_account_id) - (account_id == rule.account_id)
+        return 0
+
+    pln = {PLN: Decimal(1), **rates}
+    planned = [
+        rule.amount * sign(rule) * pln[rule.currency] / rule.frequency.months
+        for rule in rules
+        if rule.active and (rule.end_date is None or rule.end_date >= today) and sign(rule) and rule.currency in pln
+    ]
+    return sum(planned, Decimal(0)) if planned else None
 
 
 def forecast(goal: InvestmentGoal, value: Decimal, monthly: Decimal, today: date) -> GoalForecast:

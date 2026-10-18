@@ -14,8 +14,11 @@ from financial_app.domain.investment_goal import (
     average_monthly_deposits,
     forecast,
     parse_goal,
+    rules_monthly_deposits,
 )
 from financial_app.domain.portfolio_history import DayValue
+from financial_app.domain.recurring import Frequency, RecurringRule
+from financial_app.domain.transactions import TransactionType
 
 TODAY = date(2026, 10, 17)
 
@@ -76,6 +79,83 @@ def test_a_shorter_history_averages_over_the_months_it_has() -> None:
     assert average_monthly_deposits(history, None, TODAY).quantize(Decimal(1)) == Decimal(502)
     assert average_monthly_deposits(history, 1, TODAY).quantize(Decimal(1)) == Decimal(1003)
     assert average_monthly_deposits([], None, TODAY) == Decimal(0)
+
+
+def _rule(
+    rule_id: int,
+    kind: TransactionType,
+    amount: int,
+    frequency: Frequency = Frequency.MONTHLY,
+    *,
+    account_id: int = 1,
+    currency: str = "PLN",
+    target_account_id: int | None = None,
+    start_date: date = date(2026, 1, 10),
+    end_date: date | None = None,
+    active: bool = True,
+) -> RecurringRule:
+    return RecurringRule(
+        f"Reguła {rule_id}",
+        account_id,
+        kind,
+        Decimal(amount),
+        currency,
+        frequency,
+        10,
+        start_date,
+        end_date,
+        instrument_id=7 if kind is TransactionType.BUY else None,
+        active=active,
+        target_account_id=target_account_id,
+        id=rule_id,
+    )
+
+
+def test_deposit_rules_give_the_monthly_deposit_per_month_in_pln() -> None:
+    rules = [
+        _rule(1, TransactionType.DEPOSIT, 1000),
+        _rule(2, TransactionType.DEPOSIT, 3000, Frequency.QUARTERLY),
+        _rule(3, TransactionType.DEPOSIT, 600, Frequency.SEMIANNUAL),
+        _rule(4, TransactionType.DEPOSIT, 100, Frequency.YEARLY, currency="EUR"),
+    ]
+
+    # 1 000 + 3 000 / 3 + 600 / 6 + 100 € × 4,20 / 12
+    assert rules_monthly_deposits(rules, None, TODAY, {"EUR": Decimal("4.2")}) == Decimal(2135)
+
+
+def test_the_total_counts_the_active_deposit_rules_still_running() -> None:
+    rules = [
+        _rule(1, TransactionType.DEPOSIT, 1000),
+        _rule(2, TransactionType.DEPOSIT, 200, account_id=2),
+        # Starting ahead still counts
+        _rule(3, TransactionType.DEPOSIT, 50, start_date=date(2027, 1, 10)),
+        # A Buy spends cash already deposited, a Cost leaves Net Deposits alone, a Cash Transfer stays within
+        _rule(4, TransactionType.BUY, 500),
+        _rule(5, TransactionType.COST, 30),
+        _rule(6, TransactionType.CASH_TRANSFER, 400, target_account_id=2),
+        # Paused, or ended before today
+        _rule(7, TransactionType.DEPOSIT, 9000, active=False),
+        _rule(8, TransactionType.DEPOSIT, 9000, end_date=date(2026, 10, 16)),
+    ]
+
+    assert rules_monthly_deposits(rules, None, TODAY, {}) == Decimal(1250)
+    assert rules_monthly_deposits(rules[3:], None, TODAY, {}) is None
+
+
+def test_an_accounts_view_adds_cash_transfers_into_it_and_takes_off_those_out_of_it() -> None:
+    rules = [
+        _rule(1, TransactionType.DEPOSIT, 1000),
+        _rule(2, TransactionType.DEPOSIT, 200, account_id=2),
+        _rule(3, TransactionType.CASH_TRANSFER, 300, account_id=2, target_account_id=1),
+        _rule(4, TransactionType.CASH_TRANSFER, 600, Frequency.QUARTERLY, target_account_id=3),
+        # Ends today: still running
+        _rule(5, TransactionType.CASH_TRANSFER, 50, account_id=3, target_account_id=2, end_date=TODAY),
+    ]
+
+    assert rules_monthly_deposits(rules, 1, TODAY, {}) == Decimal(1100)
+    assert rules_monthly_deposits(rules, 2, TODAY, {}) == Decimal(-50)
+    assert rules_monthly_deposits(rules, 3, TODAY, {}) == Decimal(150)
+    assert rules_monthly_deposits(rules, 4, TODAY, {}) is None
 
 
 def test_without_growth_the_goal_is_reached_when_the_deposits_add_up_to_it() -> None:
