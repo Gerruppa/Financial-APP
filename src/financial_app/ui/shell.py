@@ -35,6 +35,7 @@ from financial_app.ui.multi_asset import MultiAssetPage
 from financial_app.ui.passive_income import PassiveIncomePage
 from financial_app.ui.periods import PeriodChoice
 from financial_app.ui.portfolio import PortfolioPage
+from financial_app.ui.recurring_drafts import recurring_drafts_count
 from financial_app.ui.results import ResultsPage
 from financial_app.ui.sale_summary import SaleSummaryPage
 from financial_app.ui.settings import build_settings_page
@@ -110,7 +111,7 @@ def build_shell(
     dashboard_page = DashboardPage(engine, rates, scope, period, lambda: shared.days, planned)
     strategy_page = StrategyPage(engine, rates, scope, planned)
     results_page = ResultsPage(engine, scope, period, lambda: shared.days)
-    transactions_page = TransactionsPage(engine, rates, scope)
+    transactions_page = TransactionsPage(engine, rates, scope, events.publish)
     portfolio_page = PortfolioPage(engine, rates, scope)
     bonds_page = BondsPage(engine, rates, scope, on_saved=lambda: events.publish(Change.TRANSACTIONS))
     unpriced = UnpricedSection(engine)
@@ -233,6 +234,10 @@ def build_shell(
         drafts_state = ui.refreshable(lambda: drafts_count(engine, rates.today()))
         drafts_state()
         events.subscribe(drafts_state.refresh, {Change.TRANSACTIONS, Change.PRICES, Change.BOND_DATA})
+        # The Recurring Rules' Drafts are counted apart from the bonds' (issue #97)
+        recurring_state = ui.refreshable(lambda: recurring_drafts_count(engine, rates.today()))
+        recurring_state()
+        events.subscribe(recurring_state.refresh, {Change.TRANSACTIONS, Change.RECURRING_RULES})
         history_state = ui.refreshable(lambda: history_status(engine, shared))
         history_state()
         bond_state = ui.refreshable(lambda: bond_data_status(engine))
@@ -290,7 +295,15 @@ def build_shell(
     pages["/sprzedaz"] = lambda: scope_pages(sale_page.build)
     pages["/dochod-pasywny"] = lambda: scope_pages(income_page.build)
     pages[SETTINGS_PATH] = lambda: build_settings_page(
-        engine, rates, search, sources, unpriced, instruments_changed, transactions_changed, account_deleted
+        engine,
+        rates,
+        search,
+        sources,
+        unpriced,
+        instruments_changed,
+        transactions_changed,
+        account_deleted,
+        lambda: events.publish(Change.RECURRING_RULES),
     )
     pages = {path: showing_add_button(build, path != SETTINGS_PATH) for path, build in pages.items()}
     ui.sub_pages(pages).classes("w-full").mark("page-content")

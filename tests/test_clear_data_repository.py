@@ -37,6 +37,8 @@ from financial_app.persistence.models import (
     PriceFailureRow,
     QuoteHistoryRow,
     RateCorrectionRow,
+    RecurringRuleRow,
+    RecurringRuleSkipRow,
     SkippedBrokerRow,
     StrategyRow,
     ValuationSnapshotRow,
@@ -155,8 +157,22 @@ def _fill_every_removed_table(engine: Engine) -> None:
                 InvestmentGoalRow(
                     account_id=account_id, mode="amount", amount="1000", withdrawal_rate="4", real_return="4"
                 ),
+                RecurringRuleRow(
+                    id=1,
+                    name="Wpłata",
+                    account_id=account_id,
+                    transaction_type="deposit",
+                    amount="1000",
+                    currency="PLN",
+                    frequency="monthly",
+                    day_of_month=10,
+                    start_date=date(2026, 1, 1),
+                    active=True,
+                ),
             ]
         )
+        session.flush()
+        session.add(RecurringRuleSkipRow(rule_id=1, occurrence_date=date(2026, 1, 12)))
 
 
 def _rows(engine: Engine, models: list[type[Base]]) -> dict[str, int]:

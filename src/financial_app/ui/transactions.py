@@ -27,6 +27,7 @@ from financial_app.domain.formatting import (
     parse_number,
 )
 from financial_app.domain.instruments import InstrumentError
+from financial_app.domain.recurring import RecurringDraft, repeating
 from financial_app.domain.transaction_filters import (
     CHOICE_COLUMNS,
     NEWEST_FIRST,
@@ -46,11 +47,18 @@ from financial_app.domain.transaction_form import (
     TRANSACTION_TYPE_OPTIONS,
     FormContext,
     FormLayout,
+    FormPrefill,
     FormState,
     FormTexts,
     TransactionForm,
 )
-from financial_app.domain.transactions import Origin, Transaction, TransactionError, TransactionType
+from financial_app.domain.transactions import (
+    Origin,
+    Transaction,
+    TransactionDraft,
+    TransactionError,
+    TransactionType,
+)
 from financial_app.persistence.accounts import list_accounts
 from financial_app.persistence.bond_data import load_series_terms
 from financial_app.persistence.bond_series import list_bond_series, load_bond_data
@@ -62,6 +70,8 @@ from financial_app.sources.transaction_saving import delete_saved, save_transact
 from financial_app.ui.changes import Change
 from financial_app.ui.dialogs import movable_dialog
 from financial_app.ui.multi_asset import open_split_dialog
+from financial_app.ui.recurring_drafts import prefill_of, recurring_drafts_list
+from financial_app.ui.recurring_rules import open_rule_dialog
 from financial_app.ui.save_warnings import show_warnings
 from financial_app.ui.view_scope import ViewScope, breadcrumbs
 
@@ -85,14 +95,16 @@ NO_INSTRUMENT_LABEL = "(bez instrumentu)"
 class TransactionsPage:
     """The Transakcje tab; clicking a Transaction opens it for editing or deleting. In an Account's View Scope it lists
     only that Account's Transactions, Cash and Security Transfers to it included. Each column header sorts the list and
-    filters it (L-27); the export buttons export what is listed."""
+    filters it (L-27); the export buttons export what is listed. Above it, the Recurring Rules' Drafts of the
+    View Scope wait to be confirmed (issue #97). ``publish`` tells the window what a save here changed."""
 
     # The changes it redraws on (ui/changes.py)
-    CHANGES = frozenset({Change.TRANSACTIONS, Change.SCOPE})
+    CHANGES = frozenset({Change.TRANSACTIONS, Change.SCOPE, Change.RECURRING_RULES})
 
     engine: Engine
     rates: NbpRates
     scope: ViewScope
+    publish: Callable[..., None]
     filters: TransactionFilter = NO_FILTER
     sort: Sort = NEWEST_FIRST
     _headers: dict[Column, _ColumnHeader] = field(init=False, default_factory=dict)
@@ -100,6 +112,7 @@ class TransactionsPage:
 
     def refresh(self) -> None:
         """Redraw the list if it is on screen (e.g. after a save)."""
+        self.recurring.refresh()
         self.notes.refresh()
         self.rows.refresh()
 
@@ -108,6 +121,7 @@ class TransactionsPage:
         with ui.row().classes("gap-2"):
             ui.button("Eksportuj CSV", on_click=lambda: self.export("csv")).props("outline")
             ui.button("Eksportuj XLSX", on_click=lambda: self.export("xlsx")).props("outline")
+        self.recurring()
         # The marker sits outside the refreshable list so it survives a refresh
         with ui.column().classes("w-full max-w-6xl gap-0").mark("transactions"):
             self.notes()
@@ -149,6 +163,33 @@ class TransactionsPage:
         self.refresh()
 
     @ui.refreshable_method
+    def recurring(self) -> None:
+        recurring_drafts_list(
+            self.engine,
+            self.rates,
+            self.scope.account_id,
+            self.edit_draft,
+            on_saved=self.saved,
+            on_skipped=lambda: self.publish(Change.RECURRING_RULES),
+        )
+
+    def saved(self) -> None:
+        self.publish(Change.TRANSACTIONS)
+
+    def edit_draft(self, draft: RecurringDraft) -> None:
+        """Open a Recurring Rule's Draft in the transaction dialog; what it saves covers the Draft's occurrence."""
+        open_transaction_dialog(self.engine, self.rates, self.saved, start_with=prefill_of(draft), link=draft.link)
+
+    def open(self, transaction: Transaction) -> None:
+        open_transaction_dialog(
+            self.engine,
+            self.rates,
+            self.saved,
+            transaction,
+            on_rules_changed=lambda: self.publish(Change.RECURRING_RULES),
+        )
+
+    @ui.refreshable_method
     def notes(self) -> None:
         breadcrumbs(self.scope)
         if self.filters.active:
@@ -172,8 +213,7 @@ class TransactionsPage:
         for transaction in transactions:
             row = ui.element("div").classes("grid w-full gap-x-4 border-b py-1 cursor-pointer hover:bg-gray-100")
             row.style(COLUMNS).mark("transaction-row")
-            # Only this tab is on screen, so it is the only one to redraw after an edit
-            row.on("click", lambda t=transaction: open_transaction_dialog(self.engine, self.rates, self.refresh, t))
+            row.on("click", lambda t=transaction: self.open(t))
             with row:
                 ui.label(format_date(transaction.date))
                 target = transaction.target_account_id
@@ -359,12 +399,22 @@ def _dividend_cell(payout: Transaction) -> None:
 
 
 def open_transaction_dialog(
-    engine: Engine, rates: NbpRates, on_saved: Callable[[], None], transaction: Transaction | None = None
+    engine: Engine,
+    rates: NbpRates,
+    on_saved: Callable[[], None],
+    transaction: Transaction | None = None,
+    *,
+    start_with: FormPrefill | None = None,
+    link: Callable[[TransactionDraft], TransactionDraft] | None = None,
+    on_rules_changed: Callable[[], None] | None = None,
 ) -> None:
-    """Open a fresh dialog for a new Transaction (``None``) or for editing or deleting ``transaction``.
+    """Open a fresh dialog for a new Transaction (``None``), filled with ``start_with`` if given, or for editing or
+    deleting ``transaction``.
 
-    It is built on demand and removed when closed; ``on_saved`` runs after a save or a delete. Its rules live in
-    ``domain/transaction_form.py``; the dialog only binds its widgets to them.
+    It is built on demand and removed when closed; ``on_saved`` runs after a save or a delete. ``link`` turns what it
+    saves into the Transaction covering a Recurring Rule's occurrence (issue #97). With ``on_rules_changed`` an edited
+    Deposit or Buy offers "Powtarzaj…", a new Recurring Rule repeating it, and ``on_rules_changed`` runs once it is
+    saved. Its rules live in ``domain/transaction_form.py``; the dialog only binds its widgets to them.
     """
     dialog = movable_dialog()
     dialog.on("hide", dialog.delete)
@@ -389,7 +439,7 @@ def open_transaction_dialog(
             dialog.open()
             return
 
-        start = form.initial_state(date.today())
+        start = form.initial_state(date.today(), start_with)
         texts = start.texts
         # The Account comes first and stands out (#118): it decides the type's fields, Cash currencies and bond mode
         account = ui.select(form.accounts, label="Konto", value=start.account_id).props("filled bg-color=blue-1")
@@ -688,7 +738,7 @@ def open_transaction_dialog(
             try:
                 saved = save_transaction(
                     engine,
-                    lambda series_id: form.draft(form_state, series_id),
+                    lambda series_id: (link or _unlinked)(form.draft(form_state, series_id)),
                     edited=transaction,
                     series=form.series_to_buy(form_state),
                     with_exchange=form.with_exchange(form_state),
@@ -719,10 +769,25 @@ def open_transaction_dialog(
             if transaction is not None:
                 delete_button = ui.button("Usuń", on_click=lambda: _confirm_delete(delete))
                 delete_button.props("flat color=negative").mark("delete-transaction")
+            repeatable = (TransactionType.DEPOSIT, TransactionType.BUY)
+            if transaction is not None and on_rules_changed is not None and transaction.transaction_type in repeatable:
+
+                def repeat() -> None:
+                    assert transaction is not None and on_rules_changed is not None
+                    dialog.close()
+                    open_rule_dialog(engine, rates.today(), on_rules_changed, defaults=repeating(transaction))
+
+                ui.button("Powtarzaj…", on_click=repeat).props("flat no-caps").mark("repeat-transaction").tooltip(
+                    "Nowa reguła cykliczna na wzór tej transakcji"
+                )
             ui.space()
             ui.button("Anuluj", on_click=dialog.close).props("flat")
             ui.button("Zapisz" if transaction is None else "Zapisz zmiany", on_click=save)
     dialog.open()
+
+
+def _unlinked(draft: TransactionDraft) -> TransactionDraft:
+    return draft
 
 
 def _confirm_delete(delete: Callable[[ui.dialog], None]) -> None:

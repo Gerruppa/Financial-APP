@@ -14,6 +14,7 @@ from financial_app.ui.contribution_limits import ContributionLimitsSection
 from financial_app.ui.import_sheet import SheetImportSection
 from financial_app.ui.instruments import AssetClassesSection, InstrumentsSection
 from financial_app.ui.price_sources import PriceSourcesSection
+from financial_app.ui.recurring_rules import RecurringRulesSection
 from financial_app.ui.reset import ClearDataSection
 from financial_app.ui.unpriced import UnpricedSection
 from financial_app.ui.xtb_import import XtbImportSection
@@ -28,16 +29,22 @@ def build_settings_page(
     on_instruments_changed: Callable[[], None],
     on_transactions_changed: Callable[[], None] | None = None,
     on_account_deleted: Callable[[int], None] | None = None,
+    on_rules_changed: Callable[[], None] | None = None,
 ) -> None:
     """``unpriced`` is kept by the shell, which redraws it on the changes it declares; ``on_instruments_changed`` is
     called after an Instrument or Asset Class is saved; ``sources`` check the Source Symbols typed in the Instrument
     dialog. ``on_transactions_changed`` redraws the other tabs after an XTB Reconciliation is applied;
-    ``on_account_deleted`` gets the id of an Account deleted in Konta."""
+    ``on_account_deleted`` gets the id of an Account deleted in Konta; ``on_rules_changed`` redraws the Recurring
+    Rules' Drafts after a rule or its skips change."""
     ui.label("Ustawienia").classes("text-2xl font-bold")
     limits = ContributionLimitsSection(engine)
-    accounts = AccountsSection(engine, on_deleted=on_account_deleted, on_changed=limits.refresh)
+    rules = RecurringRulesSection(engine, rates.today, on_changed=on_rules_changed)
+    accounts = AccountsSection(
+        engine, on_deleted=on_account_deleted, on_changed=lambda: _all(limits.refresh, rules.refresh)
+    )
     accounts.build()
     limits.build()
+    rules.build()
     instruments = InstrumentsSection(engine, search, sources, on_changed=on_instruments_changed)
     asset_classes = AssetClassesSection(engine, on_changed=instruments.refresh)
     asset_classes.build()
@@ -64,6 +71,7 @@ def build_settings_page(
         sheet_import.reset()
         xtb_import.reset()
         limits.refresh()
+        rules.refresh()
 
     ClearDataSection(engine, on_cleared=redraw).build()
 

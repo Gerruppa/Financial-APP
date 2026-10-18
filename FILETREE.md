@@ -81,6 +81,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `prices.py`: Quote model, Price Source keys and names, and the per-Asset-Class Fallback Order deciding which sources to try.
 - `profit_sources.py`: Splits the View Scope's result into price, FX, Dividends, interest, costs and taxes for the Dashboard waterfall
 - `reconciliation.py`: Pairs broker Transactions with entered ones and classifies matches, broker-only and entered-only; resolves choices
+- `recurring.py`: Recurring Rules: validated rule fields, occurrence schedule, and Drafts left after matching Transactions and skips
 - `results.py`: Wyniki tab figures: period XIRR, TWR, drawdown, volatility and fixed-period returns per Total and Account, from History
 - `sale_summary.py`: Sell Summary: Sale Pairs from the FIFO replay with attributed Dividends, and closed-position statistics (win rate, days, best, worst).
 - `save_warnings.py`: Warnings a save of Transactions shows (cash shortfalls, over-limit contributions, unsplit Multi-asset), computed before and after the save; never blocks it
@@ -113,6 +114,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `paths.py`: Resolves the user's data, backup and log folders, kept outside the repository
 - `quotes.py`: Saves and reads daily Instrument Quotes and the last price refresh status
 - `reconciliation.py`: Saves a broker Reconciliation's choices all or none and reads handled, unreconciled and incoming transfers
+- `recurring_rules.py`: Saves Recurring Rules and their skips, computes their Drafts and confirms them as Transactions
 - `reset.py`: Clears all portfolio data after a backup and restores default Asset Classes
 - `settings.py`: Reads and writes text application settings by key in the app_settings table
 - `strategies.py`: Reads and saves Investment Strategies for Total and each Account, with their Allocation and Instrument Targets
@@ -158,6 +160,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `0030_quantity_decimals.py`: Migration adding Instrument quantity_decimals, filled from existing Transaction quantities and set to 8 for crypto
 - `0031_valuation_snapshots.py`: Migration creating the valuation_snapshots table
 - `0032_investment_goals.py`: Migration creating the investment_goals table
+- `0033_recurring_rules.py`: Migration 0033: creates recurring rule and skip tables and the Transaction columns linking to a rule
 
 ## src/financial_app/sources/
 
@@ -210,6 +213,8 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `periods.py`: Period selector UI: preset buttons and custom range inputs, remembered per user and redrawing listeners
 - `portfolio.py`: Read-only Portfolio tab: per-Account cards with cash balances, valued Positions, Lots, FX result and dividends
 - `price_sources.py`: Ustawienia Źródła wycen card where the user stores the personal Stooq API key
+- `recurring_drafts.py`: Due Recurring Rule Drafts in the Transakcje tab and the header count; confirm, edit or skip each
+- `recurring_rules.py`: Ustawienia section listing Recurring Rules, with the rule dialog and its skipped occurrences
 - `reset.py`: Ustawienia Wyczyść dane card that clears the whole portfolio after a warning and typed confirmation
 - `results.py`: Wyniki tab page: result tiles, drawdown chart and per-Account results table under the period selector
 - `sale_summary.py`: Podsumowanie sprzedaży tab: Sale Pairs of the scope and period with the closed-position statistics tiles.
@@ -325,6 +330,9 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_prices_ui.py`: Tests Source Symbols in the Instrument dialog, Portfolio valuation from Quotes and refresh status badges.
 - `test_profit_sources_domain.py`: Tests the profit-by-source split adds up to the result the Dashboard tiles show
 - `test_reconciliation_domain.py`: Tests pairing of broker and entered Transactions in the Reconciliation domain logic
+- `test_recurring_domain.py`: Tests Recurring Rule schedules, Draft matching with Transactions, and rule validation messages
+- `test_recurring_repository.py`: Tests saving Recurring Rules and skips, confirming Drafts, and cascading deletes against the database
+- `test_recurring_ui.py`: UI tests for Recurring Rules in Ustawienia and their Drafts in Transakcje and the header
 - `test_results_domain.py`: Tests for the Wyniki tab's period results and fixed-period rows per Total and Account
 - `test_results_ui.py`: UI tests for the Wyniki tab: tiles, drawdown chart, results table and pending state
 - `test_sale_summary_domain.py`: Tests Sale Pairs across Lots, Splits and DRIPs, Dividend and coupon attribution, statistics and the view filter.

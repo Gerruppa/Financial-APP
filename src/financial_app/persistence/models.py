@@ -126,6 +126,9 @@ class TransactionRow(Base):
     # user resolved it; a reconciled Transaction is not offered for pairing again
     broker_id: Mapped[str | None] = mapped_column(String(100), unique=True)
     reconciled_on: Mapped[dt.date | None] = mapped_column(Date)
+    # A confirmed Recurring Rule Draft (issue #97): the rule and the occurrence it covers; deleting the rule unlinks it
+    recurring_rule_id: Mapped[int | None] = mapped_column(ForeignKey("recurring_rules.id", ondelete="SET NULL"))
+    recurring_occurrence: Mapped[dt.date | None] = mapped_column(Date)
 
 
 class SkippedBrokerRow(Base):
@@ -457,3 +460,35 @@ class InvestmentGoalRow(Base):
     target_date: Mapped[dt.date | None] = mapped_column(Date)
     real_return: Mapped[str] = mapped_column(String(20))
     monthly_deposit: Mapped[str | None] = mapped_column(String(30))
+
+
+class RecurringRuleRow(Base):
+    """A Recurring Rule (issue #97, spec 3.3.1): a Deposit or Buy of ``amount`` (Decimal as text) in ``currency``
+    falling due on ``day_of_month`` every ``frequency`` from ``start_date``; ``domain.recurring.RecurringRule`` is its
+    in-memory form."""
+
+    on_clear = OnClear.DELETE
+    __tablename__ = "recurring_rules"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(100))
+    account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE"), index=True)
+    transaction_type: Mapped[str] = mapped_column(String(20))
+    instrument_id: Mapped[int | None] = mapped_column(ForeignKey("instruments.id"))
+    amount: Mapped[str] = mapped_column(String(30))
+    currency: Mapped[str] = mapped_column(String(3))
+    frequency: Mapped[str] = mapped_column(String(20))
+    day_of_month: Mapped[int] = mapped_column(Integer)
+    start_date: Mapped[dt.date] = mapped_column(Date)
+    end_date: Mapped[dt.date | None] = mapped_column(Date)
+    active: Mapped[bool] = mapped_column(Boolean)
+
+
+class RecurringRuleSkipRow(Base):
+    """An occurrence of a Recurring Rule the user skipped (issue #97), so it is no Draft any more."""
+
+    on_clear = OnClear.DELETE
+    __tablename__ = "recurring_rule_skips"
+
+    rule_id: Mapped[int] = mapped_column(ForeignKey("recurring_rules.id", ondelete="CASCADE"), primary_key=True)
+    occurrence_date: Mapped[dt.date] = mapped_column(Date, primary_key=True)
