@@ -65,12 +65,13 @@ def test_an_account_holding_pln_keeps_its_commission_in_pln() -> None:
     assert form.draft(state).commission_currency == PLN
 
 
-def test_no_exchange_or_cash_transfer_on_an_account_without_pln_nor_a_cash_transfer_into_it() -> None:
+def test_no_exchange_on_an_account_without_pln_nor_a_pln_cash_transfer_into_it() -> None:
     form = _form()
 
     offered = form.kinds(_state(TransactionType.DEPOSIT))
-    assert TransactionType.CURRENCY_EXCHANGE not in offered and TransactionType.CASH_TRANSFER not in offered
-    assert TransactionType.SECURITY_TRANSFER in offered
+    assert TransactionType.CURRENCY_EXCHANGE not in offered
+    # A Cash Transfer in its own currency is (#125)
+    assert TransactionType.CASH_TRANSFER in offered and TransactionType.SECURITY_TRANSFER in offered
     assert list(form.kinds(_state(TransactionType.DEPOSIT, IKE))) == list(TransactionType)
 
     assert form.layout(_state(TransactionType.CASH_TRANSFER, IKE)).target.options == {}

@@ -112,7 +112,8 @@ def _negative_cash(
     for t in changed:
         keys = [(t.account_id, currency) for currency in dict.fromkeys((PLN, t.cash_currency))]
         if t.target_account_id is not None:
-            keys.append((t.target_account_id, PLN))  # a Cash Transfer edited or deleted takes its cash back
+            # A Cash Transfer edited or deleted takes its cash back, in its currency (#125)
+            keys.append((t.target_account_id, t.cash_currency))
         for key in keys:
             starts[key] = min(t.date, starts.get(key, t.date))
     names = {account.id: account.name for account in accounts}

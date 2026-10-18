@@ -4,7 +4,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
 
-from sqlalchemy import Engine, or_, select
+from sqlalchemy import ColumnElement, Engine, or_, select
 from sqlalchemy.orm import Session
 
 from financial_app.domain.lots import open_positions
@@ -102,6 +102,7 @@ def unreconciled_transactions(engine: Engine, ranges: Mapping[int, tuple[date, d
                     TransactionRow.instrument_id.is_(None),
                     InstrumentRow.quote_currency == PLN,
                 ),
+                _not_a_foreign_cash_transfer(),
             )
             .order_by(TransactionRow.date, TransactionRow.id)
         )
@@ -119,6 +120,7 @@ def incoming_transfers(engine: Engine, ranges: Mapping[int, tuple[date, date]]) 
                 TransactionRow.account_id.not_in(ranges),
                 TransactionRow.reconciled_on.is_(None),
                 TransactionRow.transaction_type == TransactionType.CASH_TRANSFER.value,
+                TransactionRow.cash_currency == PLN,
             )
             .order_by(TransactionRow.date, TransactionRow.id)
         )
@@ -127,6 +129,14 @@ def incoming_transfers(engine: Engine, ranges: Mapping[int, tuple[date, date]]) 
             for row in rows
             if row.target_account_id and _within(row.date, ranges[row.target_account_id])
         ]
+
+
+def _not_a_foreign_cash_transfer() -> ColumnElement[bool]:
+    """A Cash Transfer in a foreign currency (#125) is none of the statement's, which moves PLN only (spec 7)."""
+    return or_(
+        TransactionRow.transaction_type != TransactionType.CASH_TRANSFER.value,
+        TransactionRow.cash_currency == PLN,
+    )
 
 
 def _within(day: date, days: tuple[date, date]) -> bool:

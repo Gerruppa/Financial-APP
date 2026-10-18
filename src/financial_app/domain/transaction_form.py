@@ -69,8 +69,9 @@ SUGGESTED_EXCHANGE_CURRENCIES = ("USD", "EUR")
 # Currency Exchange directions: buying the foreign currency for PLN, or selling it for PLN
 BUY_CURRENCY, SELL_CURRENCY = "buy", "sell"
 TRANSACTION_TYPE_OPTIONS = {transaction_type.value: transaction_type.label for transaction_type in TransactionType}
-# The types that move PLN, which an Account without PLN cannot take (#124)
-PLN_ONLY_KINDS = (TransactionType.CURRENCY_EXCHANGE, TransactionType.CASH_TRANSFER)
+# The types that always move PLN, which an Account without PLN cannot take (#124); a Cash Transfer may be in a
+# foreign currency (#125)
+PLN_ONLY_KINDS = (TransactionType.CURRENCY_EXCHANGE,)
 # The bond types in the order the dialog offers them, the most bought first, with their terms
 BOND_TYPE_OPTIONS = {
     BondType.EDO.value: "EDO · 10 lat",
@@ -488,8 +489,8 @@ class TransactionForm:
         return self._convert_shown(state) and state.convert
 
     def _cash_currency(self, state: FormState) -> Choice[str]:
-        """A Deposit, Withdrawal or Cost on an Account holding a foreign currency may be in that cash; on one without
-        PLN, only in its own currencies."""
+        """A Deposit, Withdrawal, Cost or Cash Transfer (#125) on an Account holding a foreign currency may be in that
+        cash; on one without PLN, only in its own currencies."""
         edited = self.edited
         own = [edited.cash_currency] if edited is not None and edited.transaction_type.moves_cash_amount else []
         options = list(dict.fromkeys([*self._cash_currencies(state), *own]))
@@ -498,13 +499,14 @@ class TransactionForm:
         return Choice(visible, {c: c for c in options}, chosen, "Waluta")
 
     def cash_paid_in(self, state: FormState) -> str:
-        """The Cash Currency of a Deposit, Withdrawal or Cost: PLN unless the user chose a foreign one."""
+        """The Cash Currency of a Deposit, Withdrawal, Cost or Cash Transfer: PLN unless the user chose a foreign
+        one."""
         choice = self._cash_currency(state)
         return choice.value if choice.visible and choice.value else PLN
 
     def kinds(self, state: FormState) -> dict[TransactionType, str]:
-        """The Transaction Types the Account can take: one without PLN has no Exchange or Cash Transfer, which move
-        PLN (#124), unless the edited Transaction is one."""
+        """The Transaction Types the Account can take: one without PLN has no Currency Exchange, which always moves
+        PLN (#124), unless the edited Transaction is one; its Cash Transfers are in its own currencies (#125)."""
         edited = self.edited.transaction_type if self.edited is not None else None
         return {
             kind: kind.label
@@ -513,12 +515,12 @@ class TransactionForm:
         }
 
     def _target(self, state: FormState) -> Choice[int]:
-        # A Cash Transfer moves PLN, so it goes only to an Account holding PLN
-        pln_only = state.kind is TransactionType.CASH_TRANSFER
+        # A Cash Transfer goes only to an Account holding the currency it moves (#124, #125)
+        currency = self.cash_paid_in(state) if state.kind is TransactionType.CASH_TRANSFER else None
         others = {
             i: name
             for i, name in self.targets.items()
-            if i != state.account_id and (not pln_only or PLN in self._accounts[i].cash_currencies)
+            if i != state.account_id and (currency is None or currency in self._accounts[i].cash_currencies)
         }
         chosen = state.target_id if state.target_id in others else next(iter(others), None)
         return Choice(state.kind.is_transfer, others, chosen, "Na konto")
@@ -876,7 +878,10 @@ class TransactionForm:
             return self._dividend(state, day)
         if kind is TransactionType.CASH_TRANSFER:
             value = _read(parse_number, texts.amount, "amount", AMOUNT_MESSAGE)
-            return cash_transfer(account, day, self._target_id(state), value, texts.comment)
+            currency = self.cash_paid_in(state)
+            nbp = None if currency == PLN else self._rate(currency, day)
+            target = self._target_id(state)
+            return cash_transfer(account, day, target, value, texts.comment, cash_currency=currency, nbp_rate=nbp)
         if not kind.has_amount:
             return self._units_only(state, day)
         if not kind.is_buy_or_sell:

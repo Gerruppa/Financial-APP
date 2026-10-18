@@ -44,7 +44,7 @@ Re-implement the inwestomat.eu "Portfolio tracker" Google Sheet (v2.0.1, 01.07.2
 - Currencies: base PLN; any NBP table-A currency. Base-currency change is designed for but not built (Q16).
 
 ### 3.3 Transactions (Q22, Q23, Q37, Q38, Q50)
-Types: Deposit (Wpłata), Withdrawal (Wypłata), Buy (Zakup), Sell (Sprzedaż), Dividend/Interest (gross, withholding tax, net), Cost (Koszty), Split (X:Y), Currency Exchange (Wymiana walut), Cash Transfer, Security Transfer (keeps Lot dates and costs), DRIP.
+Types: Deposit (Wpłata), Withdrawal (Wypłata), Buy (Zakup), Sell (Sprzedaż), Dividend/Interest (gross, withholding tax, net), Cost (Koszty), Split (X:Y), Currency Exchange (Wymiana walut), Cash Transfer (PLN, or a foreign Cash Currency both Accounts hold, worth its amount at NBP D-1, moving its cash Lots with their dates and costs, #125), Security Transfer (keeps Lot dates and costs), DRIP.
 
 Each Transaction stores:
 - account, date, instrument, quantity, price (instrument currency; a Catalyst bond's price per bond, its percent of nominal times the nominal, L-23), commission (any currency), comment;
@@ -110,7 +110,7 @@ Validation at save time (Q36):
 - Lot key: Account + Instrument. Same-day order: Split, Buy, Security Transfer, Sell, DRIP/Deposit.
 - Buy fee capitalised into Lot cost; each Lot carries Actual cost and Tax cost (qty × price × NBP D-1 + fee in PLN).
 - Splits rescale open Lots (qty × X/Y, unit price × Y/X); fees are not rescaled.
-- Cash Balance per Account and Cash Currency; foreign cash held as Lots with PLN cost → FX result per Account, excludable by the Account flag. Commission paid in PLN is not counted in the foreign-cash quantity. An Account without PLN (#124) pays its commission from the foreign cash the trade is paid from, so it is counted there, valued at the trade's rate (the Tax Amount at NBP D-1); it has no Currency Exchange, Cash Transfer or broker conversion.
+- Cash Balance per Account and Cash Currency; foreign cash held as Lots with PLN cost → FX result per Account, excludable by the Account flag. Commission paid in PLN is not counted in the foreign-cash quantity. An Account without PLN (#124) pays its commission from the foreign cash the trade is paid from, so it is counted there, valued at the trade's rate (the Tax Amount at NBP D-1); it has no Currency Exchange, PLN Cash Transfer or broker conversion. A Cash Transfer in a foreign currency (#125) moves the source's oldest cash Lots to the target with their dates and costs, realising no FX result; a shortfall arrives at the NBP value, leaving a negative Lot behind.
 - Dividend attribution to sold pairs (Sell Summary): pro-rata by quantity held on the dividend date, with split-adjusted units.
 
 ## 4. Price sources (Q12, Q35, ADR-0005)
