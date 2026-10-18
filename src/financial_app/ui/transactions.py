@@ -433,7 +433,7 @@ def open_transaction_dialog(
     with dialog, ui.card().classes("w-[460px]"):
         ui.label("Nowa transakcja" if transaction is None else "Edytuj transakcję").classes("text-lg font-bold")
         if not form.accounts:
-            ui.label("Najpierw dodaj konto z walutą PLN w zakładce Ustawienia.").classes("text-gray-500")
+            ui.label("Najpierw dodaj konto w zakładce Ustawienia.").classes("text-gray-500")
             with ui.row().classes("w-full justify-end"):
                 ui.button("Zamknij", on_click=dialog.close).props("flat")
             dialog.open()
@@ -569,6 +569,7 @@ def open_transaction_dialog(
                 applying[0] = False
 
         def apply(layout: FormLayout) -> None:
+            transaction_type.set_options(dict(layout.kind.options), value=layout.kind.value)
             amount.visible = layout.amount.visible
             amount.props(f'label="{layout.amount.label}"')
             instrument_fields.visible = layout.instrument_fields
@@ -590,7 +591,8 @@ def open_transaction_dialog(
             instrument.visible = layout.instrument
             price.visible = layout.price.visible
             price.props(f'label="{layout.price.label}"')
-            commission.visible = layout.commission
+            commission.visible = layout.commission.visible
+            commission.props(f'label="{layout.commission.label}"')
             rollover.visible = layout.rollover
             if layout.bond_fields:
                 list_series(layout.series.options, layout.series.value)

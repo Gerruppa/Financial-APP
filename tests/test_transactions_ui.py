@@ -94,7 +94,7 @@ async def test_invalid_amount_is_reported_and_not_saved(engine: Engine, ike: int
     assert list_transactions(engine) == []
 
 
-async def test_dialog_offers_only_active_accounts_holding_pln(engine: Engine, ike: int) -> None:
+async def test_dialog_offers_only_active_accounts_with_or_without_pln(engine: Engine, ike: int) -> None:
     add_account(engine, AccountDraft("Stare konto", "XTB", AccountType.REGULAR, ("PLN",), active=False))
     add_account(engine, AccountDraft("Konto USD", "IBKR", AccountType.REGULAR, ("USD",)))
 
@@ -104,7 +104,7 @@ async def test_dialog_offers_only_active_accounts_holding_pln(engine: Engine, ik
 
         [account_select] = user.find(marker="transaction-account").elements
         assert isinstance(account_select, ui.select)
-        assert list(account_select.options.values()) == ["mBank IKE"]  # type: ignore[union-attr]
+        assert list(account_select.options.values()) == ["Konto USD", "mBank IKE"]  # type: ignore[union-attr]
 
 
 async def test_dialog_without_accounts_points_to_ustawienia(engine: Engine) -> None:

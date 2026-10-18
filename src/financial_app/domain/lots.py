@@ -362,7 +362,8 @@ def foreign_cash(transactions: Iterable[TransactionDraft]) -> list[ForeignCash]:
 
     Cash coming in (an Exchange from PLN, a Sell paid into foreign cash) opens a Lot at its PLN value; cash going
     out (an Exchange to PLN, a Buy paid from foreign cash) closes the oldest Lots, and the difference between its PLN
-    value and their cost is the realised FX result. A PLN commission never touches foreign cash (spec 3.5).
+    value and their cost is the realised FX result. A PLN commission never touches foreign cash (spec 3.5); one in the
+    foreign currency, on an Account without PLN, is spent from it with the trade.
     ``transactions`` come in entry order, which settles same-day ties after incoming-before-outgoing.
     """
     flows = sorted(
@@ -413,8 +414,9 @@ def _foreign_flow(t: TransactionDraft) -> _Flow | None:
     if t.transaction_type is TransactionType.CURRENCY_EXCHANGE:
         value = tax_value = t.actual_amount
     else:
-        # The Actual and Tax Amounts without the PLN commission, which is paid from PLN
-        commission = t.commission if t.transaction_type is TransactionType.BUY else -t.commission
+        # The Actual and Tax Amounts without the PLN commission, which is paid from PLN; one in the foreign cash
+        # (issue #124) is part of the flow
+        commission = t.commission_from_pln if t.transaction_type is TransactionType.BUY else -t.commission_from_pln
         value = t.actual_amount - commission
         tax_value = t.tax_amount - commission
     sign = 1 if change > 0 else -1

@@ -21,7 +21,7 @@ The most that may be paid in a calendar year into the Accounts of one Account Ty
 _Avoid_: cap, allowance, quota
 
 **Cash Currency** (Waluta rachunku):
-A currency in which an Account can hold cash. An Account with only PLN converts every foreign-currency trade automatically.
+A currency in which an Account can hold cash. An Account with only PLN converts every foreign-currency trade automatically; an Account without PLN pays everything, commissions included, from its foreign cash.
 _Avoid_: sub-account, currency account
 
 **FX Conversion Fee** (Opłata za przewalutowanie):

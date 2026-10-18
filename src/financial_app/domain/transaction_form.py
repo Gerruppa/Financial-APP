@@ -8,7 +8,8 @@ broker for its FX Conversion Fee), Dividends and interest (paid into PLN or fore
 Splits, and PLN Cash Transfers and Security Transfers to another Account. A Buy of retail treasury bonds has its bond
 mode: the type and the purchase date give the Bond Series (spec 3.4.1), unless the user picks another (L-26). A Sell
 of a Bond Series is an Early Redemption: it picks its Lot, the oldest by default, and is prefilled with the gross
-value of one bond, the early-redemption fee and the tax withheld (ADR-0007).
+value of one bond, the early-redemption fee and the tax withheld (ADR-0007). An Account without PLN (#124) takes only
+what its foreign cash pays, a trade's commission included.
 """
 
 from collections.abc import Callable, Mapping, Sequence
@@ -68,6 +69,8 @@ SUGGESTED_EXCHANGE_CURRENCIES = ("USD", "EUR")
 # Currency Exchange directions: buying the foreign currency for PLN, or selling it for PLN
 BUY_CURRENCY, SELL_CURRENCY = "buy", "sell"
 TRANSACTION_TYPE_OPTIONS = {transaction_type.value: transaction_type.label for transaction_type in TransactionType}
+# The types that move PLN, which an Account without PLN cannot take (#124)
+PLN_ONLY_KINDS = (TransactionType.CURRENCY_EXCHANGE, TransactionType.CASH_TRANSFER)
 # The bond types in the order the dialog offers them, the most bought first, with their terms
 BOND_TYPE_OPTIONS = {
     BondType.EDO.value: "EDO · 10 lat",
@@ -235,6 +238,7 @@ class Choice[T]:
 class FormLayout:
     """The fields the chosen type needs, with their options and labels, and the texts shown beside them."""
 
+    kind: Choice[str]
     amount: Shown
     instrument_fields: bool
     target: Choice[int]
@@ -254,7 +258,7 @@ class FormLayout:
     instrument: bool
     lot: Choice[int]
     price: Shown
-    commission: bool
+    commission: Shown
     gross: Shown
     withholding_tax: Shown
     net: Shown
@@ -290,12 +294,10 @@ class TransactionForm:
         edited = self.edited = context.edited
         self._accounts = {a.id: a for a in context.accounts}
         self._instruments = {i.id: i for i in context.instruments}
-        # Commissions are in PLN and Accounts without PLN are not supported yet (#124), so only Accounts holding PLN
-        # can take part; an edited Transaction keeps offering its own Account even if that has been deactivated since
+        # Active Accounts, with or without PLN (#124); an edited Transaction keeps offering its own Account even if that
+        # has been deactivated since
         self.accounts = {
-            a.id: a.name
-            for a in context.accounts
-            if (a.active and PLN in a.cash_currencies) or (edited is not None and a.id == edited.account_id)
+            a.id: a.name for a in context.accounts if a.active or (edited is not None and a.id == edited.account_id)
         }
         # A Transfer goes to another of the same Accounts; an edited one keeps offering its own target
         own_target = edited.target_account_id if edited else None
@@ -392,13 +394,18 @@ class TransactionForm:
     def _cash_currencies(self, state: FormState) -> tuple[str, ...]:
         return self._accounts[state.account_id].cash_currencies
 
+    def _holds_pln(self, state: FormState) -> bool:
+        """An Account without PLN (#124) pays everything from its foreign cash: no Exchange, Cash Transfer or broker
+        conversion, and a trade's commission is in the cash it is paid from."""
+        return PLN in self._cash_currencies(state)
+
     def _dividend_currency(self, state: FormState) -> Choice[str]:
         interest = self._interest(state)
         if not interest:
             own = self._own_dividend_currency
             return Choice(False, {own: own} if own else {}, state.dividend_currency)
         options = list(dict.fromkeys([*self._cash_currencies(state), *filter(None, [self._own_dividend_currency])]))
-        chosen = state.dividend_currency if state.dividend_currency in options else PLN
+        chosen = state.dividend_currency if state.dividend_currency in options else _first_choice(options)
         return Choice(True, {c: c for c in options}, chosen, "Waluta")
 
     def trade_currency(self, state: FormState) -> str:
@@ -432,7 +439,9 @@ class TransactionForm:
         """An Account holding the Instrument's currency pays from that cash or from PLN, as the user chooses; a
         Dividend goes into either the same way."""
         currency = self.trade_currency(state)
-        sources = {currency: f"gotówka {currency}", PLN: "PLN z przewalutowaniem"}
+        sources = {currency: f"gotówka {currency}"}
+        if self._holds_pln(state):
+            sources[PLN] = "PLN z przewalutowaniem"
         held = currency in self._cash_currencies(state)
         offered = held or self._default_settlement(state, currency) != PLN
         visible = self._settles(state) and currency != PLN and offered
@@ -449,6 +458,17 @@ class TransactionForm:
             return self.trade_currency(state)
         paid_from = self._paid_from(state)
         return paid_from.value if paid_from.visible and paid_from.value else PLN
+
+    def commission_currency(self, state: FormState) -> str:
+        """PLN, or on an Account without PLN the cash the trade is paid from (#124)."""
+        return PLN if self._holds_pln(state) else self.settlement_currency(state)
+
+    def _check_pln_held(self, state: FormState, currency: str = PLN) -> None:
+        """A Transaction moving PLN needs an Account holding PLN (#124); a trade falls back to PLN only when the
+        Account lacks its ``currency``, which the message then names."""
+        if not self._holds_pln(state):
+            name = self._accounts[state.account_id].name
+            raise TransactionError(f"Konto {name} nie ma waluty rachunku {currency}.")
 
     def fee_percent(self, state: FormState) -> Decimal | None:
         """The Account's FX Conversion Fee; an edited converted trade keeps its own while its Account stays."""
@@ -468,10 +488,13 @@ class TransactionForm:
         return self._convert_shown(state) and state.convert
 
     def _cash_currency(self, state: FormState) -> Choice[str]:
-        """A Deposit, Withdrawal or Cost on an Account holding a foreign currency may be in that cash."""
-        options = list(dict.fromkeys([*self._cash_currencies(state), self._own_cash_currency]))
+        """A Deposit, Withdrawal or Cost on an Account holding a foreign currency may be in that cash; on one without
+        PLN, only in its own currencies."""
+        edited = self.edited
+        own = [edited.cash_currency] if edited is not None and edited.transaction_type.moves_cash_amount else []
+        options = list(dict.fromkeys([*self._cash_currencies(state), *own]))
         visible = state.kind.moves_cash_amount and options != [PLN]
-        chosen = state.cash_currency if state.cash_currency in options else PLN
+        chosen = state.cash_currency if state.cash_currency in options else _first_choice(options)
         return Choice(visible, {c: c for c in options}, chosen, "Waluta")
 
     def cash_paid_in(self, state: FormState) -> str:
@@ -479,8 +502,24 @@ class TransactionForm:
         choice = self._cash_currency(state)
         return choice.value if choice.visible and choice.value else PLN
 
+    def kinds(self, state: FormState) -> dict[TransactionType, str]:
+        """The Transaction Types the Account can take: one without PLN has no Exchange or Cash Transfer, which move
+        PLN (#124), unless the edited Transaction is one."""
+        edited = self.edited.transaction_type if self.edited is not None else None
+        return {
+            kind: kind.label
+            for kind in TransactionType
+            if self._holds_pln(state) or kind not in PLN_ONLY_KINDS or kind is edited
+        }
+
     def _target(self, state: FormState) -> Choice[int]:
-        others = {i: name for i, name in self.targets.items() if i != state.account_id}
+        # A Cash Transfer moves PLN, so it goes only to an Account holding PLN
+        pln_only = state.kind is TransactionType.CASH_TRANSFER
+        others = {
+            i: name
+            for i, name in self.targets.items()
+            if i != state.account_id and (not pln_only or PLN in self._accounts[i].cash_currencies)
+        }
         chosen = state.target_id if state.target_id in others else next(iter(others), None)
         return Choice(state.kind.is_transfer, others, chosen, "Na konto")
 
@@ -680,7 +719,11 @@ class TransactionForm:
         paid_in = self.cash_paid_in(state)
         # A foreign Deposit or Withdrawal takes a rate of the user's too; a foreign Cost counts at the NBP Rate
         flow_rate = kind in (TransactionType.DEPOSIT, TransactionType.WITHDRAWAL) and paid_in != PLN
+        kinds = self.kinds(state)
+        # A type the Account cannot take, after switching to one without PLN, falls back to a Deposit
+        offered_kind = kind if kind in kinds else TransactionType.DEPOSIT
         return FormLayout(
+            kind=Choice(True, {k.value: label for k, label in kinds.items()}, offered_kind.value, "Typ"),
             amount=Shown(not trade and not dividend_type and not units_only, f"Kwota ({currency_unit(paid_in)})"),
             instrument_fields=trade or dividend_type or units_only,
             target=self._target(state),
@@ -708,7 +751,7 @@ class TransactionForm:
             instrument=not bonds,
             lot=self._lot(state),
             price=Shown(trade, f"Cena ({unit})"),
-            commission=trade,
+            commission=Shown(trade, f"Prowizja ({currency_unit(self.commission_currency(state))})"),
             gross=Shown(dividend_type, f"Kwota brutto ({unit})"),
             withholding_tax=Shown(
                 dividend_type or redemption, f"{'Podatek pobrany' if redemption else 'Podatek u źródła'} ({unit})"
@@ -731,17 +774,20 @@ class TransactionForm:
                     else ("Kwota wypłacona przez brokera (zł)", "Za kwotę netto")
                 ),
             ),
-            # Only a new Buy: an automatic Exchange is a Transaction of its own once saved
-            auto_exchange=self.edited is None and kind is TransactionType.BUY and settled_in != PLN,
+            # Only a new Buy: an automatic Exchange is a Transaction of its own once saved; it needs PLN to buy with
+            auto_exchange=self.edited is None
+            and kind is TransactionType.BUY
+            and settled_in != PLN
+            and self._holds_pln(state),
             spend=Shown(kind is TransactionType.BUY, f"Kwota do wydania ({currency_unit(settled_in)})"),
         )
 
     # The quantity proposed from the amount to spend (#120)
 
     def proposed_quantity(self, state: FormState) -> str | None:
-        """The units a Buy's amount to spend buys: the amount (less the commission when both are PLN) at the rate it
-        is paid at, divided by the price and rounded down to the Instrument's decimal places. ``None`` until the
-        amount and price read, without the NBP Rate, or when it buys nothing."""
+        """The units a Buy's amount to spend buys: the amount (less the commission when both are in the same cash) at
+        the rate it is paid at, divided by the price and rounded down to the Instrument's decimal places. ``None``
+        until the amount and price read, without the NBP Rate, or when it buys nothing."""
         if state.kind is not TransactionType.BUY:
             return None
         texts = state.texts
@@ -752,8 +798,8 @@ class TransactionForm:
             rate = self._spend_rate(state)
         except ValueError, MissingNbpRateError:
             return None
-        if self.settlement_currency(state) == PLN:
-            amount -= commission  # paid from PLN like the amount; from foreign cash, the commission is apart
+        if self.commission_currency(state) == self.settlement_currency(state):
+            amount -= commission  # paid from the same cash as the amount; a PLN one on foreign cash is apart
         if not (amount > 0 and price > 0 and rate > 0):
             return None
         instrument = None if self.bonds_chosen(state) or state.instrument_id is None else state.instrument_id
@@ -811,6 +857,8 @@ class TransactionForm:
         texts = state.texts
         account = state.account_id
         day = _read(parse_date, state.day, "day", "Data musi mieć postać DD.MM.RRRR.")
+        if kind in PLN_ONLY_KINDS:
+            self._check_pln_held(state)
         if kind is TransactionType.CURRENCY_EXCHANGE:
             currency = self._exchange_currency(state).value
             if currency is None:
@@ -847,6 +895,8 @@ class TransactionForm:
         bought = state.instrument_id if series_id is None else series_id
         if bought is None:
             raise FormError("instrument", INSTRUMENT_MESSAGE)
+        if self.settlement_currency(state) == PLN:
+            self._check_pln_held(state, self.trade_currency(state))
         currency = self.trade_currency(state)
         nbp_rate = None if currency == PLN else self._rate(currency, day)
         conversion = self._broker_conversion(state)
@@ -870,6 +920,7 @@ class TransactionForm:
             conversion=conversion,
             withholding_tax=_read(parse_number, tax_text, "withholding_tax", TAX_MESSAGE) if tax_text else Decimal(0),
             lot_id=self._lot(state).value if redemption else None,
+            commission_currency=self.commission_currency(state),
         )
 
     def _units_only(self, state: FormState, day: date) -> TransactionDraft:
@@ -900,6 +951,8 @@ class TransactionForm:
         rate = _read(parse_number, own_rate, "fx_rate", RATE_MESSAGE) if own_rate else None
         instrument = state.instrument_id
         if state.kind is TransactionType.DIVIDEND:
+            if self.settlement_currency(state) == PLN:
+                self._check_pln_held(state, self.trade_currency(state))
             # Interest edited as interest keeps naming the Lot whose coupon it is, so its Draft stays confirmed
             edited = self.edited
             was_interest = edited is not None and edited.transaction_type is TransactionType.DIVIDEND
@@ -921,6 +974,11 @@ class TransactionForm:
             raise FormError("instrument", INSTRUMENT_MESSAGE)
         units = _read(parse_number, texts.quantity, "quantity", QUANTITY_MESSAGE)
         return drip(state.account_id, day, instrument, units, gross, tax, texts.comment, nbp_rate=nbp_rate)
+
+
+def _first_choice(currencies: Sequence[str]) -> str:
+    """PLN when offered, else the first currency offered: an Account without PLN has its own (#124)."""
+    return PLN if PLN in currencies or not currencies else currencies[0]
 
 
 def _read[T](parse: Callable[[str], T], text: str, field: str, message: str) -> T:

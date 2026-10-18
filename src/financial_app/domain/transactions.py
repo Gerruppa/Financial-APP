@@ -3,7 +3,8 @@
 For now: Deposits, Withdrawals and Costs (in PLN or a foreign Cash Currency), Buys and Sells (paid in PLN, optionally
 converted by the broker for an FX Conversion Fee, or, on an Account holding the Instrument's currency, from that foreign
 cash), Currency Exchanges
-between PLN and a foreign Cash Currency, Dividends (and interest) paid into PLN or foreign cash, and DRIPs.
+between PLN and a foreign Cash Currency, Dividends (and interest) paid into PLN or foreign cash, and DRIPs. On an
+Account without PLN a trade's commission is in the foreign cash it is paid from (issue #124).
 """
 
 import datetime as dt
@@ -137,10 +138,12 @@ class SplitRatio:
 class TransactionDraft:
     """The user-entered fields of a Transaction, validated on creation. ``actual_amount`` is positive PLN.
 
-    A Buy or Sell also carries its Instrument, quantity, unit price (in the Instrument's currency) and PLN commission;
+    A Buy or Sell also carries its Instrument, quantity, unit price (in the Instrument's currency) and commission;
     build it with ``buy_or_sell``. One of a foreign-currency Instrument also carries the NBP Rate (D-1) for its Tax
     Amount and, if the user gave one, ``fx_rate``: the rate the Actual Amount was converted at. ``cash_currency`` is
-    the Cash Currency it is paid from or into: PLN, or the Instrument's own currency (the commission stays in PLN).
+    the Cash Currency it is paid from or into: PLN, or the Instrument's own currency. The commission is in PLN, or, on
+    an Account without PLN (issue #124), in ``commission_currency``: the foreign cash the trade is paid from, valued
+    at the trade's rate in the Actual Amount and at the NBP Rate in the Tax Amount.
     ``fx_conversion_fee_percent`` is the Account's FX Conversion Fee when the broker converted a foreign-currency one
     paid in PLN: its Actual Amount then comes from the PLN the broker charged, not from a rate, and the fee in PLN
     follows from it like the Tax Amount follows from the NBP Rate.
@@ -178,6 +181,8 @@ class TransactionDraft:
     quantity: Decimal | None = field(default=None, kw_only=True)
     price: Decimal | None = field(default=None, kw_only=True)
     commission: Decimal = field(default=Decimal(0), kw_only=True)
+    # PLN, or on an Account without PLN the foreign ``cash_currency`` the trade is paid from (issue #124)
+    commission_currency: str = field(default=PLN, kw_only=True)
     fx_rate: Decimal | None = field(default=None, kw_only=True)
     nbp_rate: NbpRate | None = field(default=None, kw_only=True)
     cash_currency: str = field(default=PLN, kw_only=True)
@@ -237,6 +242,7 @@ class TransactionDraft:
             _check_buy_or_sell_fields(self.quantity, self.price, self.commission)
             _check_rates(self.fx_rate, self.nbp_rate)
             _check_settlement(self.cash_currency, self.nbp_rate)
+            _check_commission_currency(self.commission_currency, self.cash_currency)
             if self.fx_conversion_fee_percent is not None:
                 _check_conversion(self.fx_conversion_fee_percent, self.fx_rate, self.nbp_rate, self.cash_currency)
         elif self.transaction_type is TransactionType.CURRENCY_EXCHANGE:
@@ -257,6 +263,8 @@ class TransactionDraft:
             raise TransactionError(f"{self.transaction_type.label} jest na razie możliwa tylko w PLN.")
         if self.to_pln and self.transaction_type is not TransactionType.CURRENCY_EXCHANGE:
             raise TransactionError("Kierunek wymiany dotyczy tylko wymiany walut.")
+        if self.commission_currency != PLN and not self.transaction_type.is_buy_or_sell:
+            raise TransactionError(f"{self.transaction_type.label} nie ma prowizji.")
         object.__setattr__(self, "comment", self.comment.strip())
 
     def _check_target(self) -> None:
@@ -360,14 +368,29 @@ class TransactionDraft:
             assert self.quantity is not None  # in foreign cash, checked on creation
             return _pln(self.quantity * self.nbp_rate.rate)
         assert self.quantity is not None and self.price is not None  # a Buy or Sell, checked on creation
-        costs = self.commission + (self.fx_conversion_fee or Decimal(0))
+        commission = self.commission if self.commission_currency == PLN else _pln(self.commission * self.nbp_rate.rate)
+        costs = commission + (self.fx_conversion_fee or Decimal(0))
         return _with_commission(self.transaction_type, _pln(self._settled_value * self.nbp_rate.rate), costs)
+
+    @property
+    def commission_in_pln(self) -> Decimal:
+        """The commission in PLN: a foreign one at the rate the trade was converted at, the user's or the NBP Rate."""
+        if self.commission_currency == PLN:
+            return self.commission
+        assert self.nbp_rate is not None  # paid from foreign cash, checked on creation
+        return _pln(self.commission * (self.fx_rate or self.nbp_rate.rate))
+
+    @property
+    def commission_from_pln(self) -> Decimal:
+        """The commission paid from PLN: all of it, unless it is in the foreign cash the trade is paid from."""
+        return self.commission if self.commission_currency == PLN else Decimal(0)
 
     @property
     def converted_amount(self) -> Decimal:
         """The Actual Amount of a Buy or Sell without its commission (and a Sell's withheld tax): what quantity × price
         alone cost or brought."""
-        return _with_commission(self.transaction_type, self.actual_amount, -self.commission) + self._withheld_on_sale
+        commission = self.commission_in_pln
+        return _with_commission(self.transaction_type, self.actual_amount, -commission) + self._withheld_on_sale
 
     @property
     def _withheld_on_sale(self) -> Decimal:
@@ -403,13 +426,13 @@ class TransactionDraft:
     def cash_change(self) -> Decimal:
         """How the Transaction moves the Account's PLN Cash Balance.
 
-        A Buy or Sell paid from foreign cash takes only its commission from PLN; a DRIP, a Split and a Security
+        A Buy or Sell paid from foreign cash takes only its PLN commission from PLN; a DRIP, a Split and a Security
         Transfer never touch cash. A Cash Transfer is seen from its source Account: the target gains what it loses.
         """
         if self.transaction_type is TransactionType.DRIP or not self.transaction_type.has_amount:
             return Decimal(0)
         if self.is_paid_in_foreign_cash:
-            return -self.commission
+            return -self.commission_from_pln
         return self.actual_cash_change
 
     @property
@@ -436,7 +459,10 @@ class TransactionDraft:
             return -self.quantity if self.to_pln else self.quantity
         if not self.is_paid_in_foreign_cash:
             return Decimal(0)
-        return self._settled_value if self._is_incoming else -self._settled_value
+        foreign_commission = self.commission - self.commission_from_pln
+        if self._is_incoming:
+            return self._settled_value - foreign_commission
+        return -self._settled_value - foreign_commission
 
     def cash_change_in(self, currency: str) -> Decimal:
         """How the Transaction moves the Account's Cash Balance in ``currency``."""
@@ -505,6 +531,7 @@ def buy_or_sell(
     conversion: BrokerConversion | None = None,
     withholding_tax: Decimal = Decimal(0),
     lot_id: int | None = None,
+    commission_currency: str = PLN,
 ) -> TransactionDraft:
     """A Buy or Sell: in PLN, a Buy costs quantity × price × rate plus commission, a Sell brings that minus it.
 
@@ -512,17 +539,22 @@ def buy_or_sell(
 
     The rate is 1 for a PLN Instrument; for a foreign-currency one it is ``fx_rate`` if the user gave one, otherwise
     the NBP Rate, which ``nbp_rate`` must then carry. Paid from foreign cash (``cash_currency``), quantity × price
-    moves that cash to the cent, and the PLN amount values that at the same rate. With a broker ``conversion``,
-    quantity × price is worth the PLN the broker charged, and the trade records its FX Conversion Fee.
+    moves that cash to the cent, and the PLN amount values that at the same rate; so does a commission in that
+    ``commission_currency``. With a broker ``conversion``, quantity × price is worth the PLN the broker charged, and
+    the trade records its FX Conversion Fee.
     """
     _check_buy_or_sell_fields(quantity, price, commission)
     _check_rates(fx_rate, nbp_rate)
     _check_settlement(cash_currency, nbp_rate)
+    _check_commission_currency(commission_currency, cash_currency)
     fee_percent = None
+    commission_from_pln = commission
     if conversion is None:
         rate = fx_rate or (nbp_rate.rate if nbp_rate else Decimal(1))
         settled_value = quantity * price if cash_currency == PLN else _pln(quantity * price)
         value = _pln(settled_value * rate)
+        if commission_currency != PLN:
+            commission_from_pln = _pln(commission * rate)
     else:
         _check_charged(conversion.charged)
         fee_percent = conversion.fee_percent
@@ -532,11 +564,11 @@ def buy_or_sell(
         raise TransactionError("Wartość transakcji (liczba × cena) musi wynosić co najmniej 0,01 zł.")
     if transaction_type is TransactionType.SELL:
         _check_withheld_on_sale(withholding_tax, nbp_rate)
-        if withholding_tax and commission + withholding_tax >= value:
+        if withholding_tax and commission_from_pln + withholding_tax >= value:
             raise TransactionError("Prowizja i podatek nie mogą przekraczać wartości sprzedaży.")
-        if commission >= value:
+        if commission_from_pln >= value:
             raise TransactionError("Prowizja nie może przekraczać wartości sprzedaży.")
-    actual_amount = _with_commission(transaction_type, value, commission) - withholding_tax
+    actual_amount = _with_commission(transaction_type, value, commission_from_pln) - withholding_tax
     return TransactionDraft(
         account_id,
         day,
@@ -547,6 +579,7 @@ def buy_or_sell(
         quantity=quantity,
         price=price,
         commission=commission,
+        commission_currency=commission_currency,
         fx_rate=fx_rate,
         nbp_rate=nbp_rate,
         cash_currency=cash_currency,
@@ -798,7 +831,7 @@ def covering_exchange(buy: TransactionDraft) -> TransactionDraft:
         buy.date,
         buy.cash_currency,
         -buy.foreign_cash_change,
-        buy.actual_amount - buy.commission,
+        buy.actual_amount - buy.commission_from_pln,
         comment=AUTOMATIC_EXCHANGE_COMMENT,
     )
 
@@ -823,6 +856,12 @@ def _check_settlement(cash_currency: str, nbp_rate: NbpRate | None) -> None:
     """Foreign cash pays only for an Instrument in that same currency."""
     if cash_currency != PLN and (nbp_rate is None or nbp_rate.currency != cash_currency):
         raise TransactionError(f"Gotówką {cash_currency} można płacić tylko za instrument w {cash_currency}.")
+
+
+def _check_commission_currency(commission_currency: str, cash_currency: str) -> None:
+    """A commission is in PLN, or in the foreign cash the trade is paid from (issue #124)."""
+    if commission_currency not in (PLN, cash_currency):
+        raise TransactionError(f"Prowizja jest w PLN albo w walucie płatności ({cash_currency}).")
 
 
 def _check_charged(charged: Decimal) -> None:
@@ -926,13 +965,14 @@ def lowest_cash_balance(
 
 
 def costs_by_account(transactions: Iterable[TransactionDraft]) -> dict[int, Decimal]:
-    """Commissions and costs in PLN per Account id: Costs, commissions and FX Conversion Fees (spec section 5)."""
+    """Commissions and costs in PLN per Account id: Costs, commissions (a foreign one at its trade's rate) and FX
+    Conversion Fees (spec section 5)."""
     costs: dict[int, Decimal] = {}
     for t in transactions:
         if t.transaction_type is TransactionType.COST:
             cost = t.actual_amount
         else:
-            cost = t.commission + (t.fx_conversion_fee or Decimal(0))
+            cost = t.commission_in_pln + (t.fx_conversion_fee or Decimal(0))
         if cost:
             costs[t.account_id] = costs.get(t.account_id, Decimal(0)) + cost
     return costs

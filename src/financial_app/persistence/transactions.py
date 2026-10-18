@@ -169,6 +169,7 @@ def fill_row(row: TransactionRow, draft: TransactionDraft) -> None:
     row.quantity = _text(draft.quantity)
     row.price = _text(draft.price)
     row.commission = str(draft.commission) if draft.transaction_type.is_buy_or_sell else None
+    row.commission_currency = draft.commission_currency
     row.fx_rate = _text(draft.fx_rate)
     nbp = draft.nbp_rate
     row.nbp_currency = None if nbp is None else nbp.currency
@@ -212,6 +213,7 @@ def to_transaction(row: TransactionRow) -> Transaction:
         quantity=_decimal(row.quantity),
         price=_decimal(row.price),
         commission=Decimal(row.commission or 0),
+        commission_currency=row.commission_currency,
         fx_rate=_decimal(row.fx_rate),
         nbp_rate=_nbp_rate(row),
         cash_currency=row.cash_currency,
