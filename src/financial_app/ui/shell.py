@@ -31,6 +31,7 @@ from financial_app.ui.bonds import BondsPage
 from financial_app.ui.changes import Change, ChangeEvents, Redrawing
 from financial_app.ui.dashboard import DashboardPage
 from financial_app.ui.dialogs import install_movable_dialogs
+from financial_app.ui.help import HELP_PATH, build_help_page
 from financial_app.ui.history import history_status, shared_history
 from financial_app.ui.multi_asset import MultiAssetPage
 from financial_app.ui.passive_income import PassiveIncomePage
@@ -56,7 +57,6 @@ class Tab:
     icon: str
 
 
-# The tab without the "+" transaction button (L-28)
 SETTINGS_PATH = "/ustawienia"
 TABS = [
     Tab("Dashboard", "/", "dashboard"),
@@ -70,7 +70,10 @@ TABS = [
     Tab("Podsumowanie sprzedaży", "/sprzedaz", "sell"),
     Tab("Dochód pasywny", "/dochod-pasywny", "payments"),
     Tab("Ustawienia", SETTINGS_PATH, "settings"),
+    Tab("Pomoc", HELP_PATH, "help"),
 ]
+# The tabs without the "+" transaction button (L-28, issue #156)
+WITHOUT_ADD_BUTTON = frozenset({SETTINGS_PATH, HELP_PATH})
 
 # The refresh running on each database, shared by every window, so that a reloaded window joins it instead of starting
 # another; ``None`` from it means the app is shutting down
@@ -278,7 +281,7 @@ def build_shell(
         add_button.props('fab color=indigo aria-label="Dodaj transakcję"').mark("add-transaction")
 
     def showing_add_button(build: Callable[[], None], shown: bool) -> Callable[[], None]:
-        """``build`` a tab, with the "+" shown on it or not (L-28: not on Ustawienia)."""
+        """``build`` a tab, with the "+" shown on it or not (L-28: not on Ustawienia nor Pomoc)."""
 
         def build_tab() -> None:
             add_button.visible = shown
@@ -319,7 +322,8 @@ def build_shell(
         lambda: events.publish(Change.RECURRING_RULES),
         layout,
     )
-    pages = {path: showing_add_button(build, path != SETTINGS_PATH) for path, build in pages.items()}
+    pages[HELP_PATH] = lambda: build_help_page({tab.path: tab.label for tab in TABS})
+    pages = {path: showing_add_button(build, path not in WITHOUT_ADD_BUTTON) for path, build in pages.items()}
     ui.sub_pages(pages).classes("w-full").mark("page-content")
 
     # Once the window is up, so that it never waits for the sources or the computation

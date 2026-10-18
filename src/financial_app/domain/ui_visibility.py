@@ -2,7 +2,7 @@
 
 Hiding changes only the view; every calculation runs the same. The hidden elements are remembered as a JSON list of
 their keys, one setting for every View Scope; nothing remembered shows everything (Pełny). The Dashboard, Portfolio,
-Transakcje and Ustawienia tabs are always shown, so they have no key.
+Transakcje, Ustawienia and Pomoc tabs are always shown, so they have no key.
 """
 
 import json

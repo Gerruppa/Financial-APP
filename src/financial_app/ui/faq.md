@@ -1,0 +1,198 @@
+# Pierwsze kroki
+
+## Od czego zacząć? {#od-czego-zaczac}
+Przejdź do: /ustawienia
+
+Najprościej w tej kolejności:
+
+1. **Konto.** W zakładce **Ustawienia**, w sekcji **Konta**, kliknij **Dodaj konto**, np. „XTB IKE”.
+2. **Instrumenty.** W sekcji **Instrumenty** kliknij **Dodaj instrument** i wyszukaj to, co kupujesz (po ISIN, nazwie albo symbolu).
+3. **Transakcje.** Okrągłym przyciskiem **„+”** w prawym dolnym rogu zapisz wpłatę gotówki, a potem zakupy.
+4. **Wyceny.** Kliknij ikonę odświeżania w nagłówku (**Odśwież wyceny**). Aplikacja pobierze ceny i kursy walut.
+
+Jeśli masz już historię w XTB albo w arkuszu inwestomat.eu, zamiast kroków 2–3 możesz ją zaimportować (sekcja **Import danych** poniżej).
+
+## Jak założyć konto i czym różnią się typy kont? {#konto}
+Przejdź do: /ustawienia
+
+W zakładce **Ustawienia**, w sekcji **Konta**, kliknij **Dodaj konto**. Wpisz **Nazwę**, **Brokera** i wybierz **Typ konta**, potem **Zapisz**.
+
+Typ konta decyduje o podatku:
+
+- **Regular**: zwykły rachunek maklerski. Od zysku płacisz 19% podatku Belki przy sprzedaży.
+- **IKE**: bez podatku od zysku przy wypłacie spełniającej warunki ustawy; wpłaty mają roczny limit.
+- **IKZE**: wpłaty odliczasz od dochodu, przy wypłacie płacisz 10% od całej kwoty; wpłaty mają roczny limit.
+- **OIPE**, **PPK**, **OKI**: konta emerytalne i inwestycyjne o własnych zasadach podatkowych.
+- **Obligacje**: konto na obligacje skarbowe detaliczne (np. w PKO BP); zakup od razu proponuje tryb obligacji.
+- **Lokata / oszczędności** i **Inne**: wszystko pozostałe.
+
+Pole **Opłata za przewalutowanie %** wypełnij, jeśli broker pobiera prowizję za wymianę waluty przy zakupie zagranicznych papierów. Konto, którego już nie używasz, oznacz jako nieaktywne przełącznikiem **Aktywne**.
+
+## Czym jest Widok i jak przełączać się między kontami a całym portfelem? {#widok}
+
+**Widok** to zakres, który pokazują zakładki: cały portfel (**Total**) albo jedno konto. Przełączasz go przyciskiem z nazwą Widoku w prawej części nagłówka; lista pokazuje konta z ich wartością. Nad treścią zakładki ścieżka „Total › Konto” pozwala wrócić do całego portfela jednym kliknięciem.
+
+Widok zmienia to, co widzisz na Dashboardzie, w Wynikach, Portfolio, Obligacjach i raportach. Aplikacja go zapamiętuje.
+
+## Jak ukryć zakładki i elementy, których nie używam? {#widocznosc}
+Przejdź do: /ustawienia
+
+W zakładce **Ustawienia**, w sekcji **Wygląd i widoczność**, wybierz profil **Podstawowy** (kilka najważniejszych kafelków i wykresów) albo **Pełny**, albo wyłącz pojedyncze elementy przełącznikami. **Przywróć domyślne** pokazuje znów wszystko. Ukrywanie zmienia tylko widok, obliczenia działają tak samo. Ukrytą zakładkę nadal otworzysz z Pomocy przyciskiem **Przejdź do …**.
+
+# Transakcje
+
+## Jak dodać wpłatę gotówki na konto? {#wplata}
+Przejdź do: /transakcje
+
+1. Kliknij **„+”** w prawym dolnym rogu.
+2. Wybierz **Konto** i **Typ** „Wpłata”.
+3. Wpisz **Datę** i **Kwotę (zł)**, potem **Zapisz**.
+
+Wpłaty pomniejszone o wypłaty to **Wpłaty netto**: ile własnych pieniędzy włożyłeś w portfel. Na IKE, IKZE i OIPE wpłata liczy się do rocznego limitu.
+
+## Jak kupić akcję albo ETF? {#zakup}
+Przejdź do: /transakcje
+
+1. Najpierw dodaj instrument: **Ustawienia** → **Instrumenty** → **Dodaj instrument**. Wyszukaj go po ISIN, nazwie albo symbolu i wybierz wynik; aplikacja uzupełni **Klasę aktywów**, **Walutę notowania** i symbole źródeł wycen.
+2. Kliknij **„+”**, wybierz **Konto** i **Typ** „Zakup”.
+3. Wybierz instrument, wpisz **Liczbę**, **Cenę** i **Prowizję**, potem **Zapisz**.
+
+Przy instrumencie w walucie obcej podajesz cenę w tej walucie. Jeśli konto trzyma tę walutę, wybierzesz, z czego płacisz (**Płatność**); jeśli broker przewalutowuje za Ciebie, zaznacz prowizję za przewalutowanie albo wpisz **Kwotę pobraną przez brokera (zł)**.
+
+## Jak kupić bitcoina albo inną kryptowalutę? {#kryptowaluty}
+Przejdź do: /transakcje
+
+1. **Ustawienia** → **Instrumenty** → **Dodaj instrument**. Wyszukaj np. „bitcoin” albo wpisz **Symbol Yahoo** „BTC-USD”. Wybierz **Klasę aktywów** „Kryptowaluty”.
+2. W polu **Miejsca po przecinku w liczbie** ustaw, ile miejsc po przecinku ma ilość (do 8), np. 8 dla 0,00125 BTC.
+3. Kliknij **„+”**, wybierz **Typ** „Zakup”, ten instrument, ułamkową **Liczbę** i **Cenę**, potem **Zapisz**.
+
+Ceny kryptowalut pobiera Yahoo i przelicza je na złote.
+
+## Jak kupić obligacje skarbowe (EDO, COI, ROR…) i skąd biorą się ich wartości? {#obligacje}
+Przejdź do: /obligacje
+
+1. Załóż konto z **Typem konta** „Obligacje” (np. „PKO obligacje”).
+2. Kliknij **„+”**, wybierz to konto i **Typ** „Zakup”. Pole **Obligacje skarbowe detaliczne** jest zaznaczone, więc zamiast instrumentu wybierasz typ obligacji (EDO, COI, ROR…) i serię; zakup z zamiany zaznacz polem **z rolowania**.
+3. Wpisz **Liczbę** obligacji i **Zapisz**. Seria (np. EDO1036) powstaje sama.
+
+Wartość obligacji aplikacja liczy sama z listów emisyjnych Ministerstwa Finansów, inflacji GUS i stopy referencyjnej NBP, pobieranych razem z wycenami najwyżej raz dziennie. Zakładka **Obligacje** pokazuje **Wartość netto** (po opłacie za wcześniejszy wykup i podatku), a na górze **Do zatwierdzenia**: odsetki i wykupy, które przyszły, z przyciskami **Zatwierdź odsetki**, **Zatwierdź wykup** i **Roluj do…**.
+
+## Jak zapisać sprzedaż, dywidendę, odsetki, koszt albo przelew między kontami? {#inne-transakcje}
+Przejdź do: /transakcje
+
+Wszystko przez **„+”**, zmieniając **Typ**:
+
+- **Sprzedaż**: instrument, **Liczba**, **Cena**, **Prowizja**. Zysk aplikacja liczy metodą FIFO.
+- **Dywidenda / odsetki**: kwota brutto i podatek pobrany u źródła.
+- **Koszty**: opłaty za prowadzenie konta i inne koszty.
+- **Transfer gotówki**: wybierz konto źródłowe w **Konto** i docelowe w **Na konto**; wartość portfela się nie zmienia.
+- **Transfer papierów**: przeniesienie instrumentów między kontami z zachowaniem kosztu zakupu.
+- **Wymiana walut**, **Wypłata**, **DRIP** i **Split** działają tak samo.
+
+## Jak poprawić albo usunąć błędną transakcję? Jak działają filtry? {#poprawianie}
+Przejdź do: /transakcje
+
+Kliknij transakcję na liście w zakładce **Transakcje**. Otworzy się okno **Edytuj transakcję**: popraw pola i kliknij **Zapisz zmiany** albo **Usuń** (aplikacja poprosi o potwierdzenie). Partie i salda przeliczą się same.
+
+Nagłówki kolumn listy sortują ją po kliknięciu, a ikona filtra przy nagłówku zawęża listę (konta, typy, instrumenty, kwoty, daty, komentarz). **wyczyść filtry** pokazuje znów wszystko. **Eksportuj CSV** i **Eksportuj XLSX** zapisują to, co widać na liście.
+
+## Czym są Reguły cykliczne i Szkice? {#reguly-cykliczne}
+Przejdź do: /ustawienia
+
+**Reguła cykliczna** to powtarzalna transakcja, np. comiesięczna wpłata na IKE albo zakup ETF-u. Dodasz ją w **Ustawieniach**, w sekcji **Transakcje cykliczne** (**Dodaj regułę**: konto, typ, kwota, **Częstotliwość**, **Dzień miesiąca**, **Pierwszy termin**) albo z okna edycji transakcji przyciskiem **Powtarzaj…**.
+
+Gdy przychodzi termin, aplikacja nie zapisuje transakcji sama: na górze zakładki **Transakcje** pojawia się **Szkic** w sekcji **Transakcje cykliczne do zatwierdzenia**. **Zatwierdź** go, **Edytuj…** (np. inna cena zakupu) albo **Pomiń**. Nagłówek pokazuje, ile szkiców czeka.
+
+# Import danych
+
+## Jak zaimportować historię z XTB i czym jest Uzgadnianie? {#import-xtb}
+Przejdź do: /ustawienia
+
+1. W xStation otwórz historię konta i wyeksportuj zestawienie do pliku .xlsx (dla kilku rachunków możesz zapisać pliki w jednym folderze).
+2. W **Ustawieniach**, w sekcji **Import z XTB i uzgadnianie**, wpisz ścieżkę pliku albo folderu i kliknij **Wczytaj**.
+3. Dopasuj rachunki XTB do kont w aplikacji i tickery do instrumentów (brakujący instrument utworzysz od razu).
+
+**Uzgadnianie** porównuje transakcje z XTB z tymi, które już wpisałeś: pokazuje te, które się różnią, te tylko w XTB i te tylko w aplikacji. Domyślnie obowiązuje wersja XTB (**Wszędzie wersja XTB**), a przy każdej pozycji możesz wybrać inaczej. Nic nie jest zapisywane przed kliknięciem **Zastosuj**. Ponowny import tego samego zestawienia nie dubluje transakcji.
+
+## Jak przenieść dane z arkusza „Portfolio tracker” inwestomat.eu? {#import-arkusza}
+Przejdź do: /ustawienia
+
+1. W Arkuszach Google pobierz kopię arkusza jako plik .xlsx (**Plik** → **Pobierz** → **Microsoft Excel**).
+2. W **Ustawieniach**, w sekcji **Import z arkusza Inwestomat**, wpisz ścieżkę pliku w pole **Plik arkusza (.xlsx)** i kliknij **Podgląd**.
+3. Dopasuj konta i tickery, których jeszcze nie ma w aplikacji (wybierz istniejące albo utwórz nowe).
+4. Kliknij **Zapisz … transakcji**.
+
+Ponowny import tego samego pliku pomija zapisane już wiersze, więc możesz go powtórzyć po dopisaniu nowych transakcji w arkuszu.
+
+# Ceny i dane
+
+## Skąd aplikacja bierze ceny i kursy walut i jak je odświeżyć? {#ceny}
+
+Ceny pobierane są z kilku **Źródeł wycen**: Yahoo (akcje i ETF-y zagraniczne, kryptowaluty, metale), Bossa (GPW, NewConnect, Catalyst), analizy.pl i bankier.pl (fundusze i PPK). Każda klasa aktywów ma swoją **Kolejność źródeł**: instrument jest wyceniany z pierwszego źródła, dla którego ma symbol. Kursy walut to kursy średnie NBP z dnia poprzedniego.
+
+Po starcie aplikacja sama odświeża wyceny, jeśli od ostatniego odświeżenia skończyła się sesja (po 17:30 w dzień roboczy). Ręcznie odświeżysz je ikoną **Odśwież wyceny** w nagłówku. Napis **Wyceny: …** obok pokazuje czas ostatniego odświeżenia; na czerwono, gdy dla części instrumentów się nie udało, a kliknięcie pokazuje powody.
+
+## Instrument nie ma ceny. Co zrobić? {#brak-ceny}
+Przejdź do: /ustawienia
+
+W **Ustawieniach** sekcja **Instrumenty bez wyceny** wymienia posiadane instrumenty bez automatycznej ceny i powód: brak symbolu w źródle, błąd przy ostatnim odświeżeniu albo brak notowania. Kliknij wiersz, aby otworzyć instrument, i:
+
+- wpisz **Symbol w źródle** (np. **Symbol Yahoo** „ISAC.L”, **Symbol Bossa** „CDR”); przycisk **Sprawdź** od razu pobiera cenę na próbę;
+- albo wpisz **Cenę ręczną**, jeśli żadne źródło nie notuje instrumentu (np. lokata, nieruchomość).
+
+Potem odśwież wyceny ikoną w nagłówku.
+
+## Jak ustawić klucz API Stooq? {#stooq}
+Przejdź do: /ustawienia
+
+Stooq dostarcza historię notowań i indeksów (np. WIG) do wykresów i benchmarków; bieżących cen nie daje. Pobieranie wymaga osobistego klucza:
+
+1. Wejdź na stooq.com/q/d/?s=wig&get_apikey i przepisz kod z obrazka.
+2. Skopiuj otrzymany klucz.
+3. W **Ustawieniach**, w sekcji **Źródła wycen**, wklej go w pole **Klucz API Stooq** i kliknij **Ustaw klucz**.
+
+# Wyniki i raporty
+
+## Co oznaczają kafelki Dashboardu i przełącznik „Po podatku”? {#dashboard}
+Przejdź do: /
+
+- **Wpłaty netto**: wszystkie wpłaty minus wszystkie wypłaty.
+- **Wartość konta**: otwarte pozycje według ostatnich cen plus gotówka, w złotych.
+- **Niezrealizowany zysk**: dzisiejsza wartość tego, co masz, minus koszt zakupu.
+- **Zrealizowany zysk**: wynik na tym, co już sprzedałeś.
+- **Dywidendy i odsetki**: netto, po podatku pobranym u źródła.
+- **XIRR**: roczna stopa zwrotu uwzględniająca terminy i kwoty wpłat i wypłat.
+
+Ikona „i” przy kafelku i wykresie wyjaśnia go dokładniej. Przełącznik **Po podatku** pomniejsza niezrealizowany zysk o szacowany podatek Belki na zwykłych kontach i o opłaty oraz podatek przy wcześniejszym wykupie obligacji. Okres wykresów i wyników wybierasz nad kafelkami.
+
+## Jak liczony jest zysk i podatek Belki? Co pokazuje Podsumowanie sprzedaży? {#fifo}
+Przejdź do: /sprzedaz
+
+Zysk liczony jest metodą **FIFO**: sprzedaż zamyka najpierw najstarsze kupione **Partie**, jak w rozliczeniu PIT-38. Koszt zakupu zawiera prowizje, a dla papierów zagranicznych przeliczenie po kursie NBP z dnia poprzedniego, więc wynik podatkowy może różnić się od wyniku w złotych z kursów rynkowych.
+
+Na kontach **Regular** od zysku należy się 19% podatku Belki; na IKE, IKZE, OIPE i PPK go nie ma. Zakładka **Podsumowanie sprzedaży** pokazuje każdą parę kupno–sprzedaż: kiedy kupiono i sprzedano, wynik, czas trzymania i dywidendy z tej partii, oraz statystyki (skuteczność, najlepsza i najgorsza sprzedaż).
+
+## Jak ustawić Strategię inwestycyjną i Cel inwestycyjny / FIRE? {#strategia-cel}
+Przejdź do: /strategie
+
+**Strategia inwestycyjna**: w zakładce **Strategie inwestycyjne** kliknij **Edytuj cele klas** i wpisz docelowy udział każdej klasy aktywów (**Cel**, razem 100%) oraz **Pasmo ±** dopuszczalnego odchylenia. Dla jednego konta użyj **Utwórz strategię konta**. Pole **Planuję wpłacić** podpowiada, jak podzielić najbliższą wpłatę, żeby zbliżyć się do celów bez sprzedaży.
+
+**Cel inwestycyjny**: na Dashboardzie kliknij **Ustaw cel**. Wpisz **Kwotę celu** albo dla FIRE **Wydatki roczne** i **Stopę wypłaty** (domyślnie 4%), opcjonalnie **Datę docelową**. Aplikacja pokaże postęp i prognozę, kiedy cel zostanie osiągnięty.
+
+## Jak działają Limity wpłat IKE / IKZE / OIPE? {#limity}
+Przejdź do: /ustawienia
+
+W **Ustawieniach**, w sekcji **Limity wpłat**, wpisz roczne limity i kliknij **Ustaw limity**; kolejny rok dodasz przyciskiem **Dodaj rok**. Wpłaty i przelewy z kont innego typu na IKE, IKZE i OIPE liczą się do limitu swojego roku. Dashboard pokazuje paski z wykorzystaniem limitu, a zapis wpłaty, która go przekracza, kończy się ostrzeżeniem.
+
+# Dane i bezpieczeństwo
+
+## Gdzie zapisane są moje dane i jak zrobić kopię zapasową? {#dane}
+
+Wszystkie dane są tylko na Twoim komputerze, w pliku `financial_app.sqlite3` w folderze `%LOCALAPPDATA%\FinancialApp` (wklej tę ścieżkę w pasek adresu Eksploratora plików). Aplikacja nie wysyła ich nigdzie; z internetu tylko pobiera ceny, kursy i dane obligacji.
+
+Przy każdym uruchomieniu aplikacja kopiuje bazę do podfolderu `backups` obok niej. Własną kopię zrobisz, kopiując plik bazy przy zamkniętej aplikacji, np. na dysk zewnętrzny. Transakcje możesz też wyeksportować w zakładce **Transakcje** przyciskami **Eksportuj CSV** i **Eksportuj XLSX**.
+
+## Jak wyczyścić dane i zacząć od nowa? {#wyczysc}
+Przejdź do: /ustawienia
+
+Na dole **Ustawień**, w sekcji **Wyczyść dane**, kliknij **Wyczyść dane**. Aplikacja pokaże, ile kont, instrumentów i transakcji usunie; po **Dalej** wpisz `USUŃ WSZYSTKO` i kliknij **Wyczyść wszystkie dane**. Przed usunięciem kopia bazy trafia do folderu `backups`, więc w razie pomyłki możesz ją przywrócić. Ustawienia, limity wpłat i pobrane dane obligacji zostają.
