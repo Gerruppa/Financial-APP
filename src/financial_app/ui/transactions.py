@@ -247,6 +247,10 @@ class TransactionsPage:
                 with ui.column().classes("gap-0 items-end"):
                     if not kind.has_amount:
                         pass  # a Split or Security Transfer moves only units
+                    elif kind is TransactionType.CASH_TRANSFER and transaction.is_paid_in_foreign_cash:  # #125
+                        assert transaction.quantity is not None  # foreign cash, checked on creation
+                        ui.label(format_amount(transaction.quantity, transaction.cash_currency))
+                        ui.label(format_pln(transaction.actual_amount)).classes("text-xs text-gray-500")
                     elif kind is TransactionType.CASH_TRANSFER:
                         ui.label(format_pln(transaction.actual_amount))
                     elif kind is TransactionType.DRIP:

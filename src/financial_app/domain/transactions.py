@@ -75,8 +75,14 @@ class TransactionType(StrEnum):
 
     @property
     def moves_cash_amount(self) -> bool:
-        """A Deposit, Withdrawal or Cost: an amount of PLN, or of a foreign Cash Currency valued in PLN."""
-        return self in (TransactionType.DEPOSIT, TransactionType.WITHDRAWAL, TransactionType.COST)
+        """A Deposit, Withdrawal, Cost or Cash Transfer: an amount of PLN, or of a foreign Cash Currency valued in PLN
+        (a foreign Cash Transfer since issue #125)."""
+        return self in (
+            TransactionType.DEPOSIT,
+            TransactionType.WITHDRAWAL,
+            TransactionType.COST,
+            TransactionType.CASH_TRANSFER,
+        )
 
 
 _LABELS = {
@@ -107,7 +113,12 @@ class Origin(StrEnum):
 
 
 # "Kwota ... w PLN": the genitive of the Transactions that move an amount of cash
-_AMOUNT_OF = {TransactionType.DEPOSIT: "wpłaty", TransactionType.WITHDRAWAL: "wypłaty", TransactionType.COST: "kosztów"}
+_AMOUNT_OF = {
+    TransactionType.DEPOSIT: "wpłaty",
+    TransactionType.WITHDRAWAL: "wypłaty",
+    TransactionType.COST: "kosztów",
+    TransactionType.CASH_TRANSFER: "transferu",
+}
 
 _ORIGIN_LABELS = {Origin.MANUAL: "ręczna", Origin.SPREADSHEET: "import z arkusza", Origin.BROKER: "import od brokera"}
 
@@ -319,8 +330,8 @@ class TransactionDraft:
             raise TransactionError(f"{label} nie ma liczby jednostek.")
 
     def _check_foreign_amount(self) -> None:
-        """A Deposit, Withdrawal or Cost in foreign cash: ``quantity`` of it, worth the Actual Amount at the user's
-        ``fx_rate`` or else the NBP Rate; a Cost counts at the NBP Rate only."""
+        """A Deposit, Withdrawal, Cost or Cash Transfer in foreign cash: ``quantity`` of it, worth the Actual Amount at
+        the user's ``fx_rate`` or else the NBP Rate; a Cost and a Cash Transfer count at the NBP Rate only."""
         kind = self.transaction_type
         if self.instrument_id is not None or self.price is not None or self.commission:
             raise TransactionError(f"{kind.label} nie dotyczy instrumentu.")
@@ -328,6 +339,8 @@ class TransactionDraft:
             raise TransactionError(f"{kind.label} nie ma przewalutowania przez brokera.")
         if kind is TransactionType.COST and self.fx_rate is not None:
             raise TransactionError("Koszty w walucie liczą się po kursie NBP.")
+        if kind is TransactionType.CASH_TRANSFER and self.fx_rate is not None:
+            raise TransactionError("Transfer gotówki w walucie liczy się po kursie NBP.")
         if self.nbp_rate is None or self.nbp_rate.currency != self.cash_currency:
             raise TransactionError(f"Brak kursu NBP {self.cash_currency}. Zapis zablokowany.")
         _check_rates(self.fx_rate, self.nbp_rate)
@@ -447,7 +460,8 @@ class TransactionDraft:
 
     @property
     def is_paid_in_foreign_cash(self) -> bool:
-        """A Buy, Sell, Dividend, Deposit, Withdrawal or Cost paid from (or into) foreign cash rather than PLN."""
+        """A Buy, Sell, Dividend, Deposit, Withdrawal, Cost or Cash Transfer paid from (or into) foreign cash rather
+        than PLN."""
         paid = self.transaction_type.settles_in_cash_currency or self.transaction_type.moves_cash_amount
         return paid and self.cash_currency != PLN
 
@@ -792,11 +806,34 @@ def split(account_id: int, day: date, instrument_id: int, ratio: SplitRatio, com
 
 
 def cash_transfer(
-    account_id: int, day: date, target_account_id: int, amount: Decimal, comment: str = ""
+    account_id: int,
+    day: date,
+    target_account_id: int,
+    amount: Decimal,
+    comment: str = "",
+    *,
+    cash_currency: str = PLN,
+    nbp_rate: NbpRate | None = None,
 ) -> TransactionDraft:
-    """``amount`` PLN moving from the Account to ``target_account_id``."""
+    """``amount`` of ``cash_currency`` moving from the Account to ``target_account_id``: PLN, or foreign cash worth
+    ``amount`` at the NBP Rate (D-1), which ``nbp_rate`` must then carry (issue #125); its Lots move with it."""
+    if cash_currency == PLN:
+        return TransactionDraft(
+            account_id, day, TransactionType.CASH_TRANSFER, amount, comment, target_account_id=target_account_id
+        )
+    if nbp_rate is None or nbp_rate.currency != cash_currency:
+        raise TransactionError(f"Brak kursu NBP {cash_currency}. Zapis zablokowany.")
+    _check_foreign_quantity(amount)
     return TransactionDraft(
-        account_id, day, TransactionType.CASH_TRANSFER, amount, comment, target_account_id=target_account_id
+        account_id,
+        day,
+        TransactionType.CASH_TRANSFER,
+        _pln(amount * nbp_rate.rate),
+        comment,
+        quantity=amount,
+        nbp_rate=nbp_rate,
+        cash_currency=cash_currency,
+        target_account_id=target_account_id,
     )
 
 

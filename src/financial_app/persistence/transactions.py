@@ -112,11 +112,11 @@ def check_references(session: Session, draft: TransactionDraft) -> None:
     account = session.get(AccountRow, draft.account_id)
     if account is None:
         raise TransactionError("Wybrane konto nie istnieje.")
-    held = {cash.currency for cash in account.cash_currencies}
+    held = _currencies(account)
     if draft.cash_currency != PLN and draft.cash_currency not in held:
         raise TransactionError(f"Konto {account.name} nie ma waluty rachunku {draft.cash_currency}.")
-    # Neither an Account without PLN nor a Cash Transfer's target without it takes PLN (#124), whatever the source:
-    # the dialog, an import
+    # An Account without PLN takes no PLN (#124), nor a Cash Transfer's target cash it does not hold (#125), whatever
+    # the source: the dialog, an import
     moves_pln = draft.cash_change or draft.transaction_type is TransactionType.CURRENCY_EXCHANGE
     if moves_pln and PLN not in held:
         raise TransactionError(f"Konto {account.name} nie ma waluty rachunku PLN.")
@@ -124,8 +124,9 @@ def check_references(session: Session, draft: TransactionDraft) -> None:
         target = session.get(AccountRow, draft.target_account_id)
         if target is None:
             raise TransactionError("Wybrane konto docelowe nie istnieje.")
-        if draft.cash_change and PLN not in {cash.currency for cash in target.cash_currencies}:
-            raise TransactionError(f"Konto {target.name} nie ma waluty rachunku PLN.")
+        currency = draft.cash_currency
+        if draft.transaction_type is TransactionType.CASH_TRANSFER and currency not in _currencies(target):
+            raise TransactionError(f"Konto {target.name} nie ma waluty rachunku {currency}.")
     if draft.instrument_id is not None:
         instrument = session.get(InstrumentRow, draft.instrument_id)
         if instrument is None:
@@ -166,6 +167,10 @@ def _check_coverage(session: Session, draft: TransactionDraft | None, replacing:
     if replacing is None:
         transactions.append(draft)
     open_positions(t for t in transactions if t is not None)
+
+
+def _currencies(account: AccountRow) -> set[str]:
+    return {cash.currency for cash in account.cash_currencies}
 
 
 def fill_row(row: TransactionRow, draft: TransactionDraft) -> None:

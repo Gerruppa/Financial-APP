@@ -295,6 +295,10 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_fallback_order_ui.py`: UI tests for editing an Asset Class's Fallback Order in Ustawienia: showing, removing, adding, moving and saving sources.
 - `test_foreign_cash_domain.py`: Domain tests for foreign cash Lots, Currency Exchange and FX result per Account
 - `test_foreign_cash_repository.py`: Tests saving Currency Exchanges and foreign-cash Buys to SQLite
+- `test_foreign_cash_transfer_domain.py`: Tests foreign-currency Cash Transfers in the domain: oldest cash Lots move with dates and costs, no FX result, NBP-rate PLN value.
+- `test_foreign_cash_transfer_form.py`: Tests the transaction dialog rules for foreign-currency Cash Transfers: source currencies offered, only targets holding the currency.
+- `test_foreign_cash_transfer_repository.py`: Tests saving foreign-currency Cash Transfers: both Accounts must hold the currency.
+- `test_foreign_cash_transfer_ui.py`: End-to-end UI test of a USD Cash Transfer without the network.
 - `test_foreign_cash_ui.py`: End-to-end UI tests for foreign cash, Currency Exchange and FX result
 - `test_foreign_trades_ui.py`: End-to-end UI tests for foreign-currency Buys and Sells using the NBP Rate
 - `test_formatting.py`: Tests the Polish number, date and count formatting and typed-input parsing helpers
