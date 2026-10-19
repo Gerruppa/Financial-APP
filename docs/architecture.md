@@ -63,5 +63,6 @@ Layout (`src/financial_app/`, see ADR-0001):
 - [Wygląd i widoczność (#155)](architecture/ui-visibility.md)
 - [Pomoc / FAQ (#156)](architecture/help-faq.md)
 - [`app.py`](architecture/app.md)
+- [Browser and demo mode, screenshots](architecture/demo-mode.md)
 - [Version and installer (#99)](architecture/version-installer.md)
 - [Contribution Limits (#95, spec 8.1)](architecture/contribution-limits.md)

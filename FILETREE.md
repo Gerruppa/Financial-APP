@@ -15,6 +15,10 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `main.py`: Convenience script entry point that calls the app's main function to start the window.
 - `pyproject.toml`: Package metadata, dependencies, console and GUI entry points, pytest, mypy and ruff settings.
 
+## .claude/skills/kapita-screenshot/
+
+- `SKILL.md`: Project skill for screenshotting KAPITA's tabs on made-up demo data before and after a visual change
+
 ## .github/workflows/
 
 - `ci.yml`: GitHub Actions job on Windows running ruff, format check, mypy and the full pytest suite on milestone close, v* tags or manual dispatch.
@@ -59,6 +63,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `contribution-limits.md`: Architecture entry for Contribution Limits (#95, spec 8.1): main functions, UI markers and decisions.
 - `dashboard-charts.md`: Architecture entry for Dashboard charts (#73, spec 6.1): main functions, UI markers and decisions.
 - `dashboard.md`: Architecture entry for Dashboard (#72, spec 5 and 6.1): main functions, UI markers and decisions.
+- `demo-mode.md`: Architecture entry for browser and demo mode (--browser, --demo), the demo data seed and the screenshot script
 - `early-redemption.md`: Architecture entry for Early Redemption (L-5, spec 3.4.1, ADR-0007): main functions, UI markers and decisions.
 - `edo-valuation.md`: Architecture entry for EDO valuation (L-3, spec 3.4.1): main functions, UI markers and decisions.
 - `export.md`: Architecture entry for Export: main functions, UI markers and decisions.
@@ -114,12 +119,13 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `create_desktop_shortcut.ps1`: PowerShell script creating a Windows desktop shortcut that starts the console-less app window.
 - `make_icons.py`: Cuts the KAPITA app icons (png and ico) out of the logo in packaging/; run only when the logo changes
 - `new_migration.py`: Generates the next numbered migration by autogenerating against a scratch database, then ruff fixes and formats it.
+- `screenshot.py`: Screenshots KAPITA's tabs with headless Chrome or Edge, running main.py --demo on a free port and stopping it after
 
 ## src/financial_app/
 
 - `__init__.py`: Package marker for financial_app; holds the one version number, __version__ = 1.0.0
 - `__main__.py`: Module entry point so the package can be run with python -m financial_app, starting the app.
-- `app.py`: Application start-up: moves the pre-1.0 data folder, attaches logging, backs up and migrates the database, then opens the NiceGUI window; shows a Windows error box when the move fails.
+- `app.py`: Application start-up: backs up and migrates the database, opens the native window or, with --browser or --demo, serves the UI in a browser; --demo seeds a made-up database in TEMP.
 
 ## src/financial_app/domain/
 
@@ -255,6 +261,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `catalyst.py`: Fetches Catalyst bonds' nominal and accrued interest from gpwcatalyst.pl and IZ indexation coefficients from gov.pl
 - `current_prices.py`: Today's valuation inputs shared by the Portfolio and the Dashboard: Instrument prices and NBP Rates from the last business day before today, each currency fetched once
 - `dashboard.py`: Computes today's Dashboard of a View Scope from the database, shared by the Dashboard and the Investment Strategy
+- `demo_data.py`: Seeds the made-up demo Portfolio (two Accounts, DEMO Instruments, a year of Transactions) for the --demo start
 - `export.py`: Writes the Transactions list to CSV and XLSX files for export
 - `history.py`: Returns an Instrument's Quotes in a date range, fetching missing days from Yahoo, analizy.pl or Stooq into cache
 - `nbp.py`: Gets NBP exchange rates from the NBP API through the local cache
@@ -372,6 +379,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_dashboard_domain.py`: Tests the Dashboard domain totals, Account table and currency exposure
 - `test_dashboard_ui.py`: UI tests for the Dashboard tab: totals, Account table, currency exposure and price status
 - `test_database.py`: Checks that the ORM models and Alembic migrations stay in sync
+- `test_demo_data.py`: Tests the made-up demo Portfolio, the demo database in TEMP and the start options
 - `test_dividends_domain.py`: Domain tests for Dividends, interest, Costs and DRIP calculations
 - `test_dividends_repository.py`: Tests saving Dividends, Costs and DRIPs to SQLite
 - `test_dividends_ui.py`: UI tests for Dividends, Costs and DRIP in the transaction dialog, Transakcje and Portfolio
