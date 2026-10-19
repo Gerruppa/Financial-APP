@@ -80,7 +80,8 @@ async def test_the_dialog_asks_for_the_account_first_and_sets_it_apart(engine: E
         account = user.find(marker="transaction-account").elements.pop()
         transaction_type = user.find(marker="transaction-type").elements.pop()
         assert account.id < transaction_type.id
-        assert account.props.get("bg-color") == "blue-1"
+        # Set apart in the Theme's highlighted field colour (ui/theme.py THEME_COLOURS "field")
+        assert "k-field" in account.classes
         assert "filled" in account.props
 
 

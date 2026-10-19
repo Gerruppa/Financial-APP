@@ -63,6 +63,7 @@ THEME_COLOURS = {
         "gain": "#166534",
         "loss": "#b91c1c",
         "warning": "#9a3412",
+        "field": "#e3f2fd",
     },
     Theme.GOLDEN: {
         "page": "#0b0b0c",
@@ -73,6 +74,7 @@ THEME_COLOURS = {
         "gain": "#22c55e",
         "loss": "#f87171",
         "warning": "#fb923c",
+        "field": "#2a2416",
     },
 }
 TEXT_COLOURS = {theme: colours["text"] for theme, colours in THEME_COLOURS.items()}
@@ -138,6 +140,7 @@ body.theme-golden .q-card { background:linear-gradient(180deg,#171717,#101010); 
 .k-loss { color:var(--k-loss); }
 .k-warning { color:var(--k-warning); }
 .k-hover:hover { background:var(--k-hover); }
+body .k-field.q-field--filled .q-field__control { background:var(--k-field); }
 .k-hero { color:var(--k-hero); }
 .k-accent { color:var(--k-accent); }
 .k-highlight { background:var(--k-highlight); }
