@@ -4,7 +4,7 @@ from datetime import date
 
 from nicegui import ui
 
-from financial_app.domain.sayings import AUTHOR, Saying, saying_of_the_day
+from financial_app.domain.sayings import Saying, saying_of_the_day
 
 
 def saying_card(day: date) -> None:
@@ -25,4 +25,5 @@ def menu_saying(day: date) -> None:
 
 
 def _signature(saying: Saying) -> None:
-    ui.label(f"— {saying.work}, {AUTHOR}").classes("text-xs opacity-70")
+    by = f", {saying.author}" if saying.author is not None else ""
+    ui.label(f"— {saying.work}{by}").classes("text-xs opacity-70")

@@ -168,7 +168,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `results.py`: Wyniki tab figures: period XIRR, TWR, drawdown, volatility and fixed-period returns per Total and Account, from History
 - `sale_summary.py`: Sell Summary: Sale Pairs from the FIFO replay with attributed Dividends, and closed-position statistics (win rate, days, best, worst).
 - `save_warnings.py`: Warnings a save of Transactions shows (cash shortfalls, over-limit contributions, unsplit Multi-asset), computed before and after the save; never blocks it
-- `sayings.py`: Saying of the day: fixed list of Kapitan Bomba lines and the day-based pick, with a separate pick for the menu
+- `sayings.py`: Saying of the day: fixed list of lines from Walaszek's cartoons (Kapitan Bomba, Egzorcysta, Chłopaki z baraków) and the day-based pick, with a separate pick for the menu
 - `spreadsheet_import.py`: Pure conversion of the user's Inwestomat Transakcje sheet rows into Transaction drafts, with fingerprints for re-import skipping.
 - `strategy.py`: Investment Strategy rules: Allocation Targets with tolerance bands, Instrument Targets, and the water-filling split of the Planned Deposit
 - `term_deposits.py`: Term Deposit rules: contract fields, capitalisation periods, Belka-net interest, Accrued Interest, Drafts and capital locked by running deposits
