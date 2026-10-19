@@ -256,7 +256,7 @@
   "src/financial_app/ui/portfolio.py": "bac417f3",
   "src/financial_app/ui/price_sources.py": "bff1b1f5",
   "src/financial_app/ui/recurring_drafts.py": "48664595",
-  "src/financial_app/ui/recurring_rules.py": "e49d0884",
+  "src/financial_app/ui/recurring_rules.py": "88b5b173",
   "src/financial_app/ui/reset.py": "d8dbcd2d",
   "src/financial_app/ui/results.py": "6972df9c",
   "src/financial_app/ui/sale_summary.py": "c53193b7",
