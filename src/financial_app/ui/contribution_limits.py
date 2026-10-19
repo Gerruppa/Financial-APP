@@ -69,9 +69,9 @@ class ContributionLimitsSection:
                         field.classes("w-full").mark(f"limit-{year}-{account_type.value}")
                         fields[account_type] = field
                         paid_label = ui.label(f"wpłacono {format_pln(paid[account_type])}")
-                        paid_label.classes("text-xs text-gray-500").mark(f"limit-paid-{year}-{account_type.value}")
+                        paid_label.classes("text-xs k-muted").mark(f"limit-paid-{year}-{account_type.value}")
                         if account_type is AccountType.IKZE:
-                            note = ui.label(_self_employed_note(year)).classes("text-xs text-gray-500 break-words")
+                            note = ui.label(_self_employed_note(year)).classes("text-xs k-muted break-words")
                             note.mark(f"limit-self-employed-{year}")
                 save = ui.button("Ustaw limity", on_click=lambda y=year, f=fields: self._save(y, f))
                 save.props("no-caps flat").classes("mt-2").mark(f"limits-save-{year}")
@@ -139,14 +139,14 @@ def _bar(bar: LimitBar, total: bool) -> None:
         with ui.row().classes("w-full items-baseline"):
             ui.label(bar.account_type.label).classes("font-medium")
             if not total:
-                ui.label(f"łącznie na wszystkich kontach {bar.account_type.label}").classes("text-xs text-gray-500")
+                ui.label(f"łącznie na wszystkich kontach {bar.account_type.label}").classes("text-xs k-muted")
             ui.space()
             if bar.limit is None:
                 ui.label(f"wpłacono {format_pln(bar.paid)}").classes("text-sm")
             else:
                 ui.label(f"{format_pln(bar.paid)} z {format_pln(bar.limit)}").classes("text-sm")
         if bar.limit is None:
-            ui.label(f"Brak limitu na {bar.year} — uzupełnij w Ustawieniach").classes("text-sm text-gray-500")
+            ui.label(f"Brak limitu na {bar.year} — uzupełnij w Ustawieniach").classes("text-sm k-muted")
             return
         share = bar.share or Decimal(0)
         over = bool(bar.over)

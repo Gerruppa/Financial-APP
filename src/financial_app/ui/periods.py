@@ -76,9 +76,7 @@ def period_selector(choice: PeriodChoice) -> None:
     @ui.refreshable
     def shown_range() -> None:
         first_day, last_day = choice.dates()
-        ui.label(f"{format_date(first_day)} – {format_date(last_day)}").classes("text-sm text-gray-600").mark(
-            "period-range"
-        )
+        ui.label(f"{format_date(first_day)} – {format_date(last_day)}").classes("text-sm k-muted").mark("period-range")
 
     current = choice.period
     with ui.row().classes("items-center gap-4").mark("period-selector"):

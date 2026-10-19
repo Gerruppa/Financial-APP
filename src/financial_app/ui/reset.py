@@ -52,7 +52,7 @@ class ClearDataSection:
             ui.label(f"Klasy aktywów wrócą do {len(DEFAULT_ASSET_CLASSES)} domyślnych. Kursy NBP zostają.").classes(
                 "text-sm"
             )
-            ui.label("Przed usunięciem kopia bazy trafi do folderu kopii zapasowych.").classes("text-sm text-gray-600")
+            ui.label("Przed usunięciem kopia bazy trafi do folderu kopii zapasowych.").classes("text-sm k-muted")
             with ui.row().classes("w-full justify-end"):
                 ui.button("Anuluj", on_click=dialog.close).props("flat").mark("clear-data-cancel")
                 ui.button("Dalej", on_click=next_step).props("color=negative").mark("clear-data-next")

@@ -83,7 +83,7 @@ def open_transaction_dialog(
     with dialog, ui.card().classes("w-[460px]"):
         ui.label("Nowa transakcja" if transaction is None else "Edytuj transakcję").classes("text-lg font-bold")
         if not form.accounts:
-            ui.label("Najpierw dodaj konto w zakładce Ustawienia.").classes("text-gray-500")
+            ui.label("Najpierw dodaj konto w zakładce Ustawienia.").classes("k-muted")
             with ui.row().classes("w-full justify-end"):
                 ui.button("Zamknij", on_click=dialog.close).props("flat")
             dialog.open()
@@ -123,7 +123,7 @@ def open_transaction_dialog(
             # Any Series of the type may be picked, e.g. for an older purchase (L-26); the date's own is the default
             series_choice = ui.select({}, label="Seria", with_input=True).classes("w-full")
             series_choice.mark("transaction-bond-series-choice")
-            series_text = ui.label().classes("text-sm text-gray-600").mark("transaction-bond-series")
+            series_text = ui.label().classes("text-sm k-muted").mark("transaction-bond-series")
             rollover = ui.checkbox("z rolowania", value=start.rollover).mark("transaction-rollover")
             # A Dividend without an Instrument is interest, e.g. on the Account's cash
             instrument = ui.select(form.instruments, label="Instrument", value=start.instrument_id, clearable=True)
@@ -131,7 +131,7 @@ def open_transaction_dialog(
             # An Early Redemption names the Lot it redeems (ADR-0007)
             lot = ui.select({}, label="Partia").classes("w-full").mark("transaction-lot")
             if not form.instruments:
-                ui.label("Najpierw dodaj instrument w zakładce Ustawienia.").classes("text-gray-500")
+                ui.label("Najpierw dodaj instrument w zakładce Ustawienia.").classes("k-muted")
             own_dividend_currency = start.dividend_currency
             dividend_currency = ui.select(
                 [own_dividend_currency] if own_dividend_currency else [], label="Waluta", value=own_dividend_currency
@@ -148,7 +148,7 @@ def open_transaction_dialog(
             gross = ui.input(value=texts.gross).classes("w-full").mark("transaction-gross")
             withholding_tax = ui.input(value=texts.withholding_tax).classes("w-full")
             withholding_tax.mark("transaction-withholding-tax")
-            net = ui.label().classes("text-sm text-gray-600").mark("transaction-net")
+            net = ui.label().classes("text-sm k-muted").mark("transaction-net")
         # How it is paid; outside the Instrument fields, as a foreign Deposit or Withdrawal takes a rate too
         paid_from = ui.select({}, label="Płatność").classes("w-full").mark("transaction-paid-from")
         fx_rate = ui.input(value=texts.fx_rate)
@@ -452,7 +452,7 @@ def _confirm_delete(delete: Callable[[ui.dialog], None]) -> None:
     confirmation.on("hide", confirmation.delete)
     with confirmation, ui.card():
         ui.label("Usunąć tę transakcję?").classes("text-lg font-bold")
-        ui.label("Partie i salda zostaną przeliczone bez niej.").classes("text-gray-600")
+        ui.label("Partie i salda zostaną przeliczone bez niej.").classes("k-muted")
         with ui.row().classes("w-full justify-end"):
             ui.button("Anuluj", on_click=confirmation.close).props("flat").mark("cancel-delete")
             ui.button("Usuń", on_click=lambda: delete(confirmation)).props("color=negative").mark("confirm-delete")

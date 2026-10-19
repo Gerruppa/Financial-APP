@@ -166,7 +166,7 @@ def dashboard_charts(
             return
         if history is None:
             with ui.card().classes("w-full").mark("chart-history-pending"):
-                ui.label("Wykresy historii: wyliczanie historii…").classes("text-gray-500")
+                ui.label("Wykresy historii: wyliczanie historii…").classes("k-muted")
             return
         if shows("chart-class-shares"):
             _class_shares_card(history, first, last, account_id)

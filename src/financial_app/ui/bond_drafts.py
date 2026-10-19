@@ -61,10 +61,10 @@ def _coupon_row(engine: Engine, draft: CouponDraft, name_account: bool, on_saved
             ui.label(
                 f"{format_quantity(draft.lot.quantity)} szt. · zakup {format_date(draft.lot.date)} · "
                 f"okres {draft.period} · {format_date(draft.due)}"
-            ).classes("text-sm text-gray-600")
+            ).classes("text-sm k-muted")
         with ui.column().classes("gap-0 items-end"):
             ui.label(f"Wypłata netto {format_pln(draft.net)}").classes("font-medium")
-            ui.label(f"podatek {format_pln(draft.tax)}").classes("text-xs text-gray-500")
+            ui.label(f"podatek {format_pln(draft.tax)}").classes("text-xs k-muted")
 
         def confirm() -> None:
             try:
@@ -87,14 +87,14 @@ def _draft_row(engine: Engine, draft: MaturityDraft, name_account: bool, on_save
             ui.label(
                 f"{format_quantity(draft.lot.quantity)} szt. · zakup {format_date(draft.lot.date)} · "
                 f"wykup {format_date(draft.maturity)}"
-            ).classes("text-sm text-gray-600")
+            ).classes("text-sm k-muted")
         redemption = draft.redemption
         if redemption is None:
-            ui.label("Seria bez wyceny: wpisz wykup przyciskiem „+”.").classes("text-sm text-gray-500")
+            ui.label("Seria bez wyceny: wpisz wykup przyciskiem „+”.").classes("text-sm k-muted")
             return
         with ui.column().classes("gap-0 items-end"):
             ui.label(f"Wypłata netto {format_pln(redemption.net)}").classes("font-medium")
-            ui.label(f"podatek {format_pln(redemption.tax)}").classes("text-xs text-gray-500")
+            ui.label(f"podatek {format_pln(redemption.tax)}").classes("text-xs k-muted")
 
         def redeem() -> None:
             try:
@@ -122,7 +122,7 @@ def _rollover_dialog(engine: Engine, draft: MaturityDraft, on_saved: Callable[[]
         bond_type.classes("w-full").mark("rollover-type")
         quantity = ui.input("Liczba obligacji", value=format_quantity(draft.lot.quantity)).classes("w-full")
         quantity.mark("rollover-quantity")
-        summary = ui.label().classes("text-sm text-gray-600").mark("rollover-summary")
+        summary = ui.label().classes("text-sm k-muted").mark("rollover-summary")
         error = ui.label().classes("text-negative").mark("rollover-error")
 
         def show() -> None:

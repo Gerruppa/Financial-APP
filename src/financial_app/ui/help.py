@@ -24,7 +24,7 @@ def build_help_page(tab_labels: Mapping[str, str]) -> None:
     faq = load_faq()
     with ui.column().classes("w-full max-w-4xl").mark("help"):
         ui.label("Pomoc").classes("text-2xl font-bold")
-        ui.label("Najczęstsze pytania. Kliknij pytanie, aby zobaczyć odpowiedź.").classes("text-gray-500")
+        ui.label("Najczęstsze pytania. Kliknij pytanie, aby zobaczyć odpowiedź.").classes("k-muted")
         search = ui.input("Szukaj w pytaniach i odpowiedziach").props("clearable").classes("w-full")
         search.mark("faq-search")
         with search.add_slot("prepend"):
@@ -47,7 +47,7 @@ def build_help_page(tab_labels: Mapping[str, str]) -> None:
                             ).props("flat no-caps").mark(f"faq-{question.slug}-go")
                     items.append((question.slug, expansion))
             sections.append((column, items))
-        no_match = ui.label("Żadne pytanie nie pasuje do wyszukiwania.").classes("text-gray-500 pt-2")
+        no_match = ui.label("Żadne pytanie nie pasuje do wyszukiwania.").classes("k-muted pt-2")
         no_match.mark("faq-no-match")
         no_match.visible = False
 

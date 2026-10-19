@@ -71,10 +71,10 @@ class ResultsPage:
     def content(self) -> None:
         days = self.history()
         if days is None:
-            ui.label("Wyniki: wyliczanie historii…").classes("text-gray-500").mark("results-pending")
+            ui.label("Wyniki: wyliczanie historii…").classes("k-muted").mark("results-pending")
             return
         if not days:
-            ui.label("Wyniki pojawią się po pierwszej transakcji.").classes("text-gray-500").mark("results-empty")
+            ui.label("Wyniki pojawią się po pierwszej transakcji.").classes("k-muted").mark("results-empty")
             return
         first, last = self.period.dates()
         account_id = self.scope.account_id
@@ -111,10 +111,10 @@ def _tiles(results: PeriodResults) -> None:
     ):
         for key, title, text, note in tiles:
             with ui.card().classes("gap-1"):
-                card_title(title, TILE_INFO.get(key), f"results-{key}", "text-sm text-gray-500")
+                card_title(title, TILE_INFO.get(key), f"results-{key}", "text-sm k-muted")
                 ui.label(text).classes("text-xl font-medium").mark(f"results-{key}")
                 if note:
-                    ui.label(note).classes("text-xs text-gray-500")
+                    ui.label(note).classes("text-xs k-muted")
 
 
 def _inflation_note(inflation: Inflation | None) -> str:

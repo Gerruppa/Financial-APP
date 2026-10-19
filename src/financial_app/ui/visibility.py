@@ -60,7 +60,7 @@ class VisibilitySection:
             ui.label(
                 "Wybierz motyw, co pokazuje Dashboard i które zakładki są w menu. Ukrycie zmienia tylko widok: "
                 "obliczenia i dane zostają bez zmian. Dashboard, Portfolio, Transakcje i Ustawienia są zawsze w menu."
-            ).classes("text-sm text-gray-500")
+            ).classes("text-sm k-muted")
             if self.theme is not None:
                 theme_section(self.theme)
             self.choices()

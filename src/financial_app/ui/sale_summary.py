@@ -74,7 +74,7 @@ class SaleSummaryPage:
         pairs = in_view(sale_pairs(transactions_in_entry_order(self.engine)), self.scope.account_id, first, last)
         stats = sale_stats(pairs)
         if stats is None:
-            ui.label("Brak sprzedaży w tym okresie.").classes("text-gray-500").mark("sale-empty")
+            ui.label("Brak sprzedaży w tym okresie.").classes("k-muted").mark("sale-empty")
             return
         names = {i.id: i.name for i in list_instruments(self.engine)}
         accounts = {a.id: a.name for a in list_accounts(self.engine)}
@@ -107,10 +107,10 @@ def _tiles(stats: SaleStats, names: dict[int, str]) -> None:
     ):
         for key, title, text, note in tiles:
             with ui.card().classes("gap-1"):
-                ui.label(title).classes("text-sm text-gray-500")
+                ui.label(title).classes("text-sm k-muted")
                 ui.label(text).classes("text-xl font-medium").mark(f"sale-{key}")
                 if note:
-                    ui.label(note).classes("text-xs text-gray-500")
+                    ui.label(note).classes("text-xs k-muted")
 
 
 def _table(pairs: list[SalePair], names: dict[int, str], accounts: dict[int, str]) -> None:

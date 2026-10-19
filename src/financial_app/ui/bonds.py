@@ -80,7 +80,7 @@ class BondsPage:
         if not holdings:
             ui.label(
                 "Brak obligacji skarbowych w portfelu. Zakup obligacji dodasz przyciskiem „+” w trybie obligacji."
-            ).classes("text-gray-500").mark("bonds-empty")
+            ).classes("k-muted").mark("bonds-empty")
             return
         with ui.element("div").classes("grid w-full gap-x-4 border-b py-1 font-medium").style(COLUMNS):
             for header in HEADERS:
@@ -91,12 +91,12 @@ class BondsPage:
         self._calendar(bond_calendar(positions, instruments, accounts, bonds, today, self.scope.account_id))
 
     def _series_row(self, holding: SeriesHolding) -> None:
-        row = ui.element("div").classes("grid w-full gap-x-4 border-b py-1 cursor-pointer hover:bg-gray-100")
+        row = ui.element("div").classes("grid w-full gap-x-4 border-b py-1 cursor-pointer k-hover")
         with row.style(COLUMNS).mark("bond-row"):
             with ui.column().classes("gap-0"):
                 ui.label(holding.instrument.name).classes("font-medium")
                 if self.scope.account_id is None:
-                    ui.label(holding.account.name).classes("text-xs text-gray-500")
+                    ui.label(holding.account.name).classes("text-xs k-muted")
             ui.label(format_quantity(holding.quantity)).classes("text-right")
             ui.label(format_pln(holding.paid)).classes("text-right")
             _rate_cell(holding.current, holding.label)
@@ -118,7 +118,7 @@ class BondsPage:
         with ui.column().classes("w-full gap-0").mark("bond-calendar"):
             if not events:
                 ui.label("W najbliższych 12 miesiącach nie przypadają odsetki, rocznice ani wykupy.").classes(
-                    "text-gray-500"
+                    "k-muted"
                 ).mark("calendar-empty")
                 return
             with ui.element("div").classes("grid w-full gap-x-4 border-b py-1 font-medium").style(CALENDAR_COLUMNS):
@@ -136,11 +136,11 @@ class BondsPage:
                 lot = f"zakup {format_date(event.lot.date)} · {format_quantity(event.quantity)} szt."
                 if self.scope.account_id is None:
                     lot = f"{event.account.name} · {lot}"
-                ui.label(lot).classes("text-xs text-gray-500")
+                ui.label(lot).classes("text-xs k-muted")
             with ui.column().classes("gap-0"):
                 ui.label(_event_text(event))
                 if event.label is not None:
-                    ui.label(event.label.value).classes("text-xs text-orange-700").mark("calendar-rate-label")
+                    ui.label(event.label.value).classes("text-xs k-warning").mark("calendar-rate-label")
             _amount_cell(event.gross)
             _amount_cell(event.net)
 
@@ -171,12 +171,10 @@ def _lot_row(held: LotHolding) -> None:
         ui.label(format_pln(held.gross)).classes("text-right")
         with ui.column().classes("gap-0 items-end"):
             if held.net is None:
-                ui.label("—").classes("text-gray-500")
+                ui.label("—").classes("k-muted")
             else:
                 ui.label(format_pln(held.net))
-                ui.label(f"opłata {format_pln(held.fee)} · podatek {format_pln(held.tax)}").classes(
-                    "text-xs text-gray-500"
-                )
+                ui.label(f"opłata {format_pln(held.fee)} · podatek {format_pln(held.tax)}").classes("text-xs k-muted")
         _date_cell(held.next_anniversary)
         _date_cell(held.maturity)
 
@@ -186,16 +184,16 @@ def _rate_cell(value: BondValue | None, label: RateLabel | None) -> None:
     the value rests on; "po koszcie" for a Series not valued yet."""
     with ui.column().classes("gap-0 items-end"):
         if value is None:
-            ui.label("po koszcie").classes("text-gray-500")
+            ui.label("po koszcie").classes("k-muted")
             return
         ui.label(rate_text(value))
         if label is not None:
-            ui.label(label.value).classes("text-xs text-orange-700").mark("bond-rate-label")
+            ui.label(label.value).classes("text-xs k-warning").mark("bond-rate-label")
 
 
 def _net_cell(net: Decimal | None) -> None:
     if net is None:
-        ui.label("—").classes("text-right text-gray-500").mark("bond-net")
+        ui.label("—").classes("text-right k-muted").mark("bond-net")
     else:
         ui.label(format_pln(net)).classes("text-right font-medium").mark("bond-net")
 

@@ -8,7 +8,7 @@ import pytest
 from financial_app.domain.strategy import BandStatus
 from financial_app.domain.themes import Theme
 from financial_app.ui.account_ranking import tile_colours
-from financial_app.ui.theme import BAND_COLOURS, TEXT_COLOURS
+from financial_app.ui.theme import BAND_COLOURS, TEXT_COLOURS, THEME_COLOURS
 
 AA = 4.5
 
@@ -44,3 +44,11 @@ def test_a_treemap_tile_label_is_readable(theme: Theme, share: str | None) -> No
 
 def test_a_golden_tile_without_a_result_is_dark() -> None:
     assert _luminance(tile_colours(Decimal(0), Theme.GOLDEN).background) < 0.05
+
+
+@pytest.mark.parametrize("theme", list(Theme))
+@pytest.mark.parametrize("tone", ["text", "muted", "gain", "loss", "warning"])
+def test_every_text_tone_is_readable_on_a_card_on_the_page_and_on_a_hovered_row(theme: Theme, tone: str) -> None:
+    colours = THEME_COLOURS[theme]
+    for background in ("card", "page", "hover"):
+        assert _contrast(colours[tone], colours[background]) >= AA, background
