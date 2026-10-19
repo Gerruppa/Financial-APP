@@ -57,7 +57,7 @@ def recurring_drafts_list(
         return
     accounts = {account.id: account.name for account in list_accounts(engine)}
     instruments = instrument_labels(engine)
-    with ui.card().classes("w-full mb-4 bg-amber-50").mark("recurring-drafts"):
+    with ui.card().classes("w-full max-w-screen-2xl mb-4 bg-amber-50").mark("recurring-drafts"):
         ui.label("Transakcje cykliczne do zatwierdzenia").classes("text-lg font-bold")
         for draft in drafts:
             rule = draft.rule

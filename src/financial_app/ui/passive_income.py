@@ -68,7 +68,7 @@ class PassiveIncomePage:
         ui.label("Dywidendy i odsetki netto: otrzymane oraz prognozowane kupony obligacji.").classes(
             "text-sm text-gray-600"
         )
-        with ui.column().classes("w-full").mark("passive-income"):
+        with ui.column().classes("w-full max-w-screen-2xl").mark("passive-income"):
             self.content()
 
     @ui.refreshable_method
