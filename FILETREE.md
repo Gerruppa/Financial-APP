@@ -315,6 +315,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 
 ## tests/
 
+- `conftest.py`: Shared test setup: gives NiceGUI should_see and should_not_see 5 s to match, for background tasks on slow CI runners.
 - `test_account_deletion.py`: Tests deleting an Account that nothing names and the refusals naming what still holds an Account
 - `test_account_ranking_domain.py`: Tests Account ranking figures, sorting, best and worst marks and treemap tiles
 - `test_account_ranking_ui.py`: Tests the Dashboard's Account treemap and ranking, profit waterfall and after-tax toggle
