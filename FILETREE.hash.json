@@ -1,6 +1,6 @@
 {
   ".filetree.json": "f8768f99",
-  ".github/workflows/ci.yml": "eb67df10",
+  ".github/workflows/ci.yml": "cdec1787",
   ".gitignore": "f92f235a",
   ".pre-commit-config.yaml": "e1ceb82b",
   "CLAUDE.md": "5b77b4c9",
@@ -26,7 +26,7 @@
   "main.py": "73374504",
   "packaging/kapita.iss": "e741040f",
   "packaging/kapita.spec": "a5b72f24",
-  "pyproject.toml": "0bfeea2d",
+  "pyproject.toml": "096eaab2",
   "scripts/build_installer.ps1": "7f9ad1a0",
   "scripts/create_desktop_shortcut.ps1": "10628799",
   "scripts/make_icons.py": "855d96a7",
