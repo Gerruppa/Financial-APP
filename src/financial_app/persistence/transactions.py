@@ -67,7 +67,8 @@ def update_transaction(engine: Engine, transaction_id: int, draft: TransactionDr
 
     Blocked with InsufficientQuantityError if a Sell, this one or a later one, would lose its cover.
     An imported Transaction keeps its Origin and fingerprint, so that importing its file again still skips it, and a
-    confirmed Recurring Rule Draft the occurrence it covers (issue #97).
+    confirmed Recurring Rule Draft the occurrence it covers (issue #97), and a Term Deposit's interest the period it
+    pays (issue #160).
     """
     with Session(engine) as session, session.begin():
         row = get_row(session, transaction_id)
@@ -77,6 +78,8 @@ def update_transaction(engine: Engine, transaction_id: int, draft: TransactionDr
             external_id=row.external_id,
             recurring_rule_id=row.recurring_rule_id,
             recurring_occurrence=row.recurring_occurrence,
+            term_deposit_id=row.term_deposit_id,
+            term_deposit_period=row.term_deposit_period,
         )
         check_references(session, draft)
         _check_coverage(session, draft, replacing=row)
@@ -205,6 +208,8 @@ def fill_row(row: TransactionRow, draft: TransactionDraft) -> None:
     row.lot_id = draft.lot_id
     row.recurring_rule_id = draft.recurring_rule_id
     row.recurring_occurrence = draft.recurring_occurrence
+    row.term_deposit_id = draft.term_deposit_id
+    row.term_deposit_period = draft.term_deposit_period
 
 
 def _text(value: Decimal | None) -> str | None:
@@ -242,6 +247,8 @@ def to_transaction(row: TransactionRow) -> Transaction:
         lot_id=row.lot_id,
         recurring_rule_id=row.recurring_rule_id,
         recurring_occurrence=row.recurring_occurrence,
+        term_deposit_id=row.term_deposit_id,
+        term_deposit_period=row.term_deposit_period,
     )
 
 

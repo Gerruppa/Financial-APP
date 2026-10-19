@@ -1,8 +1,9 @@
-"""The Obligacje tab (spec 3.4.1, L-4): the Bond Series held in the View Scope, each expanding to its Lots, with what
-was paid in, the current period and its rate (labelled when MF has not published it), the gross value, the net value
-after the early-redemption fee and the tax the Account's Tax Regime withholds, the next anniversary and the maturity.
-Above them, the "Do zatwierdzenia" list of the Lots held past their maturity (L-6); below them, the calendar of the
-coupons, anniversaries and maturities over the next 12 months (L-9)."""
+"""The Dochód stały tab (spec 3.4.1, L-4; issue #160): the Term Deposits of the View Scope (``ui/term_deposits.py``),
+then the Bond Series held, each expanding to its Lots, with what was paid in, the current period and its rate
+(labelled when MF has not published it), the gross value, the net value after the early-redemption fee and the tax
+the Account's Tax Regime withholds, the next anniversary and the maturity. Above them, the "Do zatwierdzenia" list of
+the Lots held past their maturity (L-6) and of the deposits' interest and maturities; below the bonds, the calendar of
+the coupons, anniversaries and maturities over the next 12 months (L-9)."""
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -21,6 +22,7 @@ from financial_app.sources.nbp import NbpRates
 from financial_app.sources.todays_view import todays_view
 from financial_app.ui.bond_drafts import drafts_list
 from financial_app.ui.changes import TODAYS_VALUE
+from financial_app.ui.term_deposits import DepositsSection
 from financial_app.ui.view_scope import ViewScope
 
 COLUMNS = "grid-template-columns: minmax(8rem, 2fr) repeat(7, minmax(6rem, 1fr))"
@@ -43,7 +45,7 @@ CALENDAR_HEADERS = ("Data", "Seria", "Zdarzenie", "Brutto", "Netto")
 
 @dataclass
 class BondsPage:
-    """The Obligacje tab of the View Scope; the bonds are valued at the end of the NBP Rates' today, as the
+    """The Dochód stały tab of the View Scope; the bonds are valued at the end of the NBP Rates' today, as the
     Portfolio values them."""
 
     # The changes it redraws on (ui/changes.py)
@@ -54,13 +56,15 @@ class BondsPage:
     scope: ViewScope
     # Called once a Draft is confirmed, as after any saved Transaction
     on_saved: Callable[[], None] = field(default=lambda: None)
+    # Called once a Term Deposit is added, edited, ended, renewed or deleted
+    on_deposits_changed: Callable[[], None] = field(default=lambda: None)
 
     def refresh(self) -> None:
         """Redraw the tab if it is on screen (e.g. after a save, a price refresh or a scope change)."""
         self.content.refresh()
 
     def build(self) -> None:
-        ui.label("Obligacje").classes("text-2xl font-bold")
+        ui.label("Dochód stały").classes("text-2xl font-bold")
         with ui.column().classes("w-full max-w-6xl gap-0").mark("bonds"):
             self.content()
 
@@ -68,7 +72,9 @@ class BondsPage:
     def content(self) -> None:
         view = todays_view(self.engine, self.rates)
         today = view.today
-        drafts_list(self.engine, today, self.scope.account_id, self.on_saved)
+        drafts_list(self.engine, today, self.scope.account_id, self.on_saved, self.on_deposits_changed)
+        DepositsSection(self.engine, view, self.scope.account_id, self.on_deposits_changed, self.on_saved).build()
+        ui.label("Obligacje").classes("text-lg font-bold mt-6")
         positions, instruments, accounts, bonds = view.positions, view.instruments, view.accounts, view.bonds
         holdings = bond_holdings(positions, instruments, accounts, bonds, today, self.scope.account_id)
         if not holdings:

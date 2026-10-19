@@ -24,7 +24,8 @@ Typ konta decyduje o podatku:
 - **IKZE**: wpłaty odliczasz od dochodu, przy wypłacie płacisz 10% od całej kwoty; wpłaty mają roczny limit.
 - **OIPE**, **PPK**, **OKI**: konta emerytalne i inwestycyjne o własnych zasadach podatkowych.
 - **Obligacje**: konto na obligacje skarbowe detaliczne (np. w PKO BP); zakup od razu proponuje tryb obligacji.
-- **Lokata / oszczędności** i **Inne**: wszystko pozostałe.
+- **Lokata / oszczędności**: rachunek w banku; od odsetek bank pobiera 19% podatku Belki. Na takim koncie założysz lokatę terminową (pytanie **Jak dodać lokatę terminową?**).
+- **Inne**: wszystko pozostałe.
 
 Pole **Opłata za przewalutowanie %** wypełnij, jeśli broker pobiera prowizję za wymianę waluty przy zakupie zagranicznych papierów. Konto, którego już nie używasz, oznacz jako nieaktywne przełącznikiem **Aktywne**.
 
@@ -75,7 +76,21 @@ Przejdź do: /obligacje
 2. Kliknij **„+”**, wybierz to konto i **Typ** „Zakup”. Pole **Obligacje skarbowe detaliczne** jest zaznaczone, więc zamiast instrumentu wybierasz typ obligacji (EDO, COI, ROR…) i serię; zakup z zamiany zaznacz polem **z rolowania**.
 3. Wpisz **Liczbę** obligacji i **Zapisz**. Seria (np. EDO1036) powstaje sama.
 
-Wartość obligacji aplikacja liczy sama z listów emisyjnych Ministerstwa Finansów, inflacji GUS i stopy referencyjnej NBP, pobieranych razem z wycenami najwyżej raz dziennie. Zakładka **Obligacje** pokazuje **Wartość netto** (po opłacie za wcześniejszy wykup i podatku), a na górze **Do zatwierdzenia**: odsetki i wykupy, które przyszły, z przyciskami **Zatwierdź odsetki**, **Zatwierdź wykup** i **Roluj do…**.
+Wartość obligacji aplikacja liczy sama z listów emisyjnych Ministerstwa Finansów, inflacji GUS i stopy referencyjnej NBP, pobieranych razem z wycenami najwyżej raz dziennie. Zakładka **Dochód stały**, w sekcji **Obligacje**, pokazuje **Wartość netto** (po opłacie za wcześniejszy wykup i podatku), a na górze **Do zatwierdzenia**: odsetki i wykupy, które przyszły, z przyciskami **Zatwierdź odsetki**, **Zatwierdź wykup** i **Roluj do…**.
+
+## Jak dodać lokatę terminową? {#lokaty}
+Przejdź do: /obligacje
+
+1. Załóż konto z **Typem konta** „Lokata / oszczędności” (np. „mBank lokaty”).
+2. W zakładce **Dochód stały**, w sekcji **Lokaty**, kliknij **Dodaj lokatę**.
+3. Wypełnij pola **Kwota (zł)**, **Data założenia**, **Okres** z **Jednostką** (miesięcy albo dni), **Oprocentowanie (% w skali roku)** i **Kapitalizacja odsetek** (na koniec, co miesiąc, co kwartał, co pół roku, co rok). Zaznacz **Odnawialna**, jeśli bank sam ją przedłuża.
+4. Jeśli kapitału nie ma jeszcze na koncie, w polu **Zapisz też przelanie kapitału** wybierz „Wpłata na konto lokaty” albo „Transfer z konta …”. Potem **Zapisz**.
+
+Okno od razu pokazuje datę zapadalności i odsetki netto na koniec. Odsetki aplikacja liczy za każdy okres kapitalizacji: kapitał × oprocentowanie × liczba dni / 365, z 19% podatku Belki. Przy kapitalizacji w trakcie lokaty odsetki netto powiększają kapitał następnego okresu.
+
+Odsetki narosłe od początku okresu (po podatku) liczą się do wartości konta na Dashboardzie, w Portfolio i w historii. Gdy okres się kończy, na górze zakładki w **Do zatwierdzenia** pojawiają się odsetki do zatwierdzenia (**Zatwierdź odsetki** albo **Edytuj…**, jeśli bank naliczył inaczej). W dniu zapadalności wybierasz **Zakończ** albo **Odnów…** (z nowym oprocentowaniem).
+
+Lokatę zerwaną przed terminem kliknij na liście i użyj **Zerwij lokatę**: odsetki za trwający okres przepadają. Jeśli bank mimo to wypłacił jakieś odsetki, zapisz je przyciskiem **„+”** jako **Dywidenda / odsetki**. Gdy wypłata z konta sięga kapitału trwającej lokaty, aplikacja to zapisze, ale ostrzeże.
 
 ## Jak zapisać sprzedaż, dywidendę, odsetki, koszt albo przelew między kontami? {#inne-transakcje}
 Przejdź do: /transakcje
@@ -138,7 +153,7 @@ Przejdź do: /ustawienia
 W **Ustawieniach** sekcja **Instrumenty bez wyceny** wymienia posiadane instrumenty bez automatycznej ceny i powód: brak symbolu w źródle, błąd przy ostatnim odświeżeniu albo brak notowania. Kliknij wiersz, aby otworzyć instrument, i:
 
 - wpisz **Symbol w źródle** (np. **Symbol Yahoo** „ISAC.L”, **Symbol Bossa** „CDR”); przycisk **Sprawdź** od razu pobiera cenę na próbę;
-- albo wypełnij pole **Cena ręczna**, jeśli żadne źródło nie notuje instrumentu (np. lokata, nieruchomość).
+- albo wypełnij pole **Cena ręczna**, jeśli żadne źródło nie notuje instrumentu (np. nieruchomość). Lokatę bankową zapisz jako lokatę terminową (pytanie **Jak dodać lokatę terminową?**).
 
 Potem odśwież wyceny ikoną w nagłówku.
 

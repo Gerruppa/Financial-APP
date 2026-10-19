@@ -14,11 +14,14 @@ from financial_app.domain.history import ONE_DAY
 from financial_app.domain.instruments import Instrument
 from financial_app.domain.portfolio_history import DayValue, HistoryPrice, daily_history
 from financial_app.domain.prices import PriceSourceError
+from financial_app.domain.term_deposits import Accruals, tax_rates_of
 from financial_app.domain.transactions import PLN, Transaction
+from financial_app.persistence.accounts import list_accounts
 from financial_app.persistence.benchmarks import list_benchmarks
 from financial_app.persistence.bond_series import load_bond_data
 from financial_app.persistence.history import history_prices, nbp_rates_between
 from financial_app.persistence.instruments import list_instruments
+from financial_app.persistence.term_deposits import list_deposits
 from financial_app.persistence.transactions import list_transactions, transactions_in_entry_order
 from financial_app.sources.history import QuoteHistory
 from financial_app.sources.nbp import NbpRates
@@ -37,6 +40,7 @@ class HistoryInputs:
     first: date
     last: date
     bonds: BondData = field(default_factory=BondData)
+    accruals: Accruals | None = None
 
 
 @dataclass(frozen=True)
@@ -130,6 +134,7 @@ class PortfolioHistory:
             first,
             last,
             load_bond_data(self.engine),
+            Accruals(list_deposits(self.engine), tax_rates_of(list_accounts(self.engine)), transactions),
         )
 
     async def values(self) -> list[DayValue]:
@@ -150,6 +155,7 @@ class PortfolioHistory:
                 inputs.first,
                 inputs.last,
                 inputs.bonds,
+                inputs.accruals,
             )
         if generation == self._generation:
             self._cached = values

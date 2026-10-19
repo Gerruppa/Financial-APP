@@ -19,7 +19,8 @@ class AccountValue:
     """In PLN: the PLN Cash Balance ``cash``; ``open_positions``, the Positions and the foreign cash; ``unrealized``,
     the Positions' result at their prices plus the foreign cash's unrealised FX result; ``realized_fx``, the FX result
     of the foreign cash already spent (both FX parts nothing when the Account excludes them); ``fx``, the foreign cash's
-    whole FX result, shown even when excluded; ``holds``, whether the Account holds cash, a Position or foreign cash."""
+    whole FX result, shown even when excluded; ``holds``, whether the Account holds cash, a Position or foreign cash;
+    ``accrued``, the interest its Term Deposits earned and not paid into the cash yet, net of Belka (issue #160)."""
 
     cash: Decimal
     open_positions: Decimal
@@ -27,10 +28,11 @@ class AccountValue:
     realized_fx: Decimal
     fx: Decimal
     holds: bool
+    accrued: Decimal = Decimal(0)
 
     @property
     def value(self) -> Decimal:
-        return self.cash + self.open_positions
+        return self.cash + self.open_positions + self.accrued
 
     @property
     def result(self) -> Decimal:
@@ -45,11 +47,13 @@ def account_value(
     foreign: Iterable[ForeignCash],
     prices: Mapping[int, UnitPrice | None],
     rates: Mapping[str, Decimal],
+    accrued: Decimal = Decimal(0),
 ) -> AccountValue:
     """The value of ``account`` holding ``cash`` PLN and its own of ``positions`` (at ``prices``, PLN per unit by
-    Instrument id) and ``foreign`` cash (at ``rates``, PLN per unit by currency)."""
+    Instrument id) and ``foreign`` cash (at ``rates``, PLN per unit by currency), and ``accrued`` net interest of its
+    Term Deposits."""
     open_positions = unrealized = realized_fx = fx = Decimal(0)
-    holds = bool(cash)
+    holds = bool(cash or accrued)
     for position in (p for p in positions if p.account_id == account.id):
         holds = True
         price = prices.get(position.instrument_id)
@@ -65,7 +69,7 @@ def account_value(
         if not account.exclude_fx_result:
             realized_fx += balance.realized_result
             unrealized += unrealised_fx
-    return AccountValue(cash, open_positions, unrealized, realized_fx, fx, holds)
+    return AccountValue(cash, open_positions, unrealized, realized_fx, fx, holds, accrued)
 
 
 def is_listed(account: Account, value: AccountValue) -> bool:

@@ -90,6 +90,14 @@ _Avoid_: operation, trade, entry
 A Deposit, Buy, Cost or Cash Transfer the user repeats on an Account (monthly, quarterly, half-yearly or yearly, on a day of the month), with its planned amount; a Buy of a Bond Series repeats its bond type, whichever month's Series it buys. Each of its occurrences due by today and not matched by a Transaction is a Draft; an occurrence can be skipped for good.
 _Avoid_: standing order, schedule, subscription
 
+**Term Deposit** (Lokata terminowa):
+A bank deposit on an Account of the Deposit type: a principal in PLN from a start date for a term of months or days at an annual rate, its interest capitalised at maturity or every month, quarter, half-year or year. Each capitalisation period earns the capital × the rate × its actual days / 365, rounded to the grosz, less Belka rounded to the grosz; a period capitalised before maturity adds its net interest to the next period's capital. Each period ended and not paid by an interest Dividend is a Draft, and so is its maturity, ended or renewed from that day; a deposit broken before maturity forfeits the period running then.
+_Avoid_: savings account, lokata (alone)
+
+**Accrued Interest** (Narosłe odsetki):
+The interest a Term Deposit has earned and not yet paid into the cash, net of Belka: the periods ended and not paid, and the running period's days so far. It counts in its Account's value, as cash.
+_Avoid_: pending interest, unpaid interest
+
 **Dividend** (Dywidenda / odsetki):
 A payout of an Instrument, or interest (with or without an Instrument), recorded with its gross amount and the withholding tax taken at source, both in its own currency. The net amount goes into PLN cash (converted) or foreign cash of the same currency. A Bond Series' coupon is recorded as interest naming the Lot it was paid on.
 _Avoid_: coupon, income
@@ -177,11 +185,11 @@ Selling a Bond Series back to the issuer before maturity: it names its Lot (ADR-
 _Avoid_: sale, early sell
 
 **Net Value** (Wartość netto):
-What redeeming one bond of a Bond Series' Lot today would pay, a Lot's being that times its bonds: the bond's gross value less the early-redemption fee (none at maturity) and the tax the Account's Tax Regime withholds on its profit. Shown in the Obligacje tab; the Dashboard's after-tax toggle takes it.
+What redeeming one bond of a Bond Series' Lot today would pay, a Lot's being that times its bonds: the bond's gross value less the early-redemption fee (none at maturity) and the tax the Account's Tax Regime withholds on its profit. Shown in the Dochód stały tab; the Dashboard's after-tax toggle takes it.
 _Avoid_: after-tax value, redemption value
 
 **Draft** (Szkic):
-A Transaction the app proposes for confirmation (a maturity redemption, a Rollover, a bond coupon or a Recurring Rule's occurrence), computed from what is due and not yet recorded, never stored; confirming it saves an ordinary Transaction.
+A Transaction the app proposes for confirmation (a maturity redemption, a Rollover, a bond coupon, a Recurring Rule's occurrence or a Term Deposit's interest), computed from what is due and not yet recorded, never stored; confirming it saves an ordinary Transaction. A Term Deposit's maturity is a Draft too, confirmed by ending or renewing the deposit.
 _Avoid_: pending transaction, suggestion
 
 **Rollover** (Zamiana):

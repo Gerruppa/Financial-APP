@@ -14,6 +14,7 @@ from collections.abc import Collection, Sequence
 from dataclasses import dataclass, replace
 from decimal import Decimal
 
+from financial_app.domain.term_deposits import AccruedInterest
 from financial_app.domain.transactions import TransactionDraft, TransactionType, costs_by_account
 
 
@@ -38,15 +39,21 @@ class ProfitSources:
 
 
 def profit_sources(
-    transactions: Sequence[TransactionDraft], account_ids: Collection[int], result: Decimal, fx: Decimal
+    transactions: Sequence[TransactionDraft],
+    account_ids: Collection[int],
+    result: Decimal,
+    fx: Decimal,
+    accrued: AccruedInterest | None = None,
 ) -> ProfitSources:
     """The result by source of the Accounts ``account_ids`` (the View Scope); ``result`` is their Positions' and
     foreign cash's unrealised and realised result (``Totals.unrealized`` + ``Totals.realized``) and ``fx`` its FX
-    part."""
+    part. ``accrued`` is their Term Deposits' interest not paid yet (issue #160): gross interest less its tax."""
     costs = costs_by_account(transactions)
     spent = sum((costs.get(account, Decimal(0)) for account in account_ids), Decimal(0))
-    total = result
-    dividends = interest = taxes = Decimal(0)
+    accrued = accrued or AccruedInterest()
+    total = result + accrued.net
+    dividends = Decimal(0)
+    interest, taxes = accrued.gross, -accrued.tax
     for t in (t for t in transactions if t.account_id in account_ids):
         if t.transaction_type is TransactionType.COST:
             total -= t.actual_amount

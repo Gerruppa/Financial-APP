@@ -64,7 +64,7 @@ TABS = [
     Tab("Portfolio", "/portfolio", "account_balance_wallet"),
     Tab("Transakcje", "/transakcje", "receipt_long"),
     Tab("Strategie inwestycyjne", "/strategie", "flag"),
-    Tab("Obligacje", "/obligacje", "savings"),
+    Tab("Dochód stały", "/obligacje", "savings"),
     Tab("Multi-asset", "/multi-asset", "pie_chart"),
     Tab("Benchmarki", "/benchmarki", "compare_arrows"),
     Tab("Podsumowanie sprzedaży", "/sprzedaz", "sell"),
@@ -120,7 +120,13 @@ def build_shell(
     results_page = ResultsPage(engine, scope, period, lambda: shared.days)
     transactions_page = TransactionsPage(engine, rates, scope, events.publish)
     portfolio_page = PortfolioPage(engine, rates, scope)
-    bonds_page = BondsPage(engine, rates, scope, on_saved=lambda: events.publish(Change.TRANSACTIONS))
+    bonds_page = BondsPage(
+        engine,
+        rates,
+        scope,
+        on_saved=lambda: events.publish(Change.TRANSACTIONS),
+        on_deposits_changed=lambda: events.publish(Change.TERM_DEPOSITS),
+    )
     unpriced = UnpricedSection(engine)
     sale_page = SaleSummaryPage(engine, scope, period)
     income_page = PassiveIncomePage(engine, rates, scope)
@@ -145,7 +151,10 @@ def build_shell(
         background_tasks.create(load_history(), name="history")
 
     # First, so that a change outdating History has it invalidated before any tab redraws
-    events.subscribe(history_outdated, {Change.TRANSACTIONS, Change.PRICES, Change.BOND_DATA, Change.INSTRUMENTS})
+    events.subscribe(
+        history_outdated,
+        {Change.TRANSACTIONS, Change.PRICES, Change.BOND_DATA, Change.INSTRUMENTS, Change.TERM_DEPOSITS},
+    )
 
     # A Multi-asset Split changes the value History counts in each Asset Class
     multi_asset_page = MultiAssetPage(engine, rates, scope, on_split_saved=lambda: events.publish(Change.INSTRUMENTS))
@@ -242,7 +251,9 @@ def build_shell(
         # MF's new rates may value a matured Series, so the bond data refresh redraws it too
         drafts_state = ui.refreshable(lambda: drafts_count(engine, rates.today()))
         drafts_state()
-        events.subscribe(drafts_state.refresh, {Change.TRANSACTIONS, Change.PRICES, Change.BOND_DATA})
+        events.subscribe(
+            drafts_state.refresh, {Change.TRANSACTIONS, Change.PRICES, Change.BOND_DATA, Change.TERM_DEPOSITS}
+        )
         # The Recurring Rules' Drafts are counted apart from the bonds' (issue #97)
         recurring_state = ui.refreshable(lambda: recurring_drafts_count(engine, rates.today()))
         recurring_state()

@@ -62,7 +62,7 @@ ELEMENTS = (
     Element("chart-drawdown", "Drawdown", CHARTS),
     Element("tab-wyniki", "Wyniki", TABS),
     Element("tab-strategie", "Strategie inwestycyjne", TABS),
-    Element("tab-obligacje", "Obligacje", TABS),
+    Element("tab-obligacje", "Dochód stały", TABS),
     Element("tab-multi-asset", "Multi-asset", TABS),
     Element("tab-benchmarki", "Benchmarki", TABS),
     Element("tab-sprzedaz", "Podsumowanie sprzedaży", TABS),

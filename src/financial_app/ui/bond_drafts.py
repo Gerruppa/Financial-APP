@@ -1,6 +1,7 @@
-"""The "Do zatwierdzenia" list of the Obligacje tab and its count in the header (spec 3.4.1, L-6, L-8): each Lot of a
-Bond Series held past its maturity, confirmed as its redemption or as a Rollover ("roluj do…") into a new Series, and
-each coupon of a COI, ROR or DOR Lot paid but not entered, confirmed as interest."""
+"""The "Do zatwierdzenia" list of the Dochód stały tab and its count in the header (spec 3.4.1, L-6, L-8): each Lot of
+a Bond Series held past its maturity, confirmed as its redemption or as a Rollover ("roluj do…") into a new Series,
+and each coupon of a COI, ROR or DOR Lot paid but not entered, confirmed as interest; with them the Term Deposits'
+interest and maturities (issue #160, ``ui/deposit_drafts.py``)."""
 
 from collections.abc import Callable
 from datetime import date
@@ -8,28 +9,48 @@ from datetime import date
 from nicegui import ui
 from sqlalchemy import Engine
 
-from financial_app.domain.bond_drafts import ROLLOVER_TYPES, CouponDraft, MaturityDraft
+from financial_app.domain.bond_drafts import ROLLOVER_TYPES, BondDraft, CouponDraft, MaturityDraft
 from financial_app.domain.bonds import BondType
 from financial_app.domain.formatting import format_date, format_pln, format_quantity, parse_number
 from financial_app.domain.instruments import InstrumentError
+from financial_app.domain.term_deposits import DepositDraft, DepositMaturityDraft, InterestDraft
 from financial_app.domain.transactions import TransactionError
 from financial_app.persistence.bond_drafts import confirm_draft, confirm_rollover, pending_drafts, rollover_price
+from financial_app.persistence.deposit_drafts import pending_deposit_drafts
 from financial_app.sources.transaction_saving import checked_save
+from financial_app.ui.deposit_drafts import interest_row, maturity_row
 from financial_app.ui.save_warnings import show_warnings
 
 
-def drafts_list(engine: Engine, today: date, account_id: int | None, on_saved: Callable[[], None]) -> None:
-    """The Drafts due in the View Scope (``account_id``), nothing when there are none."""
-    drafts = pending_drafts(engine, today, account_id)
+def drafts_list(
+    engine: Engine,
+    today: date,
+    account_id: int | None,
+    on_saved: Callable[[], None],
+    on_deposits_changed: Callable[[], None],
+) -> None:
+    """The Drafts due in the View Scope (``account_id``), bonds' and Term Deposits' by their day, nothing when there
+    are none. ``on_saved`` runs after a Draft is confirmed as a Transaction, ``on_deposits_changed`` after a deposit
+    is ended or renewed."""
+    drafts: list[BondDraft | DepositDraft] = [
+        *pending_drafts(engine, today, account_id),
+        *pending_deposit_drafts(engine, today, account_id),
+    ]
     if not drafts:
         return
+    name_account = account_id is None
     with ui.card().classes("w-full mb-4 bg-amber-50").mark("bond-drafts"):
         ui.label("Do zatwierdzenia").classes("text-lg font-bold")
-        for draft in drafts:
-            if isinstance(draft, CouponDraft):
-                _coupon_row(engine, draft, account_id is None, on_saved)
-            else:
-                _draft_row(engine, draft, account_id is None, on_saved)
+        for draft in sorted(drafts, key=lambda d: d.due):
+            match draft:
+                case CouponDraft():
+                    _coupon_row(engine, draft, name_account, on_saved)
+                case MaturityDraft():
+                    _draft_row(engine, draft, name_account, on_saved)
+                case InterestDraft():
+                    interest_row(engine, draft, name_account, on_saved)
+                case DepositMaturityDraft():
+                    maturity_row(engine, draft, name_account, on_deposits_changed)
 
 
 def _coupon_row(engine: Engine, draft: CouponDraft, name_account: bool, on_saved: Callable[[], None]) -> None:
@@ -135,8 +156,9 @@ def _rollover_dialog(engine: Engine, draft: MaturityDraft, on_saved: Callable[[]
 
 
 def drafts_count(engine: Engine, today: date) -> None:
-    """ "Do zatwierdzenia: n" in the header while any Draft is due in any Account; clicking opens the Obligacje tab."""
-    count = len(pending_drafts(engine, today))
+    """ "Do zatwierdzenia: n" in the header while any bond or Term Deposit Draft is due in any Account; clicking opens
+    the Dochód stały tab."""
+    count = len(pending_drafts(engine, today)) + len(pending_deposit_drafts(engine, today))
     if not count:
         return
     ui.button(f"Do zatwierdzenia: {count}", on_click=lambda: ui.navigate.to("/obligacje")).props(
