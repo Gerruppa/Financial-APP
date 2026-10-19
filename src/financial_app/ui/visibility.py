@@ -20,6 +20,7 @@ from financial_app.domain.ui_visibility import (
     visibility_setting,
 )
 from financial_app.persistence.settings import UI_HIDDEN, load_setting, save_setting
+from financial_app.ui.theme import ThemeChoice, theme_section
 
 PRESETS = {Profile.BASIC: "basic", Profile.FULL: "full"}
 
@@ -49,16 +50,19 @@ class Layout:
 class VisibilitySection:
     """The Ustawienia card with the View Profile, its presets and a switch per element, grouped."""
 
-    def __init__(self, layout: Layout) -> None:
+    def __init__(self, layout: Layout, theme: ThemeChoice | None = None) -> None:
         self.layout = layout
+        self.theme = theme
 
     def build(self) -> None:
         with ui.card().classes("w-full").mark("ui-visibility"):
             ui.label("Wygląd i widoczność").classes("text-lg font-bold")
             ui.label(
-                "Wybierz, co pokazuje Dashboard i które zakładki są w menu. Ukrycie zmienia tylko widok: obliczenia "
-                "i dane zostają bez zmian. Dashboard, Portfolio, Transakcje i Ustawienia są zawsze w menu."
+                "Wybierz motyw, co pokazuje Dashboard i które zakładki są w menu. Ukrycie zmienia tylko widok: "
+                "obliczenia i dane zostają bez zmian. Dashboard, Portfolio, Transakcje i Ustawienia są zawsze w menu."
             ).classes("text-sm text-gray-500")
+            if self.theme is not None:
+                theme_section(self.theme)
             self.choices()
 
     @ui.refreshable_method

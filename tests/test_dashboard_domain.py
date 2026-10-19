@@ -9,7 +9,7 @@ from financial_app.domain.accounts import Account, AccountType
 from financial_app.domain.bond_valuation import BondData
 from financial_app.domain.bonds import BondSeries, CpiReading, SeriesTerms
 from financial_app.domain.currencies import NbpRate
-from financial_app.domain.dashboard import dashboard
+from financial_app.domain.dashboard import Totals, dashboard
 from financial_app.domain.instruments import Instrument
 from financial_app.domain.portfolio_history import DayValue
 from financial_app.domain.transactions import TransactionDraft, TransactionType, buy_or_sell, currency_exchange
@@ -319,3 +319,20 @@ def test_a_bond_series_deducts_its_fee_and_withheld_tax_after_tax_not_offset_by_
     assert bonds_row.totals.estimated_tax == Decimal("38.90")
     assert xtb_row.totals.estimated_tax == Decimal(0)
     assert board.totals.estimated_tax == Decimal("38.90")
+
+
+def test_an_amounts_share_of_the_value_and_the_profits_share_of_net_deposits() -> None:
+    totals = Totals(Decimal(1000), Decimal(500), Decimal(1500), Decimal(50), Decimal(0), Decimal(0), Decimal(30))
+
+    assert totals.share_of_value(totals.cash) == Decimal("0.25")
+    assert totals.share_of_value(totals.costs) == Decimal("0.015")
+    assert totals.profit_share() == Decimal(1)
+
+
+def test_shares_are_none_without_a_value_or_net_deposits() -> None:
+    empty = Totals(Decimal(0), Decimal(0), Decimal(0), Decimal(0), Decimal(0), Decimal(0), Decimal(0))
+    computing = Totals(None, Decimal(100), Decimal(0), Decimal(0), Decimal(0), Decimal(0), Decimal(0))
+
+    assert empty.share_of_value(Decimal(5)) is None
+    assert empty.profit_share() is None
+    assert computing.profit_share() is None

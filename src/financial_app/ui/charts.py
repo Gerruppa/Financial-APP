@@ -31,6 +31,7 @@ from financial_app.domain.portfolio_history import DayValue
 from financial_app.domain.profit_sources import ProfitSources
 from financial_app.domain.transactions import TransactionDraft
 from financial_app.ui.info import card_title
+from financial_app.ui.theme import LABEL_COLOURS, LINE_COLOURS, current_theme, echart
 
 # ECharts formats in the browser, so its tooltips and axes write numbers as domain/formatting.py does: a decimal comma,
 # non-breaking spaces between thousands (4-digit numbers too) and before "zł" and "%"
@@ -50,7 +51,7 @@ _AXIS_PLN = (
 )
 _AXIS_PERCENT = f"value => value + '{_NBSP}%'"
 # A waterfall bar is a rectangle from the running total before it (value[1]) to after it (value[2]), its signed
-# change (value[3]) in whole złoty above it
+# change (value[3]) in whole złoty above it, in the Theme's ``{label}`` colour
 _WATERFALL_CHANGE = (
     "value => new Intl.NumberFormat('pl-PL', {maximumFractionDigits: 0, useGrouping: 'always',"
     rf" signDisplay: 'exceptZero'}}).format(value).replace(/\s/g, '{_NBSP}').replace('\u2212', '-') + '{_NBSP}zł'"
@@ -64,7 +65,7 @@ _WATERFALL_BAR = f"""(params, api) => {{
         {{type: 'rect', shape: {{x: top[0] - width / 2, y: top[1], width: width, height: bottom[1] - top[1]}},
          style: {{fill: api.visual('color')}}}},
         {{type: 'text', style: {{text: change(api.value(3)), x: top[0], y: top[1] - 4, align: 'center',
-         verticalAlign: 'bottom', fill: '#424242', fontSize: 11}}}},
+         verticalAlign: 'bottom', fill: '{{label}}', fontSize: 11}}}},
     ]}};
 }}"""
 _GAIN, _LOSS, _RESULT = "#2e7d32", "#c62828", "#3f51b5"
@@ -179,6 +180,65 @@ def dashboard_charts(
             drawdown_chart(history, first, last, account_id)
 
 
+def hero_value_chart(history: Sequence[DayValue], first: date, last: date, account_id: int | None) -> None:
+    """The value over the period as a line over a fading area, in the Theme's colour, marked ``chart-hero`` (the
+    Dashboard's main card, issue #174)."""
+    colours = LINE_COLOURS[current_theme()]
+    points = value_series(history, first, last, account_id)
+    options = {
+        "tooltip": {"trigger": "axis", ":valueFormatter": PLN_FORMATTER},
+        "grid": {"containLabel": True, "left": 32, "right": 8, "top": 12, "bottom": 8},
+        "xAxis": {
+            "type": "category",
+            "boundaryGap": False,
+            "data": [format_date(point.day) for point in points],
+            "axisTick": {"show": False},
+        },
+        "yAxis": {"type": "value", "scale": True, "position": "right", "axisLabel": {":formatter": _AXIS_PLN}},
+        "series": [
+            {
+                "name": "Wartość portfela",
+                "type": "line",
+                "showSymbol": False,
+                "data": [_pln(point.value) for point in points],
+                "lineStyle": {"color": colours["value"], "width": 2},
+                "itemStyle": {"color": colours["value"]},
+                "areaStyle": {"color": _fading(colours["area"])},
+            }
+        ],
+    }
+    echart(options).classes("w-full h-64").mark("chart-hero")
+
+
+def sparkline(values: Sequence[Decimal], name: str) -> None:
+    """A small line of ``values`` with no axes, green when it ends above where it starts, red below, marked
+    ``sparkline-<name>`` (an Account's card)."""
+    colours = LINE_COLOURS[current_theme()]
+    colour = colours["gain"] if not values or values[-1] >= values[0] else colours["loss"]
+    options = {
+        "grid": {"left": 0, "right": 0, "top": 2, "bottom": 2},
+        "xAxis": {"type": "category", "show": False, "boundaryGap": False},
+        "yAxis": {"type": "value", "show": False, "scale": True},
+        "series": [
+            {
+                "type": "line",
+                "showSymbol": False,
+                "silent": True,
+                "data": [_pln(value) for value in values],
+                "lineStyle": {"color": colour, "width": 1.5},
+                "areaStyle": {"color": colour, "opacity": 0.12},
+            }
+        ],
+    }
+    echart(options).classes("w-28 h-10 shrink-0").mark(f"sparkline-{name}")
+
+
+def _fading(colour: str) -> dict[str, Any]:
+    """``colour`` at the top fading to nothing at the bottom."""
+    stops = [{"offset": 0, "color": colour}, {"offset": 1, "color": "rgba(0,0,0,0)"}]
+    return {"type": "linear", "x": 0, "y": 0, "x2": 0, "y2": 1, "colorStops": stops}
+
+
 def drawdown_chart(
     history: Sequence[DayValue], first: date, last: date, account_id: int | None, name: str = "drawdown"
 ) -> None:
@@ -224,7 +284,7 @@ def _card(title: str, name: str, options: dict[str, Any], info: str | None = Non
     its ``CHART_INFO``, and the zoom button in its corner."""
     with ui.card().classes("relative w-full gap-1"):
         card_title(title, info or CHART_INFO.get(name), name)
-        ui.echart(options).classes("w-full h-72").mark(f"chart-{name}")
+        echart(options).classes("w-full h-72").mark(f"chart-{name}")
         zoom_button(title, name, options, timeline=timeline)
 
 
@@ -258,7 +318,7 @@ def zoom_button(
                 ui.label(title).classes("text-lg font-medium")
                 ui.space()
                 ui.button(icon="close", on_click=dialog.close).props("flat round dense").mark("zoom-close")
-            chart = ui.echart(zoomed, on_point_click=clicked if on_point_click else None)
+            chart = echart(zoomed, on_point_click=clicked if on_point_click else None)
             chart.classes("w-full flex-1 min-h-0").mark(f"chart-{name}-zoomed")
 
     button = ui.button(icon="open_in_full", on_click=zoom).props("flat round dense size=sm color=grey-7")
@@ -274,7 +334,7 @@ def _class_shares_card(history: Sequence[DayValue], first: date, last: date, acc
         with ui.button_group().props("flat"):
             for choice in Grouping:
                 button = ui.button(choice.label, on_click=lambda c=choice: shown.refresh(c)).props("no-caps dense")
-                button.props("unelevated color=indigo" if choice is grouping else "flat color=grey-8")
+                button.props("unelevated color=primary" if choice is grouping else "flat color=grey-8")
                 button.classes("px-2").mark(f"grouping-{choice}")
         shares = class_shares(history, first, last, account_id, grouping)
         names = list(dict.fromkeys(name for share in shares for name in share.shares))
@@ -294,7 +354,7 @@ def _class_shares_card(history: Sequence[DayValue], first: date, last: date, acc
                 for name in names
             ],
         }
-        ui.echart(options).classes("w-full h-72").mark("chart-class-shares")
+        echart(options).classes("w-full h-72").mark("chart-class-shares")
         zoom_button("Udział aktywów w czasie", "class-shares", options, timeline=True)
 
     with ui.card().classes("relative w-full gap-1"):
@@ -415,7 +475,7 @@ def _waterfall(sources: ProfitSources) -> dict[str, Any]:
             {
                 "name": "Zmiana",
                 "type": "custom",
-                ":renderItem": _WATERFALL_BAR,
+                ":renderItem": _WATERFALL_BAR.replace("{label}", LABEL_COLOURS[current_theme()]),
                 "encode": {"x": 0, "y": [1, 2]},
                 "data": bars,
             }

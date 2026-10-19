@@ -17,6 +17,7 @@ from financial_app.ui.instruments import AssetClassesSection, InstrumentsSection
 from financial_app.ui.price_sources import PriceSourcesSection
 from financial_app.ui.recurring_rules import RecurringRulesSection
 from financial_app.ui.reset import ClearDataSection
+from financial_app.ui.theme import ThemeChoice
 from financial_app.ui.unpriced import UnpricedSection
 from financial_app.ui.visibility import Layout, VisibilitySection
 from financial_app.ui.xtb_import import XtbImportSection
@@ -33,13 +34,14 @@ def build_settings_page(
     on_account_deleted: Callable[[int], None] | None = None,
     on_rules_changed: Callable[[], None] | None = None,
     layout: Layout | None = None,
+    theme: ThemeChoice | None = None,
 ) -> None:
     """``unpriced`` is kept by the shell, which redraws it on the changes it declares; ``on_instruments_changed`` is
     called after an Instrument or Asset Class is saved; ``sources`` check the Source Symbols typed in the Instrument
     dialog. ``on_transactions_changed`` redraws the other tabs after an XTB Reconciliation is applied;
     ``on_account_deleted`` gets the id of an Account deleted in Konta; ``on_rules_changed`` redraws the Recurring
     Rules' Drafts after a rule or its skips change; ``layout`` is the window's hidden elements, which the shell
-    redraws on."""
+    redraws on, and ``theme`` its Theme, which the shell reloads the window on."""
     ui.label("Ustawienia").classes("text-2xl font-bold")
     limits = ContributionLimitsSection(engine)
     rules = RecurringRulesSection(engine, rates.today, on_changed=on_rules_changed)
@@ -78,7 +80,7 @@ def build_settings_page(
         rules.refresh()
         _all(on_rules_changed)  # the cleared rules' Drafts are no longer counted
 
-    VisibilitySection(layout or Layout(engine)).build()
+    VisibilitySection(layout or Layout(engine), theme or ThemeChoice(engine)).build()
     ClearDataSection(engine, on_cleared=redraw).build()
 
 

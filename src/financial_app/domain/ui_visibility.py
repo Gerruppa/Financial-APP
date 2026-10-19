@@ -45,7 +45,7 @@ ELEMENTS = (
     Element("tile-xirr", "XIRR", TILES),
     Element("since-snapshot", "Zmiana od migawki", SECTIONS),
     Element("investment-goal", "Cel inwestycyjny / FIRE", SECTIONS),
-    Element("account-table", "Tabela kont", SECTIONS),
+    Element("account-table", "Twoje konta i aktywa (karty i tabela)", SECTIONS),
     Element("contribution-limits", "Limity wpłat", SECTIONS),
     Element("account-ranking", "Ranking i treemap kont", SECTIONS),
     Element("currency-exposure", "Waluty w portfelu", SECTIONS),

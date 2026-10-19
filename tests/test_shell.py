@@ -4,9 +4,12 @@ from collections.abc import AsyncIterator
 from pathlib import Path
 
 import pytest
+from nicegui import ui
 from nicegui.testing import User, user_simulation
+from sqlalchemy import Engine
 
 from financial_app.persistence.db import init_db
+from financial_app.persistence.settings import UI_THEME, load_setting
 from financial_app.ui.shell import build_shell
 
 TABS = [
@@ -25,8 +28,12 @@ TABS = [
 
 
 @pytest.fixture
-async def user(tmp_path: Path) -> AsyncIterator[User]:
-    engine = init_db(tmp_path / "app.sqlite3")
+def engine(tmp_path: Path) -> Engine:
+    return init_db(tmp_path / "app.sqlite3")
+
+
+@pytest.fixture
+async def user(engine: Engine) -> AsyncIterator[User]:
     async with user_simulation(lambda: build_shell(engine)) as user:
         await user.open("/")
         yield user
@@ -49,11 +56,30 @@ async def test_clicking_a_menu_entry_opens_its_tab(user: User, tab: str) -> None
         await user.should_see(tab)
 
 
-async def test_header_names_the_app_and_its_version(user: User) -> None:
-    with user.scope(marker="header"):
+async def test_the_menu_names_the_app_and_its_version(user: User) -> None:
+    with user.scope(marker="nav-menu"):
         await user.should_see("KAPITA")
         await user.should_see("1.0.0")
-    user.find(marker="app-logo")
+        user.find(marker="app-logo")
+
+
+async def test_the_menu_lights_the_tab_on_screen(user: User) -> None:
+    with user.scope(marker="nav-menu"):
+        user.find("Wyniki").click()
+    with user.scope(marker="page-content"):
+        await user.should_see("Wyniki")
+
+    with user.scope(marker="nav-menu"):
+        lit_tabs = [button.text for button in user.find(ui.button).elements if "k-active" in button.classes]
+    assert lit_tabs == ["Wyniki"]
+
+
+async def test_the_theme_button_switches_to_golden_and_remembers_it(user: User, engine: Engine) -> None:
+    await user.should_see(marker="theme-toggle")
+
+    user.find(marker="theme-toggle").click()
+
+    assert load_setting(engine, UI_THEME) == "golden"
 
 
 async def test_header_offers_total_view_scope(user: User) -> None:

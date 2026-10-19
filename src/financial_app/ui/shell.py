@@ -1,4 +1,4 @@
-"""App shell (UI prototype variant B, issue #1): left menu, header with View Scope, "+" button."""
+"""App shell (issues #1 and #174): left menu with the logo, header with View Scope and Theme, "+" button."""
 
 import asyncio
 from collections.abc import Callable, Mapping
@@ -13,6 +13,7 @@ from financial_app import __version__
 from financial_app.domain.formatting import format_datetime
 from financial_app.domain.instrument_search import CombinedSearch, InstrumentSearch
 from financial_app.domain.prices import ANALIZY, BANKIER, BOSSA, SOURCE_NAMES, YAHOO, refresh_due, source_reason
+from financial_app.domain.themes import Theme
 from financial_app.domain.ui_visibility import tab_key
 from financial_app.persistence.bond_data import bond_data_statuses
 from financial_app.persistence.quotes import last_successful_refresh
@@ -44,6 +45,7 @@ from financial_app.ui.results import ResultsPage
 from financial_app.ui.sale_summary import SaleSummaryPage
 from financial_app.ui.settings import build_settings_page
 from financial_app.ui.strategy import PlannedDeposit, StrategyPage, out_of_band_notice
+from financial_app.ui.theme import ThemeChoice, apply_theme
 from financial_app.ui.transaction_dialog import open_transaction_dialog
 from financial_app.ui.transactions import TransactionsPage
 from financial_app.ui.unpriced import UnpricedSection
@@ -121,6 +123,7 @@ def build_shell(
     planned = PlannedDeposit()
     layout = Layout(engine)
     layout.on_change(lambda: events.publish(Change.LAYOUT))
+    theme = ThemeChoice(engine)
     dashboard_page = DashboardPage(engine, rates, scope, period, lambda: shared.days, layout, planned)
     strategy_page = StrategyPage(engine, rates, scope, planned)
     results_page = ResultsPage(engine, scope, period, lambda: shared.days)
@@ -251,10 +254,11 @@ def build_shell(
         if refresh_at_start or shared.fetching is not None:
             await fetch_history()
 
-    with ui.header().classes("bg-indigo-900 items-center").mark("header") as header:
-        ui.image(APP_LOGO).classes("w-8 h-8").mark("app-logo")
-        ui.label(APP_TITLE).classes("text-lg font-bold tracking-widest")
-        ui.label(__version__).classes("text-xs opacity-60 self-end mb-1")
+    apply_theme(theme.theme)
+    # A new Theme restyles the whole window, its charts drawn on canvas too, so the window is built again in it
+    theme.on_change(ui.navigate.reload)
+
+    with ui.header().classes("k-header items-center px-6").props("bordered=false").mark("header") as header:
         ui.space()
         # MF's new rates may value a matured Series, so the bond data refresh redraws it too
         drafts_state = ui.refreshable(lambda: drafts_count(engine, rates.today()))
@@ -274,22 +278,41 @@ def build_shell(
         price_status = ui.refreshable(lambda: _price_status(engine, engine in _running_refreshes))
         price_status()
         refresh_button = ui.button(icon="refresh", on_click=refresh_now).props(
-            'flat round color=white aria-label="Odśwież wyceny"'
+            'flat round color=ink aria-label="Odśwież wyceny"'
         )
         refresh_button.tooltip("Odśwież wyceny").mark("refresh-prices")
         switcher = ScopeSwitcher(scope, lambda: shared.days)
         events.subscribe(switcher.refresh, switcher.CHANGES)
+        other = Theme.LIGHT if theme.theme is Theme.GOLDEN else Theme.GOLDEN
+        theme_button = ui.button(
+            icon="light_mode" if theme.theme is Theme.GOLDEN else "dark_mode", on_click=lambda: theme.choose(other)
+        )
+        theme_button.props(f'flat round color=primary aria-label="Motyw: {other.label}"').mark("theme-toggle")
+        theme_button.tooltip(f"Motyw: {other.label}")
+
+    # The tab on screen, lit in the menu
+    shown_path = {"path": "/"}
 
     # A tab hidden in Wygląd i widoczność leaves the menu, yet its address still opens it
     @ui.refreshable
     def menu() -> None:
         for tab in TABS:
+            if tab.path == SETTINGS_PATH:
+                ui.separator().classes("my-3 opacity-20")
             if layout.shows(tab_key(tab.path)):
-                ui.button(tab.label, icon=tab.icon, on_click=lambda path=tab.path: ui.navigate.to(path)).props(
-                    "flat align=left no-caps no-wrap color=white"
-                ).classes("w-full")
+                button = ui.button(tab.label, icon=tab.icon, on_click=lambda path=tab.path: ui.navigate.to(path))
+                lit = tab.path == shown_path["path"]
+                button.props(f"flat align=left no-caps no-wrap color={'side-active' if lit else 'side'}")
+                button.classes("k-menu-item w-full" + (" k-active" if lit else ""))
 
-    with ui.left_drawer(value=True).classes("bg-indigo-950").props("width=260").mark("nav-menu"):
+    # top_corner: the menu runs the window's full height, beside the header rather than under it
+    drawer = ui.left_drawer(value=True, top_corner=True).classes("k-side").props("width=260")
+    with drawer.mark("nav-menu"):
+        with ui.row().classes("items-center gap-3 no-wrap px-2 pt-2 pb-6"):
+            ui.image(APP_LOGO).props("no-transition no-spinner").classes("w-10 h-10 shrink-0").mark("app-logo")
+            with ui.column().classes("gap-0"):
+                ui.label(APP_TITLE).classes("text-xl font-bold tracking-widest text-white")
+                ui.label(__version__).classes("text-xs opacity-60")
         menu()
     events.subscribe(menu.refresh, {Change.LAYOUT})
 
@@ -297,13 +320,16 @@ def build_shell(
         add_button = ui.button(
             icon="add", on_click=lambda: open_transaction_dialog(engine, rates, transactions_changed)
         )
-        add_button.props('fab color=indigo aria-label="Dodaj transakcję"').mark("add-transaction")
+        add_button.props('fab color=primary aria-label="Dodaj transakcję"').mark("add-transaction")
 
-    def showing_add_button(build: Callable[[], None], shown: bool) -> Callable[[], None]:
-        """``build`` a tab, with the "+" shown on it or not (L-28: not on Ustawienia nor Pomoc)."""
+    def showing_add_button(path: str, build: Callable[[], None], shown: bool) -> Callable[[], None]:
+        """``build`` the tab at ``path``, lit in the menu, with the "+" shown on it or not (L-28: not on Ustawienia
+        nor Pomoc)."""
 
         def build_tab() -> None:
             add_button.visible = shown
+            shown_path["path"] = path
+            menu.refresh()
             build()
 
         return build_tab
@@ -340,10 +366,11 @@ def build_shell(
         account_deleted,
         lambda: events.publish(Change.RECURRING_RULES),
         layout,
+        theme,
     )
     pages[HELP_PATH] = lambda: build_help_page({tab.path: tab.label for tab in TABS})
-    pages = {path: showing_add_button(build, path not in WITHOUT_ADD_BUTTON) for path, build in pages.items()}
-    ui.sub_pages(pages).classes("w-full").mark("page-content")
+    pages = {path: showing_add_button(path, build, path not in WITHOUT_ADD_BUTTON) for path, build in pages.items()}
+    ui.sub_pages(pages).classes("w-full px-2").mark("page-content")
 
     # Once the window is up, so that it never waits for the sources or the computation
     ui.timer(0, load_history, once=True)
@@ -370,7 +397,7 @@ def _price_status(engine: Engine, refreshing: bool) -> None:
     failures = status.failures if status and not refreshing else []
     text = "Wyceny: odświeżanie…" if refreshing else refresh_summary(status)
     button = ui.button(text, on_click=lambda: _price_errors_dialog(engine)).props("flat no-caps")
-    button.props(f"color={'red-4' if failures else 'white'}").mark("price-status")
+    button.props(f"color={'negative' if failures else 'ink'}").mark("price-status")
 
 
 def _price_errors_dialog(engine: Engine) -> None:

@@ -92,6 +92,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `spreadsheet-workbook.md`: Architecture entry for sources/spreadsheet.py: main functions, UI markers and decisions.
 - `stooq-price-history.md`: Architecture entry for sources/stooq.py: main functions, UI markers and decisions.
 - `term-deposits.md`: Architecture entry for Term Deposits (#160, spec 3.3.2): main functions, UI markers and decisions.
+- `theme.md`: Architecture entry for the window's Theme (Jasny or Golden): remembered setting, CSS and Quasar colours, chart theme.
 - `todays-view.md`: Architecture entry for Today's View state (#109): main functions, UI markers and decisions.
 - `transaction-filters.md`: Architecture entry for Transakcje filters and sorting (L-27): main functions, UI markers and decisions.
 - `transaction-form.md`: Architecture entry for Transaction form (#111): main functions, UI markers and decisions.
@@ -169,6 +170,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `spreadsheet_import.py`: Pure conversion of the user's Inwestomat Transakcje sheet rows into Transaction drafts, with fingerprints for re-import skipping.
 - `strategy.py`: Investment Strategy rules: Allocation Targets with tolerance bands, Instrument Targets, and the water-filling split of the Planned Deposit
 - `term_deposits.py`: Term Deposit rules: contract fields, capitalisation periods, Belka-net interest, Accrued Interest, Drafts and capital locked by running deposits
+- `themes.py`: Window Theme enum (Jasny, Golden) and parsing of its remembered text; nothing saved or unknown is Jasny
 - `transaction_filters.py`: Excel-like column filters and sort order for the Transakcje list; returns the filtered, sorted view of Transactions
 - `transaction_form.py`: Transaction dialog rules without widgets: fields per Transaction Type and the Transaction they describe, or the field error
 - `transactions.py`: Transaction types, drafts and builders for every kind, plus cash balances and cost and dividend totals per Account.
@@ -315,6 +317,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `shell.py`: Main app window shell: left menu, header with refresh status and View Scope, and the transaction button
 - `strategy.py`: Strategie inwestycyjne tab, Dashboard strategy section and post-refresh notice for classes outside their tolerance band
 - `term_deposits.py`: Lokaty section of Dochód stały: running Term Deposits with accrued interest, and the dialog to add, edit, break or delete one
+- `theme.py`: Applies the window's Theme (CSS, Quasar colours, dark mode), remembers it, and wraps ECharts in the Theme
 - `transaction_dialog.py`: Transaction dialog for adding, editing and deleting every supported transaction type, bound to the form model
 - `transactions.py`: Transakcje tab: the Transaction list with column sorting and filters
 - `unpriced.py`: Ustawienia Instrumenty bez wyceny card listing held Instruments lacking an automatic price, with reasons
@@ -464,6 +467,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_term_deposits_repository.py`: Tests saving Term Deposits and confirming their Drafts against the database
 - `test_term_deposits_ui.py`: UI tests of adding Term Deposits and handling their Drafts in the Dochód stały tab
 - `test_term_deposits_valuation.py`: Tests Term Deposit interest counted in Account value, history, Dashboard profit and save warnings
+- `test_themes_domain.py`: Tests the Theme labels and reading the remembered Theme text back, with unknown text falling to Jasny
 - `test_todays_view.py`: Tests today's View state loaded once for the tabs, on an in-memory database with fixed NBP Rates
 - `test_trades_ui.py`: Tests PLN Buys and Sells end to end through the transaction dialog, Transakcje list and Portfolio.
 - `test_transaction_edit_ui.py`: UI tests for editing and deleting a Transaction from the Transakcje list, including blocked edits

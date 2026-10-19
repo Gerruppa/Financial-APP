@@ -182,7 +182,7 @@ class BenchmarksPage:
                     if chosen is BenchmarkKind.INSTRUMENT:
                         self.fetch()
 
-                ui.button("Dodaj", on_click=add).props("unelevated color=indigo").mark("benchmark-add-button")
+                ui.button("Dodaj", on_click=add).props("unelevated color=primary").mark("benchmark-add-button")
 
 
 def _percent(fraction: Decimal | None, signed: bool = False) -> str:

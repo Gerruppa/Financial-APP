@@ -61,6 +61,7 @@ Layout (`src/financial_app/`, see ADR-0001):
 - [`ui/shell.py`](architecture/shell.md)
 - [`ui/changes.py` (#112)](architecture/changes.md)
 - [Wygląd i widoczność (#155)](architecture/ui-visibility.md)
+- [Theme: Jasny and Golden (#174)](architecture/theme.md)
 - [Pomoc / FAQ (#156)](architecture/help-faq.md)
 - [`app.py`](architecture/app.md)
 - [Browser and demo mode, screenshots](architecture/demo-mode.md)

@@ -63,7 +63,7 @@ class ScopeSwitcher:
         self.scope = scope
         self.days = days
         self.show_inactive = False
-        self.button = ui.button(on_click=self.open).props("flat no-caps color=white icon-right=expand_more")
+        self.button = ui.button(on_click=self.open).props("flat no-caps color=ink icon-right=expand_more")
         self.button.mark("view-scope")
         with self.button:
             self.menu = ui.menu()
@@ -118,7 +118,7 @@ class ScopeSwitcher:
     ) -> None:
         chosen = account_id == self.scope.account_id
         row = ui.element("div").classes("w-full px-4 py-2 cursor-pointer hover:bg-gray-100")
-        row.classes("bg-indigo-50" if chosen else "").mark(f"scope-entry scope-{scope_setting(account_id)}")
+        row.classes("k-highlight" if chosen else "").mark(f"scope-entry scope-{scope_setting(account_id)}")
         row.on("click", lambda: self.choose(account_id))
         with row:
             with ui.row().classes("w-full items-baseline justify-between no-wrap gap-4"):
@@ -127,7 +127,7 @@ class ScopeSwitcher:
             with ui.row().classes("w-full items-center justify-between no-wrap gap-4"):
                 if account_id is not None:
                     bar = ui.linear_progress(float(share or 0), show_value=False, size="6px").classes("w-32")
-                    bar.props("rounded color=indigo")
+                    bar.props("rounded color=primary")
                 else:
                     ui.element("div")
                 change_label = ui.label(NO_VALUE if change is None else format_pln(change, signed=bool(change)))
@@ -142,6 +142,6 @@ def breadcrumbs(scope: ViewScope) -> None:
     if scope.account_id is None:
         return
     with ui.row().classes("items-center gap-1 text-sm").mark("breadcrumbs"):
-        ui.button(TOTAL_LABEL, on_click=lambda: scope.switch(None)).props("flat dense no-caps color=indigo")
+        ui.button(TOTAL_LABEL, on_click=lambda: scope.switch(None)).props("flat dense no-caps color=primary")
         ui.label("›").classes("text-gray-500")
         ui.label(scope.name).classes("font-medium")

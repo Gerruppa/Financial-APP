@@ -14,7 +14,7 @@ def bond_data_status(engine: Engine) -> None:
     if not failing:
         return
     text = f"Dane obligacji: {format_count(len(failing), 'błąd', 'błędy', 'błędów')}"
-    ui.button(text, on_click=lambda: _bond_data_errors_dialog(engine)).props("flat no-caps color=red-4").mark(
+    ui.button(text, on_click=lambda: _bond_data_errors_dialog(engine)).props("flat no-caps color=negative").mark(
         "bond-data-status"
     )
 

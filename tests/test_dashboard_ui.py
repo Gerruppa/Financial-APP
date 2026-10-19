@@ -116,6 +116,8 @@ async def test_the_account_table_has_a_row_per_account_with_its_fx_exclusion(eng
     async with user_simulation(_shell(engine)) as user:
         await user.open("/")
         await _tile(user, "xirr", f"13,02{NBSP}%")
+        user.find(marker="accounts-view-table").click()
+        await user.should_see(marker="account-row")
 
         assert _rows(user, "account-row") == [
             [
@@ -166,6 +168,8 @@ async def test_an_account_scope_shows_only_that_accounts_totals_and_row(engine: 
         await _tile(user, "value", _pln("3 000,00"))
         await _tile(user, "net-deposits", _pln("3 000,00"))
         await _tile(user, "costs", _pln("0,00"))
+        user.find(marker="accounts-view-table").click()
+        await user.should_see(marker="account-row")
         assert [row[0] for row in _rows(user, "account-row")] == ["XTB"]
 
 
@@ -199,3 +203,45 @@ async def test_the_price_status_shows_the_last_refresh_its_errors_and_the_unpric
             await user.should_see("1 instrument bez wyceny")
             user.find("1 instrument bez wyceny").click()
         await user.should_see("Klasy aktywów")
+
+
+async def test_the_main_card_shows_the_value_beside_the_period_and_the_value_chart(engine: Engine) -> None:
+    async with user_simulation(_shell(engine)) as user:
+        await user.open("/")
+        # The card is drawn again once History is computed, now with the chart
+        await user.should_see(marker="chart-hero")
+
+        with user.scope(marker="dashboard-hero"):
+            await user.should_see(marker="hero-value", content=_pln("4 095,00"))
+            await user.should_see(marker="period-selector")
+            await user.should_see(marker="chart-hero")
+
+
+async def test_each_tile_has_its_icon_and_cash_and_costs_their_share_of_the_portfolio(engine: Engine) -> None:
+    async with user_simulation(_shell(engine)) as user:
+        await user.open("/")
+        await _tile(user, "value", _pln("4 095,00"))
+
+        for key in ("net-deposits", "value", "cash", "xirr"):
+            await user.should_see(marker=f"tile-icon-{key}")
+        await user.should_see(marker="total-cash-note", content=f"85,35{NBSP}% portfela")
+        await user.should_see(marker="total-costs-note", content=f"0,12{NBSP}% portfela")
+
+
+async def test_accounts_show_as_cards_with_their_profit_and_the_table_one_click_away(engine: Engine) -> None:
+    async with user_simulation(_shell(engine)) as user:
+        await user.open("/")
+        await _tile(user, "xirr", f"13,02{NBSP}%")
+
+        assert _rows(user, "account-card") == [
+            ["IKE", _pln("1 095,00"), f"{_pln('+95,00')} (+9,50{NBSP}%)"],
+            ["XTB", _pln("3 000,00"), f"{_pln('+0,00')} (+0,00{NBSP}%)"],
+        ]
+        await user.should_not_see(marker="account-row")
+
+        user.find(marker="accounts-view-table").click()
+        await user.should_see(marker="account-row")
+        await user.should_not_see(marker="account-card")
+
+        user.find(marker="accounts-view-cards").click()
+        await user.should_see(marker="account-card")
