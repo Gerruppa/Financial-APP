@@ -80,7 +80,7 @@ async def test_a_redemption_picks_the_oldest_lot_and_is_prefilled(engine: Engine
     oldest = _bought(engine, bonds, date(2024, 5, 22))
     _bought(engine, bonds, date(2025, 3, 3), quantity=5)
     async with user_simulation(lambda: build_shell(engine)) as user:
-        await user.open("/")
+        await user.open("/benchmarki")
         _open_redemption(user, engine, bonds)
 
         await user.should_see(marker="transaction-lot")
@@ -107,7 +107,7 @@ async def test_choosing_another_lot_fills_its_quantity_and_values(engine: Engine
     _bought(engine, bonds, date(2024, 5, 22))
     newer = _bought(engine, bonds, date(2025, 3, 3), quantity=5)
     async with user_simulation(lambda: build_shell(engine)) as user:
-        await user.open("/")
+        await user.open("/benchmarki")
         _open_redemption(user, engine, bonds)
         _choose(user, "transaction-lot", newer.id)
 
@@ -126,7 +126,7 @@ async def test_choosing_another_lot_fills_its_quantity_and_values(engine: Engine
 async def test_typed_values_stay_when_the_quantity_changes(engine: Engine, bonds: int) -> None:
     _bought(engine, bonds, date(2024, 5, 22))
     async with user_simulation(lambda: build_shell(engine)) as user:
-        await user.open("/")
+        await user.open("/benchmarki")
         _open_redemption(user, engine, bonds)
         user.find(marker="transaction-commission").clear().type("7,50")
         user.find(marker="transaction-quantity").clear().type("3")
@@ -175,7 +175,7 @@ async def test_an_ike_withholds_no_tax(engine: Engine) -> None:
     ike = add_account(engine, AccountDraft("PKO IKE", "PKO BP", AccountType.IKE, ("PLN",))).id
     _bought(engine, ike, date(2024, 5, 22))
     async with user_simulation(lambda: build_shell(engine)) as user:
-        await user.open("/")
+        await user.open("/benchmarki")
         _open_redemption(user, engine, ike)
         user.find(marker="transaction-quantity").clear().type("1")
 
@@ -188,7 +188,7 @@ async def test_a_sell_of_another_instrument_picks_no_lot(engine: Engine, bonds: 
     pzu = add_instrument(engine, InstrumentDraft("PZU", shares.id, "PLN")).id
     add_transaction(engine, buy_or_sell(bonds, date(2025, 1, 2), TransactionType.BUY, pzu, Decimal(5), Decimal(40)))
     async with user_simulation(lambda: build_shell(engine)) as user:
-        await user.open("/")
+        await user.open("/benchmarki")
         user.find(marker="add-transaction").click()
         _choose(user, "transaction-type", TransactionType.SELL.value)
         _choose(user, "transaction-instrument", pzu)

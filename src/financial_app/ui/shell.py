@@ -80,8 +80,8 @@ TABS = [
     Tab("Ustawienia", SETTINGS_PATH, "settings"),
     Tab("Pomoc", HELP_PATH, "help"),
 ]
-# The tabs without the "+" transaction button (L-28, issue #156)
-WITHOUT_ADD_BUTTON = frozenset({SETTINGS_PATH, HELP_PATH})
+# The tabs without the "+" transaction button (L-28, issue #156; the Dashboard too)
+WITHOUT_ADD_BUTTON = frozenset({"/", SETTINGS_PATH, HELP_PATH})
 
 # The refresh running on each database, shared by every window, so that a reloaded window joins it instead of starting
 # another; ``None`` from it means the app is shutting down
@@ -323,8 +323,8 @@ def build_shell(
         add_button.props('fab color=primary aria-label="Dodaj transakcję"').mark("add-transaction")
 
     def showing_add_button(path: str, build: Callable[[], None], shown: bool) -> Callable[[], None]:
-        """``build`` the tab at ``path``, lit in the menu, with the "+" shown on it or not (L-28: not on Ustawienia
-        nor Pomoc)."""
+        """``build`` the tab at ``path``, lit in the menu, with the "+" shown on it or not (L-28: not on the
+        Dashboard, Ustawienia nor Pomoc)."""
 
         def build_tab() -> None:
             add_button.visible = shown
