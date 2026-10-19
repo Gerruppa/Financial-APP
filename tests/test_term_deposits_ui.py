@@ -50,6 +50,10 @@ def _choose(user: User, marker: str, value: object) -> None:
         element.value = value
 
 
+def _selected(user: User, marker: str) -> object:
+    return user.find(marker=marker, kind=ui.select).elements.pop().value
+
+
 def _three_months(account_id: int, **fields: object) -> TermDepositDraft:
     values: dict[str, object] = {
         "account_id": account_id,
@@ -85,7 +89,9 @@ async def test_a_deposit_is_added_with_its_capital_paid_in_and_listed_with_its_a
             _type(user, "deposit-term", "3")
             _type(user, "deposit-rate", "6")
             _choose(user, "deposit-capitalization", Capitalization.MONTHLY.value)
-            _choose(user, "deposit-capital", "deposit")
+            # The Account holds no cash yet, so its capital is paid in by default
+            assert _selected(user, "deposit-capital") == "deposit"
+            await user.should_see(marker="deposit-capital-hint")
             await user.should_see(f"Zapadalność 15.04.2026 · odsetki netto na koniec 120,32{NBSP}zł")
             user.find(marker="save-deposit").click()
 
@@ -208,3 +214,30 @@ async def test_the_portfolio_counts_the_accrued_interest_in_the_accounts_value(e
         with user.scope(marker="account-accrued"):
             await user.should_see(f"60,00{NBSP}zł")
         await user.should_see(f"10{NBSP}060,00{NBSP}zł")
+
+
+async def test_a_deposit_on_an_account_already_holding_its_capital_records_no_payment_by_default(
+    engine: Engine, account: int
+) -> None:
+    _paid_in(engine, account, 20000)
+
+    async with user_simulation(lambda: _shell(engine)) as user:
+        await user.open("/obligacje")
+        user.find(marker="add-deposit").click()
+        with user.scope(marker="deposit-dialog"):
+            _type(user, "deposit-name", "Lokata 3M")
+            _type(user, "deposit-principal", "10000")
+            _type(user, "deposit-start", "15.01.2026")
+            _type(user, "deposit-term", "3")
+            _type(user, "deposit-rate", "6")
+            assert _selected(user, "deposit-capital") == "none"
+            # More than the cash held: the Deposit again, until the user picks a source
+            _type(user, "deposit-principal", "25000")
+            assert _selected(user, "deposit-capital") == "deposit"
+            _choose(user, "deposit-capital", "none")
+            _type(user, "deposit-principal", "30000")
+            assert _selected(user, "deposit-capital") == "none"
+            user.find(marker="save-deposit").click()
+
+        await user.should_see(marker="deposit-row")
+    assert len(list_transactions(engine)) == 1

@@ -13,7 +13,7 @@ from enum import StrEnum
 
 from financial_app.domain.accounts import Account, tax_regime_for
 from financial_app.domain.bonds import add_months
-from financial_app.domain.transactions import TransactionDraft, TransactionType, dividend
+from financial_app.domain.transactions import TransactionDraft, TransactionType, cash_balances, dividend
 
 GROSZ = Decimal("0.01")
 DAYS_A_YEAR = 365
@@ -387,3 +387,9 @@ def deposit_rows(
             )
         )
     return sorted(rows, key=lambda row: (row.deposit.maturity, row.account.name, row.deposit.name))
+
+
+def needs_capital(transactions: Iterable[TransactionDraft], account_id: int, day: date, principal: Decimal) -> bool:
+    """Whether a new deposit's capital still has to be paid into its Account: the Account's PLN cash at the end of its
+    start ``day`` is below ``principal``, so the deposit dialog offers to record the Deposit by default."""
+    return cash_balances(transactions, on=day).get(account_id, Decimal(0)) < principal

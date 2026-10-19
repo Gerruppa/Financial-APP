@@ -84,7 +84,9 @@ Przejdź do: /obligacje
 1. Załóż konto z **Typem konta** „Lokata / oszczędności” (np. „mBank lokaty”).
 2. W zakładce **Dochód stały**, w sekcji **Lokaty**, kliknij **Dodaj lokatę**.
 3. Wypełnij pola **Kwota (zł)**, **Data założenia**, **Okres** z **Jednostką** (miesięcy albo dni), **Oprocentowanie (% w skali roku)** i **Kapitalizacja odsetek** (na koniec, co miesiąc, co kwartał, co pół roku, co rok). Zaznacz **Odnawialna**, jeśli bank sam ją przedłuża.
-4. Jeśli kapitału nie ma jeszcze na koncie, w polu **Zapisz też przelanie kapitału** wybierz „Wpłata na konto lokaty” albo „Transfer z konta …”. Potem **Zapisz**.
+4. Pole **Zapisz też przelanie kapitału** samo proponuje „Wpłata na konto lokaty”, gdy w dniu założenia na koncie brakuje gotówki na kapitał, a „Nie zapisuj”, gdy pieniądze już tam są. Możesz wybrać też „Transfer z konta …”. Potem **Zapisz**.
+
+Sama lokata nie pojawia się w zakładce **Transakcje**: trafia tam tylko jej kapitał (wpłata albo transfer z kroku 4) i zatwierdzone odsetki.
 
 Okno od razu pokazuje datę zapadalności i odsetki netto na koniec. Odsetki aplikacja liczy za każdy okres kapitalizacji: kapitał × oprocentowanie × liczba dni / 365, z 19% podatku Belki. Przy kapitalizacji w trakcie lokaty odsetki netto powiększają kapitał następnego okresu.
 

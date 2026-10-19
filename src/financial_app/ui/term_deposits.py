@@ -27,6 +27,7 @@ from financial_app.domain.term_deposits import (
     TermUnit,
     deposit_rows,
     interest_periods,
+    needs_capital,
     tax_rate_of,
 )
 from financial_app.domain.transactions import (
@@ -180,6 +181,19 @@ def open_deposit_dialog(
             }
             capital = ui.select(sources, value=NO_CAPITAL, label="Zapisz też przelanie kapitału").classes("w-full")
             capital.mark("deposit-capital")
+            ui.label(
+                "Sama lokata nie trafia do Transakcji: zapisują się tam jej kapitał (to pole) i zatwierdzone odsetki."
+            ).classes("text-xs text-gray-500").mark("deposit-capital-hint")
+        # The capital's source follows whether the Account holds it on the start, until the user picks one
+        picked = False
+        defaulting = False
+
+        def capital_picked() -> None:
+            nonlocal picked
+            picked = picked or not defaulting
+
+        if capital is not None:
+            capital.on_value_change(capital_picked)
         summary = ui.label().classes("text-sm text-gray-600").mark("deposit-summary")
         error = ui.label().classes("text-negative").mark("deposit-error")
 
@@ -216,6 +230,7 @@ def open_deposit_dialog(
             )
 
         def show() -> None:
+            nonlocal defaulting
             try:
                 shown = draft()
             except TermDepositError:
@@ -224,6 +239,11 @@ def open_deposit_dialog(
             periods = interest_periods(shown, tax_rate_of(by_id[shown.account_id]))
             net = sum((p.net for p in periods), Decimal(0))
             summary.text = f"Zapadalność {format_date(shown.maturity)} · odsetki netto na koniec {format_pln(net)}"
+            if capital is not None and not picked:
+                defaulting = True
+                needed = needs_capital(view.transactions, shown.account_id, shown.start_date, shown.principal)
+                capital.value = CAPITAL_DEPOSIT if needed else NO_CAPITAL
+                defaulting = False
 
         def save() -> None:
             try:

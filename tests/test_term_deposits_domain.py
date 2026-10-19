@@ -26,10 +26,11 @@ from financial_app.domain.term_deposits import (
     deposit_rows,
     interest_periods,
     locked_capital,
+    needs_capital,
     paid_periods,
     tax_rates_of,
 )
-from financial_app.domain.transactions import Transaction, dividend
+from financial_app.domain.transactions import Transaction, TransactionType, deposit_or_withdrawal, dividend
 
 BELKA = Decimal("0.19")
 
@@ -257,3 +258,18 @@ def test_the_deposits_list_matches_entered_interest_as_the_value_does() -> None:
     (row,) = deposit_rows([ended, running], [SAVINGS], entered, date(2026, 2, 16), None)
 
     assert row.accrued == Accruals([ended, running], tax_rates_of([SAVINGS]), entered).on(date(2026, 2, 16))[1]
+
+
+def test_a_new_deposit_needs_its_capital_paid_in_unless_the_account_holds_it_on_its_start() -> None:
+    paid_in = Transaction(
+        **{
+            **vars(deposit_or_withdrawal(1, date(2026, 1, 10), TransactionType.DEPOSIT, Decimal(10000))),
+            "id": 1,
+        }
+    )
+
+    assert needs_capital([paid_in], 1, date(2026, 1, 15), Decimal(10000)) is False
+    assert needs_capital([paid_in], 1, date(2026, 1, 15), Decimal("10000.01")) is True
+    # Cash paid in after the start does not hold it on the start
+    assert needs_capital([paid_in], 1, date(2026, 1, 9), Decimal(100)) is True
+    assert needs_capital([paid_in], 2, date(2026, 1, 15), Decimal(100)) is True
