@@ -48,7 +48,8 @@ def test_a_golden_tile_without_a_result_is_dark() -> None:
 
 @pytest.mark.parametrize("theme", list(Theme))
 @pytest.mark.parametrize("tone", ["text", "muted", "gain", "loss", "warning"])
-def test_every_text_tone_is_readable_on_a_card_on_the_page_and_on_a_hovered_row(theme: Theme, tone: str) -> None:
+def test_every_text_tone_is_readable_on_every_background(theme: Theme, tone: str) -> None:
     colours = THEME_COLOURS[theme]
-    for background in ("card", "page", "hover"):
+    # The page, a card, a hovered row and the highlighted field (the transaction dialog's Account)
+    for background in ("card", "page", "hover", "field"):
         assert _contrast(colours[tone], colours[background]) >= AA, background
