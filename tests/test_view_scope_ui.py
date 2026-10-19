@@ -156,7 +156,8 @@ async def test_the_period_selector_shows_its_range_and_is_remembered(engine: Eng
         with user.scope(marker="period-selector"):
             await user.should_see("03.08.2026 – 12.10.2026")
             user.find("1M").click()
-            await user.should_see("12.09.2026 – 12.10.2026")
+        # On the Dashboard the selector sits in the main card, drawn again for the new period
+        await user.should_see(marker="period-range", content="12.09.2026 – 12.10.2026")
         assert load_setting(engine, PERIOD) == "1m"
 
         with user.scope(marker="period-selector"):
@@ -166,8 +167,7 @@ async def test_the_period_selector_shows_its_range_and_is_remembered(engine: Eng
         user.find(marker="period-to").type("10.10.2026")
         user.find("Zastosuj").click()
 
-        with user.scope(marker="period-selector"):
-            await user.should_see("03.10.2026 – 10.10.2026")
+        await user.should_see(marker="period-range", content="03.10.2026 – 10.10.2026")
         assert load_setting(engine, PERIOD) == "custom:2026-10-03:2026-10-10"
 
         await user.open("/wyniki")

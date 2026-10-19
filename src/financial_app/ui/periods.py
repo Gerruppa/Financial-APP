@@ -70,7 +70,7 @@ def period_selector(choice: PeriodChoice) -> None:
         with ui.button_group().props("flat"):
             for preset in PeriodPreset:
                 button = ui.button(preset.label, on_click=lambda p=preset: preset_chosen(p)).props("no-caps dense")
-                button.props("unelevated color=indigo" if preset is chosen else "flat color=grey-8")
+                button.props("unelevated color=primary" if preset is chosen else "flat color=grey-8")
                 button.classes("px-2").mark(f"period-{preset}")
 
     @ui.refreshable

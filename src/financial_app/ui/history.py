@@ -86,7 +86,7 @@ def history_status(engine: Engine, shared: SharedHistory) -> None:
     else:
         return
     button = ui.button(text, on_click=lambda: _history_errors_dialog(engine, shared.failures)).props("flat no-caps")
-    button.props(f"color={'red-4' if failures and shared.fetching is None else 'white'}").mark("history-status")
+    button.props(f"color={'negative' if failures and shared.fetching is None else 'ink'}").mark("history-status")
 
 
 def _history_errors_dialog(engine: Engine, failures: HistoryFetch) -> None:

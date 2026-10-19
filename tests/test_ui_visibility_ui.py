@@ -7,6 +7,7 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
+from nicegui import ui
 from nicegui.testing import User, user_simulation
 from sqlalchemy import Engine
 
@@ -17,6 +18,7 @@ from financial_app.domain.transactions import TransactionDraft, TransactionType,
 from financial_app.persistence.accounts import add_account
 from financial_app.persistence.db import init_db
 from financial_app.persistence.instruments import add_instrument, list_asset_classes
+from financial_app.persistence.settings import UI_THEME, load_setting
 from financial_app.persistence.transactions import add_transactions
 from financial_app.sources.history import QuoteHistory
 from financial_app.sources.nbp import NbpRates
@@ -138,3 +140,15 @@ async def test_changing_a_switch_by_hand_makes_the_profile_custom(engine: Engine
         await _switch(user, "tile-xirr")
 
         await user.should_see(marker="ui-profile", content="Własny")
+
+
+async def test_the_theme_is_chosen_in_wyglad_i_widocznosc_and_remembered(engine: Engine) -> None:
+    async with user_simulation(_shell(engine)) as user:
+        await user.open("/ustawienia")
+        await user.should_see(marker="ui-theme")
+        toggle = user.find(marker="ui-theme", kind=ui.toggle).elements.pop()
+        assert toggle.value == "jasny"
+
+        toggle.set_value("golden")
+
+        assert load_setting(engine, UI_THEME) == "golden"

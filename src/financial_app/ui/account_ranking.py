@@ -23,6 +23,7 @@ from financial_app.domain.account_ranking import (
 from financial_app.domain.formatting import format_percent, format_pln
 from financial_app.ui.charts import PLN_FORMATTER, zoom_button
 from financial_app.ui.info import card_title
+from financial_app.ui.theme import echart
 
 DASH = "—"
 # The tile colours run from pale at no P&L to full at this share of the Net Deposits
@@ -80,7 +81,7 @@ def accounts_treemap(rows: Sequence[RankingRow], switch: Callable[[int], None]) 
 
     with ui.card().classes("relative w-full gap-1"):
         card_title("Konta", TREEMAP_INFO, "accounts-treemap")
-        ui.echart(options, on_point_click=clicked).classes("w-full h-72").mark("chart-accounts-treemap")
+        echart(options, on_point_click=clicked).classes("w-full h-72").mark("chart-accounts-treemap")
         zoom_button("Konta", "accounts-treemap", options, clicked)
 
 

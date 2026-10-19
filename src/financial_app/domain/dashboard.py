@@ -60,6 +60,18 @@ class Totals:
         """The value less the Net Deposits, as the sheet's "Zysk / strata"; ``None`` while History is computed."""
         return None if self.net_deposits is None else self.value - self.net_deposits
 
+    def profit_share(self, after_tax: bool = False) -> Decimal | None:
+        """The P&L (less the estimated tax when ``after_tax``) as a fraction of the Net Deposits; ``None`` while
+        History is computed or without Net Deposits."""
+        profit = self.profit_after(after_tax)
+        if profit is None or not self.net_deposits:
+            return None
+        return profit / self.net_deposits
+
+    def share_of_value(self, amount: Decimal) -> Decimal | None:
+        """``amount`` as a fraction of the value (e.g. the cash's share of the Portfolio); ``None`` without a value."""
+        return amount / self.value if self.value else None
+
     def value_after(self, after_tax: bool) -> Decimal:
         """The value, less the estimated tax when ``after_tax``."""
         return self.value - self.estimated_tax if after_tax else self.value

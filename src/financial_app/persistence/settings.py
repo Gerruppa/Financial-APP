@@ -17,6 +17,8 @@ PASSIVE_INCOME_GOAL = "passive_income_goal"
 # The Dashboard elements and tabs hidden in Wygląd i widoczność, a JSON list of their keys (issue #155); clearing the
 # data keeps it, as it is how the window looks rather than data
 UI_HIDDEN = "ui.hidden"
+# The window's Theme, ``jasny`` or ``golden`` (issue #174); kept on clearing the data like ``UI_HIDDEN``
+UI_THEME = "ui.theme"
 # The XTB import's remembered matches (L-17): an XTB account number's Account id, a ticker's Instrument id; clearing
 # the data removes every key starting with ``XTB_PREFIX``, as they name ids new rows may take again
 XTB_PREFIX = "xtb_"

@@ -109,5 +109,5 @@ def recurring_drafts_count(engine: Engine, today: date) -> None:
     if not count:
         return
     ui.button(f"Cykliczne do zatwierdzenia: {count}", on_click=lambda: ui.navigate.to("/transakcje")).props(
-        "flat no-caps color=amber-4"
+        "flat no-caps color=attention"
     ).mark("recurring-drafts-count")
