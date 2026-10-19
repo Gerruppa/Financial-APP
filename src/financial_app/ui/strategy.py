@@ -42,7 +42,6 @@ from financial_app.ui.dialogs import movable_dialog
 from financial_app.ui.info import info_icon
 from financial_app.ui.view_scope import ViewScope
 
-STATUS_COLOURS = {BandStatus.GREEN: "bg-green-1", BandStatus.YELLOW: "bg-amber-2", BandStatus.RED: "bg-red-2"}
 ROW_COLUMNS = "grid-template-columns: minmax(10rem, 2fr) repeat(6, minmax(6rem, 1fr)) minmax(8rem, 1.5fr)"
 ROW_HEADERS = ("Klasa", "Wartość", "Udział", "Cel", "Różnica", "Do celu", "Z wpłaty", "")
 
@@ -252,7 +251,8 @@ def _class_rows(current: ScopeStrategy, details: bool, edit: EditInstruments | N
         asset_class = by_name.get(row.asset_class)
         line = ui.element("div").classes("grid w-full gap-x-4 border-b py-1 text-sm items-center").style(ROW_COLUMNS)
         if row.status is not None:
-            line.classes(STATUS_COLOURS[row.status])
+            # The band's colour follows the Theme (ui/theme.py BAND_COLOURS)
+            line.classes(f"k-band-{row.status.value}")
         with line.mark(f"strategy-row band-{row.status.value}" if row.status else "strategy-row"):
             ui.label(row.asset_class).classes("font-medium")
             ui.label(format_pln(row.value)).classes("text-right")
@@ -268,7 +268,7 @@ def _class_rows(current: ScopeStrategy, details: bool, edit: EditInstruments | N
             from_deposit = format_pln(row.from_deposit) if shown and row.from_deposit is not None else ""
             ui.label(from_deposit).classes("text-right").mark(marker)
             names = [current.account_names.get(a, "") for a in current.buy_on.get(row.asset_class, ())]
-            accounts = ui.label(f"Kup na: {', '.join(names)}" if names else "").classes("text-gray-600")
+            accounts = ui.label(f"Kup na: {', '.join(names)}" if names else "")
             accounts.mark(f"accounts-{asset_class.id}" if asset_class else "accounts")
         if details and asset_class is not None:
             _instrument_rows(row, asset_class, current.instruments, edit)

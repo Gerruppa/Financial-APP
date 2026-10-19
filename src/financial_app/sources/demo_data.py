@@ -10,9 +10,11 @@ from sqlalchemy import Engine
 
 from financial_app.domain.accounts import AccountDraft, AccountType
 from financial_app.domain.instruments import InstrumentDraft
+from financial_app.domain.strategy import ClassTarget, Strategy
 from financial_app.domain.transactions import TransactionType, buy_or_sell, deposit_or_withdrawal, dividend
 from financial_app.persistence.accounts import add_account
 from financial_app.persistence.instruments import add_instrument, list_asset_classes
+from financial_app.persistence.strategies import save_strategy
 from financial_app.persistence.transactions import add_transactions
 
 # Made-up names, so a screenshot never passes for a real holding
@@ -26,7 +28,8 @@ _INSTRUMENTS = [
 
 
 def seed_demo_data(engine: Engine, today: date) -> None:
-    """Fill the empty, migrated database at ``engine`` with two Accounts and a year of Transactions up to ``today``."""
+    """Fill the empty, migrated database at ``engine`` with two Accounts, a year of Transactions up to ``today`` and a
+    Total Investment Strategy whose classes fall in each band colour."""
     classes = {asset_class.name: asset_class.id for asset_class in list_asset_classes(engine)}
     akcje, etf, obligacje, zloto = (
         add_instrument(engine, InstrumentDraft(name, classes[class_name], "PLN", manual_price=price)).id
@@ -54,4 +57,15 @@ def seed_demo_data(engine: Engine, today: date) -> None:
             deposit_or_withdrawal(ike.id, day(90), TransactionType.DEPOSIT, Decimal(8000)),
             buy_or_sell(ike.id, day(85), TransactionType.BUY, etf, Decimal(55), Decimal("124.90"), Decimal(5)),
         ],
+    )
+    # Shares of about 10, 32, 9 and 8 % against these targets: green, red, yellow, green
+    targets = {
+        "Akcje polskie": 10,
+        "Akcje zagraniczne": 50,
+        "Obligacje korporacyjne polskie": 15,
+        "Metale i surowce": 5,
+    }
+    save_strategy(
+        engine,
+        Strategy(None, {classes[name]: ClassTarget(Decimal(percent)) for name, percent in targets.items()}),
     )

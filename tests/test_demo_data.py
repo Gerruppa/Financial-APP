@@ -63,3 +63,13 @@ def test_the_start_options_default_to_the_native_window() -> None:
     assert app.parse_args(["--demo", "--port", "8090"]).port == 8090
     # pytest's own options, seen when the startup tests run main.py, are ignored
     assert not app.parse_args(["-n", "auto", "--testmon"]).browser
+
+
+async def test_the_demo_strategy_shows_every_band_colour(engine: Engine) -> None:
+    seed_demo_data(engine, TODAY)
+
+    async with user_simulation(lambda: build_shell(engine)) as user:
+        await user.open("/")
+
+        for status in ("green", "yellow", "red"):
+            await user.should_see(marker=f"band-{status}")

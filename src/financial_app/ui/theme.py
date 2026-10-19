@@ -12,6 +12,7 @@ from typing import Any
 from nicegui import context, ui
 from sqlalchemy import Engine
 
+from financial_app.domain.strategy import BandStatus
 from financial_app.domain.themes import Theme, parse_theme
 from financial_app.persistence.settings import UI_THEME, load_setting, save_setting
 
@@ -48,12 +49,48 @@ _MOUNTAINS = (
     "L330 130 L390 95 L470 170 L560 80 L640 140 L720 110 L800 160 L800 300 Z'/></svg>\")"
 )
 
-CSS = """
+# The text of each Theme (its --k-text) and, behind it, the Investment Strategy's band rows: pale in Jasny, deep in
+# Golden, so the text stays readable in both
+TEXT_COLOURS = {Theme.LIGHT: "#0f172a", Theme.GOLDEN: "#f2f2f2"}
+BAND_COLOURS = {
+    Theme.LIGHT: {BandStatus.GREEN: "#e8f5e9", BandStatus.YELLOW: "#ffe082", BandStatus.RED: "#ffcdd2"},
+    Theme.GOLDEN: {BandStatus.GREEN: "#163a24", BandStatus.YELLOW: "#3d3210", BandStatus.RED: "#45191b"},
+}
+# The Accounts treemap's tiles (ui/account_ranking.py): from the tile without P&L, pale in Jasny and the dark of a
+# card in Golden, towards the gain's green or the loss's red; grey without a result
+TILE_PALE = {Theme.LIGHT: (232, 245, 233), Theme.GOLDEN: (38, 38, 38)}
+TILE_GAIN, TILE_LOSS = (46, 125, 50), (198, 40, 40)
+TILE_UNKNOWN = {Theme.LIGHT: "#9e9e9e", Theme.GOLDEN: "#525252"}
+# The relative luminance at which black and white text contrast alike: (L + 0.05) / 0.05 = 1.05 / (L + 0.05)
+_EVEN_CONTRAST = (1.05 * 0.05) ** 0.5 - 0.05
+
+
+def readable_label(background: str) -> str:
+    """Black or white, whichever contrasts more with the ``#rrggbb`` ``background``; by WCAG either reaches 4.5:1 on
+    any colour between them."""
+    return "#000000" if luminance(background) > _EVEN_CONTRAST else "#ffffff"
+
+
+def luminance(colour: str) -> float:
+    """WCAG relative luminance of a ``#rrggbb`` colour."""
+    channels = [int(colour[i : i + 2], 16) / 255 for i in (1, 3, 5)]
+    r, g, b = (c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4 for c in channels)
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+_BAND_CSS = "".join(
+    f"body.theme-{theme.value} .k-band-{status.value} {{ background:{colour}; }}\n"
+    for theme, colours in BAND_COLOURS.items()
+    for status, colour in colours.items()
+)
+
+CSS = (
+    """
 body.theme-jasny { --k-page:#f4f6fa; --k-side:#0f1b33; --k-side-text:#cbd5e1; --k-side-active:#1e2b48;
-  --k-card:#ffffff; --k-border:#e5e9f0; --k-text:#0f172a; --k-muted:#64748b; --k-accent:#2563eb;
+  --k-card:#ffffff; --k-border:#e5e9f0; --k-text:TEXT_JASNY; --k-muted:#64748b; --k-accent:#2563eb;
   --k-hero:#0f172a; --k-chip:#eef2f7; --k-highlight:#eef2ff; }
 body.theme-golden { --k-page:#0b0b0c; --k-side:#0e0e0f; --k-side-text:#d4d4d4; --k-side-active:#2a2416;
-  --k-card:#141414; --k-border:rgba(212,175,55,.22); --k-text:#f2f2f2; --k-muted:#a3a3a3; --k-accent:#d4af37;
+  --k-card:#141414; --k-border:rgba(212,175,55,.22); --k-text:TEXT_GOLDEN; --k-muted:#a3a3a3; --k-accent:#d4af37;
   --k-hero:#e8c766; --k-chip:#262626; --k-highlight:#2a2416; }
 body { background:var(--k-page); color:var(--k-text); }
 body.theme-golden { background:var(--k-page) MOUNTAINS no-repeat right top / 70% 260px; }
@@ -77,6 +114,10 @@ body.theme-golden .k-icon { background:rgba(212,175,55,.12) !important; color:va
 .q-linear-progress__track { background:var(--k-chip) !important; opacity:1 !important; }
 .q-circular-progress__track { color:var(--k-chip) !important; opacity:1 !important; }
 """.replace("MOUNTAINS", _MOUNTAINS)
+    .replace("TEXT_JASNY", TEXT_COLOURS[Theme.LIGHT])
+    .replace("TEXT_GOLDEN", TEXT_COLOURS[Theme.GOLDEN])
+    + _BAND_CSS
+)
 
 _GOLDEN_AXIS = {
     "axisLine": {"lineStyle": {"color": "#525252"}},
