@@ -185,7 +185,7 @@ async def test_drip_adds_a_lot_without_moving_cash(engine: Engine, ike: int, pzu
 
     async with user_simulation(lambda: _shell(engine)) as user:
         # Not on Transakcje, whose list also names PZU
-        await user.open("/")
+        await user.open("/benchmarki")
         _start(user, "DRIP", "IKE")
         _choose(user, "transaction-instrument", "PZU")
         await user.should_not_see(marker="transaction-price")

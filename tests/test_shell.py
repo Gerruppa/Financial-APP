@@ -87,7 +87,14 @@ async def test_header_offers_total_view_scope(user: User) -> None:
         await user.should_see("Total")
 
 
+async def test_the_dashboard_has_no_plus_button(user: User) -> None:
+    await user.should_see(marker="dashboard")
+
+    await user.should_not_see(marker="add-transaction")
+
+
 async def test_plus_button_opens_transaction_dialog(user: User) -> None:
+    await user.open("/transakcje")
     await user.should_not_see("Nowa transakcja")
 
     user.find(marker="add-transaction").click()

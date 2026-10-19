@@ -93,7 +93,7 @@ async def test_foreign_buy_at_the_users_rate_shows_both_amounts(engine: Engine, 
 
 async def test_missing_nbp_rate_blocks_saving_with_a_message(engine: Engine, ike: int, apple: int) -> None:
     async with user_simulation(lambda: _shell(engine, nbp_answer=None)) as user:
-        await user.open("/")
+        await user.open("/benchmarki")
 
         _save_foreign_buy(user, fx_rate="3,65")
 
@@ -108,7 +108,7 @@ async def test_rate_field_shows_only_for_a_foreign_currency_instrument(engine: E
     add_instrument(engine, InstrumentDraft("PZU", asset_class.id, "PLN"))
 
     async with user_simulation(lambda: _shell(engine)) as user:
-        await user.open("/")
+        await user.open("/benchmarki")
         user.find(marker="add-transaction").click()
         user.find(marker="transaction-type").click()
         user.find("Zakup").click()
