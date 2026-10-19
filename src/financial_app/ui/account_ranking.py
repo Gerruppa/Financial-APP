@@ -16,19 +16,20 @@ from nicegui.events import EChartPointClickEventArguments
 from financial_app.domain.account_ranking import (
     RankingColumn,
     RankingRow,
+    TreemapTile,
     best_and_worst,
     sort_ranking,
     treemap_tiles,
 )
 from financial_app.domain.formatting import format_percent, format_pln
+from financial_app.domain.themes import Theme
 from financial_app.ui.charts import PLN_FORMATTER, zoom_button
 from financial_app.ui.info import card_title
-from financial_app.ui.theme import echart
+from financial_app.ui.theme import TILE_GAIN, TILE_LOSS, TILE_PALE, TILE_UNKNOWN, current_theme, echart, readable_label
 
 DASH = "—"
 # The tile colours run from pale at no P&L to full at this share of the Net Deposits
 _FULL_COLOUR_AT = Decimal("0.3")
-_PALE, _GAIN, _LOSS, _UNKNOWN = (232, 245, 233), (46, 125, 50), (198, 40, 40), "#9e9e9e"
 TREEMAP_INFO = (
     "Każde konto to prostokąt: im większy, tym większa wartość konta. Kolor to zysk lub strata względem wpłat "
     "netto: zielony to zysk, czerwony strata, a im ciemniejszy, tym większy (pełny kolor od 30 % wpłat); szary "
@@ -46,6 +47,7 @@ def accounts_treemap(rows: Sequence[RankingRow], switch: Callable[[int], None]) 
     """The treemap of the Accounts holding something, largest first; a click on a tile calls ``switch`` with its
     Account id."""
     tiles = treemap_tiles(sorted(rows, key=lambda row: row.value, reverse=True))
+    theme = current_theme()
     ids = {tile.account.name: tile.account.id for tile in tiles}
     tooltip = (
         f"p => {{ const pln = {PLN_FORMATTER}; return p.name + '<br>' + pln(p.value)"
@@ -62,15 +64,7 @@ def accounts_treemap(rows: Sequence[RankingRow], switch: Callable[[int], None]) 
                 "breadcrumb": {"show": False},
                 "width": "100%",
                 "height": "100%",
-                "data": [
-                    {
-                        "name": tile.account.name,
-                        "value": round(float(tile.value), 2),
-                        "profit": None if tile.profit is None else round(float(tile.profit), 2),
-                        "itemStyle": {"color": _colour(tile.profit_share)},
-                    }
-                    for tile in tiles
-                ],
+                "data": [_tile(tile, theme) for tile in tiles],
             }
         ],
     }
@@ -85,14 +79,39 @@ def accounts_treemap(rows: Sequence[RankingRow], switch: Callable[[int], None]) 
         zoom_button("Konta", "accounts-treemap", options, clicked)
 
 
-def _colour(share: Decimal | None) -> str:
-    """Green for a gain, red for a loss, the deeper the larger against the Net Deposits; grey without P&L."""
+@dataclass(frozen=True)
+class TileColours:
+    """A treemap tile's colour and its label's, black or white, whichever reads better on it."""
+
+    background: str
+    label: str
+
+
+def tile_colours(share: Decimal | None, theme: Theme) -> TileColours:
+    """Green for a gain, red for a loss, the deeper the larger against the Net Deposits, from the ``theme``'s pale tile
+    at no P&L; grey without a result."""
     if share is None:
-        return _UNKNOWN
-    strength = min(abs(share) / _FULL_COLOUR_AT, Decimal(1))
-    full = _GAIN if share >= 0 else _LOSS
-    channels = (round(pale + (deep - pale) * float(strength)) for pale, deep in zip(_PALE, full, strict=True))
-    return "#" + "".join(f"{channel:02x}" for channel in channels)
+        background = TILE_UNKNOWN[theme]
+    else:
+        strength = min(abs(share) / _FULL_COLOUR_AT, Decimal(1))
+        full = TILE_GAIN if share >= 0 else TILE_LOSS
+        channels = (
+            round(pale + (deep - pale) * float(strength)) for pale, deep in zip(TILE_PALE[theme], full, strict=True)
+        )
+        background = "#" + "".join(f"{channel:02x}" for channel in channels)
+    return TileColours(background, readable_label(background))
+
+
+def _tile(tile: TreemapTile, theme: Theme) -> dict[str, Any]:
+    """A treemap tile's data: its name, value, P&L for the tooltip, and its colours in ``theme``."""
+    colours = tile_colours(tile.profit_share, theme)
+    return {
+        "name": tile.account.name,
+        "value": round(float(tile.value), 2),
+        "profit": None if tile.profit is None else round(float(tile.profit), 2),
+        "itemStyle": {"color": colours.background},
+        "label": {"color": colours.label},
+    }
 
 
 RANKING_COLUMNS = "grid-template-columns: minmax(8rem, 2fr) repeat(5, minmax(7rem, 1fr))"

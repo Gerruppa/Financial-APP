@@ -68,10 +68,14 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     return parser.parse_known_args(argv)[0]
 
 
+def demo_dir() -> Path:
+    """The demo's data folder in TEMP, apart from the user's real one."""
+    return Path(tempfile.gettempdir()) / "KAPITA-demo"
+
+
 def start_demo_database() -> None:
     """Point the app at a demo folder in TEMP and fill a fresh database there; real data stays untouched."""
-    folder = Path(tempfile.gettempdir()) / "KAPITA-demo"
-    os.environ[DATA_DIR_ENV] = str(folder)
+    os.environ[DATA_DIR_ENV] = str(demo_dir())
     database_path().unlink(missing_ok=True)
     engine = init_db(database_path())
     seed_demo_data(engine, date.today())
