@@ -10,6 +10,8 @@ reference/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+# pytest-testmon's per-test coverage, the base of the Delta tests
+.testmondata*
 *.egg-info/
 build/
 

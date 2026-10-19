@@ -19,6 +19,7 @@ dev = [
     "pytest-asyncio>=1.4",
     "pytest-xdist>=3.8",
     "pytest-timeout>=2.4",
+    "pytest-testmon>=2.2",
     "pre-commit>=4.7",
     "mypy>=2.4",
     "ruff>=0.16",
@@ -55,6 +56,7 @@ financial_app = ["persistence/migrations/*.py", "persistence/migrations/versions
 testpaths = ["tests"]
 pythonpath = ["src"]
 asyncio_mode = "auto"
+markers = ["ui: drives the UI through NiceGUI's user_simulation (set in tests/conftest.py)"]
 
 [tool.mypy]
 files = ["src", "tests"]
