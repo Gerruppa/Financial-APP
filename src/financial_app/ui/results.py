@@ -64,7 +64,7 @@ class ResultsPage:
     def build(self) -> None:
         ui.label("Wyniki").classes("text-2xl font-bold")
         period_selector(self.period)
-        with ui.column().classes("w-full max-w-6xl").mark("results"):
+        with ui.column().classes("w-full").mark("results"):
             self.content()
 
     @ui.refreshable_method
