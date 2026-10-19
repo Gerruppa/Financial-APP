@@ -1,0 +1,3 @@
+# Unpriced Instruments
+
+`domain/valuation.py` `instruments_without_price` and `sources/prices.py` `unpriced_instruments(engine)` give the "Instrumenty bez wyceny" list (#40): held Instruments, Bond Series aside, with no Source Symbol in their Fallback Order (`UnpricedReason.NO_SOURCE`), failing in every source in the last refresh (`FAILED`, with the reasons, until the next refresh) or with a symbol but no Quote yet (`NOT_REFRESHED`). `ui/unpriced.py` `UnpricedSection` is its card in Ustawienia below Instrumenty; a row opens the Instrument dialog. The shell keeps the section and redraws it after a price refresh or a Transaction save, and `InstrumentsSection.refresh` redraws it through `on_changed`.

@@ -1,0 +1,3 @@
+# Info icons and waterfall amounts
+
+`ui/info.py` `info_icon(text, name)` (marker `info-<name>`, the text in a hover tooltip, blank lines split paragraphs) and `card_title(title, info, name)`. The Polish texts sit beside their cards: `ui/charts.py` `CHART_INFO` by chart name (the drawdown passes its own, also on Wyniki), `ui/dashboard.py` `TILE_INFO` by tile key (markers `info-total-<key>`) and `CURRENCY_INFO`, `ui/account_ranking.py` `TREEMAP_INFO` and `RANKING_INFO`, `ui/strategy.py` `STRATEGY_INFO`, `ui/results.py` `TILE_INFO` for XIRR and TWR (`info-results-<key>`). The waterfall's `renderItem` draws each bar's signed change in whole złoty above it, and its axis labels slant 35° so they never overlap.

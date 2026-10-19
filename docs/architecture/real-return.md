@@ -1,0 +1,3 @@
+# Real return (L-10, spec 3.4.1)
+
+`domain/inflation.py` `inflation(readings, first, last)` spreads each month's GUS month-on-month CPI evenly across its days, compounding daily, over the days after `first` up to `last`, as the sheet's Benchmarki (a month GUS has not published adds none: `Inflation.complete`, `known_until`); `real_return` is (1 + TWR) / (1 + inflation) − 1. `period_results(..., cpi=)` gives `PeriodResults.inflation` (counted from the day the scope first held something) and `real_return`; the shell redraws Wyniki after a bond data refresh. `tests/test_bond_parity.py` (L-11) compares every row of the sheet's Obligacje tab of a type it values (EDO, ROS, ROD, COI, TOS) and each of those types against `sheet_value`, the tab's formulas re-stated.

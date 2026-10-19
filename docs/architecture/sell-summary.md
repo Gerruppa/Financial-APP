@@ -1,0 +1,3 @@
+# Sell Summary (#92, spec 6.2)
+
+`domain/lots.py` `Replay.closed` lists each `ClosedLot` (the Sell, the closed part of the Lot, `revenue` pro rata); `domain/sale_summary.py` `sale_pairs` (a `SalePair` each, with the Dividends attributed per unit held the day before, `DIVIDEND_AFTER_SALE` 90 days after selling everything, a coupon to its Lot), `in_view` (scope and sale day, newest first) and `sale_stats` (`SaleStats`: count, win rate, average days, best, worst, sums). `ui/sale_summary.py` `SaleSummaryPage` (`/sprzedaz`: tiles `sale-<key>`, headers `sale-header`, rows `sale-row`, `sale-empty`; Instrument and Account names wrap in their columns, dates and numbers keep one line, #116).
