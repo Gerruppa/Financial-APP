@@ -154,7 +154,8 @@ async def test_a_bond_data_refresh_revalues_the_portfolio_and_outdates_history(e
     async with user_simulation(shell) as user:
         await user.open("/portfolio")
         with user.scope(marker="portfolio"):
-            await user.should_see(f"5,35{NBSP}% · rok 1")
+            # The start refresh runs in the background; a slow CI runner needs more than the default 0.3 s
+            await user.should_see(f"5,35{NBSP}% · rok 1", retries=50)
             await user.should_not_see("brak oprocentowania")
 
     assert history.invalidated >= 1

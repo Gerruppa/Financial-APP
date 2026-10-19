@@ -280,7 +280,7 @@
   "tests/test_benchmarks_ui.py": "ee9785e9",
   "tests/test_bond_calendar_domain.py": "51b36573",
   "tests/test_bond_data.py": "a569e894",
-  "tests/test_bond_data_ui.py": "723f9855",
+  "tests/test_bond_data_ui.py": "a24e6ffb",
   "tests/test_bond_drafts_domain.py": "5997c20e",
   "tests/test_bond_drafts_repository.py": "0457ffc8",
   "tests/test_bond_drafts_ui.py": "830e9b25",
