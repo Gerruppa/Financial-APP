@@ -82,7 +82,7 @@ class RecurringRulesSection:
                 )
             ui.label(
                 "Terminy, które minęły bez pasującej transakcji, czekają w zakładce Transakcje na zatwierdzenie."
-            ).classes("text-sm text-gray-500")
+            ).classes("text-sm k-muted")
             # The marker sits outside the refreshable list so it survives a refresh
             with ui.column().classes("w-full gap-1").mark("recurring-rules"):
                 self.rule_list()
@@ -94,7 +94,7 @@ class RecurringRulesSection:
     def rule_list(self) -> None:
         rules = list_rules(self.engine)
         if not rules:
-            ui.label("Nie dodano jeszcze żadnej reguły.").classes("text-gray-500")
+            ui.label("Nie dodano jeszcze żadnej reguły.").classes("k-muted")
             return
         accounts = {account.id: account.name for account in list_accounts(self.engine)}
         instruments = instrument_labels(self.engine)
@@ -113,11 +113,11 @@ class RecurringRulesSection:
                 if rule.instrument_id is not None:
                     what.append(instruments[rule.instrument_id])
                 what.append(format_amount(rule.amount, rule.currency))
-                ui.label(" · ".join(what)).classes("text-sm text-gray-600")
+                ui.label(" · ".join(what)).classes("text-sm k-muted")
                 when = [f"{rule.frequency.label}, dzień {rule.day_of_month}"]
                 upcoming = next_occurrence(rule, self.today())
                 when.append("bez kolejnych terminów" if upcoming is None else f"najbliższy {format_date(upcoming)}")
-                ui.label(" · ".join(when)).classes("text-sm text-gray-500")
+                ui.label(" · ".join(when)).classes("text-sm k-muted")
             ui.button(icon="toggle_on" if rule.active else "toggle_off", on_click=lambda: self._switch(rule)).props(
                 f'flat round aria-label="{"Wyłącz" if rule.active else "Włącz"} {rule.name}"'
             ).mark("toggle-recurring-rule")
@@ -146,7 +146,7 @@ class RecurringRulesSection:
 
         with confirmation, ui.card():
             ui.label(f"Usunąć regułę „{rule.name}”?").classes("text-lg font-bold")
-            ui.label("Zapisane z niej transakcje zostaną.").classes("text-gray-600")
+            ui.label("Zapisane z niej transakcje zostaną.").classes("k-muted")
             with ui.row().classes("w-full justify-end"):
                 ui.button("Anuluj", on_click=confirmation.close).props("flat")
                 ui.button("Usuń", on_click=delete).props("color=negative").mark("confirm-delete-recurring-rule")
@@ -191,7 +191,7 @@ def open_rule_dialog(
     with dialog, ui.card().classes("w-[480px]"):
         ui.label("Nowa reguła cykliczna" if rule is None else "Edytuj regułę cykliczną").classes("text-lg font-bold")
         if not accounts:
-            ui.label("Najpierw dodaj konto w sekcji Konta.").classes("text-gray-500")
+            ui.label("Najpierw dodaj konto w sekcji Konta.").classes("k-muted")
             with ui.row().classes("w-full justify-end"):
                 ui.button("Zamknij", on_click=dialog.close).props("flat")
             dialog.open()
@@ -321,7 +321,7 @@ def _skips(engine: Engine, rule: RecurringRule, today: date, on_changed: Callabl
         skipped = skipped_occurrences(engine, rule.id)
         ui.label("Pominięte terminy").classes("font-medium mt-2")
         if not skipped:
-            ui.label("Brak pominiętych terminów.").classes("text-sm text-gray-500")
+            ui.label("Brak pominiętych terminów.").classes("text-sm k-muted")
         for day in skipped:
             with ui.row().classes("w-full items-center border-b").mark("rule-skip"):
                 ui.label(format_date(day)).classes("grow")

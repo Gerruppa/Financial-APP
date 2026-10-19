@@ -90,7 +90,7 @@ class AssetClassesSection:
         for asset_class in list_asset_classes(self.engine):
             with ui.row().classes("w-full items-center no-wrap border-b py-1").mark(f"asset-class-{asset_class.id}"):
                 ui.label(asset_class.name).classes("grow")
-                ui.label(_order_text(asset_class.fallback_order)).classes("text-sm text-gray-500")
+                ui.label(_order_text(asset_class.fallback_order)).classes("text-sm k-muted")
                 ui.button(icon="edit", on_click=lambda c=asset_class: self.open_dialog(c)).props(
                     f'flat round dense aria-label="Edytuj klasę {asset_class.name}"'
                 ).mark(f"edit-asset-class-{asset_class.id}")
@@ -105,9 +105,7 @@ class AssetClassesSection:
             name = ui.input("Nazwa", value=asset_class.name if asset_class else "").classes("w-full")
             name.mark("asset-class-name")
             ui.label("Kolejność źródeł wycen").classes("font-medium")
-            ui.label("Instrument jest wyceniany z pierwszego źródła, dla którego ma symbol.").classes(
-                "text-sm text-gray-500"
-            )
+            ui.label("Instrument jest wyceniany z pierwszego źródła, dla którego ma symbol.").classes("text-sm k-muted")
             with ui.column().classes("w-full gap-1").mark("fallback-order-editor"):
                 _order_editor(order)
             error = ui.label().classes("text-negative").mark("asset-class-error")
@@ -169,7 +167,7 @@ def _order_editor(order: list[str]) -> None:
             order[i], order[i + 1] = order[i + 1], order[i]
 
         if not order:
-            ui.label("Bez źródeł: instrumenty tej klasy mają tylko cenę ręczną.").classes("text-sm text-gray-500")
+            ui.label("Bez źródeł: instrumenty tej klasy mają tylko cenę ręczną.").classes("text-sm k-muted")
         for i, source in enumerate(order):
             name = SOURCE_NAMES.get(source, source)
             with ui.row().classes("w-full items-center no-wrap gap-1"):
@@ -221,7 +219,7 @@ class InstrumentsSection:
     def instrument_list(self) -> None:
         instruments = list_instruments(self.engine)
         if not instruments:
-            ui.label("Nie dodano jeszcze żadnego instrumentu.").classes("text-gray-500")
+            ui.label("Nie dodano jeszcze żadnego instrumentu.").classes("k-muted")
         bond_series = list_bond_series(self.engine)
         for instrument in instruments:
             self._instrument_row(instrument, bond_series.get(instrument.id))
@@ -243,9 +241,9 @@ class InstrumentsSection:
                 details.extend(fund_details(instrument))
                 for source, symbol in instrument.source_symbols.items():
                     details.append(f"{SOURCE_NAMES.get(source, source)} {symbol}")
-                ui.label(" · ".join(d for d in details if d)).classes("text-sm text-gray-500")
+                ui.label(" · ".join(d for d in details if d)).classes("text-sm k-muted")
                 if series is not None:
-                    ui.label(rates_summary(series)).classes("text-sm text-gray-500").mark("bond-rates")
+                    ui.label(rates_summary(series)).classes("text-sm k-muted").mark("bond-rates")
             if series is not None:
                 ui.button(icon="percent", on_click=lambda: open_rates_dialog(self.engine, series, self.refresh)).props(
                     f'flat round aria-label="Oprocentowanie {instrument.name}"'
@@ -337,7 +335,7 @@ class InstrumentsSection:
             # bankier.pl; the others wait under "Więcej źródeł" and keep their symbols, and Stooq, which never values
             # a Position, has its own section
             with ui.column().classes("w-full gap-2").mark("class-sources"):
-                note = ui.label().classes("text-sm text-gray-500").mark("class-sources-note")
+                note = ui.label().classes("text-sm k-muted").mark("class-sources-note")
                 class_sources = ui.column().classes("w-full gap-2")
             more = ui.expansion().classes("w-full").mark("more-sources")
             stooq_section = ui.expansion("Historia notowań (Stooq)").classes("w-full").mark("stooq-history")
@@ -478,7 +476,7 @@ class InstrumentsSection:
                     search_button.props(remove="loading")
                 with search_results:
                     if message:
-                        ui.label(message).classes("text-sm text-gray-500").mark("instrument-search-message")
+                        ui.label(message).classes("text-sm k-muted").mark("instrument-search-message")
                     for result in results:
                         _result_row(result, choose)
 

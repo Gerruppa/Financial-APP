@@ -45,7 +45,7 @@ class AccountsSection:
     def account_list(self) -> None:
         accounts = list_accounts(self.engine)
         if not accounts:
-            ui.label("Nie dodano jeszcze żadnego konta.").classes("text-gray-500")
+            ui.label("Nie dodano jeszcze żadnego konta.").classes("k-muted")
         for account in accounts:
             self._account_row(account)
 
@@ -62,7 +62,7 @@ class AccountsSection:
                     details.append(f"przewalutowanie {format_percent(account.fx_conversion_fee_percent)}")
                 if account.exclude_fx_result:
                     details.append("bez wyniku walutowego")
-                ui.label(" · ".join(d for d in details if d)).classes("text-sm text-gray-500")
+                ui.label(" · ".join(d for d in details if d)).classes("text-sm k-muted")
             ui.button(icon="edit", on_click=lambda: self.open_dialog(account)).props(
                 f'flat round aria-label="Edytuj {account.name}"'
             ).mark("edit-account")
@@ -107,7 +107,7 @@ def open_account_dialog(
             value=(account.account_type if account else AccountType.REGULAR).value,
         ).classes("w-full")
         account_type.mark("account-type")
-        regime = ui.label().classes("text-sm text-gray-600")
+        regime = ui.label().classes("text-sm k-muted")
         regime.bind_text_from(account_type, "value", lambda value: tax_regime_for(AccountType(value)).summary)
         currencies = ui.input(
             "Waluty rachunku", value=", ".join(account.cash_currencies if account else cash_currencies)
@@ -177,7 +177,7 @@ def _confirm_delete(name: str, delete: Callable[[ui.dialog], None]) -> None:
     confirmation.on("hide", confirmation.delete)
     with confirmation, ui.card():
         ui.label(f"Usunąć konto „{name}”?").classes("text-lg font-bold")
-        ui.label("Konto nie ma transakcji, więc nic się nie przeliczy.").classes("text-gray-600")
+        ui.label("Konto nie ma transakcji, więc nic się nie przeliczy.").classes("k-muted")
         with ui.row().classes("w-full justify-end"):
             ui.button("Anuluj", on_click=confirmation.close).props("flat").mark("cancel-delete-account")
             confirm = ui.button("Usuń", on_click=lambda: delete(confirmation)).props("color=negative")

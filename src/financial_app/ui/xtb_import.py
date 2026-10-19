@@ -102,7 +102,7 @@ class XtbImportSection:
             self._accounts(preview, names)
             self._tickers(preview, instruments)
             if preview.unmatched_accounts or preview.unmatched_tickers:
-                ui.label("Dopasuj rachunki i tickery, aby zobaczyć porównanie.").classes("text-gray-500")
+                ui.label("Dopasuj rachunki i tickery, aby zobaczyć porównanie.").classes("k-muted")
                 return
             describe = _Describer(names, instruments)
             for problem in preview.problems:
@@ -201,7 +201,7 @@ class XtbImportSection:
                 for line in lines:
                     ui.label(line).classes("text-sm")
             if isinstance(item, Pair) and item.linked:
-                ui.label("Przelew wpisany w aplikacji zostaje").classes("text-sm text-gray-500")
+                ui.label("Przelew wpisany w aplikacji zostaje").classes("text-sm k-muted")
                 return
             ui.toggle(
                 {choice.value: label for choice, label in options.items()},

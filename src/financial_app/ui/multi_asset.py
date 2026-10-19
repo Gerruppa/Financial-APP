@@ -28,9 +28,7 @@ def split_editor(asset_classes: Sequence[AssetClass], split: Mapping[int, Decima
     fields: dict[int, ui.input] = {}
     with ui.column().classes("w-full gap-1").mark("multi-asset-split"):
         ui.label("Podział Multi-asset").classes("font-medium")
-        ui.label("Jaki procent wartości instrumentu przypada na każdą klasę; razem 100%.").classes(
-            "text-sm text-gray-500"
-        )
+        ui.label("Jaki procent wartości instrumentu przypada na każdą klasę; razem 100%.").classes("text-sm k-muted")
         with ui.grid(columns=2).classes("w-full gap-x-4 gap-y-0"):
             for asset_class in asset_classes:
                 if asset_class.multi_asset:
@@ -73,7 +71,7 @@ def open_split_dialog(engine: Engine, instrument: Instrument, on_saved: Callable
         ui.label(f"Podział Multi-asset: {instrument.name}").classes("text-lg font-bold")
         if not instrument.multi_asset_split:
             ui.label(f"Bez podziału instrument liczy się w całości do klasy {instrument.asset_class_name}.").classes(
-                "text-sm text-gray-500"
+                "text-sm k-muted"
             )
         typed = split_editor(list_asset_classes(engine), instrument.multi_asset_split)
         error = ui.label().classes("text-negative").mark("split-error")
@@ -124,7 +122,7 @@ class MultiAssetPage:
             ui.label(
                 "Brak instrumentów Multi-asset w portfelu. Instrument klasy Multi-asset dostaje podział na klasy "
                 "w swoim oknie w Ustawienia > Instrumenty."
-            ).classes("text-gray-500").mark("multi-asset-empty")
+            ).classes("k-muted").mark("multi-asset-empty")
             return
         for holding in holdings:
             self._holding_row(holding)
@@ -145,7 +143,7 @@ class MultiAssetPage:
                 value = format_pln(holding.value)
                 ui.label(value if holding.priced else f"{value} (po koszcie)")
             if instrument.multi_asset_split:
-                ui.label(_split_text(holding)).classes("text-sm text-gray-500")
+                ui.label(_split_text(holding)).classes("text-sm k-muted")
             else:
                 ui.label(
                     f"Brak podziału: liczy się w całości do klasy {instrument.asset_class_name}. Kliknij, aby go dodać."

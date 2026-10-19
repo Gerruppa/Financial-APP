@@ -176,16 +176,16 @@ class TransactionsPage:
         listed = self.scoped()
         self._header_row.set_visibility(bool(listed))
         if not listed:
-            ui.label("Brak transakcji. Dodaj pierwszą przyciskiem „+”.").classes("text-gray-500")
+            ui.label("Brak transakcji. Dodaj pierwszą przyciskiem „+”.").classes("k-muted")
             return
         account_names = {account.id: account.name for account in list_accounts(self.engine)}
         instruments = {instrument.id: instrument for instrument in list_instruments(self.engine)}
         names = {instrument_id: instrument.name for instrument_id, instrument in instruments.items()}
         transactions = view(listed, self.filters, self.sort, account_names, names)
         if not transactions:
-            ui.label("Żadna transakcja nie spełnia filtrów.").classes("text-gray-500 py-1").mark("no-match")
+            ui.label("Żadna transakcja nie spełnia filtrów.").classes("k-muted py-1").mark("no-match")
         for transaction in transactions:
-            row = ui.element("div").classes("grid w-full gap-x-4 border-b py-1 cursor-pointer hover:bg-gray-100")
+            row = ui.element("div").classes("grid w-full gap-x-4 border-b py-1 cursor-pointer k-hover")
             row.style(COLUMNS).mark("transaction-row")
             row.on("click", lambda t=transaction: self.open(t))
             with row:
@@ -205,47 +205,47 @@ class TransactionsPage:
                             assert transaction.quantity is not None and transaction.price is not None
                             price = format_unit_price(transaction.price, instrument.quote_currency)
                             quantity = format_quantity(transaction.quantity)
-                            ui.label(f"{quantity} × {price}").classes("text-xs text-gray-500")
+                            ui.label(f"{quantity} × {price}").classes("text-xs k-muted")
                             if transaction.withholding_tax:
                                 fee, tax = format_pln(transaction.commission), format_pln(transaction.withholding_tax)
-                                ui.label(f"opłata {fee} · podatek {tax}").classes("text-xs text-gray-500")
+                                ui.label(f"opłata {fee} · podatek {tax}").classes("text-xs k-muted")
                         elif kind is TransactionType.SPLIT:
-                            ui.label(f"split {transaction.split_ratio}").classes("text-xs text-gray-500")
+                            ui.label(f"split {transaction.split_ratio}").classes("text-xs k-muted")
                         elif kind is TransactionType.SECURITY_TRANSFER:
                             assert transaction.quantity is not None
-                            ui.label(f"{format_quantity(transaction.quantity)} szt.").classes("text-xs text-gray-500")
+                            ui.label(f"{format_quantity(transaction.quantity)} szt.").classes("text-xs k-muted")
                     if kind.is_dividend:
                         _dividend_cell(transaction)
                     if transaction.nbp_rate is not None:
-                        ui.label(_rates_text(transaction)).classes("text-xs text-gray-500")
+                        ui.label(_rates_text(transaction)).classes("text-xs k-muted")
                 with ui.column().classes("gap-0 items-end"):
                     if not kind.has_amount:
                         pass  # a Split or Security Transfer moves only units
                     elif kind is TransactionType.CASH_TRANSFER and transaction.is_paid_in_foreign_cash:  # #125
                         assert transaction.quantity is not None  # foreign cash, checked on creation
                         ui.label(format_amount(transaction.quantity, transaction.cash_currency))
-                        ui.label(format_pln(transaction.actual_amount)).classes("text-xs text-gray-500")
+                        ui.label(format_pln(transaction.actual_amount)).classes("text-xs k-muted")
                     elif kind is TransactionType.CASH_TRANSFER:
                         ui.label(format_pln(transaction.actual_amount))
                     elif kind is TransactionType.DRIP:
                         ui.label(f"reinwestowano {format_pln(transaction.actual_amount)}")
                         if transaction.tax_amount != transaction.actual_amount:
                             tax = format_pln(transaction.tax_amount)
-                            ui.label(f"podatkowa {tax}").classes("text-xs text-gray-500")
+                            ui.label(f"podatkowa {tax}").classes("text-xs k-muted")
                     elif transaction.is_paid_in_foreign_cash:
                         currency = transaction.cash_currency
                         ui.label(format_amount(transaction.foreign_cash_change, currency, signed=True))
                         actual = format_pln(transaction.actual_cash_change, signed=True)
-                        ui.label(f"rzeczywista {actual}").classes("text-xs text-gray-500")
+                        ui.label(f"rzeczywista {actual}").classes("text-xs k-muted")
                     else:
                         ui.label(format_pln(transaction.cash_change, signed=True))
                     if kind is not TransactionType.DRIP and transaction.tax_amount != transaction.actual_amount:
                         tax = format_pln(transaction.tax_cash_change, signed=True)
-                        ui.label(f"podatkowa {tax}").classes("text-xs text-gray-500")
+                        ui.label(f"podatkowa {tax}").classes("text-xs k-muted")
                 with ui.column().classes("gap-0"):
-                    ui.label(transaction.comment).classes("text-gray-600")
+                    ui.label(transaction.comment).classes("k-muted")
                     if transaction.origin is not Origin.MANUAL:
-                        ui.label(transaction.origin.label).classes("text-xs text-gray-500").mark("transaction-origin")
+                        ui.label(transaction.origin.label).classes("text-xs k-muted").mark("transaction-origin")
 
 
 class _ColumnHeader:
@@ -363,17 +363,17 @@ def _exchange_cell(exchange: Transaction) -> None:
     assert exchange.quantity is not None
     rate = format_rate(exchange.actual_amount / exchange.quantity)
     amount = format_amount(exchange.foreign_cash_change, currency, signed=True)
-    ui.label(f"{amount} po {rate}").classes("text-xs text-gray-500")
+    ui.label(f"{amount} po {rate}").classes("text-xs k-muted")
 
 
 def _dividend_cell(payout: Transaction) -> None:
     """A Dividend's gross amount and withholding tax; a DRIP's units bought with it."""
     currency = payout.dividend_currency
     if payout.quantity is not None:
-        ui.label(f"+{format_quantity(payout.quantity)} szt.").classes("text-xs text-gray-500")
+        ui.label(f"+{format_quantity(payout.quantity)} szt.").classes("text-xs k-muted")
     assert payout.gross is not None
     gross, tax = format_amount(payout.gross, currency), format_amount(payout.withholding_tax, currency)
-    ui.label(f"brutto {gross} · podatek {tax}").classes("text-xs text-gray-500")
+    ui.label(f"brutto {gross} · podatek {tax}").classes("text-xs k-muted")
 
 
 def _rates_text(trade: Transaction) -> str:

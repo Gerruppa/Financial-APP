@@ -433,6 +433,6 @@ def _refresh_message(result: RefreshResult) -> str:
 def _placeholder_page(title: str) -> Callable[[], None]:
     def build() -> None:
         ui.label(title).classes("text-2xl font-bold")
-        ui.label("Ta zakładka jest w przygotowaniu.").classes("text-gray-500")
+        ui.label("Ta zakładka jest w przygotowaniu.").classes("k-muted")
 
     return build

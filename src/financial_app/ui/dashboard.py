@@ -300,7 +300,7 @@ def _since_snapshot(change: SnapshotChange | None) -> None:
         f", w tym rynek {format_pln(change.market, signed=True)}, "
         f"wpłaty netto {format_pln(change.net_deposits, signed=True)}"
     )
-    ui.label(text).classes("text-sm text-gray-600").mark("since-snapshot")
+    ui.label(text).classes("text-sm k-muted").mark("since-snapshot")
 
 
 ACCOUNT_COLUMNS = "grid-template-columns: minmax(8rem, 2fr) repeat(9, minmax(6rem, 1fr)) minmax(8rem, 1.5fr)"
@@ -344,7 +344,7 @@ def _account_table(rows: tuple[AccountRow, ...], after_tax: bool) -> None:
                 ui.label(row.account.name).classes("font-medium")
                 for cell in cells:
                     ui.label(cell).classes("text-right")
-                ui.label("bez wyniku walutowego" if row.account.exclude_fx_result else "").classes("text-gray-500")
+                ui.label("bez wyniku walutowego" if row.account.exclude_fx_result else "").classes("k-muted")
 
 
 CURRENCY_COLUMNS = "grid-template-columns: 4rem repeat(2, minmax(6rem, 10rem))"
@@ -379,7 +379,7 @@ def _prices_line(refresh: RefreshStatus | None, unpriced: int) -> None:
     """When prices were last refreshed and how many Instruments failed, as in the header; the Instruments without a
     price lead to their list in Ustawienia."""
     with ui.row().classes("items-center gap-4 text-sm").mark("dashboard-prices"):
-        ui.label(refresh_summary(refresh)).classes("text-negative" if refresh and refresh.failures else "text-gray-600")
+        ui.label(refresh_summary(refresh)).classes("text-negative" if refresh and refresh.failures else "k-muted")
         if unpriced:
             text = format_count(unpriced, "instrument bez wyceny", "instrumenty bez wyceny", "instrumentów bez wyceny")
             ui.link(text, "/ustawienia")

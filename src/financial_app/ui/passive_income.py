@@ -65,9 +65,7 @@ class PassiveIncomePage:
 
     def build(self) -> None:
         ui.label("Dochód pasywny").classes("text-2xl font-bold")
-        ui.label("Dywidendy i odsetki netto: otrzymane oraz prognozowane kupony obligacji.").classes(
-            "text-sm text-gray-600"
-        )
+        ui.label("Dywidendy i odsetki netto: otrzymane oraz prognozowane kupony obligacji.").classes("text-sm k-muted")
         with ui.column().classes("w-full max-w-screen-2xl").mark("passive-income"):
             self.content()
 
@@ -137,10 +135,10 @@ def _tiles(months: list[MonthIncome], average: Decimal, goal: Decimal | None) ->
     ):
         for key, title, text, note in tiles:
             with ui.card().classes("gap-1"):
-                ui.label(title).classes("text-sm text-gray-500")
+                ui.label(title).classes("text-sm k-muted")
                 ui.label(text).classes("text-xl font-medium").mark(f"income-{key}")
                 if note:
-                    ui.label(note).classes("text-xs text-gray-500")
+                    ui.label(note).classes("text-xs k-muted")
 
 
 def _chart(months: list[MonthIncome], goal: Decimal | None) -> None:
@@ -183,7 +181,7 @@ def _forecast(items: list[IncomeItem], today: date, account_id: int | None, engi
     with ui.card().classes("w-full").mark("income-forecast"):
         ui.label("Prognozowane kupony (12 miesięcy)").classes("text-lg font-medium")
         if not coming:
-            ui.label("Brak kuponów do wypłaty.").classes("text-gray-500")
+            ui.label("Brak kuponów do wypłaty.").classes("k-muted")
             return
         with ui.element("div").classes("grid w-full gap-x-4 text-sm font-medium").style(FORECAST_COLUMNS):
             for header in ("Data", "Seria", "Konto", "Netto"):

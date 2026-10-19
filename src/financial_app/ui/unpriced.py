@@ -35,7 +35,7 @@ class UnpricedSection:
             ui.label(
                 "Instrumenty z otwartą pozycją bez wyceny automatycznej. Kliknij instrument, uzupełnij symbol "
                 "w źródle i odśwież wyceny."
-            ).classes("text-sm text-gray-500")
+            ).classes("text-sm k-muted")
             # The marker sits outside the refreshable list so it survives a refresh
             with ui.column().classes("w-full gap-0").mark("unpriced"):
                 self.unpriced_list(open_instrument)
@@ -44,7 +44,7 @@ class UnpricedSection:
     def unpriced_list(self, open_instrument: Callable[[Instrument], None]) -> None:
         listed = unpriced_instruments(self.engine)
         if not listed:
-            ui.label("Każdy instrument z otwartą pozycją ma wycenę automatyczną.").classes("text-gray-500")
+            ui.label("Każdy instrument z otwartą pozycją ma wycenę automatyczną.").classes("k-muted")
         for unpriced in listed:
             _unpriced_row(unpriced, open_instrument)
 

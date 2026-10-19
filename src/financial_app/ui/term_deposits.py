@@ -88,7 +88,7 @@ class DepositsSection:
                 text = "Brak trwających lokat."
                 if not _holding_accounts(self.view.accounts):
                     text += " Lokatę założysz na koncie typu „Lokata / oszczędności” (Ustawienia → Konta)."
-                ui.label(text).classes("text-gray-500").mark("deposits-empty")
+                ui.label(text).classes("k-muted").mark("deposits-empty")
                 return
             with ui.element("div").classes("grid w-full gap-x-4 border-b py-1 font-medium").style(COLUMNS):
                 for header in HEADERS:
@@ -98,21 +98,21 @@ class DepositsSection:
 
     def _row(self, row: DepositRow) -> None:
         deposit = row.deposit
-        line = ui.element("div").classes("grid w-full gap-x-4 border-b py-1 cursor-pointer hover:bg-gray-100")
+        line = ui.element("div").classes("grid w-full gap-x-4 border-b py-1 cursor-pointer k-hover")
         with line.style(COLUMNS).mark("deposit-row"):
             with ui.column().classes("gap-0"):
                 ui.label(deposit.name).classes("font-medium")
                 details = f"od {format_date(deposit.start_date)} · {CAPITALIZATION_LABELS[deposit.capitalization]}"
                 if self.account_id is None:
                     details = f"{row.account.name} · {details}"
-                ui.label(details).classes("text-xs text-gray-500")
+                ui.label(details).classes("text-xs k-muted")
             ui.label(format_pln(deposit.principal)).classes("text-right")
             ui.label(format_exact_percent(deposit.annual_rate)).classes("text-right")
             ui.label(format_date(deposit.maturity)).classes("text-right")
             ui.label(str(row.days_left)).classes("text-right")
             with ui.column().classes("gap-0 items-end"):
                 ui.label(format_pln(row.accrued.net))
-                ui.label(f"podatek {format_pln(row.accrued.tax)}").classes("text-xs text-gray-500")
+                ui.label(f"podatek {format_pln(row.accrued.tax)}").classes("text-xs k-muted")
             ui.label(format_pln(row.break_value)).classes("text-right font-medium")
         line.on("click", lambda: self.open_dialog(deposit))
 
@@ -184,7 +184,7 @@ def open_deposit_dialog(
             capital.mark("deposit-capital")
             ui.label(
                 "Sama lokata nie trafia do Transakcji: zapisują się tam jej kapitał (to pole) i zatwierdzone odsetki."
-            ).classes("text-xs text-gray-500").mark("deposit-capital-hint")
+            ).classes("text-xs k-muted").mark("deposit-capital-hint")
         # The capital's source follows whether the Account holds it on the start, until the user picks one
         picked = False
         defaulting = False
@@ -195,7 +195,7 @@ def open_deposit_dialog(
 
         if capital is not None:
             capital.on_value_change(capital_picked)
-        summary = ui.label().classes("text-sm text-gray-600").mark("deposit-summary")
+        summary = ui.label().classes("text-sm k-muted").mark("deposit-summary")
         error = ui.label().classes("text-negative").mark("deposit-error")
 
         def draft() -> TermDepositDraft:
