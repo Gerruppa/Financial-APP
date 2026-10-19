@@ -11,7 +11,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `CONTEXT.md`: Domain glossary defining the app's Polish-labelled terms (Accounts, Instruments, Transactions, Lots, Quotes) and terms to avoid.
 - `GLOSSARY.md`: Polish-to-English index of glossary terms, mapping UI labels to CONTEXT.md definitions and sections
 - `README.md`: User-facing setup guide: install steps, desktop shortcut creation, data location, backups and log file.
-- `alembic.ini`: Alembic CLI configuration pointing migrations at the persistence package; the app runs them itself at start-up.
+- `alembic.ini`: Alembic CLI configuration pointing migrations at the persistence package, with ruff post-write hooks for new revisions; the app runs migrations itself at start-up.
 - `main.py`: Convenience script entry point that calls the app's main function to start the window.
 - `pyproject.toml`: Package metadata, dependencies, console and GUI entry points, pytest, mypy and ruff settings.
 
@@ -113,6 +113,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `build_installer.ps1`: Builds the KAPITA installer: runs PyInstaller on the spec, then Inno Setup with the version from the package
 - `create_desktop_shortcut.ps1`: PowerShell script creating a Windows desktop shortcut that starts the console-less app window.
 - `make_icons.py`: Cuts the KAPITA app icons (png and ico) out of the logo in packaging/; run only when the logo changes
+- `new_migration.py`: Generates the next numbered migration by autogenerating against a scratch database, then ruff fixes and formats it.
 
 ## src/financial_app/
 
