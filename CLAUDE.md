@@ -26,7 +26,7 @@ The app re-implements the inwestomat.eu "Portfolio tracker" Google Sheet. The ag
 - Python 3.14 in a virtualenv at `.venv/`. Dependencies are listed in `pyproject.toml`; the package is installed in editable mode with `.venv/Scripts/python.exe -m pip install -e ".[dev]"`.
 - Windows host. Use the venv interpreter directly, without relying on activation:
   - Run the app (native window): `.venv/Scripts/python.exe main.py`
-  - Tests: `.venv/Scripts/python.exe -m pytest` (UI tests use NiceGUI's `user_simulation`, with no browser)
+  - Tests: `.venv/Scripts/python.exe -m pytest -n auto` (about 2 minutes; UI tests use NiceGUI's `user_simulation`, with no browser)
   - Type check: `.venv/Scripts/python.exe -m mypy` (strict)
   - Lint and format: `.venv/Scripts/python.exe -m ruff check .` and `.venv/Scripts/python.exe -m ruff format .`
 - Change source files with the Edit tool, one call per replacement; Python heredocs piped through Git Bash break on quotes.

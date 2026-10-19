@@ -1,0 +1,16 @@
+# Install once per clone: .venv/Scripts/python.exe -m pre_commit install
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.10
+    hooks:
+      - id: ruff-check
+      - id: ruff-format
+  # mypy needs the project and its dependencies, so it runs from the venv over the whole project.
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy
+        entry: .venv\\Scripts\\python.exe -m mypy
+        language: system
+        types: [python]
+        pass_filenames: false
