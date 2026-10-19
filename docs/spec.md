@@ -162,7 +162,7 @@ Dropped: Google Finance, FT, Biznesradar scraping. Each source is a module with 
 
 ## 5. Screens (tabs)
 
-Shell (UI prototype verdict, branch `prototype/ui-shell`, issue #1): **left navigation menu**, Dashboard as tiles and cards, **"+" floating button** opening the transaction dialog (on every tab but Ustawienia, L-28). Number format everywhere: Polish (decimal comma, non-breaking thousand separators and before "zł"/"%"), produced by one shared formatter; amounts never wrap.
+Shell (UI prototype verdict, branch `prototype/ui-shell`, issue #1): **left navigation menu**, Dashboard as tiles and cards, **"+" floating button** opening the transaction dialog (on every tab but the Dashboard, Ustawienia and Pomoc, L-28). Number format everywhere: Polish (decimal comma, non-breaking thousand separators and before "zł"/"%"), produced by one shared formatter; amounts never wrap.
 
 **View Scope** (Q61–Q64, inspired by MyFund): sub-portfolios are Accounts (no extra grouping level). A scope switcher in the header, visible on every tab, offers **Total** first, then Accounts sorted by value descending, each with value, share-of-total bar and daily change; inactive Accounts hidden behind "pokaż nieaktywne". Every tab (sums, charts, Portfolio, Transakcje, Wyniki, Strategia, Benchmarki) follows the scope; the last scope is remembered. Breadcrumbs (Total › Account) return to Total. Transfers between Accounts do not change Net Deposits or XIRR in Total; in an Account scope they count as Deposit on the target and Withdrawal on the source.
 

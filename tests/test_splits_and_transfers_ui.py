@@ -70,7 +70,7 @@ def _start(user: User, kind: str, account: str = "IKE") -> None:
 async def test_split_rescales_the_position_and_shows_its_ratio(engine: Engine, ike: int, pzu: int) -> None:
     _bought(engine, ike, pzu)
     async with user_simulation(lambda: _shell(engine)) as user:
-        await user.open("/")  # the Transakcje list would also offer PZU to click
+        await user.open("/benchmarki")  # the Transakcje list would also offer PZU to click
         _start(user, "Split")
         _choose(user, "transaction-instrument", "PZU")
         user.find(marker="transaction-split-ratio").type("3:1")
@@ -88,7 +88,7 @@ async def test_split_rescales_the_position_and_shows_its_ratio(engine: Engine, i
 async def test_malformed_split_ratio_is_blocked(engine: Engine, ike: int, pzu: int, ratio: str) -> None:
     _bought(engine, ike, pzu)
     async with user_simulation(lambda: _shell(engine)) as user:
-        await user.open("/")  # the Transakcje list would also offer PZU to click
+        await user.open("/benchmarki")  # the Transakcje list would also offer PZU to click
         _start(user, "Split")
         _choose(user, "transaction-instrument", "PZU")
         user.find(marker="transaction-split-ratio").type(ratio)
@@ -100,7 +100,7 @@ async def test_malformed_split_ratio_is_blocked(engine: Engine, ike: int, pzu: i
 
 async def test_split_before_the_first_buy_is_blocked(engine: Engine, ike: int, pzu: int) -> None:
     async with user_simulation(lambda: _shell(engine)) as user:
-        await user.open("/")  # the Transakcje list would also offer PZU to click
+        await user.open("/benchmarki")  # the Transakcje list would also offer PZU to click
         _start(user, "Split")
         _choose(user, "transaction-instrument", "PZU")
         user.find(marker="transaction-split-ratio").type("2:1")
@@ -112,7 +112,7 @@ async def test_split_before_the_first_buy_is_blocked(engine: Engine, ike: int, p
 
 async def test_cash_transfer_moves_cash_to_the_target_account(engine: Engine, ike: int, xtb: int) -> None:
     async with user_simulation(lambda: _shell(engine)) as user:
-        await user.open("/")  # the Transakcje list would also offer PZU to click
+        await user.open("/benchmarki")  # the Transakcje list would also offer PZU to click
         _start(user, "Transfer gotówki")
         _choose(user, "transaction-target-account", "XTB")
         user.find(marker="transaction-amount").type("250")
@@ -128,7 +128,7 @@ async def test_cash_transfer_moves_cash_to_the_target_account(engine: Engine, ik
 
 async def test_target_account_offers_only_the_other_accounts(engine: Engine, ike: int, xtb: int) -> None:
     async with user_simulation(lambda: _shell(engine)) as user:
-        await user.open("/")  # the Transakcje list would also offer PZU to click
+        await user.open("/benchmarki")  # the Transakcje list would also offer PZU to click
         _start(user, "Transfer gotówki", account="XTB")
 
         [target] = user.find(marker="transaction-target-account").elements
@@ -139,7 +139,7 @@ async def test_target_account_offers_only_the_other_accounts(engine: Engine, ike
 async def test_security_transfer_moves_the_units_with_their_lots(engine: Engine, ike: int, xtb: int, pzu: int) -> None:
     _bought(engine, ike, pzu)
     async with user_simulation(lambda: _shell(engine)) as user:
-        await user.open("/")  # the Transakcje list would also offer PZU to click
+        await user.open("/benchmarki")  # the Transakcje list would also offer PZU to click
         _start(user, "Transfer papierów")
         _choose(user, "transaction-target-account", "XTB")
         _choose(user, "transaction-instrument", "PZU")
@@ -159,7 +159,7 @@ async def test_editing_a_security_transfer_keeps_its_target_and_quantity(
 ) -> None:
     _bought(engine, ike, pzu)
     async with user_simulation(lambda: _shell(engine)) as user:
-        await user.open("/")  # the Transakcje list would also offer PZU to click
+        await user.open("/benchmarki")  # the Transakcje list would also offer PZU to click
         _start(user, "Transfer papierów")
         _choose(user, "transaction-target-account", "XTB")
         _choose(user, "transaction-instrument", "PZU")

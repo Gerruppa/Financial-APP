@@ -143,7 +143,7 @@ async def test_automatic_exchange_is_offered_only_for_a_buy_paid_in_foreign_cash
     add_account(engine, AccountDraft("mBank IKE", "mBank", AccountType.IKE, ("PLN",)))
 
     async with user_simulation(lambda: _shell(engine)) as user:
-        await user.open("/")
+        await user.open("/benchmarki")
         _start_buy(user, account="mBank IKE")
         await user.should_not_see(marker="transaction-auto-exchange")
         await user.should_not_see("gotówka USD")

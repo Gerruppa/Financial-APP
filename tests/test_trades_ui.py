@@ -100,7 +100,7 @@ async def test_buy_from_plus_dialog_appears_in_transakcje(engine: Engine, ike: i
 
 async def test_buy_without_enough_cash_saves_with_a_warning(engine: Engine, ike: int, pzu: int) -> None:
     async with user_simulation(lambda: build_shell(engine)) as user:
-        await user.open("/")
+        await user.open("/benchmarki")
 
         _save_trade(user, "Zakup", "PZU", "10", "50")
 
@@ -112,7 +112,7 @@ async def test_uncovered_sell_is_blocked_with_a_clear_message(engine: Engine, ik
     _buy(engine, ike, pzu, "5", "50")
 
     async with user_simulation(lambda: build_shell(engine)) as user:
-        await user.open("/")
+        await user.open("/benchmarki")
 
         _save_trade(user, "Sprzedaż", "PZU", "8", "60")
 
@@ -126,7 +126,7 @@ async def test_covered_sell_is_saved(engine: Engine, ike: int, pzu: int) -> None
     _buy(engine, ike, pzu, "5", "50")
 
     async with user_simulation(lambda: build_shell(engine)) as user:
-        await user.open("/")
+        await user.open("/benchmarki")
 
         _save_trade(user, "Sprzedaż", "PZU", "5", "60", fee="2")
 
@@ -137,7 +137,7 @@ async def test_covered_sell_is_saved(engine: Engine, ike: int, pzu: int) -> None
 
 async def test_trade_needs_an_instrument(engine: Engine, ike: int, pzu: int) -> None:
     async with user_simulation(lambda: build_shell(engine)) as user:
-        await user.open("/")
+        await user.open("/benchmarki")
         user.find(marker="add-transaction").click()
         user.find(marker="transaction-type").click()
         user.find("Zakup").click()
@@ -153,7 +153,7 @@ async def test_dialog_offers_foreign_currency_instruments_too(engine: Engine, ik
     add_instrument(engine, InstrumentDraft("Apple", list_asset_classes(engine)[2].id, "USD"))
 
     async with user_simulation(lambda: build_shell(engine)) as user:
-        await user.open("/")
+        await user.open("/benchmarki")
         user.find(marker="add-transaction").click()
         user.find(marker="transaction-type").click()
         user.find("Zakup").click()

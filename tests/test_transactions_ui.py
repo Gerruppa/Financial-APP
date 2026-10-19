@@ -86,7 +86,7 @@ async def test_the_dialog_asks_for_the_account_first_and_sets_it_apart(engine: E
 
 async def test_invalid_amount_is_reported_and_not_saved(engine: Engine, ike: int) -> None:
     async with user_simulation(lambda: build_shell(engine)) as user:
-        await user.open("/")
+        await user.open("/benchmarki")
 
         _save_transaction(user, amount="dużo")
 
@@ -99,7 +99,7 @@ async def test_dialog_offers_only_active_accounts_with_or_without_pln(engine: En
     add_account(engine, AccountDraft("Konto USD", "IBKR", AccountType.REGULAR, ("USD",)))
 
     async with user_simulation(lambda: build_shell(engine)) as user:
-        await user.open("/")
+        await user.open("/benchmarki")
         user.find(marker="add-transaction").click()
 
         [account_select] = user.find(marker="transaction-account").elements
@@ -109,7 +109,7 @@ async def test_dialog_offers_only_active_accounts_with_or_without_pln(engine: En
 
 async def test_dialog_without_accounts_points_to_ustawienia(engine: Engine) -> None:
     async with user_simulation(lambda: build_shell(engine)) as user:
-        await user.open("/")
+        await user.open("/benchmarki")
         user.find(marker="add-transaction").click()
 
         await user.should_see("Najpierw dodaj konto")
@@ -152,7 +152,7 @@ async def test_withdrawal_beyond_the_cash_balance_saves_with_a_warning(engine: E
     add_transaction(engine, TransactionDraft(ike, date(2026, 1, 2), TransactionType.DEPOSIT, Decimal("100")))
 
     async with user_simulation(lambda: build_shell(engine)) as user:
-        await user.open("/")
+        await user.open("/benchmarki")
 
         _save_transaction(user, type_label="Wypłata", amount="150")
 
@@ -164,7 +164,7 @@ async def test_withdrawal_within_the_cash_balance_gives_no_warning(engine: Engin
     add_transaction(engine, TransactionDraft(ike, date(2026, 1, 2), TransactionType.DEPOSIT, Decimal("100")))
 
     async with user_simulation(lambda: build_shell(engine)) as user:
-        await user.open("/")
+        await user.open("/benchmarki")
 
         _save_transaction(user, type_label="Wypłata", amount="100")
 
