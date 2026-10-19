@@ -43,6 +43,7 @@ from financial_app.ui.portfolio import PortfolioPage
 from financial_app.ui.recurring_drafts import recurring_drafts_count
 from financial_app.ui.results import ResultsPage
 from financial_app.ui.sale_summary import SaleSummaryPage
+from financial_app.ui.sayings import menu_saying
 from financial_app.ui.settings import build_settings_page
 from financial_app.ui.strategy import PlannedDeposit, StrategyPage, out_of_band_notice
 from financial_app.ui.theme import ThemeChoice, apply_theme
@@ -304,6 +305,8 @@ def build_shell(
                 lit = tab.path == shown_path["path"]
                 button.props(f"flat align=left no-caps no-wrap color={'side-active' if lit else 'side'}")
                 button.classes("k-menu-item w-full" + (" k-active" if lit else ""))
+        if layout.shows("sayings"):
+            menu_saying(now().date())
 
     # top_corner: the menu runs the window's full height, beside the header rather than under it
     drawer = ui.left_drawer(value=True, top_corner=True).classes("k-side").props("width=260")
