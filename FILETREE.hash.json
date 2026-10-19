@@ -26,7 +26,7 @@
   "main.py": "73374504",
   "packaging/kapita.iss": "e741040f",
   "packaging/kapita.spec": "a5b72f24",
-  "pyproject.toml": "5df7c528",
+  "pyproject.toml": "0bfeea2d",
   "scripts/build_installer.ps1": "7f9ad1a0",
   "scripts/create_desktop_shortcut.ps1": "10628799",
   "scripts/make_icons.py": "855d96a7",

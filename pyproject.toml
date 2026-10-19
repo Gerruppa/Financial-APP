@@ -22,6 +22,7 @@ dev = [
     "mypy>=2.4",
     "ruff>=0.16",
     "types-xlrd",
+    "types-openpyxl",
 ]
 # Builds the Windows installer (scripts/build_installer.ps1) and the icons (scripts/make_icons.py)
 build = [
