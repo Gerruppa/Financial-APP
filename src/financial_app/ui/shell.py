@@ -44,7 +44,8 @@ from financial_app.ui.results import ResultsPage
 from financial_app.ui.sale_summary import SaleSummaryPage
 from financial_app.ui.settings import build_settings_page
 from financial_app.ui.strategy import PlannedDeposit, StrategyPage, out_of_band_notice
-from financial_app.ui.transactions import TransactionsPage, open_transaction_dialog
+from financial_app.ui.transaction_dialog import open_transaction_dialog
+from financial_app.ui.transactions import TransactionsPage
 from financial_app.ui.unpriced import UnpricedSection
 from financial_app.ui.view_scope import ScopeSwitcher, ViewScope, breadcrumbs
 from financial_app.ui.visibility import Layout
