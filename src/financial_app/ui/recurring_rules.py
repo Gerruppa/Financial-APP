@@ -200,7 +200,7 @@ def open_rule_dialog(
         name.props('hint="Widoczna na szkicu, np. „Wpłata IKE”"')
         account_id = start.account_id if start.account_id in accounts else next(iter(accounts))
         account = ui.select({a.id: a.name for a in accounts.values()}, label="Konto", value=account_id)
-        account.classes("w-full").props("filled bg-color=blue-1").mark("rule-account")
+        account.classes("w-full k-field").props("filled").mark("rule-account")
         kind = ui.select(TYPE_OPTIONS, label="Typ", value=start.transaction_type.value).classes("w-full")
         kind.mark("rule-type")
         target = ui.select({}, label="Konto docelowe", value=None).classes("w-full").mark("rule-target")

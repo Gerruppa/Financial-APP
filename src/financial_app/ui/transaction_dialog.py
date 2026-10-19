@@ -92,8 +92,9 @@ def open_transaction_dialog(
         start = form.initial_state(date.today(), start_with)
         texts = start.texts
         # The Account comes first and stands out (#118): it decides the type's fields, Cash currencies and bond mode
-        account = ui.select(form.accounts, label="Konto", value=start.account_id).props("filled bg-color=blue-1")
-        account.classes("w-full [&_.q-field\\_\\_native]:font-bold").mark("transaction-account")
+        account = ui.select(form.accounts, label="Konto", value=start.account_id).props("filled")
+        # The Theme's highlighted field (k-field): light blue in Jasny, dark gold in Golden
+        account.classes("w-full k-field [&_.q-field\\_\\_native]:font-bold").mark("transaction-account")
         transaction_type = ui.select(TRANSACTION_TYPE_OPTIONS, label="Typ", value=start.kind.value)
         transaction_type.classes("w-full").mark("transaction-type")
         target = ui.select(form.targets, label="Na konto", value=start.target_id).classes("w-full")
