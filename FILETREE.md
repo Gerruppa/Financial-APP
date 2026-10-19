@@ -113,6 +113,10 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `kapita.iss`: Inno Setup recipe for the KAPITA Windows installer: per-user install, Start menu and desktop shortcuts, upgrades by fixed AppId
 - `kapita.spec`: PyInstaller recipe freezing main.py into the windowed KAPITA folder build, with NiceGUI, migrations and icons as data
 
+## prototypes/
+
+- `dashboard_redesign_prototype.py`: Throwaway NiceGUI prototype comparing three Dashboard layouts and a golden theme on made-up demo data; not for production
+
 ## scripts/
 
 - `build_installer.ps1`: Builds the KAPITA installer: runs PyInstaller on the spec, then Inno Setup with the version from the package

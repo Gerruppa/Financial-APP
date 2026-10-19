@@ -85,6 +85,7 @@
   "main.py": "73374504",
   "packaging/kapita.iss": "e741040f",
   "packaging/kapita.spec": "a5b72f24",
+  "prototypes/dashboard_redesign_prototype.py": "fe610d33",
   "pyproject.toml": "6d2d8a6c",
   "scripts/build_installer.ps1": "7f9ad1a0",
   "scripts/create_desktop_shortcut.ps1": "10628799",
