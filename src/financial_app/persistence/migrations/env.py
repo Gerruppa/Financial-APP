@@ -1,9 +1,10 @@
 """Alembic environment.
 
 The app passes its own connection (see ``db.init_db``). The ``alembic`` CLI
-connects to the user's REAL database (``paths.database_path()``), so prefer
-``revision --autogenerate`` there and point FINANCIAL_APP_DATA_DIR at a scratch
-folder before running ``upgrade``/``downgrade`` by hand.
+connects to the user's REAL database (``paths.database_path()``), so generate a
+revision with ``scripts/new_migration.py`` (a scratch database) and point
+FINANCIAL_APP_DATA_DIR at a scratch folder before running ``upgrade``/``downgrade``
+by hand.
 """
 
 from alembic import context

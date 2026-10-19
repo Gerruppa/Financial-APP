@@ -14,7 +14,7 @@ Rules no config enforces:
 - `domain/` never imports NiceGUI, SQLAlchemy, Alembic or pywebview (`tests/test_architecture.py` checks).
 - Every amount or date shown in or read from the UI goes through `domain/formatting.py` (`format_pln`, `format_percent`, `format_date`, `parse_number`, `parse_date`, ...).
 - One FIFO engine: `domain/lots.py` (ADR-0003); Positions, realised results and Sale Pairs all come from its replay.
-- The schema changes only through a new migration: `.venv/Scripts/python.exe -m alembic revision --autogenerate -m "..."`; `tests/test_database.py` fails if models and migrations drift. The database lives in the user's app-data folder (`FINANCIAL_APP_DATA_DIR` overrides), never in the repo.
+- The schema changes only through a new migration: `.venv/Scripts/python.exe scripts/new_migration.py "..."` (numbers it, autogenerates it on a scratch database, runs ruff); then write its docstring; `tests/test_database.py` fails if models and migrations drift. The database lives in the user's app-data folder (`FINANCIAL_APP_DATA_DIR` overrides), never in the repo.
 - UI text is Polish; code, DB names and docs English. Errors for the user carry a Polish message.
 - UI tests use NiceGUI's `user_simulation` and find elements by `.mark(...)` markers; `user.find("text")` matches substrings, so keep labels and markers unique.
 - Each tab redraws through its page's `refresh()`, on the changes its class declares in `CHANGES` (`ui/changes.py`); `ui/shell.py` only publishes the changes (a save, a price or bond data refresh, a scope switch, an Instrument change, History outdated or computed). A new tab declares `CHANGES` and joins the shell's `tabs` list.
