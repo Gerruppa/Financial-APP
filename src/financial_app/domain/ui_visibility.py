@@ -32,6 +32,7 @@ TILES = "Kafelki"
 SECTIONS = "Sekcje Dashboardu"
 CHARTS = "Wykresy"
 TABS = "Zakładki"
+MENU = "Menu"
 
 ELEMENTS = (
     Element("tile-net-deposits", "Wpłaty netto", TILES),
@@ -45,7 +46,6 @@ ELEMENTS = (
     Element("tile-xirr", "XIRR", TILES),
     Element("since-snapshot", "Zmiana od migawki", SECTIONS),
     Element("investment-goal", "Cel inwestycyjny / FIRE", SECTIONS),
-    Element("sayings", "Cytat dnia (Dashboard i menu)", SECTIONS),
     Element("account-table", "Twoje konta i aktywa (karty i tabela)", SECTIONS),
     Element("contribution-limits", "Limity wpłat", SECTIONS),
     Element("account-ranking", "Ranking i treemap kont", SECTIONS),
@@ -68,6 +68,7 @@ ELEMENTS = (
     Element("tab-benchmarki", "Benchmarki", TABS),
     Element("tab-sprzedaz", "Podsumowanie sprzedaży", TABS),
     Element("tab-dochod-pasywny", "Dochód pasywny", TABS),
+    Element("sayings", "Cytat dnia", MENU),
 )
 KEYS = frozenset(element.key for element in ELEMENTS)
 

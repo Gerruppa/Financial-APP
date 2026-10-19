@@ -35,7 +35,6 @@ from financial_app.ui.help import HELP_PATH
 from financial_app.ui.info import card_title
 from financial_app.ui.investment_goal import goal_tile
 from financial_app.ui.periods import PeriodChoice, period_selector
-from financial_app.ui.sayings import saying_card
 from financial_app.ui.strategy import PlannedDeposit, scope_strategy, strategy_section
 from financial_app.ui.view_scope import ViewScope
 from financial_app.ui.visibility import Layout
@@ -135,28 +134,10 @@ class DashboardPage:
             ui.space()
             ui.switch("Po podatku", value=self.after_tax, on_change=self._toggle_after_tax).mark("after-tax")
         _totals(board.totals, self.after_tax, shows)
-        goal, saying = shows("investment-goal"), shows("sayings")
-        if goal or saying:
-            # The saying takes a third of the row beside the goal, or either the whole row alone
-            alone = "lg:col-span-3" if not (goal and saying) else ""
-            with ui.element("div").classes("w-full grid gap-4 lg:grid-cols-3"):
-                if goal:
-                    # The goal's progress follows the "Po podatku" toggle
-                    value = board.totals.value_after(self.after_tax)
-                    # flex stretches the goal's card to the saying's height
-                    with ui.element("div").classes(f"flex {alone or 'lg:col-span-2'}"):
-                        goal_tile(
-                            self.engine,
-                            self.rates,
-                            self.scope.account_id,
-                            value,
-                            days,
-                            self.period.today(),
-                            self.refresh,
-                        )
-                if saying:
-                    with ui.element("div").classes(alone):
-                        saying_card(self.period.today())
+        if shows("investment-goal"):
+            # The goal's progress follows the "Po podatku" toggle
+            value = board.totals.value_after(self.after_tax)
+            goal_tile(self.engine, self.rates, self.scope.account_id, value, days, self.period.today(), self.refresh)
         if shows("account-table"):
             self.accounts_section(board.accounts, days, period)
         if shows("contribution-limits"):

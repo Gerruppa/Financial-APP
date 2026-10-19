@@ -86,7 +86,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `real-return.md`: Architecture entry for Real return (L-10, spec 3.4.1): main functions, UI markers and decisions.
 - `recurring-rules.md`: Architecture entry for Recurring Rules (#97, spec 3.3.1): main functions, UI markers and decisions.
 - `reset.md`: Architecture entry for persistence/reset.py: main functions, UI markers and decisions.
-- `sayings.md`: Architecture entry for the saying of the day (#178): domain list, Dashboard card, menu line and UI markers.
+- `sayings.md`: Architecture entry for the saying of the day (#178): domain list, menu line and UI markers; hidden by the Menu switch in Wygląd i widoczność.
 - `sell-summary.md`: Architecture entry for Sell Summary (#92, spec 6.2): main functions, UI markers and decisions.
 - `shell.md`: Architecture entry for ui/shell.py: main functions, UI markers and decisions.
 - `spreadsheet-import.md`: Architecture entry for domain/spreadsheet_import.py: main functions, UI markers and decisions.
@@ -168,7 +168,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `results.py`: Wyniki tab figures: period XIRR, TWR, drawdown, volatility and fixed-period returns per Total and Account, from History
 - `sale_summary.py`: Sell Summary: Sale Pairs from the FIFO replay with attributed Dividends, and closed-position statistics (win rate, days, best, worst).
 - `save_warnings.py`: Warnings a save of Transactions shows (cash shortfalls, over-limit contributions, unsplit Multi-asset), computed before and after the save; never blocks it
-- `sayings.py`: Saying of the day: fixed list of lines from Walaszek's cartoons (Kapitan Bomba, Egzorcysta, Chłopaki z baraków) and the day-based pick, with a separate pick for the menu
+- `sayings.py`: Saying of the day: fixed list of lines from Walaszek's cartoons (Kapitan Bomba, Egzorcysta, Chłopaki z baraków) and the day-based pick shown at the foot of the menu
 - `spreadsheet_import.py`: Pure conversion of the user's Inwestomat Transakcje sheet rows into Transaction drafts, with fingerprints for re-import skipping.
 - `strategy.py`: Investment Strategy rules: Allocation Targets with tolerance bands, Instrument Targets, and the water-filling split of the Planned Deposit
 - `term_deposits.py`: Term Deposit rules: contract fields, capitalisation periods, Belka-net interest, Accrued Interest, Drafts and capital locked by running deposits
@@ -176,7 +176,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `transaction_filters.py`: Excel-like column filters and sort order for the Transakcje list; returns the filtered, sorted view of Transactions
 - `transaction_form.py`: Transaction dialog rules without widgets: fields per Transaction Type and the Transaction they describe, or the field error
 - `transactions.py`: Transaction types, drafts and builders for every kind, plus cash balances and cost and dividend totals per Account.
-- `ui_visibility.py`: Hideable Dashboard elements and tabs, View Profiles (Podstawowy, Pełny, Własny), and the hidden set saved as JSON text
+- `ui_visibility.py`: Hideable Dashboard elements, tabs and the menu's saying, View Profiles (Podstawowy, Pełny, Własny), and the hidden set saved as JSON text
 - `valuation.py`: Decides each Instrument's price and status from Manual Price or Quote, including metal spot conversion and badges.
 - `valuation_snapshots.py`: Valuation Snapshot figures per View Scope and the change since one, split into market change and Net Deposits in between
 - `view_scope.py`: View Scope logic: Total or one Account, its remembered setting, switcher entries and transaction filtering
@@ -315,7 +315,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `results.py`: Wyniki tab page: result tiles, drawdown chart and per-Account results table under the period selector
 - `sale_summary.py`: Podsumowanie sprzedaży tab: Sale Pairs of the scope and period with the closed-position statistics tiles.
 - `save_warnings.py`: Shows save warnings as notifications, the same way wherever Transactions were saved
-- `sayings.py`: Saying of the day UI: Dashboard card beside the Investment Goal and the line at the foot of the menu
+- `sayings.py`: Saying of the day UI: the line at the foot of the menu, signed with its work and author
 - `settings.py`: Builds the Ustawienia page by assembling its sections: Accounts, Asset Classes, Instruments, sources, import, reset
 - `shell.py`: Main app window shell: left menu, header with refresh status and View Scope, and the transaction button
 - `strategy.py`: Strategie inwestycyjne tab, Dashboard strategy section and post-refresh notice for classes outside their tolerance band
@@ -452,8 +452,8 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_sale_summary_domain.py`: Tests Sale Pairs across Lots, Splits and DRIPs, Dividend and coupon attribution, statistics and the view filter.
 - `test_sale_summary_ui.py`: UI tests of the Podsumowanie sprzedaży tab: pairs, statistics, Account scope and an empty period.
 - `test_save_warnings_domain.py`: Tests the save warnings computed from Transactions before and after a save
-- `test_sayings_domain.py`: Domain tests for the saying of the day: stable within a day, menu differs from Dashboard, every saying comes up
-- `test_sayings_ui.py`: UI tests for the saying of the day: shown on Dashboard and menu, and one switch hides both
+- `test_sayings_domain.py`: Domain tests for the saying of the day: stable within a day, every saying comes up once in as many days as there are sayings
+- `test_sayings_ui.py`: UI tests for the saying of the day: shown in the menu alone (not on Dashboard), signatures, and the Wygląd i widoczność switch hiding it
 - `test_shell.py`: Smoke tests of the app shell's tabs and navigation, run without a browser.
 - `test_splits_and_transfers_domain.py`: Tests Splits, Cash Transfers and Security Transfers in the FIFO engine and Cash Balances.
 - `test_splits_and_transfers_repository.py`: Tests saving Splits, Cash Transfers and Security Transfers in SQLite.

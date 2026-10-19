@@ -1,8 +1,8 @@
 """The saying of the day (issue #178): a line from Bartosz Walaszek's cartoons (Kapitan Bomba, Egzorcysta) or
-Chłopaki z baraków on the Dashboard and in the menu.
+Chłopaki z baraków at the foot of the menu.
 
-"Saying", not "Quote": a Quote is an Instrument's price. A saying stays the whole day, so a redraw does not swap it,
-and the menu's is the next one on the list, so the two never repeat each other. Only lines found in published
+"Saying", not "Quote": a Quote is an Instrument's price. A saying stays the whole day, so a redraw does not swap it.
+Only lines found in published
 collections of the shows' quotes are listed.
 """
 
@@ -42,7 +42,7 @@ def _baraki(text: str) -> Saying:
     return Saying(text, CHLOPAKI_Z_BARAKOW)
 
 
-# The works take turns, so the Dashboard and the menu mostly show two different ones
+# The works take turns from day to day
 SAYINGS = (
     _bomba("Czujesz ten zapach? Tak pachnie sto złotych."),
     _egzorcysta(
@@ -84,6 +84,6 @@ SAYINGS = (
 )
 
 
-def saying_of_the_day(day: date, menu: bool = False) -> Saying:
-    """The Dashboard's saying shown on ``day``, or with ``menu`` the menu's."""
-    return SAYINGS[(day.toordinal() + menu) % len(SAYINGS)]
+def saying_of_the_day(day: date) -> Saying:
+    """The saying shown on ``day``."""
+    return SAYINGS[day.toordinal() % len(SAYINGS)]
