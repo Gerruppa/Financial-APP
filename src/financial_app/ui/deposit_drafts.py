@@ -27,10 +27,10 @@ def interest_row(engine: Engine, draft: InterestDraft, name_account: bool, on_sa
             ui.label(
                 f"okres {period.number} · {format_date(period.start)}–{format_date(period.end)} · "
                 f"kapitał {format_pln(period.capital)}"
-            ).classes("text-sm text-gray-600")
+            ).classes("text-sm k-muted")
         with ui.column().classes("gap-0 items-end"):
             ui.label(f"Wypłata netto {format_pln(period.net)}").classes("font-medium")
-            ui.label(f"podatek {format_pln(period.tax)}").classes("text-xs text-gray-500")
+            ui.label(f"podatek {format_pln(period.tax)}").classes("text-xs k-muted")
 
         def confirm() -> None:
             try:
@@ -102,7 +102,7 @@ def maturity_row(
             title = f"Zapadalność {deposit.name}"
             ui.label(f"{title} · {draft.account.name}" if name_account else title).classes("font-medium")
             ui.label(f"od {format_date(deposit.start_date)} · koniec {format_date(draft.due)}").classes(
-                "text-sm text-gray-600"
+                "text-sm k-muted"
             )
         ui.label(f"Kapitał z odsetkami {format_pln(draft.final_capital)}").classes("font-medium")
 
@@ -127,9 +127,7 @@ def _renew_dialog(engine: Engine, draft: DepositMaturityDraft, on_changed: Calla
     dialog.on("hide", dialog.delete)
     with dialog, ui.card().classes("min-w-96").mark("renew-dialog"):
         ui.label(f"Odnów {draft.deposit.name}").classes("text-lg font-bold")
-        ui.label(f"Od {format_date(draft.due)} · kapitał {format_pln(draft.final_capital)}").classes(
-            "text-sm text-gray-600"
-        )
+        ui.label(f"Od {format_date(draft.due)} · kapitał {format_pln(draft.final_capital)}").classes("text-sm k-muted")
         rate = ui.input("Oprocentowanie (% w skali roku)", value=format_exact(draft.deposit.annual_rate))
         rate.classes("w-full").mark("renew-rate")
         error = ui.label().classes("text-negative").mark("renew-error")

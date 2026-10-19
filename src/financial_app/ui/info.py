@@ -5,7 +5,7 @@ from nicegui import ui
 
 def info_icon(text: str, name: str) -> None:
     """An "i" icon marked ``info-<name>`` showing ``text`` on hover; blank lines in ``text`` split its paragraphs."""
-    with ui.icon("info_outline", size="xs").classes("cursor-help text-gray-400").mark(f"info-{name}"):
+    with ui.icon("info_outline", size="xs").classes("cursor-help k-muted").mark(f"info-{name}"):
         ui.tooltip(text).classes("max-w-sm text-sm whitespace-pre-line").props('anchor="bottom end" self="top end"')
 
 

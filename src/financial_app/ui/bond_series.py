@@ -44,7 +44,7 @@ def open_rates_dialog(engine: Engine, series: BondSeries, on_saved: Callable[[],
         ui.label(f"Oprocentowanie serii {series.name}").classes("text-lg font-bold")
         ui.label(
             "Wartości z pliku MF. Popraw tylko te, które się nie zgadzają; puste pole to wartość z pliku."
-        ).classes("text-sm text-gray-500")
+        ).classes("text-sm k-muted")
         margin = None
         if series.bond_type not in FIXED_RATE_TYPES:
             mf_margin = None if series.mf is None else series.mf.margin

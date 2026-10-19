@@ -95,7 +95,7 @@ def goal_tile(
                 f"Prognoza: cel w {format_month(result.reached_on)} przy wpłatach {format_pln(monthly)} miesięcznie "
                 f"i {format_percent(goal.real_return)} realnie rocznie"
             )
-        ui.label(text).classes("text-sm text-gray-600").mark("goal-forecast")
+        ui.label(text).classes("text-sm k-muted").mark("goal-forecast")
         if goal.target_date is not None and not result.reached:
             if result.required_monthly is None:
                 required = f"Data docelowa {format_date(goal.target_date)} minęła"
@@ -103,7 +103,7 @@ def goal_tile(
                 required = (
                     f"Do {format_date(goal.target_date)} potrzeba {format_pln(result.required_monthly)} miesięcznie"
                 )
-            ui.label(required).classes("text-sm text-gray-600").mark("goal-required")
+            ui.label(required).classes("text-sm k-muted").mark("goal-required")
 
 
 def _goal_dialog(
@@ -141,7 +141,7 @@ def _goal_dialog(
         real_return.classes("w-full").mark("goal-real-return")
         monthly = ui.input("Miesięczna wpłata (puste: domyślna)", value=texts.monthly_deposit).props('suffix="zł"')
         monthly.classes("w-full").mark("goal-monthly")
-        ui.label(f"Domyślnie {default}").classes("text-xs text-gray-500").mark("goal-monthly-default")
+        ui.label(f"Domyślnie {default}").classes("text-xs k-muted").mark("goal-monthly-default")
         error = ui.label().classes("text-negative").mark("goal-error")
 
         def save() -> None:

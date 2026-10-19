@@ -158,7 +158,7 @@ class StrategyPage:
                 name = next((a.name for a in today.accounts if a.id == account_id), "")
                 ui.label(
                     f"Konto „{name}” nie ma własnej strategii: poniżej jego struktura bez rebalansowania."
-                ).classes("text-gray-500")
+                ).classes("k-muted")
                 ui.button("Utwórz strategię konta", on_click=lambda: self._save(Strategy(account_id))).mark(
                     "create-strategy"
                 )
@@ -203,7 +203,7 @@ def _strategy_body(
     current = scope_strategy(engine, today, account_id, planned.amount)
     if current.view.targets_sum is None:
         if account_id is None:
-            ui.label("Brak celów alokacji: ustaw je w zakładce Strategie inwestycyjne.").classes("text-gray-500")
+            ui.label("Brak celów alokacji: ustaw je w zakładce Strategie inwestycyjne.").classes("k-muted")
         _class_rows(current, details, edit)
         return current
 
@@ -313,7 +313,7 @@ def _targets_dialog(
     with dialog, ui.card().classes("w-[560px]").mark("targets-dialog"):
         ui.label("Cele klas aktywów").classes("text-lg font-bold")
         ui.label("Udział klasy w wartości portfela i dopuszczalne odchylenie w punktach procentowych.").classes(
-            "text-sm text-gray-500"
+            "text-sm k-muted"
         )
         with ui.grid(columns="minmax(10rem, 2fr) 1fr 1fr").classes("w-full gap-x-4 gap-y-0 items-center"):
             for asset_class in asset_classes:
@@ -377,7 +377,7 @@ def _instrument_targets_dialog(
     fields: dict[int, ui.input] = {}
     with dialog, ui.card().classes("w-[480px]").mark("instrument-targets-dialog"):
         ui.label(f"Cele instrumentów: {asset_class.name}").classes("text-lg font-bold")
-        ui.label("Udział instrumentu w klasie; razem 100%. Puste pole: bez celu.").classes("text-sm text-gray-500")
+        ui.label("Udział instrumentu w klasie; razem 100%. Puste pole: bez celu.").classes("text-sm k-muted")
         for instrument in sorted(instruments, key=lambda i: i.name.casefold()):
             share = strategy.instrument_targets.get(instrument.id)
             field_ = ui.input(instrument.name, value="" if share is None else format_exact(share))

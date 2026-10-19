@@ -89,7 +89,7 @@ class PortfolioPage:
         else:
             accounts = [a for a in view.accounts if a.id == self.scope.account_id]
         if not accounts:
-            ui.label("Brak kont. Dodaj konto w zakładce Ustawienia.").classes("text-gray-500")
+            ui.label("Brak kont. Dodaj konto w zakładce Ustawienia.").classes("k-muted")
         for account in accounts:
             own = sorted(
                 (p for p in view.positions if p.account_id == account.id),
@@ -118,12 +118,12 @@ def _account_card(
                 result_label.mark("account-result")
             ui.label(format_pln(value.value)).classes("text-lg font-medium")
         with ui.row().classes("w-full items-center"):
-            ui.label("Saldo gotówki").classes("text-gray-500")
+            ui.label("Saldo gotówki").classes("k-muted")
             ui.label(format_pln(value.cash)).classes("font-medium")
         if value.accrued:
             # Counted in the value: the Term Deposits' interest not paid into the cash yet, net of Belka (#160)
             with ui.row().classes("w-full items-center").mark("account-accrued"):
-                ui.label("Narosłe odsetki lokat").classes("text-gray-500")
+                ui.label("Narosłe odsetki lokat").classes("k-muted")
                 ui.label(format_pln(value.accrued)).classes("font-medium")
         for title, amounts, marker in (
             ("Dywidendy i odsetki", totals.dividends, "account-dividends"),
@@ -131,12 +131,12 @@ def _account_card(
         ):
             if account.id in amounts:
                 with ui.row().classes("w-full items-center").mark(marker):
-                    ui.label(title).classes("text-gray-500")
+                    ui.label(title).classes("k-muted")
                     ui.label(format_pln(amounts[account.id])).classes("font-medium")
         if foreign:
             _foreign_cash_table(foreign, view.rates)
             with ui.row().classes("w-full items-center"):
-                ui.label("Wynik walutowy").classes("text-gray-500")
+                ui.label("Wynik walutowy").classes("k-muted")
                 excluded = " (wyłączony z wyniku konta)" if account.exclude_fx_result else ""
                 fx_label = ui.label(f"{format_pln(value.fx, signed=True)}{excluded}").classes(_result_color(value.fx))
                 fx_label.mark("fx-result")
@@ -157,7 +157,7 @@ def _foreign_cash_table(foreign: list[ForeignCash], rates: dict[str, Decimal]) -
                 ui.label(format_pln(balance.cost)).classes("text-right")
                 if rate is None:
                     for cell in ("brak kursu", "\u2014", "\u2014"):
-                        ui.label(cell).classes("text-right text-gray-500")
+                        ui.label(cell).classes("text-right k-muted")
                     continue
                 result = balance.result(rate)
                 ui.label(format_rate(rate)).classes("text-right")
@@ -172,7 +172,7 @@ def _positions_table(
         for header in HEADERS:
             ui.label(header).classes("text-right" if header != "Instrument" else "")
     for position in positions:
-        row = ui.element("div").classes("grid w-full gap-x-4 border-b py-1 cursor-pointer hover:bg-gray-100")
+        row = ui.element("div").classes("grid w-full gap-x-4 border-b py-1 cursor-pointer k-hover")
         with row.style(COLUMNS).mark("position-row"):
             current = prices[position.instrument_id]
             with ui.row().classes("items-center gap-2"):
@@ -194,20 +194,20 @@ def _valuation_cells(position: Position, current: InstrumentPrice) -> None:
     if current.bond is not None:
         _bond_price_cell(position, current.bond)
     elif current.price is None:
-        ui.label(missing).classes("text-right text-gray-500")
+        ui.label(missing).classes("text-right k-muted")
     else:
         _price_cell(current.price, current)
     price = current.pln
     if price is None:
         cells = ["—"] * 3 if current.price is None else [missing, "—", "—"]
         for cell in cells:
-            ui.label(cell).classes("text-right text-gray-500")
+            ui.label(cell).classes("text-right k-muted")
         return
     result = position.result(price)
     with ui.column().classes("gap-0 items-end"):
         ui.label(format_pln(position.value(price)))
         if current.unit_spot_pln is not None:
-            ui.label(f"spot {format_pln(position.value(current.unit_spot_pln))}").classes("text-xs text-gray-500")
+            ui.label(f"spot {format_pln(position.value(current.unit_spot_pln))}").classes("text-xs k-muted")
     ui.label(format_pln(result, signed=True)).classes(f"text-right {_result_color(result)}")
     ui.label(format_percent(position.result_percent(price), signed=True)).classes(f"text-right {_result_color(result)}")
 
@@ -221,9 +221,7 @@ def _price_cell(price: Decimal, current: InstrumentPrice) -> None:
             ui.label(format_unit_price(price, current.currency))
         else:
             ui.label(format_amount(price, current.currency))
-            ui.label(f"spot {format_unit_price(current.spot, current.currency)}{ounce}").classes(
-                "text-xs text-gray-500"
-            )
+            ui.label(f"spot {format_unit_price(current.spot, current.currency)}{ounce}").classes("text-xs k-muted")
         quote = current.quote
         if quote is None:
             return
@@ -232,7 +230,7 @@ def _price_cell(price: Decimal, current: InstrumentPrice) -> None:
             caption = f"{source}: {format_unit_price(quote.price, quote.currency)}{ounce} ({format_date(quote.day)})"
         else:
             caption = format_date(quote.day)
-        ui.label(caption).classes("text-xs text-gray-500")
+        ui.label(caption).classes("text-xs k-muted")
 
 
 def _bond_price_cell(position: Position, bond: BondPrice) -> None:
@@ -248,12 +246,12 @@ def _bond_rate(bond: BondPrice, lot: Lot, labelled: tuple[Lot, ...]) -> None:
     Lot rests on."""
     value = bond.value(lot.date)
     if value is None:
-        ui.label("po koszcie").classes("text-xs text-gray-500")
+        ui.label("po koszcie").classes("text-xs k-muted")
         return
-    ui.label(rate_text(value)).classes("text-xs text-gray-500")
+    ui.label(rate_text(value)).classes("text-xs k-muted")
     label = most_uncertain(v.label for other in labelled if (v := bond.value(other.date)) is not None)
     if label is not None:
-        ui.label(label.value).classes("text-xs text-orange-700").mark("bond-rate-label")
+        ui.label(label.value).classes("text-xs k-warning").mark("bond-rate-label")
 
 
 def _lots_table(position: Position, instrument: Instrument, bond: BondPrice | None) -> ui.element:
@@ -263,7 +261,7 @@ def _lots_table(position: Position, instrument: Instrument, bond: BondPrice | No
     headers = ("Data zakupu", "Liczba", "Koszt rzeczywisty", "Koszt podatkowy")
     with ui.column().classes("w-full gap-0 pl-8 pb-2").mark("position-lots") as details:
         if fund := fund_details(instrument):
-            ui.label(" · ".join(fund)).classes("text-sm text-gray-500 pb-1").mark("fund-details")
+            ui.label(" · ".join(fund)).classes("text-sm k-muted pb-1").mark("fund-details")
         with ui.element("div").classes("grid gap-x-4 text-sm font-medium").style(columns):
             for header in headers if bond is None else (*headers, "Oprocentowanie", "Wartość"):
                 ui.label(header).classes("text-right" if header != "Data zakupu" else "")

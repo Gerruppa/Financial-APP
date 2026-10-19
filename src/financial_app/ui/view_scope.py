@@ -106,7 +106,7 @@ class ScopeSwitcher:
             if any(not entry.active for entry in entries):
                 label = "ukryj nieaktywne" if self.show_inactive else "pokaż nieaktywne"
                 ui.button(label, on_click=self.toggle_inactive).props("flat dense no-caps size=sm").classes(
-                    "self-center text-gray-600"
+                    "self-center k-muted"
                 ).mark("toggle-inactive")
 
     def _entry(self, entry: ScopeEntry) -> None:
@@ -117,7 +117,7 @@ class ScopeSwitcher:
         self, name: str, account_id: int | None, value: Decimal | None, share: Decimal | None, change: Decimal | None
     ) -> None:
         chosen = account_id == self.scope.account_id
-        row = ui.element("div").classes("w-full px-4 py-2 cursor-pointer hover:bg-gray-100")
+        row = ui.element("div").classes("w-full px-4 py-2 cursor-pointer k-hover")
         row.classes("k-highlight" if chosen else "").mark(f"scope-entry scope-{scope_setting(account_id)}")
         row.on("click", lambda: self.choose(account_id))
         with row:
@@ -133,7 +133,7 @@ class ScopeSwitcher:
                 change_label = ui.label(NO_VALUE if change is None else format_pln(change, signed=bool(change)))
                 change_label.classes("text-xs whitespace-nowrap")
                 if change:
-                    change_label.classes("text-green-700" if change > 0 else "text-red-700")
+                    change_label.classes("k-gain" if change > 0 else "k-loss")
                 change_label.tooltip("Zmiana dzienna")
 
 
@@ -143,5 +143,5 @@ def breadcrumbs(scope: ViewScope) -> None:
         return
     with ui.row().classes("items-center gap-1 text-sm").mark("breadcrumbs"):
         ui.button(TOTAL_LABEL, on_click=lambda: scope.switch(None)).props("flat dense no-caps color=primary")
-        ui.label("›").classes("text-gray-500")
+        ui.label("›").classes("k-muted")
         ui.label(scope.name).classes("font-medium")

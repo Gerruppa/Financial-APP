@@ -34,7 +34,7 @@ def _bond_data_errors_dialog(engine: Engine) -> None:
                 if status.succeeded_at
                 else "Brak pobranych danych."
             )
-            ui.label(copy).classes("text-sm pl-4 text-gray-500")
+            ui.label(copy).classes("text-sm pl-4 k-muted")
         with ui.row().classes("w-full justify-end"):
             ui.button("Zamknij", on_click=dialog.close).props("flat")
     dialog.on("hide", dialog.delete)

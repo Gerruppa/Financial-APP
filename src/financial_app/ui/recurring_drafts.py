@@ -71,7 +71,7 @@ def recurring_drafts_list(
                         what[0] += f" → {accounts[rule.target_account_id]}"
                     if rule.instrument_id is not None:
                         what.append(instruments[rule.instrument_id])
-                    ui.label(" · ".join(what)).classes("text-sm text-gray-600")
+                    ui.label(" · ".join(what)).classes("text-sm k-muted")
                 amount = format_amount(rule.amount, rule.currency)
                 buying = rule.transaction_type is TransactionType.BUY
                 ui.label(f"ok. {amount}" if buying else amount).classes("font-medium")

@@ -62,7 +62,7 @@ class BenchmarksPage:
         ui.label("Benchmarki").classes("text-2xl font-bold")
         ui.label(
             "Każda wpłata i wypłata trafia do benchmarku w dniu operacji po jego cenie w PLN, bez opłat i podatków."
-        ).classes("text-sm text-gray-600")
+        ).classes("text-sm k-muted")
         if ensure_default_benchmarks(self.engine):
             self.fetch()
         period_selector(self.period)
@@ -74,12 +74,10 @@ class BenchmarksPage:
     def content(self) -> None:
         days = self.history()
         if days is None:
-            ui.label("Benchmarki: wyliczanie historii…").classes("text-gray-500").mark("benchmarks-pending")
+            ui.label("Benchmarki: wyliczanie historii…").classes("k-muted").mark("benchmarks-pending")
             return
         if not days:
-            ui.label("Benchmarki pojawią się po pierwszej transakcji.").classes("text-gray-500").mark(
-                "benchmarks-empty"
-            )
+            ui.label("Benchmarki pojawią się po pierwszej transakcji.").classes("k-muted").mark("benchmarks-empty")
             return
         first, last = self.period.dates()
         rows = benchmark_comparison(self.engine, days, first, last, self.scope.account_id)
@@ -108,7 +106,7 @@ class BenchmarksPage:
                 with line.style(COLUMNS).mark("benchmark-row"):
                     name = ui.label(f"{row.name}*" if row.short_history else row.name).classes("font-medium")
                     if row.short_history:
-                        name.classes("text-red-700")
+                        name.classes("k-loss")
                     ui.label(format_pln(row.value)).classes("text-right")
                     ui.label(DASH if row.difference is None else format_pln(row.difference, signed=True)).classes(
                         "text-right"
@@ -117,7 +115,7 @@ class BenchmarksPage:
                     ui.label(_percent(row.twr)).classes("text-right")
                     self._row_controls(row.benchmark)
             if any(row.short_history for row in rows):
-                ui.label(SHORT_HISTORY).classes("text-xs text-red-700")
+                ui.label(SHORT_HISTORY).classes("text-xs k-loss")
 
     def _row_controls(self, benchmark: Benchmark | None) -> None:
         if benchmark is None or benchmark.id is None:

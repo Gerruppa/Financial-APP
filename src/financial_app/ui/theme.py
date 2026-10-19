@@ -51,7 +51,35 @@ _MOUNTAINS = (
 
 # The text of each Theme (its --k-text) and, behind it, the Investment Strategy's band rows: pale in Jasny, deep in
 # Golden, so the text stays readable in both
-TEXT_COLOURS = {Theme.LIGHT: "#0f172a", Theme.GOLDEN: "#f2f2f2"}
+# Each Theme's page, card and hovered row, and the text tones on them: the CSS's --k-<name>, and the k-muted, k-gain,
+# k-loss, k-warning and k-hover classes a page names instead of a colour
+THEME_COLOURS = {
+    Theme.LIGHT: {
+        "page": "#f4f6fa",
+        "card": "#ffffff",
+        "hover": "#f1f5f9",
+        "text": "#0f172a",
+        "muted": "#475569",
+        "gain": "#166534",
+        "loss": "#b91c1c",
+        "warning": "#9a3412",
+    },
+    Theme.GOLDEN: {
+        "page": "#0b0b0c",
+        "card": "#141414",
+        "hover": "#262626",
+        "text": "#f2f2f2",
+        "muted": "#a3a3a3",
+        "gain": "#22c55e",
+        "loss": "#f87171",
+        "warning": "#fb923c",
+    },
+}
+TEXT_COLOURS = {theme: colours["text"] for theme, colours in THEME_COLOURS.items()}
+_THEME_CSS = "".join(
+    f"body.theme-{theme.value} {{ " + " ".join(f"--k-{name}:{colour};" for name, colour in colours.items()) + " }\n"
+    for theme, colours in THEME_COLOURS.items()
+)
 BAND_COLOURS = {
     Theme.LIGHT: {BandStatus.GREEN: "#e8f5e9", BandStatus.YELLOW: "#ffe082", BandStatus.RED: "#ffcdd2"},
     Theme.GOLDEN: {BandStatus.GREEN: "#163a24", BandStatus.YELLOW: "#3d3210", BandStatus.RED: "#45191b"},
@@ -86,11 +114,11 @@ _BAND_CSS = "".join(
 
 CSS = (
     """
-body.theme-jasny { --k-page:#f4f6fa; --k-side:#0f1b33; --k-side-text:#cbd5e1; --k-side-active:#1e2b48;
-  --k-card:#ffffff; --k-border:#e5e9f0; --k-text:TEXT_JASNY; --k-muted:#64748b; --k-accent:#2563eb;
+body.theme-jasny { --k-side:#0f1b33; --k-side-text:#cbd5e1; --k-side-active:#1e2b48;
+  --k-border:#e5e9f0; --k-accent:#2563eb;
   --k-hero:#0f172a; --k-chip:#eef2f7; --k-highlight:#eef2ff; }
-body.theme-golden { --k-page:#0b0b0c; --k-side:#0e0e0f; --k-side-text:#d4d4d4; --k-side-active:#2a2416;
-  --k-card:#141414; --k-border:rgba(212,175,55,.22); --k-text:TEXT_GOLDEN; --k-muted:#a3a3a3; --k-accent:#d4af37;
+body.theme-golden { --k-side:#0e0e0f; --k-side-text:#d4d4d4; --k-side-active:#2a2416;
+  --k-border:rgba(212,175,55,.22); --k-accent:#d4af37;
   --k-hero:#e8c766; --k-chip:#262626; --k-highlight:#2a2416; }
 body { background:var(--k-page); color:var(--k-text); }
 body.theme-golden { background:var(--k-page) MOUNTAINS no-repeat right top / 70% 260px; }
@@ -106,6 +134,10 @@ body.theme-golden .k-menu-item.k-active { color:var(--k-accent) !important; }
 .q-card { border:1px solid var(--k-border); border-radius:14px; box-shadow:0 1px 3px rgba(15,23,42,.06); }
 body.theme-golden .q-card { background:linear-gradient(180deg,#171717,#101010); }
 .k-muted { color:var(--k-muted); }
+.k-gain { color:var(--k-gain); }
+.k-loss { color:var(--k-loss); }
+.k-warning { color:var(--k-warning); }
+.k-hover:hover { background:var(--k-hover); }
 .k-hero { color:var(--k-hero); }
 .k-accent { color:var(--k-accent); }
 .k-highlight { background:var(--k-highlight); }
@@ -114,8 +146,7 @@ body.theme-golden .k-icon { background:rgba(212,175,55,.12) !important; color:va
 .q-linear-progress__track { background:var(--k-chip) !important; opacity:1 !important; }
 .q-circular-progress__track { color:var(--k-chip) !important; opacity:1 !important; }
 """.replace("MOUNTAINS", _MOUNTAINS)
-    .replace("TEXT_JASNY", TEXT_COLOURS[Theme.LIGHT])
-    .replace("TEXT_GOLDEN", TEXT_COLOURS[Theme.GOLDEN])
+    + _THEME_CSS
     + _BAND_CSS
 )
 
