@@ -25,7 +25,7 @@ The app re-implements the inwestomat.eu "Portfolio tracker" Google Sheet. The ag
 
 - Python 3.14 in a virtualenv at `.venv/`. Dependencies are listed in `pyproject.toml`; the package is installed in editable mode with `.venv/Scripts/python.exe -m pip install -e ".[dev]"`.
 - Windows host. Use the venv interpreter directly, without relying on activation:
-  - Run the app (native window): `.venv/Scripts/python.exe main.py`
+  - Run the app (native window): `.venv/Scripts/python.exe main.py`; `--browser` serves it on http://127.0.0.1:8080 instead, `--demo` does that on a fresh made-up database in TEMP. For a visual change, screenshot the tabs before and after with the `kapita-screenshot` skill (`scripts/screenshot.py`).
   - Delta tests, after each change: `.venv/Scripts/python.exe -m pytest --testmon -n auto` (pytest-testmon runs only the tests whose covered code changed; its first run, or a run after a dependency or `conftest.py` change, is the full suite). Testmon tracks only Python, so after changing a non-Python file a test reads (`tests/fixtures/`, `docs/`, `CONTEXT.md`, `GLOSSARY.md`) also run that test by path.
   - Regression tests, the full suite: `.venv/Scripts/python.exe -m pytest -n auto` (about 2.5 minutes; UI tests use NiceGUI's `user_simulation`, with no browser). Run it only when asked or when a milestone closes; CI (`.github/workflows/ci.yml`) runs it on a milestone's closing, a `v*` tag and by hand (`gh workflow run CI`), not on PRs.
   - Without the UI tests: add `-m "not ui"` to either command.
@@ -33,6 +33,7 @@ The app re-implements the inwestomat.eu "Portfolio tracker" Google Sheet. The ag
   - Lint and format: `.venv/Scripts/python.exe -m ruff check .` and `.venv/Scripts/python.exe -m ruff format .`
 - Change source files with the Edit tool, one call per replacement; Python heredocs piped through Git Bash break on quotes.
 - To merge a PR, run `gh pr merge <n> --merge --delete-branch` as a command of its own: only that exact form matches the allow rule in `.claude/settings.json`.
+- A small task (one PR, no spec or migration: a visual tweak, a label, a doc fix) needs no issue and no triage: branch, change, Delta tests, PR, then merge it without asking once pre-commit and the Delta tests pass. Ask before merging anything larger, a migration or a change to `domain/lots.py`.
 
 ## Agent skills
 
