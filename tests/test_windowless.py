@@ -1,5 +1,6 @@
-"""The desktop shortcut starts the app without a console, where sys.stdout and sys.stderr are None."""
+"""The shortcut and KAPITA.exe start the app without a console: sys.stdout and sys.stderr are None, or os.devnull."""
 
+import os
 import sys
 from pathlib import Path
 
@@ -31,3 +32,17 @@ def test_with_a_console_output_is_left_alone(tmp_path: Path) -> None:
 
     assert (sys.stdout, sys.stderr) == (stdout, stderr)
     assert not (tmp_path / "app.log").exists()
+
+
+def test_streams_pywebview_sent_to_devnull_go_to_the_log(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    # Importing pywebview (as NiceGUI does) swaps the missing streams for os.devnull before main() runs
+    with open(os.devnull, "w") as stdout, open(os.devnull, "w") as stderr:
+        monkeypatch.setattr(sys, "stdout", stdout)
+        monkeypatch.setattr(sys, "stderr", stderr)
+        log_file = tmp_path / "app.log"
+
+        attach_log_when_windowless(log_file)
+        print("hello")
+        sys.stdout.flush()
+
+    assert log_file.read_text(encoding="utf-8").splitlines() == ["hello"]

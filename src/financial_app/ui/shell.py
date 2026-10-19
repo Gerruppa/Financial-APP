@@ -4,10 +4,12 @@ import asyncio
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 
 from nicegui import background_tasks, run, ui
 from sqlalchemy import Engine
 
+from financial_app import __version__
 from financial_app.domain.formatting import format_datetime
 from financial_app.domain.instrument_search import CombinedSearch, InstrumentSearch
 from financial_app.domain.prices import ANALIZY, BANKIER, BOSSA, SOURCE_NAMES, YAHOO, refresh_due, source_reason
@@ -47,7 +49,10 @@ from financial_app.ui.unpriced import UnpricedSection
 from financial_app.ui.view_scope import ScopeSwitcher, ViewScope, breadcrumbs
 from financial_app.ui.visibility import Layout
 
-APP_TITLE = "Moje inwestycje"
+APP_TITLE = "KAPITA"
+ASSETS_DIR = Path(__file__).parent / "assets"
+APP_ICON = ASSETS_DIR / "kapita.ico"
+APP_LOGO = ASSETS_DIR / "kapita.png"
 
 
 @dataclass(frozen=True)
@@ -246,7 +251,9 @@ def build_shell(
             await fetch_history()
 
     with ui.header().classes("bg-indigo-900 items-center").mark("header") as header:
-        ui.label(APP_TITLE).classes("text-lg font-bold")
+        ui.image(APP_LOGO).classes("w-8 h-8").mark("app-logo")
+        ui.label(APP_TITLE).classes("text-lg font-bold tracking-widest")
+        ui.label(__version__).classes("text-xs opacity-60 self-end mb-1")
         ui.space()
         # MF's new rates may value a matured Series, so the bond data refresh redraws it too
         drafts_state = ui.refreshable(lambda: drafts_count(engine, rates.today()))

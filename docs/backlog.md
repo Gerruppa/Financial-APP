@@ -46,7 +46,7 @@ Outside Stage 3, later:
 - [ ] #96 (L-18) Investment goal / FIRE per scope.
 - [ ] #97 (L-19) Recurring transactions as drafts to confirm.
 - [ ] #98 (L-20) Account comparison mode.
-- [ ] #99 (L-21) .exe installer.
+- [x] #99 (L-21) .exe installer (KAPITA 1.0).
 - [ ] #100 (L-22) OKI Tax Regime once the law is final (spec 8).
 
 Parked ideas: virtual portfolio, net worth with liabilities, tags, price alerts, portfolio health score.

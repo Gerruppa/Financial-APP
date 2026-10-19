@@ -49,6 +49,13 @@ async def test_clicking_a_menu_entry_opens_its_tab(user: User, tab: str) -> None
         await user.should_see(tab)
 
 
+async def test_header_names_the_app_and_its_version(user: User) -> None:
+    with user.scope(marker="header"):
+        await user.should_see("KAPITA")
+        await user.should_see("1.0.0")
+    user.find(marker="app-logo")
+
+
 async def test_header_offers_total_view_scope(user: User) -> None:
     with user.scope(marker="header"):
         await user.should_see("Total")
