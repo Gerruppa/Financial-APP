@@ -1,0 +1,3 @@
+# Bond calendar (L-9, spec 3.4.1)
+
+`domain/bond_calendar.py` `bond_calendar(positions, instruments, accounts, bonds, today, account_id)` gives the `CalendarEvent`s (`EventKind` coupon, anniversary, maturity; per Lot, after today up to `CALENDAR_MONTHS` 12 later inclusive) with the period, `PeriodRate`, label, and the gross and net: coupons and maturities are the `coupon_drafts` and `maturity_drafts` due by the window's end, so the amounts are what confirming them saves (`EarlyRedemption.gross`); a Series not valued shows only its maturity. `domain/bond_valuation.py` `period_rate_text` formats a rate with its period. `ui/bonds.py` draws it below the totals (`bond-calendar`, rows `calendar-row`, `calendar-rate-label`, `calendar-empty`).

@@ -1,0 +1,3 @@
+# `tests/test_history_parity.py` (#70, spec 6.1)
+
+History against the sheet's Historia tab at each month end (total, Net Deposits, each class; a difference counts over 1% and over 50 PLN), skipped without `reference/`. It imports the sheet into `reference/historia-parity.sqlite3` (git-ignored, rebuilt when the Transakcje or the symbols change), gives each Instrument the Yahoo symbol of its sheet ticker (`yahoo_symbol`) and fetches the history once through `PortfolioHistory`; known differences are `Deviation`s (late-entered Transactions found from the data, Bond Series at cost), each also in spec 6.1 or 9.

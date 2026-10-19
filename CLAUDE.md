@@ -8,7 +8,7 @@ The app is called KAPITA; version 1.0.0 (`financial_app.__version__`) ships as a
 
 ## Layout
 
-`src/financial_app/` in four layers (ADR-0001): `domain/` (pure-Python calculations), `persistence/` (SQLite through SQLAlchemy), `sources/` (Price Sources, importers and services above persistence) and `ui/` (NiceGUI). **Before changing a module, read its entry in `docs/architecture.md`**: the main functions, UI markers and decisions per module. Update that entry when you change the module. `FILETREE.md` finds a file by purpose.
+`src/financial_app/` in four layers (ADR-0001): `domain/` (pure-Python calculations), `persistence/` (SQLite through SQLAlchemy), `sources/` (Price Sources, importers and services above persistence) and `ui/` (NiceGUI). **Before changing a module, read its entries in `docs/architecture/`**: the main functions, UI markers and decisions per module; `grep -l "<module path>" docs/architecture/` finds them, and `docs/architecture.md` is the index. Update those entries when you change the module. `FILETREE.md` finds a file by purpose.
 
 Rules no config enforces:
 - `domain/` never imports NiceGUI, SQLAlchemy, Alembic or pywebview (`tests/test_architecture.py` checks).

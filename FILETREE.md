@@ -7,7 +7,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `.filetree.json`: Filetree manifest config: manifest path, include/exclude filters, summary language, commit guard and self-only mode.
 - `.gitignore`: Git ignore rules for the venv, caches, build output, the personal spreadsheet reference folder and graphify output.
 - `.pre-commit-config.yaml`: Pre-commit hooks: ruff check, ruff format and mypy from the venv.
-- `CLAUDE.md`: Guidance for Claude Code: project state, layers and unwritten rules, pointers to docs/architecture.md, environment commands.
+- `CLAUDE.md`: Guidance for Claude Code: project state, layers and unwritten rules, pointers to docs/architecture/, environment commands.
 - `CONTEXT.md`: Domain glossary defining the app's Polish-labelled terms (Accounts, Instruments, Transactions, Lots, Quotes) and terms to avoid.
 - `GLOSSARY.md`: Polish-to-English index of glossary terms, mapping UI labels to CONTEXT.md definitions and sections
 - `README.md`: User-facing setup guide: install steps, desktop shortcut creation, data location, backups and log file.
@@ -21,7 +21,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 
 ## docs/
 
-- `architecture.md`: Per-module reference for src/financial_app: main functions, UI markers and decisions; CLAUDE.md points here before changing a module.
+- `architecture.md`: Index of the per-module architecture entries in docs/architecture/, plus the domain and persistence layer rules.
 - `backlog.md`: Local stand-in for GitHub Issues: done and open stage items, with L-n ids for items not yet on GitHub
 - `spec.md`: Agreed product specification: goals, architecture, data model, transaction rules, valuation and feature scope.
 
@@ -42,6 +42,66 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `domain.md`: Agent instructions for reading CONTEXT.md and ADRs before exploring code and using the glossary's vocabulary.
 - `issue-tracker.md`: Agent instructions for managing issues, PRs and wayfinder maps on GitHub with the gh CLI.
 - `triage-labels.md`: Mapping of the five canonical triage roles to this repo's GitHub issue label names.
+
+## docs/architecture/
+
+- `accounts.md`: Architecture entry for domain/accounts.py: main functions, UI markers and decisions.
+- `analizy.md`: Architecture entry for sources/analizy.py: main functions, UI markers and decisions.
+- `app.md`: Architecture entry for app.py: main functions, UI markers and decisions.
+- `benchmarks.md`: Architecture entry for Benchmarks (#91, spec 6.2): main functions, UI markers and decisions.
+- `bond-calendar.md`: Architecture entry for Bond calendar (L-9, spec 3.4.1): main functions, UI markers and decisions.
+- `bond-data.md`: Architecture entry for Bond data (Stage 3, L-1, spec 3.4.1): main functions, UI markers and decisions.
+- `bond-drafts.md`: Architecture entry for Maturity and Rollover Drafts (L-6, spec 3.4.1): main functions, UI markers and decisions.
+- `bond-series.md`: Architecture entry for Bond Series (L-2, spec 3.4.1): main functions, UI markers and decisions.
+- `bossa.md`: Architecture entry for sources/bossa.py: main functions, UI markers and decisions.
+- `catalyst-bonds.md`: Architecture entry for Catalyst bonds (L-23, L-24, spec 4.2): main functions, UI markers and decisions.
+- `changes.md`: Architecture entry for ui/changes.py (#112): main functions, UI markers and decisions.
+- `contribution-limits.md`: Architecture entry for Contribution Limits (#95, spec 8.1): main functions, UI markers and decisions.
+- `dashboard-charts.md`: Architecture entry for Dashboard charts (#73, spec 6.1): main functions, UI markers and decisions.
+- `dashboard.md`: Architecture entry for Dashboard (#72, spec 5 and 6.1): main functions, UI markers and decisions.
+- `early-redemption.md`: Architecture entry for Early Redemption (L-5, spec 3.4.1, ADR-0007): main functions, UI markers and decisions.
+- `edo-valuation.md`: Architecture entry for EDO valuation (L-3, spec 3.4.1): main functions, UI markers and decisions.
+- `export.md`: Architecture entry for Export: main functions, UI markers and decisions.
+- `help-faq.md`: Architecture entry for Pomoc / FAQ (#156): main functions, UI markers and decisions.
+- `history-parity-test.md`: Architecture entry for tests/test_history_parity.py (#70, spec 6.1): main functions, UI markers and decisions.
+- `info-icons.md`: Architecture entry for Info icons and waterfall amounts: main functions, UI markers and decisions.
+- `instrument-search.md`: Architecture entry for domain/instrument_search.py: main functions, UI markers and decisions.
+- `instruments.md`: Architecture entry for domain/instruments.py: main functions, UI markers and decisions.
+- `investment-goal.md`: Architecture entry for Investment Goal (#96): main functions, UI markers and decisions.
+- `investment-strategies.md`: Architecture entry for Investment Strategies (#76, spec 5 and 6.1): main functions, UI markers and decisions.
+- `lots.md`: Architecture entry for domain/lots.py: main functions, UI markers and decisions.
+- `metrics.md`: Architecture entry for domain/metrics.py (#69, spec 6.1): main functions, UI markers and decisions.
+- `multi-asset.md`: Architecture entry for Multi-asset (#75, spec 6.1): main functions, UI markers and decisions.
+- `nbp-rates.md`: Architecture entry for sources/nbp.py: main functions, UI markers and decisions.
+- `obligacje-tab.md`: Architecture entry for Obligacje tab and Net Value (L-4, spec 3.4.1): main functions, UI markers and decisions.
+- `passive-income.md`: Architecture entry for Passive-income calendar (#93, spec 6.2): main functions, UI markers and decisions.
+- `portfolio-history.md`: Architecture entry for domain/portfolio_history.py (#68, spec 6.1, ADR-0006): main functions, UI markers and decisions.
+- `price-refresh.md`: Architecture entry for sources/prices.py: main functions, UI markers and decisions.
+- `prices.md`: Architecture entry for domain/prices.py: main functions, UI markers and decisions.
+- `real-return.md`: Architecture entry for Real return (L-10, spec 3.4.1): main functions, UI markers and decisions.
+- `recurring-rules.md`: Architecture entry for Recurring Rules (#97, spec 3.3.1): main functions, UI markers and decisions.
+- `reset.md`: Architecture entry for persistence/reset.py: main functions, UI markers and decisions.
+- `sell-summary.md`: Architecture entry for Sell Summary (#92, spec 6.2): main functions, UI markers and decisions.
+- `shell.md`: Architecture entry for ui/shell.py: main functions, UI markers and decisions.
+- `spreadsheet-import.md`: Architecture entry for domain/spreadsheet_import.py: main functions, UI markers and decisions.
+- `spreadsheet-workbook.md`: Architecture entry for sources/spreadsheet.py: main functions, UI markers and decisions.
+- `stooq-price-history.md`: Architecture entry for sources/stooq.py: main functions, UI markers and decisions.
+- `term-deposits.md`: Architecture entry for Term Deposits (#160, spec 3.3.2): main functions, UI markers and decisions.
+- `todays-view.md`: Architecture entry for Today's View state (#109): main functions, UI markers and decisions.
+- `transaction-filters.md`: Architecture entry for Transakcje filters and sorting (L-27): main functions, UI markers and decisions.
+- `transaction-form.md`: Architecture entry for Transaction form (#111): main functions, UI markers and decisions.
+- `transaction-saving.md`: Architecture entry for Saving Transactions (#110): main functions, UI markers and decisions.
+- `transactions.md`: Architecture entry for domain/transactions.py: main functions, UI markers and decisions.
+- `treemap-ranking-waterfall.md`: Architecture entry for Treemap, Account ranking, waterfall and after-tax toggle (#89, spec 6.1): main functions, UI markers and decisions.
+- `ui-visibility.md`: Architecture entry for Wygląd i widoczność (#155): main functions, UI markers and decisions.
+- `unpriced-instruments.md`: Architecture entry for Unpriced Instruments: main functions, UI markers and decisions.
+- `valuation-snapshots.md`: Architecture entry for Valuation Snapshots (#115, ADR-0008): main functions, UI markers and decisions.
+- `valuation.md`: Architecture entry for domain/valuation.py: main functions, UI markers and decisions.
+- `version-installer.md`: Architecture entry for Version and installer (#99): main functions, UI markers and decisions.
+- `view-scope-periods.md`: Architecture entry for View Scope and period selector (#71, spec 5 and 6.1): main functions, UI markers and decisions.
+- `wyniki.md`: Architecture entry for Wyniki (#74, spec 6.1): main functions, UI markers and decisions.
+- `xtb-import-reconciliation.md`: Architecture entry for XTB import and Reconciliation (L-17, spec 7): main functions, UI markers and decisions.
+- `yahoo.md`: Architecture entry for sources/yahoo.py: main functions, UI markers and decisions.
 
 ## packaging/
 
@@ -255,6 +315,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 
 ## tests/
 
+- `conftest.py`: Shared test setup: gives NiceGUI should_see and should_not_see 5 s to match, for background tasks on slow CI runners.
 - `test_account_deletion.py`: Tests deleting an Account that nothing names and the refusals naming what still holds an Account
 - `test_account_ranking_domain.py`: Tests Account ranking figures, sorting, best and worst marks and treemap tiles
 - `test_account_ranking_ui.py`: Tests the Dashboard's Account treemap and ranking, profit waterfall and after-tax toggle
