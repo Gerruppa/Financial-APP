@@ -1,7 +1,7 @@
 [project]
-name = "financial-app"
-version = "0.1.0"
-description = "Personal investment tracker (re-implementation of the inwestomat.eu Portfolio tracker sheet)"
+name = "kapita"
+dynamic = ["version"]
+description = "KAPITA: personal investment tracker (re-implementation of the inwestomat.eu Portfolio tracker sheet)"
 requires-python = ">=3.14"
 dependencies = [
     "nicegui>=3.18",
@@ -21,13 +21,18 @@ dev = [
     "ruff>=0.16",
     "types-xlrd",
 ]
+# Builds the Windows installer (scripts/build_installer.ps1) and the icons (scripts/make_icons.py)
+build = [
+    "pyinstaller>=6.16",
+    "pillow>=11",
+]
 
 [project.scripts]
-financial-app = "financial_app.app:main"
+kapita = "financial_app.app:main"
 
 # No console window: this is what the desktop shortcut starts.
 [project.gui-scripts]
-financial-app-gui = "financial_app.app:main"
+kapita-gui = "financial_app.app:main"
 
 [build-system]
 requires = ["setuptools>=80"]
@@ -36,8 +41,11 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.dynamic]
+version = { attr = "financial_app.__version__" }
+
 [tool.setuptools.package-data]
-financial_app = ["persistence/migrations/*.py", "persistence/migrations/versions/*.py", "ui/*.md"]
+financial_app = ["persistence/migrations/*.py", "persistence/migrations/versions/*.py", "ui/*.md", "ui/assets/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

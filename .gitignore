@@ -15,3 +15,6 @@ build/
 
 # Local knowledge-graph output from the graphify skill
 graphify-out/
+
+# PyInstaller and installer output (scripts/build_installer.ps1)
+dist/

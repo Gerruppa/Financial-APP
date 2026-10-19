@@ -205,7 +205,7 @@ W **Ustawieniach**, w sekcji **Limity wpłat**, wpisz roczne limity i kliknij **
 
 ## Gdzie zapisane są moje dane i jak zrobić kopię zapasową? {#dane}
 
-Wszystkie dane są tylko na Twoim komputerze, w pliku `financial_app.sqlite3` w folderze `%LOCALAPPDATA%\FinancialApp` (wklej tę ścieżkę w pasek adresu Eksploratora plików). Aplikacja nie wysyła ich nigdzie; z internetu tylko pobiera ceny, kursy i dane obligacji.
+Wszystkie dane są tylko na Twoim komputerze, w pliku `financial_app.sqlite3` w folderze `%LOCALAPPDATA%\KAPITA` (wklej tę ścieżkę w pasek adresu Eksploratora plików). Aplikacja nie wysyła ich nigdzie; z internetu tylko pobiera ceny, kursy i dane obligacji.
 
 Przy każdym uruchomieniu aplikacja kopiuje bazę do podfolderu `backups` obok niej. Własną kopię zrobisz, kopiując plik bazy przy zamkniętej aplikacji, np. na dysk zewnętrzny. Transakcje możesz też wyeksportować w zakładce **Transakcje** przyciskami **Eksportuj CSV** i **Eksportuj XLSX**.
 

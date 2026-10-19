@@ -38,15 +38,22 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `issue-tracker.md`: Agent instructions for managing issues, PRs and wayfinder maps on GitHub with the gh CLI.
 - `triage-labels.md`: Mapping of the five canonical triage roles to this repo's GitHub issue label names.
 
+## packaging/
+
+- `kapita.iss`: Inno Setup recipe for the KAPITA Windows installer: per-user install, Start menu and desktop shortcuts, upgrades by fixed AppId
+- `kapita.spec`: PyInstaller recipe freezing main.py into the windowed KAPITA folder build, with NiceGUI, migrations and icons as data
+
 ## scripts/
 
+- `build_installer.ps1`: Builds the KAPITA installer: runs PyInstaller on the spec, then Inno Setup with the version from the package
 - `create_desktop_shortcut.ps1`: PowerShell script creating a Windows desktop shortcut that starts the console-less app window.
+- `make_icons.py`: Cuts the KAPITA app icons (png and ico) out of the logo in packaging/; run only when the logo changes
 
 ## src/financial_app/
 
-- `__init__.py`: Empty package marker for the financial_app package.
+- `__init__.py`: Package marker for financial_app; holds the one version number, __version__ = 1.0.0
 - `__main__.py`: Module entry point so the package can be run with python -m financial_app, starting the app.
-- `app.py`: Application start-up: attaches logging, backs up and migrates the database, then opens the NiceGUI window.
+- `app.py`: Application start-up: moves the pre-1.0 data folder, attaches logging, backs up and migrates the database, then opens the NiceGUI window; shows a Windows error box when the move fails.
 
 ## src/financial_app/domain/
 
@@ -116,7 +123,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `investment_goals.py`: Loads, saves and deletes the Investment Goal of each View Scope in the database
 - `models.py`: SQLAlchemy ORM models describing the database tables; schema changes go through migrations
 - `nbp_rates.py`: SQLite cache of NBP Rates keyed by currency and day
-- `paths.py`: Resolves the user's data, backup and log folders, kept outside the repository
+- `paths.py`: Resolves the user's data, backup and log folders outside the repository; moves the legacy FinancialApp data folder to KAPITA.
 - `quotes.py`: Saves and reads daily Instrument Quotes and the last price refresh status
 - `reconciliation.py`: Saves a broker Reconciliation's choices all or none and reads handled, unreconciled and incoming transfers
 - `recurring_rules.py`: Saves Recurring Rules and their skips, computes their Drafts and confirms them as Transactions
@@ -341,7 +348,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_nbp_rates.py`: Tests fetching and caching NBP D-1 rates from saved API responses, without the network.
 - `test_passive_income_domain.py`: Tests received income kinds, monthly sums by scope, goal progress, the 12-month average and goal parsing.
 - `test_passive_income_ui.py`: UI tests of the Dochód pasywny tab: received and forecast by month, the goal, years and the scope.
-- `test_paths.py`: Tests that the default data directory lies outside the repository and respects the override.
+- `test_paths.py`: Tests the default data directory (outside the repository, named KAPITA), the override, and the legacy folder move without overwriting new data.
 - `test_periods_domain.py`: Unit tests for period presets, custom ranges and period text persistence
 - `test_physical_metals_ui.py`: Tests physical metal Instruments with weight per unit and Buyback Spread in the dialog and Portfolio.
 - `test_portfolio_history_domain.py`: Unit tests for the History engine: daily value per Account and Asset Class and Net Deposits
