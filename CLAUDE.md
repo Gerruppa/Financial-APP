@@ -29,6 +29,8 @@ The app re-implements the inwestomat.eu "Portfolio tracker" Google Sheet. The ag
   - Tests: `.venv/Scripts/python.exe -m pytest` (UI tests use NiceGUI's `user_simulation`, with no browser)
   - Type check: `.venv/Scripts/python.exe -m mypy` (strict)
   - Lint and format: `.venv/Scripts/python.exe -m ruff check .` and `.venv/Scripts/python.exe -m ruff format .`
+- Change source files with the Edit tool, one call per replacement; Python heredocs piped through Git Bash break on quotes.
+- To merge a PR, run `gh pr merge <n> --merge --delete-branch` as a command of its own: only that exact form matches the allow rule in `.claude/settings.json`.
 
 ## Agent skills
 
