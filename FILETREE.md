@@ -307,7 +307,8 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `shell.py`: Main app window shell: left menu, header with refresh status and View Scope, and the transaction button
 - `strategy.py`: Strategie inwestycyjne tab, Dashboard strategy section and post-refresh notice for classes outside their tolerance band
 - `term_deposits.py`: Lokaty section of Dochód stały: running Term Deposits with accrued interest, and the dialog to add, edit, break or delete one
-- `transactions.py`: Transakcje tab with column sorting and filters, and the transaction dialog for adding, editing and deleting all supported transaction types
+- `transaction_dialog.py`: Transaction dialog for adding, editing and deleting every supported transaction type, bound to the form model
+- `transactions.py`: Transakcje tab: the Transaction list with column sorting and filters
 - `unpriced.py`: Ustawienia Instrumenty bez wyceny card listing held Instruments lacking an automatic price, with reasons
 - `view_scope.py`: View Scope header switcher and breadcrumbs, listing Accounts by value with share and daily change
 - `visibility.py`: Window Layout of hidden elements, plus the Ustawienia switches and View Profile presets that change it
