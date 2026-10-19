@@ -14,7 +14,7 @@ The app opens a native pywebview window you cannot see. `main.py --demo` serves 
 ```
 
 - A tab is its route without the slash: `dashboard` (`/`), `portfolio`, `transakcje`, `obligacje`, `ustawienia`, `benchmarki`, `sprzedaz`, `strategie`, `dochod-pasywny`, `multi-asset`. Git Bash turns a leading `/` into a Windows path, so never pass one.
-- `--width` / `--height` set the viewport (default 1400x900, the native window).
+- `--width` / `--height` set the viewport (default 1400x900, the native window); `--theme golden` shoots the dark Golden Theme, so check a colour change in both.
 - It prints each PNG's path; `Read` the PNG to look at it.
 - Write the shots to the session scratchpad, never into the repo.
 

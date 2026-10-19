@@ -3,16 +3,19 @@
 Starts `main.py --demo` (made-up data in a fresh TEMP database, never the user's) on a free port, shoots each tab
 with headless Chrome or Edge into <dir>/<tab>.png and stops the app. A tab is its route without the slash
 (`transakcje`, `ustawienia`; `dashboard` is /), since Git Bash turns a leading slash into a Windows path. --width
-and --height set the viewport (default 1400x900, the native window's size).
+and --height set the viewport (default 1400x900, the native window's size); --theme golden shoots the Golden Theme.
 """
 
 import argparse
+import os
 import socket
 import subprocess
 import sys
 import time
 import urllib.request
 from pathlib import Path
+
+from financial_app.domain.themes import Theme
 
 ROOT = Path(__file__).resolve().parents[1]
 BROWSERS = [
@@ -42,12 +45,26 @@ def wait_until_up(url: str, app: subprocess.Popen[bytes], seconds: float = 60) -
     sys.exit(f"{url} did not answer within {seconds:.0f} s")
 
 
+def choose_theme(theme: str) -> None:
+    """Remember ``theme`` in the demo database, as Ustawienia would; each page then builds in it."""
+    from financial_app.app import demo_dir
+    from financial_app.persistence.db import open_engine
+    from financial_app.persistence.paths import DATA_DIR_ENV, database_path
+    from financial_app.persistence.settings import UI_THEME, save_setting
+
+    os.environ[DATA_DIR_ENV] = str(demo_dir())
+    engine = open_engine(database_path())
+    save_setting(engine, UI_THEME, theme)
+    engine.dispose()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("tabs", nargs="*", default=["dashboard"])
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--width", type=int, default=1400)
     parser.add_argument("--height", type=int, default=900)
+    parser.add_argument("--theme", choices=[theme.value for theme in Theme], default=Theme.LIGHT.value)
     args = parser.parse_args()
     browser = next((path for path in BROWSERS if path.exists()), None)
     if browser is None:
@@ -57,6 +74,7 @@ def main() -> None:
     app = subprocess.Popen([sys.executable, str(ROOT / "main.py"), "--demo", "--port", str(port)], cwd=ROOT)
     try:
         wait_until_up(f"http://127.0.0.1:{port}/", app)
+        choose_theme(args.theme)
         for tab in args.tabs:
             name = tab.strip("/") or "dashboard"
             route = "/" if name == "dashboard" else f"/{name}"

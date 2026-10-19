@@ -121,7 +121,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `create_desktop_shortcut.ps1`: PowerShell script creating a Windows desktop shortcut that starts the console-less app window.
 - `make_icons.py`: Cuts the KAPITA app icons (png and ico) out of the logo in packaging/; run only when the logo changes
 - `new_migration.py`: Generates the next numbered migration by autogenerating against a scratch database, then ruff fixes and formats it.
-- `screenshot.py`: Screenshots KAPITA's tabs with headless Chrome or Edge, running main.py --demo on a free port and stopping it after
+- `screenshot.py`: Screenshots KAPITA's tabs with headless Chrome or Edge on demo data, in the Jasny or Golden Theme, then stops the app
 
 ## src/financial_app/
 
@@ -265,7 +265,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `catalyst.py`: Fetches Catalyst bonds' nominal and accrued interest from gpwcatalyst.pl and IZ indexation coefficients from gov.pl
 - `current_prices.py`: Today's valuation inputs shared by the Portfolio and the Dashboard: Instrument prices and NBP Rates from the last business day before today, each currency fetched once
 - `dashboard.py`: Computes today's Dashboard of a View Scope from the database, shared by the Dashboard and the Investment Strategy
-- `demo_data.py`: Seeds the made-up demo Portfolio (two Accounts, DEMO Instruments, a year of Transactions) for the --demo start
+- `demo_data.py`: Seeds the made-up demo Portfolio (two Accounts, DEMO Instruments, a year of Transactions, a Total Investment Strategy) for the --demo start
 - `export.py`: Writes the Transactions list to CSV and XLSX files for export
 - `history.py`: Returns an Instrument's Quotes in a date range, fetching missing days from Yahoo, analizy.pl or Stooq into cache
 - `nbp.py`: Gets NBP exchange rates from the NBP API through the local cache
@@ -472,6 +472,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_term_deposits_repository.py`: Tests saving Term Deposits and confirming their Drafts against the database
 - `test_term_deposits_ui.py`: UI tests of adding Term Deposits and handling their Drafts in the Dochód stały tab
 - `test_term_deposits_valuation.py`: Tests Term Deposit interest counted in Account value, history, Dashboard profit and save warnings
+- `test_theme_contrast.py`: Tests WCAG AA contrast of Investment Strategy band rows and Accounts treemap tile labels in both Themes
 - `test_themes_domain.py`: Tests the Theme labels and reading the remembered Theme text back, with unknown text falling to Jasny
 - `test_todays_view.py`: Tests today's View state loaded once for the tabs, on an in-memory database with fixed NBP Rates
 - `test_trades_ui.py`: Tests PLN Buys and Sells end to end through the transaction dialog, Transakcje list and Portfolio.
