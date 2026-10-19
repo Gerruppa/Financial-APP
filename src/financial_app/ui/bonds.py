@@ -65,7 +65,7 @@ class BondsPage:
 
     def build(self) -> None:
         ui.label("Dochód stały").classes("text-2xl font-bold")
-        with ui.column().classes("w-full gap-0").mark("bonds"):
+        with ui.column().classes("w-full max-w-screen-2xl gap-0").mark("bonds"):
             self.content()
 
     @ui.refreshable_method

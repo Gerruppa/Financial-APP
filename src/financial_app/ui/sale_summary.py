@@ -102,7 +102,7 @@ def _tiles(stats: SaleStats, names: dict[int, str]) -> None:
     )
     with (
         ui.element("div")
-        .classes("grid w-full gap-4")
+        .classes("grid w-full max-w-screen-2xl gap-4")
         .style("grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr))")
     ):
         for key, title, text, note in tiles:
