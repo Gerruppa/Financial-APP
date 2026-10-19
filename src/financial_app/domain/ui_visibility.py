@@ -45,6 +45,7 @@ ELEMENTS = (
     Element("tile-xirr", "XIRR", TILES),
     Element("since-snapshot", "Zmiana od migawki", SECTIONS),
     Element("investment-goal", "Cel inwestycyjny / FIRE", SECTIONS),
+    Element("sayings", "Cytat dnia (Dashboard i menu)", SECTIONS),
     Element("account-table", "Twoje konta i aktywa (karty i tabela)", SECTIONS),
     Element("contribution-limits", "Limity wpłat", SECTIONS),
     Element("account-ranking", "Ranking i treemap kont", SECTIONS),
@@ -70,9 +71,18 @@ ELEMENTS = (
 )
 KEYS = frozenset(element.key for element in ELEMENTS)
 
-# What Podstawowy keeps for a beginner with one Account and a few ETFs
+# What Podstawowy keeps for a beginner with one Account and a few ETFs; the sayings (#178) too, so a Podstawowy saved
+# before them still reads as Podstawowy
 _BASIC_SHOWN = frozenset(
-    {"tile-value", "tile-net-deposits", "tile-unrealized", "account-table", "chart-value", "chart-allocation"}
+    {
+        "tile-value",
+        "tile-net-deposits",
+        "tile-unrealized",
+        "account-table",
+        "chart-value",
+        "chart-allocation",
+        "sayings",
+    }
 )
 _PRESETS = {Profile.FULL: frozenset[str](), Profile.BASIC: KEYS - _BASIC_SHOWN}
 
