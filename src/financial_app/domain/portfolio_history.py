@@ -22,6 +22,7 @@ from financial_app.domain.currencies import NbpRate
 from financial_app.domain.history import ONE_DAY
 from financial_app.domain.instruments import Instrument
 from financial_app.domain.lots import ForeignCash, Position, UnitPrice, foreign_cash, open_positions
+from financial_app.domain.term_deposits import Accruals, AccruedInterest
 from financial_app.domain.transactions import PLN, SplitRatio, TransactionDraft, TransactionType, cash_balances
 
 # The Asset Classes PLN and foreign cash are counted in
@@ -80,11 +81,13 @@ def daily_history(
     first: date,
     last: date,
     bonds: BondData | None = None,
+    accruals: Accruals | None = None,
 ) -> list[DayValue]:
     """Each day from ``first`` to ``last``.
 
     ``transactions`` come in entry order (for the FIFO engine's same-day ties), ``prices`` by Instrument id and
-    ``rates`` by currency, both oldest first; ``bonds`` values the Bond Series.
+    ``rates`` by currency, both oldest first; ``bonds`` values the Bond Series and ``accruals`` the interest the Term
+    Deposits earned and not paid yet, net of Belka, counted as cash (issue #160).
     """
     pricing = _Pricing(instruments, prices, rates, _splits(transactions), bonds or BondData())
     change_days = {t.date for t in transactions}
@@ -100,7 +103,8 @@ def daily_history(
         if state is None or day in change_days:
             state = _State.on(transactions, day)
         net_deposits, account_net_deposits = _add_flows(net_deposits, account_net_deposits, flows_by_day.get(day, ()))
-        history.append(_value(state, pricing, day, net_deposits, account_net_deposits))
+        accrued = {} if accruals is None else accruals.on(day)
+        history.append(_value(state, pricing, day, net_deposits, account_net_deposits, accrued))
         day += ONE_DAY
     return history
 
@@ -262,7 +266,12 @@ def _add_flows(
 
 
 def _value(
-    state: _State, pricing: _Pricing, day: date, net_deposits: Decimal, account_net_deposits: dict[int, Decimal]
+    state: _State,
+    pricing: _Pricing,
+    day: date,
+    net_deposits: Decimal,
+    account_net_deposits: dict[int, Decimal],
+    accrued: Mapping[int, AccruedInterest],
 ) -> DayValue:
     accounts: dict[int, Decimal] = {}
     classes: dict[str, Decimal] = {}
@@ -279,6 +288,8 @@ def _value(
 
     for account_id, balance in state.cash.items():
         add(account_id, balance, [(CASH_CLASS, balance)])
+    for account_id, earned in accrued.items():
+        add(account_id, earned.net, [(CASH_CLASS, earned.net)])
     unpriced_currencies: set[str] = set()
     for cash in state.foreign_cash:
         rate = pricing.rate(cash.currency, day)

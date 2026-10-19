@@ -89,6 +89,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `save_warnings.py`: Warnings a save of Transactions shows (cash shortfalls, over-limit contributions, unsplit Multi-asset), computed before and after the save; never blocks it
 - `spreadsheet_import.py`: Pure conversion of the user's Inwestomat Transakcje sheet rows into Transaction drafts, with fingerprints for re-import skipping.
 - `strategy.py`: Investment Strategy rules: Allocation Targets with tolerance bands, Instrument Targets, and the water-filling split of the Planned Deposit
+- `term_deposits.py`: Term Deposit rules: contract fields, capitalisation periods, Belka-net interest, Accrued Interest, Drafts and capital locked by running deposits
 - `transaction_filters.py`: Excel-like column filters and sort order for the Transakcje list; returns the filtered, sorted view of Transactions
 - `transaction_form.py`: Transaction dialog rules without widgets: fields per Transaction Type and the Transaction they describe, or the field error
 - `transactions.py`: Transaction types, drafts and builders for every kind, plus cash balances and cost and dividend totals per Account.
@@ -109,6 +110,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `bond_series.py`: Bond Series persistence: lists Series with their MF terms and rate corrections, saves corrections, finds or creates Series Instruments
 - `contribution_limits.py`: Reads and saves yearly Contribution Limits per Account Type in SQLite
 - `db.py`: Opens the SQLite engine and applies pending Alembic migrations at start-up.
+- `deposit_drafts.py`: Computes pending Term Deposit interest and maturity Drafts from saved deposits and Transactions; confirms interest as Transactions
 - `history.py`: Reads and writes cached Stooq Quote history and NBP Rate history, with the cover of fetched days.
 - `instruments.py`: Saves and reads Asset Classes and Instruments, and deletes Instrument data including its Quotes and failures.
 - `investment_goals.py`: Loads, saves and deletes the Investment Goal of each View Scope in the database
@@ -121,6 +123,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `reset.py`: Clears all portfolio data after a backup and restores default Asset Classes
 - `settings.py`: Reads and writes text application settings by key in the app_settings table
 - `strategies.py`: Reads and saves Investment Strategies for Total and each Account, with their Allocation and Instrument Targets
+- `term_deposits.py`: Saves, edits, ends, renews and deletes Term Deposits on Deposit Accounts, and lists them
 - `transactions.py`: Saves, edits, deletes and lists Transactions, replaying positions to block invalid changes
 - `valuation_snapshots.py`: Saves Valuation Snapshots per View Scope and day, and reads the newest snapshot from an earlier day
 
@@ -166,6 +169,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `0033_recurring_rules.py`: Migration 0033: creates recurring rule and skip tables and the Transaction columns linking to a rule
 - `0034_commission_currency.py`: Migration adding the transactions commission_currency column, defaulting to PLN, for commissions paid in foreign cash.
 - `0035_recurring_rule_target.py`: Migration adding the nullable target_account_id column to recurring_rules for Cash Transfer Recurring Rules.
+- `0036_term_deposits.py`: Alembic migration 0036 creating the term_deposits table and linking interest Transactions to deposit periods
 
 ## src/financial_app/sources/
 
@@ -181,7 +185,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `export.py`: Writes the Transactions list to CSV and XLSX files for export
 - `history.py`: Returns an Instrument's Quotes in a date range, fetching missing days from Yahoo, analizy.pl or Stooq into cache
 - `nbp.py`: Gets NBP exchange rates from the NBP API through the local cache
-- `passive_income.py`: Loads the passive-income items: income received from Transactions and the coupons not entered for the next 12 months.
+- `passive_income.py`: Loads the passive-income items: income received from Transactions and the coupons and Term Deposit interest not entered for the next 12 months.
 - `portfolio_history.py`: Fetches History prices and NBP Rates into cache and computes daily values, cached until invalidated
 - `prices.py`: Refreshes held Instruments' Quotes from price sources in fallback order and records failures
 - `spreadsheet.py`: Previews and imports Transactions and Instruments from the user's Inwestomat spreadsheet
@@ -199,13 +203,14 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `accounts.py`: Ustawienia Konta card: lists Accounts, opens the add and edit dialog, and deletes an unused Account
 - `benchmarks.py`: Benchmarki tab: comparison table with chart toggles and delete, the add form, and value charts over the period.
 - `bond_data.py`: Header status listing failing bond data sources with their reasons, shown only while one keeps failing
-- `bond_drafts.py`: Obligacje tab's "Do zatwierdzenia" list of maturities and unpaid coupons, and its count in the header
+- `bond_drafts.py`: Dochód stały tab's "Do zatwierdzenia" list of bond maturities, unpaid coupons, and Term Deposit interest and maturities, with its header count.
 - `bond_series.py`: Bond Series rate summary and dialog for correcting MF rates by hand in Ustawienia Instrumenty
-- `bonds.py`: Obligacje tab UI: expandable table of Bond Series and their Lots with gross and net values, the "Do zatwierdzenia" list of matured Lots, and the 12-month bond calendar
+- `bonds.py`: Dochód stały tab UI: Term Deposits section, expandable Bond Series table with Lots and values, the "Do zatwierdzenia" list, and the 12-month calendar.
 - `changes.py`: Window change events: the Change enum, the TODAYS_VALUE set, and ChangeEvents, which redraws each tab or header element that declared the published changes.
 - `charts.py`: Dashboard's nine ECharts charts, the profit waterfall, and shared PLN line and bar chart helpers for other tabs.
 - `contribution_limits.py`: Contribution Limits UI: yearly limits in Ustawienia and this year's Dashboard bars
 - `dashboard.py`: Dashboard tab UI: totals, price status, Account table, exposure, charts, Account treemap and ranking, Investment Goal tile, and the after-tax toggle
+- `deposit_drafts.py`: Dochód stały rows for Term Deposit interest and maturity Drafts: confirm, edit amounts, end or renew a matured deposit
 - `dialogs.py`: Draggable dialog support with no backdrop, so the screen behind stays readable
 - `faq.md`: Polish FAQ text shown on the Pomoc tab; sections, questions with slugs, and links to tabs
 - `fund_details.py`: Builds the short fund detail texts (TER, Distribution Policy, domicile) shared by Instrument list and Portfolio
@@ -229,6 +234,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `settings.py`: Builds the Ustawienia page by assembling its sections: Accounts, Asset Classes, Instruments, sources, import, reset
 - `shell.py`: Main app window shell: left menu, header with refresh status and View Scope, and the transaction button
 - `strategy.py`: Strategie inwestycyjne tab, Dashboard strategy section and post-refresh notice for classes outside their tolerance band
+- `term_deposits.py`: Lokaty section of Dochód stały: running Term Deposits with accrued interest, and the dialog to add, edit, break or delete one
 - `transactions.py`: Transakcje tab with column sorting and filters, and the transaction dialog for adding, editing and deleting all supported transaction types
 - `unpriced.py`: Ustawienia Instrumenty bez wyceny card listing held Instruments lacking an automatic price, with reasons
 - `view_scope.py`: View Scope header switcher and breadcrumbs, listing Accounts by value with share and daily change
@@ -371,6 +377,10 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_symbol_check.py`: Unit tests for the Sprawdź symbol check: quote, currency mismatch warning, and error cases on fake sources
 - `test_symbol_check_ui.py`: UI tests for the Sprawdź buttons in the Instrument dialog, on fake sources without network
 - `test_symbol_fields_ui.py`: UI tests for the Instrument dialog's Source Symbol fields, ordered by the Asset Class's Fallback Order.
+- `test_term_deposits_domain.py`: Tests of Term Deposit interest periods, accrued interest, Drafts and locked capital
+- `test_term_deposits_repository.py`: Tests saving Term Deposits and confirming their Drafts against the database
+- `test_term_deposits_ui.py`: UI tests of adding Term Deposits and handling their Drafts in the Dochód stały tab
+- `test_term_deposits_valuation.py`: Tests Term Deposit interest counted in Account value, history, Dashboard profit and save warnings
 - `test_todays_view.py`: Tests today's View state loaded once for the tabs, on an in-memory database with fixed NBP Rates
 - `test_trades_ui.py`: Tests PLN Buys and Sells end to end through the transaction dialog, Transakcje list and Portfolio.
 - `test_transaction_edit_ui.py`: UI tests for editing and deleting a Transaction from the Transakcje list, including blocked edits

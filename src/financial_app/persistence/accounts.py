@@ -20,6 +20,7 @@ from financial_app.persistence.models import (
 )
 from financial_app.persistence.recurring_rules import delete_rules_of_account
 from financial_app.persistence.settings import VIEW_SCOPE, XTB_ACCOUNT
+from financial_app.persistence.term_deposits import delete_deposits_of_account
 
 
 def list_accounts(engine: Engine) -> list[Account]:
@@ -58,7 +59,7 @@ def account_holders(engine: Engine, account_id: int) -> AccountHolders:
 def delete_account(engine: Engine, account_id: int) -> None:
     """Delete an Account nothing names any more, else raise ``AccountError`` saying what holds it (L-28). A View
     Scope remembered on it goes back to Total, and a Benchmark comparing against it, its Valuation Snapshots and
-    its Investment Goal and its Recurring Rules go with it. An Account already
+    its Investment Goal, its Recurring Rules and its Term Deposits go with it. An Account already
     gone (deleted in another window) is left so."""
     with Session(engine) as session, session.begin():
         row = session.get(AccountRow, account_id)
@@ -72,6 +73,7 @@ def delete_account(engine: Engine, account_id: int) -> None:
         session.execute(delete(ValuationSnapshotRow).where(ValuationSnapshotRow.account_id == account_id))
         session.execute(delete(InvestmentGoalRow).where(InvestmentGoalRow.account_id == account_id))
         delete_rules_of_account(session, account_id)
+        delete_deposits_of_account(session, account_id)
         session.delete(row)
         session.execute(
             delete(AppSetting).where(AppSetting.key == VIEW_SCOPE, AppSetting.value == scope_setting(account_id))

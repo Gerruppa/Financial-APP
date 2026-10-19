@@ -2,10 +2,12 @@
 by month, against the Monthly Income Goal.
 
 Received income is each Dividend's and DRIP's Actual Amount, net of the tax withheld: a Dividend of an Instrument or a
-DRIP is a dividend, interest naming a Lot a bond coupon, other interest (a broker's on free cash) interest. The
-forecast is the coupons of the Bond Series held that are not entered yet (``domain.bond_drafts.coupon_drafts``, as the
-bond calendar shows them), net of the tax the Account's Tax Regime withholds. A bond paying its interest only at
-maturity (EDO, TOS, ...) brings it with its redemption, a Sell, so it is no passive income here.
+DRIP is a dividend, interest naming a Lot a bond coupon, interest paying a Term Deposit's period deposit interest
+(issue #160), other interest (a broker's on free cash) interest. The forecast is the coupons of the Bond Series held
+that are not entered yet (``domain.bond_drafts.coupon_drafts``, as the bond calendar shows them), net of the tax the
+Account's Tax Regime withholds, and the Term Deposits' periods not paid yet (``domain.term_deposits.deposit_drafts``).
+A bond paying its interest only at maturity (EDO, TOS, ...) brings it with its redemption, a Sell, so it is no passive
+income here.
 """
 
 from collections.abc import Iterable
@@ -17,6 +19,7 @@ from enum import StrEnum
 from financial_app.domain.bond_drafts import CouponDraft
 from financial_app.domain.bonds import add_months
 from financial_app.domain.formatting import parse_number
+from financial_app.domain.term_deposits import InterestDraft
 from financial_app.domain.transactions import TransactionDraft
 
 MONTHS = 12
@@ -27,6 +30,7 @@ class IncomeKind(StrEnum):
 
     DIVIDENDS = "dividends"
     BOND_INTEREST = "bond_interest"
+    DEPOSIT_INTEREST = "deposit_interest"
     INTEREST = "interest"
 
     @property
@@ -37,6 +41,7 @@ class IncomeKind(StrEnum):
 _LABELS = {
     IncomeKind.DIVIDENDS: "Dywidendy",
     IncomeKind.BOND_INTEREST: "Odsetki z obligacji",
+    IncomeKind.DEPOSIT_INTEREST: "Odsetki z lokat",
     IncomeKind.INTEREST: "Odsetki",
 }
 
@@ -88,6 +93,8 @@ def received_income(transactions: Iterable[TransactionDraft]) -> list[IncomeItem
             kind = IncomeKind.DIVIDENDS
         elif t.lot_id is not None:
             kind = IncomeKind.BOND_INTEREST
+        elif t.term_deposit_id is not None:
+            kind = IncomeKind.DEPOSIT_INTEREST
         else:
             kind = IncomeKind.INTEREST
         items.append(IncomeItem(t.date, kind, t.account_id, t.actual_amount, instrument_id=t.instrument_id))
@@ -105,6 +112,14 @@ def forecast_coupons(drafts: Iterable[CouponDraft]) -> list[IncomeItem]:
             instrument_id=draft.instrument.id,
             forecast=True,
         )
+        for draft in drafts
+    ]
+
+
+def forecast_deposit_interest(drafts: Iterable[InterestDraft]) -> list[IncomeItem]:
+    """The Term Deposits' periods not paid yet, as forecast deposit interest on their last day."""
+    return [
+        IncomeItem(draft.due, IncomeKind.DEPOSIT_INTEREST, draft.account.id, draft.period.net, forecast=True)
         for draft in drafts
     ]
 

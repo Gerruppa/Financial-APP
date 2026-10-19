@@ -21,6 +21,7 @@ from financial_app.domain.lots import Position, UnitPrice, foreign_cash, replay
 from financial_app.domain.metrics import twr, xirr
 from financial_app.domain.portfolio_history import CASH_CLASS, FOREIGN_CASH_CLASS, DayValue
 from financial_app.domain.profit_sources import ProfitSources, profit_sources
+from financial_app.domain.term_deposits import AccruedInterest
 from financial_app.domain.transactions import (
     PLN,
     TransactionDraft,
@@ -47,10 +48,12 @@ class Totals:
     xirr: Decimal | None = None
     twr: Decimal | None = None
     estimated_tax: Decimal = Decimal(0)
+    # The interest the Term Deposits earned and not paid into the cash yet, net of Belka (issue #160)
+    accrued: Decimal = Decimal(0)
 
     @property
     def value(self) -> Decimal:
-        return self.cash + self.open_positions
+        return self.cash + self.open_positions + self.accrued
 
     @property
     def profit(self) -> Decimal | None:
@@ -123,14 +126,18 @@ def dashboard(
     history: Sequence[DayValue] | None,
     account_id: int | None = None,
     period: tuple[date, date] | None = None,
+    accrued: Mapping[int, AccruedInterest] | None = None,
 ) -> Dashboard:
     """The Dashboard of ``transactions`` (in entry order) with Positions at ``prices`` (PLN per unit by Instrument id)
     and foreign cash at ``rates`` (PLN per unit by currency, valued at cost without one).
 
     ``history`` is History up to today, ``None`` while it is computed; ``account_id`` is the View Scope (an Account, or
     ``None`` for Total) and ``period`` the "from" and "to" days of XIRR. Like the sheet, XIRR ends at today's value as
-    the Dashboard shows it (with Manual Prices), not as History has it.
+    the Dashboard shows it (with Manual Prices), not as History has it. ``accrued`` is the interest each Account's
+    Term Deposits earned by today, by Account id: its net counts in the value as cash, and in the profit by source as
+    interest less the tax.
     """
+    accrued = accrued or {}
     moves = replay(transactions)
     foreign = foreign_cash(transactions)
     balances = cash_balances(transactions)
@@ -167,8 +174,9 @@ def dashboard(
         count_held(currency, amount, [(asset_class, amount)])
 
     for account in (a for a in accounts if account_id in (None, a.id)):
+        earned = accrued.get(account.id, AccruedInterest())
         held_value = account_value(
-            account, balances.get(account.id, Decimal(0)), moves.positions, foreign, prices, rates
+            account, balances.get(account.id, Decimal(0)), moves.positions, foreign, prices, rates, earned.net
         )
         if is_listed(account, held_value) or account.id == account_id:
             listed.add(account.id)
@@ -192,7 +200,7 @@ def dashboard(
         for balance in (c for c in foreign if c.account_id == account.id):
             rate = rates.get(balance.currency)
             count_cash(balance.currency, FOREIGN_CASH_CLASS, balance.cost if rate is None else balance.value(rate))
-        count_cash(PLN, CASH_CLASS, held_value.cash)
+        count_cash(PLN, CASH_CLASS, held_value.cash + held_value.accrued)
         tax_rate = tax_regime_for(account.account_type).unrealized_tax_rate
         taxable[tax_rate] = taxable.get(tax_rate, Decimal(0)) + taxable_gain
         withheld_total += withheld
@@ -210,6 +218,7 @@ def dashboard(
                     dividends=dividends.get(account.id, Decimal(0)),
                     costs=costs.get(account.id, Decimal(0)),
                     estimated_tax=_estimated_tax(tax_rate, taxable_gain) + withheld,
+                    accrued=held_value.accrued,
                 ),
             )
         )
@@ -245,6 +254,7 @@ def dashboard(
         xirr=xirr_rate,
         twr=twr_rate,
         estimated_tax=sum((_estimated_tax(rate, gain) for rate, gain in taxable.items()), withheld_total),
+        accrued=sum((row.accrued for row in scoped), Decimal(0)),
     )
     currencies = tuple(CurrencyShare(*share) for share in _shares(exposure))
     classes = tuple(ClassShare(*share) for share in _shares(allocation) if share[1])
@@ -258,7 +268,13 @@ def dashboard(
         classes,
         holdings,
         {a: values for a, values in held.items() if values},
-        profit_sources(transactions, {row.account.id for row in rows}, totals.unrealized + totals.realized, fx),
+        profit_sources(
+            transactions,
+            {row.account.id for row in rows},
+            totals.unrealized + totals.realized,
+            fx,
+            sum((accrued.get(row.account.id, AccruedInterest()) for row in rows), AccruedInterest()),
+        ),
     )
 
 

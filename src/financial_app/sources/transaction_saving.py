@@ -13,6 +13,7 @@ from financial_app.persistence.accounts import list_accounts
 from financial_app.persistence.bond_series import drop_if_unused, series_instrument
 from financial_app.persistence.contribution_limits import load_limits
 from financial_app.persistence.instruments import get_instrument, list_instruments
+from financial_app.persistence.term_deposits import list_deposits
 from financial_app.persistence.transactions import (
     add_transactions,
     delete_transaction,
@@ -36,7 +37,13 @@ def checked_save[T](engine: Engine, write: Callable[[], T]) -> Saved[T]:
     value = write()
     after = transactions_in_entry_order(engine)
     warnings = save_warnings(
-        before, after, list_accounts(engine), instruments_before, list_instruments(engine), load_limits(engine)
+        before,
+        after,
+        list_accounts(engine),
+        instruments_before,
+        list_instruments(engine),
+        load_limits(engine),
+        list_deposits(engine),
     )
     return Saved(value, warnings)
 

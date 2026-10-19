@@ -15,10 +15,11 @@ class Change(Enum):
     INSTRUMENTS = auto()  # an Instrument's Asset Class or Multi-asset Split changed
     RECURRING_RULES = auto()  # a Recurring Rule or its skipped occurrences changed
     LAYOUT = auto()  # an element or tab shown or hidden in Wygląd i widoczność
+    TERM_DEPOSITS = auto()  # a Term Deposit added, edited, ended, renewed or deleted
 
 
 # What a tab valuing the View Scope's holdings today redraws on
-TODAYS_VALUE = frozenset({Change.TRANSACTIONS, Change.PRICES, Change.BOND_DATA, Change.SCOPE})
+TODAYS_VALUE = frozenset({Change.TRANSACTIONS, Change.PRICES, Change.BOND_DATA, Change.SCOPE, Change.TERM_DEPOSITS})
 
 
 class Redrawing(Protocol):

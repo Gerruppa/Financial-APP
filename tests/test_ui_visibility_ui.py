@@ -114,7 +114,7 @@ async def test_podstawowy_keeps_the_basics_and_przywroc_domyslne_shows_everythin
         await user.should_see(marker="ui-profile", content="Podstawowy")
         with user.scope(marker="nav-menu"):
             await user.should_not_see("Wyniki")
-            await user.should_not_see("Obligacje")
+            await user.should_not_see("Dochód stały")
         await user.open("/")
         await user.should_see(marker="total-value")
         await user.should_see(marker="account-table")
@@ -127,7 +127,7 @@ async def test_podstawowy_keeps_the_basics_and_przywroc_domyslne_shows_everythin
 
         await user.should_see(marker="ui-profile", content="Pełny")
         with user.scope(marker="nav-menu"):
-            await user.should_see("Obligacje")
+            await user.should_see("Dochód stały")
         await user.open("/")
         await user.should_see(marker="total-cash")
         await user.should_see(marker="chart-waterfall")

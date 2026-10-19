@@ -120,6 +120,11 @@ def _account_card(
         with ui.row().classes("w-full items-center"):
             ui.label("Saldo gotówki").classes("text-gray-500")
             ui.label(format_pln(value.cash)).classes("font-medium")
+        if value.accrued:
+            # Counted in the value: the Term Deposits' interest not paid into the cash yet, net of Belka (#160)
+            with ui.row().classes("w-full items-center").mark("account-accrued"):
+                ui.label("Narosłe odsetki lokat").classes("text-gray-500")
+                ui.label(format_pln(value.accrued)).classes("font-medium")
         for title, amounts, marker in (
             ("Dywidendy i odsetki", totals.dividends, "account-dividends"),
             ("Prowizje i koszty", totals.costs, "account-costs"),

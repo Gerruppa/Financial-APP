@@ -131,6 +131,10 @@ class TransactionRow(Base):
     # A confirmed Recurring Rule Draft (issue #97): the rule and the occurrence it covers; deleting the rule unlinks it
     recurring_rule_id: Mapped[int | None] = mapped_column(ForeignKey("recurring_rules.id", ondelete="SET NULL"))
     recurring_occurrence: Mapped[dt.date | None] = mapped_column(Date)
+    # Interest of a Term Deposit (issue #160): the deposit and the last day of the period it pays; deleting the
+    # deposit unlinks it
+    term_deposit_id: Mapped[int | None] = mapped_column(ForeignKey("term_deposits.id", ondelete="SET NULL"))
+    term_deposit_period: Mapped[dt.date | None] = mapped_column(Date)
 
 
 class SkippedBrokerRow(Base):
@@ -495,3 +499,24 @@ class RecurringRuleSkipRow(Base):
 
     rule_id: Mapped[int] = mapped_column(ForeignKey("recurring_rules.id", ondelete="CASCADE"), primary_key=True)
     occurrence_date: Mapped[dt.date] = mapped_column(Date, primary_key=True)
+
+
+class TermDepositRow(Base):
+    """A Term Deposit (issue #160) on a Deposit Account: ``principal`` (Decimal as text) from ``start_date`` for
+    ``term_count`` ``term_unit`` at ``annual_rate`` percent (as text), capitalised as ``capitalization`` says;
+    ``domain.term_deposits.TermDeposit`` is its in-memory form."""
+
+    on_clear = OnClear.DELETE
+    __tablename__ = "term_deposits"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(100))
+    principal: Mapped[str] = mapped_column(String(30))
+    start_date: Mapped[dt.date] = mapped_column(Date)
+    term_count: Mapped[int] = mapped_column(Integer)
+    term_unit: Mapped[str] = mapped_column(String(10))
+    annual_rate: Mapped[str] = mapped_column(String(30))
+    capitalization: Mapped[str] = mapped_column(String(20))
+    renew: Mapped[bool] = mapped_column(Boolean)
+    closed_on: Mapped[dt.date | None] = mapped_column(Date)

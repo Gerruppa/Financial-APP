@@ -15,7 +15,7 @@ TABS = [
     "Portfolio",
     "Transakcje",
     "Strategie inwestycyjne",
-    "Obligacje",
+    "Dochód stały",
     "Benchmarki",
     "Podsumowanie sprzedaży",
     "Dochód pasywny",

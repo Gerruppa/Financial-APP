@@ -37,6 +37,14 @@ def todays_dashboard(
     History (``None`` while it is computed) and ``period`` the days XIRR runs over."""
     view = todays_view(engine, rates)
     board = dashboard(
-        view.transactions, view.accounts, view.instruments, view.pln_prices, view.rates, days, account_id, period
+        view.transactions,
+        view.accounts,
+        view.instruments,
+        view.pln_prices,
+        view.rates,
+        days,
+        account_id,
+        period,
+        view.accrued,
     )
     return TodaysDashboard(board, view.transactions, view.accounts, view.instruments)

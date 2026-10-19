@@ -212,10 +212,19 @@ class TransactionDraft:
     # A confirmed Recurring Rule Draft (issue #97): the rule and the occurrence it covers, whatever its day or amount
     recurring_rule_id: int | None = field(default=None, kw_only=True)
     recurring_occurrence: dt.date | None = field(default=None, kw_only=True)
+    # Interest of a Term Deposit (issue #160): the deposit and the last day of the capitalisation period it pays
+    term_deposit_id: int | None = field(default=None, kw_only=True)
+    term_deposit_period: dt.date | None = field(default=None, kw_only=True)
 
     def __post_init__(self) -> None:
         if (self.recurring_rule_id is None) != (self.recurring_occurrence is None):
             raise TransactionError("Powiązanie z regułą cykliczną wymaga reguły i terminu.")
+        if (self.term_deposit_id is None) != (self.term_deposit_period is None):
+            raise TransactionError("Powiązanie z lokatą wymaga lokaty i okresu.")
+        if self.term_deposit_id is not None and not (
+            self.transaction_type is TransactionType.DIVIDEND and self.instrument_id is None
+        ):
+            raise TransactionError("Z lokatą można powiązać tylko odsetki.")
         if not self.transaction_type.has_amount:
             if self.actual_amount:
                 raise TransactionError(f"{self.transaction_type.label} nie ma kwoty.")

@@ -41,6 +41,7 @@ from financial_app.persistence.models import (
     RecurringRuleSkipRow,
     SkippedBrokerRow,
     StrategyRow,
+    TermDepositRow,
     ValuationSnapshotRow,
 )
 from financial_app.persistence.nbp_rates import cache_rate, cached_rate
@@ -168,6 +169,17 @@ def _fill_every_removed_table(engine: Engine) -> None:
                     day_of_month=10,
                     start_date=date(2026, 1, 1),
                     active=True,
+                ),
+                TermDepositRow(
+                    account_id=account_id,
+                    name="Lokata 3M",
+                    principal="10000",
+                    start_date=date(2026, 1, 15),
+                    term_count=3,
+                    term_unit="months",
+                    annual_rate="6",
+                    capitalization="at_maturity",
+                    renew=False,
                 ),
             ]
         )

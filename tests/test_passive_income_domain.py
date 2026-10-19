@@ -1,18 +1,28 @@
 """The passive-income calendar (issue #93, spec 10): Dividends and interest received, the coupons forecast, by month,
 against the Monthly Income Goal."""
 
+from dataclasses import replace
 from datetime import date
 from decimal import Decimal
 
 import pytest
 
+from financial_app.domain.accounts import Account, AccountType
 from financial_app.domain.passive_income import (
     IncomeItem,
     IncomeKind,
+    forecast_deposit_interest,
     income_by_month,
     monthly_average,
     parse_income_goal,
     received_income,
+)
+from financial_app.domain.term_deposits import (
+    Capitalization,
+    InterestDraft,
+    TermDeposit,
+    TermUnit,
+    deposit_drafts,
 )
 from financial_app.domain.transactions import TransactionDraft, TransactionType, buy_or_sell, dividend, drip
 
@@ -93,3 +103,33 @@ def test_the_goal_is_a_positive_amount_or_none(text: str, goal: Decimal | None) 
 def test_a_goal_that_is_no_positive_amount_is_refused(text: str) -> None:
     with pytest.raises(ValueError, match="Cel"):
         parse_income_goal(text)
+
+
+def test_term_deposit_interest_is_received_and_its_periods_not_paid_yet_are_forecast() -> None:
+    savings = Account("Lokaty", "mBank", AccountType.DEPOSIT, ("PLN",), id=3)
+    lokata = TermDeposit(
+        id=5,
+        account_id=3,
+        name="Lokata 3M",
+        principal=Decimal(10000),
+        start_date=date(2026, 1, 15),
+        term_count=3,
+        term_unit=TermUnit.MONTHS,
+        annual_rate=Decimal(6),
+        capitalization=Capitalization.AT_MATURITY,
+    )
+    linked = replace(
+        dividend(3, date(2026, 4, 15), Decimal("147.95"), Decimal("28.11")),
+        term_deposit_id=5,
+        term_deposit_period=date(2026, 4, 15),
+    )
+    # The period's interest, then the deposit's maturity
+    draft, _ = deposit_drafts([lokata], [savings], [], date(2026, 5, 1), None)
+    assert isinstance(draft, InterestDraft)
+
+    assert received_income([linked]) == [
+        IncomeItem(date(2026, 4, 15), IncomeKind.DEPOSIT_INTEREST, 3, Decimal("119.84"))
+    ]
+    assert forecast_deposit_interest([draft]) == [
+        IncomeItem(date(2026, 4, 15), IncomeKind.DEPOSIT_INTEREST, 3, Decimal("119.84"), forecast=True)
+    ]

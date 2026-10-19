@@ -9,9 +9,17 @@ from decimal import Decimal
 
 from financial_app.domain.accounts import Account, AccountType
 from financial_app.domain.contribution_limits import LimitBar, over_limit, over_limit_warning
-from financial_app.domain.formatting import format_amount
+from financial_app.domain.formatting import format_amount, format_date, format_pln
 from financial_app.domain.instruments import Instrument
-from financial_app.domain.transactions import PLN, Transaction, TransactionDraft, TransactionType, lowest_cash_balance
+from financial_app.domain.term_deposits import TermDeposit, locked_capital
+from financial_app.domain.transactions import (
+    PLN,
+    Transaction,
+    TransactionDraft,
+    TransactionType,
+    cash_balances,
+    lowest_cash_balance,
+)
 
 # The Transactions that put an Instrument into a Position, so a Multi-asset one then needs its split
 _BUYING = (TransactionType.BUY, TransactionType.DRIP)
@@ -32,25 +40,45 @@ class CashShortfall:
 
 
 @dataclass(frozen=True)
+class LockedCash:
+    """An Account's PLN cash on ``day`` going below the ``capital`` its running Term Deposits hold (issue #160)."""
+
+    account_name: str
+    day: date
+    cash: Decimal
+    capital: Decimal
+
+    def message(self, done: str) -> str:
+        return (
+            f"{done}, ale gotówka konta {self.account_name} {format_date(self.day)} ({format_pln(self.cash)}) jest "
+            f"mniejsza niż kapitał jej lokat ({format_pln(self.capital)}). Jeśli lokata została zerwana, zaznacz to "
+            "w zakładce Dochód stały."
+        )
+
+
+@dataclass(frozen=True)
 class SaveWarnings:
     """What the UI tells the user after a save: the Contribution Limit bars the save has just taken over their limit,
     the negative Cash Balances from the earliest day it touched, the Multi-asset Instruments it bought that have no
-    split yet, and the Bond Series Instruments it created or removed."""
+    split yet, the Bond Series Instruments it created or removed, and the Accounts whose cash it took below the
+    capital of their running Term Deposits."""
 
     over_limit: tuple[LimitBar, ...] = ()
     negative_cash: tuple[CashShortfall, ...] = ()
     unsplit: tuple[Instrument, ...] = ()
     series_created: tuple[str, ...] = ()
     series_dropped: tuple[str, ...] = ()
+    locked_cash: tuple[LockedCash, ...] = ()
 
     @property
     def any(self) -> bool:
-        return bool(self.over_limit or self.negative_cash or self.unsplit)
+        return bool(self.over_limit or self.negative_cash or self.unsplit or self.locked_cash)
 
     def messages(self, done: str, *, unsplit: bool = True) -> list[str]:
         """The Polish warnings; ``done`` opens a cash one ("Zapisano", "Usunięto"). Without ``unsplit`` the caller
         asks for the split itself (the transaction dialog opens the split dialog)."""
         texts = [shortfall.message(done) for shortfall in self.negative_cash]
+        texts += [locked.message(done) for locked in self.locked_cash]
         texts += [over_limit_warning(bar) for bar in self.over_limit]
         if unsplit and self.unsplit:
             names = ", ".join(instrument.name for instrument in self.unsplit)
@@ -75,9 +103,10 @@ def save_warnings(
     instruments_before: Iterable[Instrument],
     instruments_after: Iterable[Instrument],
     limits: Mapping[int, Mapping[AccountType, Decimal | None]],
+    deposits: Sequence[TermDeposit] = (),
 ) -> SaveWarnings:
     """What the save from ``before`` to ``after`` (all the Transactions, and all the Instruments, either side of it)
-    warns of."""
+    warns of; ``deposits`` are the Term Deposits."""
     accounts = list(accounts)
     changed = touched(before, after)
     saved = set(after)
@@ -100,7 +129,36 @@ def save_warnings(
         tuple(unsplit),
         tuple(sorted(series_after - series_before)),
         tuple(sorted(series_before - series_after)),
+        tuple(_locked_cash(before, after, accounts, changed, deposits)),
     )
+
+
+def _locked_cash(
+    before: Sequence[TransactionDraft],
+    after: Sequence[TransactionDraft],
+    accounts: Sequence[Account],
+    changed: Iterable[TransactionDraft],
+    deposits: Sequence[TermDeposit],
+) -> list[LockedCash]:
+    """Each Account and day a changed Transaction moves PLN cash on, whose cash the save took below the capital of
+    the deposits running then; a deposit broken without saying so only warns, like insufficient cash."""
+    days = dict.fromkeys(
+        (account_id, t.date)
+        for t in changed
+        for account_id in (t.account_id, t.target_account_id)
+        if account_id is not None
+    )
+    names = {account.id: account.name for account in accounts}
+    found = []
+    for account_id, day in days:
+        capital = locked_capital(deposits, day).get(account_id)
+        if capital is None:
+            continue
+        cash = cash_balances([t for t in after if t.date <= day]).get(account_id, Decimal(0))
+        was = cash_balances([t for t in before if t.date <= day]).get(account_id, Decimal(0))
+        if cash < capital <= was:
+            found.append(LockedCash(names[account_id], day, cash, capital))
+    return found
 
 
 def _negative_cash(
