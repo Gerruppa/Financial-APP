@@ -17,6 +17,8 @@ dependencies = [
 dev = [
     "pytest>=9.1",
     "pytest-asyncio>=1.4",
+    "pytest-xdist>=3.8",
+    "pre-commit>=4.7",
     "mypy>=2.4",
     "ruff>=0.16",
     "types-xlrd",

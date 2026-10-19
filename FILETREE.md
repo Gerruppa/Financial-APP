@@ -6,6 +6,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 
 - `.filetree.json`: Filetree manifest config: manifest path, include/exclude filters, summary language, commit guard and self-only mode.
 - `.gitignore`: Git ignore rules for the venv, caches, build output, the personal spreadsheet reference folder and graphify output.
+- `.pre-commit-config.yaml`: Pre-commit hooks: ruff check, ruff format and mypy from the venv.
 - `CLAUDE.md`: Guidance for Claude Code: project state, layers and unwritten rules, pointers to docs/architecture.md, environment commands.
 - `CONTEXT.md`: Domain glossary defining the app's Polish-labelled terms (Accounts, Instruments, Transactions, Lots, Quotes) and terms to avoid.
 - `GLOSSARY.md`: Polish-to-English index of glossary terms, mapping UI labels to CONTEXT.md definitions and sections
@@ -13,6 +14,10 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `alembic.ini`: Alembic CLI configuration pointing migrations at the persistence package; the app runs them itself at start-up.
 - `main.py`: Convenience script entry point that calls the app's main function to start the window.
 - `pyproject.toml`: Package metadata, dependencies, console and GUI entry points, pytest, mypy and ruff settings.
+
+## .github/workflows/
+
+- `ci.yml`: GitHub Actions job on Windows: ruff, ruff format check, mypy and the parallel pytest suite on every PR and push to main.
 
 ## docs/
 
