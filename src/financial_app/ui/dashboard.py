@@ -91,7 +91,7 @@ class DashboardPage:
     def build(self) -> None:
         ui.label("Dashboard").classes("text-2xl font-bold")
         period_selector(self.period)
-        with ui.column().classes("w-full max-w-6xl").mark("dashboard"):
+        with ui.column().classes("w-full").mark("dashboard"):
             self.content()
 
     @ui.refreshable_method

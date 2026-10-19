@@ -146,7 +146,7 @@ class StrategyPage:
 
     def build(self) -> None:
         ui.label("Strategie inwestycyjne").classes("text-2xl font-bold")
-        with ui.column().classes("w-full max-w-6xl").mark("strategy"):
+        with ui.column().classes("w-full").mark("strategy"):
             self.content()
 
     @ui.refreshable_method

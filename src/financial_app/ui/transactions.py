@@ -97,7 +97,7 @@ class TransactionsPage:
             ui.button("Eksportuj XLSX", on_click=lambda: self.export("xlsx")).props("outline")
         self.recurring()
         # The marker sits outside the refreshable list so it survives a refresh
-        with ui.column().classes("w-full max-w-6xl gap-0").mark("transactions"):
+        with ui.column().classes("w-full gap-0").mark("transactions"):
             self.notes()
             # The headers stay while the list redraws, so an open filter stays open as it is typed in
             self._header_row = ui.element("div").classes("grid w-full gap-x-4 border-b py-1 font-medium").style(COLUMNS)

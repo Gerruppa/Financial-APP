@@ -75,7 +75,7 @@ class PortfolioPage:
     def build(self) -> None:
         ui.label("Portfolio").classes("text-2xl font-bold")
         # The marker sits outside the refreshable cards so it survives a refresh
-        with ui.column().classes("w-full max-w-6xl").mark("portfolio"):
+        with ui.column().classes("w-full").mark("portfolio"):
             self.cards()
 
     @ui.refreshable_method

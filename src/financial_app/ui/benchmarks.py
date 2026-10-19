@@ -66,7 +66,7 @@ class BenchmarksPage:
         if ensure_default_benchmarks(self.engine):
             self.fetch()
         period_selector(self.period)
-        with ui.column().classes("w-full max-w-6xl").mark("benchmarks"):
+        with ui.column().classes("w-full").mark("benchmarks"):
             self.content()
             self._add_form()
 
