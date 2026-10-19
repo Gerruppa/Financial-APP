@@ -264,7 +264,7 @@
   "src/financial_app/ui/settings.py": "ff553f97",
   "src/financial_app/ui/shell.py": "ca08ad4a",
   "src/financial_app/ui/strategy.py": "52338b0e",
-  "src/financial_app/ui/term_deposits.py": "6b250541",
+  "src/financial_app/ui/term_deposits.py": "41fef5bb",
   "src/financial_app/ui/transaction_dialog.py": "475b327e",
   "src/financial_app/ui/transactions.py": "c7372040",
   "src/financial_app/ui/unpriced.py": "76abc87f",

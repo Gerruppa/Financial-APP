@@ -147,6 +147,7 @@ def open_deposit_dialog(
         if default not in {a.id for a in accounts}:
             default = accounts[0].id if accounts else None
         account = ui.select({a.id: a.name for a in accounts}, value=default, label="Konto").classes("w-full")
+        account.props("filled bg-color=blue-1")
         account.mark("deposit-account")
         name = ui.input("Nazwa", value=deposit.name if deposit else "").classes("w-full").mark("deposit-name")
         principal = ui.input("Kwota (zł)", value=format_exact(deposit.principal) if deposit else "")
