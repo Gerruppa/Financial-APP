@@ -1,16 +1,19 @@
 """The header search and the Instrument Card (issue #175), on a test search and history without the network."""
 
-from collections.abc import Callable, Mapping
+import gc
+from collections.abc import Callable
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 
 import pytest
+from nicegui import ui
 from nicegui.testing import User, user_simulation
 from sqlalchemy import Engine
 
 from financial_app.domain.accounts import AccountDraft, AccountType
-from financial_app.domain.instrument_search import InstrumentSearch, SearchResult, SearchResults
+from financial_app.domain.instrument_card import CardPeriod
+from financial_app.domain.instrument_search import FoundListing, FoundListings, InstrumentSearch
 from financial_app.domain.instruments import InstrumentDraft
 from financial_app.domain.portfolio_history import DayValue
 from financial_app.domain.prices import BOSSA, YAHOO, Quote
@@ -29,7 +32,7 @@ from financial_app.ui.shell import build_shell
 TODAY = date(2026, 10, 20)
 NOW = datetime(2026, 10, 20, 9, 0)
 
-VUAA = SearchResult(
+VUAA = FoundListing(
     name="Vanguard S&P 500 UCITS ETF USD Acc",
     symbol="VUAA.L",
     market="LSE",
@@ -44,19 +47,19 @@ VUAA = SearchResult(
 class FixedSearch:
     """Gives ``results`` with ``notes`` for any query."""
 
-    def __init__(self, results: list[SearchResult], notes: tuple[str, ...] = ()) -> None:
+    def __init__(self, results: list[FoundListing], notes: tuple[str, ...] = ()) -> None:
         self.results, self.notes = results, notes
 
-    def search(self, query: str) -> SearchResults:
-        return SearchResults(self.results, self.notes)
+    def search(self, query: str) -> FoundListings:
+        return FoundListings(self.results, self.notes)
 
 
 class FixedHistory:
     """Gives every listing the same three closes."""
 
-    def of(self, source_symbols: Mapping[str, str], currency: str, last: date) -> list[Quote]:
+    def closes(self, listing: FoundListing, last: date) -> list[Quote]:
         return [
-            Quote(Decimal(price), currency, date.fromisoformat(day), YAHOO)
+            Quote(Decimal(price), listing.currency, date.fromisoformat(day), YAHOO)
             for day, price in [("2025-12-31", "125"), ("2026-10-19", "140"), ("2026-10-20", "147")]
         ]
 
@@ -100,6 +103,24 @@ async def test_an_own_instrument_is_listed_while_typing_and_opens_its_card(engin
         await user.should_see(marker="card-edit")
 
 
+async def test_a_card_opened_before_the_search_answers_stays_open_when_the_results_redraw(engine: Engine) -> None:
+    add_instrument(
+        engine,
+        InstrumentDraft("CD Projekt", _class_id(engine, "Akcje polskie"), "PLN", source_symbols={YAHOO: "CDR.WA"}),
+    )
+    async with user_simulation(_shell(engine, FixedSearch([]), FixedHistory())) as user:
+        await user.open("/")
+        user.find(marker="header-search").type("projekt")
+        await user.should_see("Twoje instrumenty")
+        user.find(marker="own-result").click()
+        await user.should_see(marker="instrument-card")
+
+        await user.should_see(marker="header-search-message")  # the search answered and redrew the results
+        gc.collect()  # a dialog goes with the element it was opened in once that is collected
+
+        await user.should_see(marker="instrument-card")
+
+
 async def _found_card(user: User, query: str) -> None:
     """Types ``query``, asks the search services with Enter and opens the first Search Result's card."""
     await user.open("/")
@@ -132,6 +153,22 @@ async def test_a_search_result_is_added_as_an_instrument_from_its_card(engine: E
             "USD",
             {YAHOO: "VUAA.L"},
         )
+
+
+async def test_a_chart_period_chosen_redraws_the_chart_from_its_start(engine: Engine) -> None:
+    async with user_simulation(_shell(engine, FixedSearch([VUAA]), FixedHistory())) as user:
+        await _found_card(user, "vuaa")
+        await user.should_see(marker="chart-price")
+        [toggle] = user.find(marker="card-periods").elements
+        assert isinstance(toggle, ui.toggle)
+        assert [str(period) for period in toggle.options] == ["YTD", "1M", "3M", "6M", "1R", "3L", "5L", "Max"]
+
+        toggle.value = CardPeriod.ONE_MONTH  # as the browser's choice maps back to its option
+
+        await user.should_see(marker="chart-price")
+        [chart] = user.find(marker="chart-price").elements
+        assert isinstance(chart, ui.echart)
+        assert chart.options["xAxis"]["data"] == ["31.12.2025", "19.10.2026", "20.10.2026"]
 
 
 async def test_a_search_result_already_held_shows_it_is_owned_instead_of_the_add_button(engine: Engine) -> None:
@@ -180,7 +217,7 @@ async def test_an_own_instruments_card_shows_its_position_on_each_account(engine
 
 
 async def test_a_listing_without_history_says_so_on_its_card(engine: Engine) -> None:
-    listing = SearchResult("CD Projekt", "CDR", "GPW", "PLN", source_symbols={BOSSA: "CDR"}, source="Yahoo")
+    listing = FoundListing("CD Projekt", "CDR", "GPW", "PLN", source_symbols={BOSSA: "CDR"}, source="Yahoo")
     async with user_simulation(_shell(engine, FixedSearch([listing]), NoHistory())) as user:
         await _found_card(user, "cdr")
 
@@ -227,7 +264,7 @@ async def test_enter_opens_the_highlighted_own_instrument_without_waiting_for_th
 class NoHistory:
     """Gives no listing any close, as for one with neither a Yahoo nor an analizy.pl symbol."""
 
-    def of(self, source_symbols: Mapping[str, str], currency: str, last: date) -> list[Quote]:
+    def closes(self, listing: FoundListing, last: date) -> list[Quote]:
         return []
 
 

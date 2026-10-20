@@ -37,8 +37,12 @@ The identifier of an Instrument in one Price Source (e.g. `PZU.WA` in Yahoo, `pz
 _Avoid_: ticker
 
 **Search Result** (Wynik wyszukiwania):
-An instrument found in an external search service (Yahoo, analizy.pl) that the user does not hold as an Instrument yet: its name, ISIN when known, and its listings, each with a market, a quote currency and Source Symbols. It becomes an Instrument only when the user saves one of its listings as one.
-_Avoid_: listing, quote, notowanie
+An instrument found in an external search service (Yahoo, analizy.pl) that the user does not hold as an Instrument yet: its name, ISIN when known, and its Listings. It becomes an Instrument only when the user saves one of its Listings as one.
+_Avoid_: quote, notowanie
+
+**Listing** (Linia notowań):
+One market and quote currency a Search Result trades in, with the Source Symbols its prices come from (e.g. the same ETF on the LSE in USD and in GBP is two Listings). Saving a Listing makes it an Instrument; one held already is the Instrument with any of its Source Symbols.
+_Avoid_: quote, notowanie, ticker
 
 **Instrument Card** (Karta instrumentu):
 The view of one Search Result, one of the user's Instruments or one Bond Series type: what it is, its recent price and returns, and the step that follows (add it as an Instrument, edit it, or buy the bond type).

@@ -24,6 +24,7 @@ The Polish UI labels with the English terms the code and the docs use, in Polish
 | Kwota podatkowa | [Tax Amount](CONTEXT.md#transactions-and-holdings) | Transactions and holdings |
 | Kwota rzeczywista | [Actual Amount](CONTEXT.md#transactions-and-holdings) | Transactions and holdings |
 | Limit wpłat | [Contribution Limit](CONTEXT.md#accounts-and-instruments) | Accounts and instruments |
+| Linia notowań | [Listing](CONTEXT.md#accounts-and-instruments) | Accounts and instruments |
 | Lokata terminowa | [Term Deposit](CONTEXT.md#transactions-and-holdings) | Transactions and holdings |
 | Miesięczny cel dochodu | [Monthly Income Goal](CONTEXT.md#results) | Results |
 | Migawka wyceny | [Valuation Snapshot](CONTEXT.md#results) | Results |

@@ -37,15 +37,19 @@ from financial_app.ui.theme import LABEL_COLOURS, LINE_COLOURS, current_theme, e
 # ECharts formats in the browser, so its tooltips and axes write numbers as domain/formatting.py does: a decimal comma,
 # non-breaking spaces between thousands (4-digit numbers too) and before "zł" and "%"
 _NBSP = "\N{NO-BREAK SPACE}"
-_DECIMALS = "minimumFractionDigits: 2, maximumFractionDigits: 2"
-PLN_FORMATTER = (
-    f"value => value == null ? '—' : new Intl.NumberFormat('pl-PL', {{{_DECIMALS}, useGrouping: 'always'}})"
-    rf".format(value).replace(/\s/g, '{_NBSP}') + '{_NBSP}zł'"
-)
-_PERCENT = (
-    f"value => value == null ? '—' : new Intl.NumberFormat('pl-PL', {{{_DECIMALS}, useGrouping: 'always'}})"
-    rf".format(value).replace(/\s/g, '{_NBSP}') + '{_NBSP}%'"
-)
+
+
+def _formatter(unit: str, decimals: int = 2) -> str:
+    """A tooltip's value with 2 to ``decimals`` decimal places followed by ``unit``; "—" without one."""
+    return (
+        "value => value == null ? '—' : new Intl.NumberFormat('pl-PL', {minimumFractionDigits: 2, "
+        f"maximumFractionDigits: {decimals}, useGrouping: 'always'}})"
+        rf".format(value).replace(/\s/g, '{_NBSP}') + '{_NBSP}{unit}'"
+    )
+
+
+PLN_FORMATTER = _formatter("zł")
+_PERCENT = _formatter("%")
 _AXIS_PLN = (
     "value => new Intl.NumberFormat('pl-PL', {maximumFractionDigits: 0, useGrouping: 'always'})"
     rf".format(value).replace(/\s/g, '{_NBSP}')"
@@ -215,13 +219,8 @@ def price_chart(quotes: Sequence[Quote], currency: str) -> None:
     """The closes in ``currency`` as a line over a fading area, in the Theme's colour, marked ``chart-price`` (the
     Instrument Card, issue #175)."""
     colours = LINE_COLOURS[current_theme()]
-    unit = currency_unit(currency)
-    price = (
-        "value => value == null ? '—' : new Intl.NumberFormat('pl-PL', {minimumFractionDigits: 2, "
-        rf"maximumFractionDigits: 4, useGrouping: 'always'}}).format(value).replace(/\s/g, '{_NBSP}') + '{_NBSP}{unit}'"
-    )
     options = {
-        "tooltip": {"trigger": "axis", ":valueFormatter": price},
+        "tooltip": {"trigger": "axis", ":valueFormatter": _formatter(currency_unit(currency), decimals=4)},
         "grid": {"containLabel": True, "left": 8, "right": 8, "top": 12, "bottom": 8},
         "xAxis": {
             "type": "category",

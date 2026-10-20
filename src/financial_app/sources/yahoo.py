@@ -10,7 +10,7 @@ from decimal import Decimal
 from urllib.error import HTTPError
 from urllib.parse import quote as url_quote
 
-from financial_app.domain.instrument_search import InstrumentSearchError, SearchResult, looks_like_isin
+from financial_app.domain.instrument_search import FoundListing, InstrumentSearchError, looks_like_isin
 from financial_app.domain.prices import BOSSA, YAHOO, YAHOO_HISTORY, CurrencyMismatchError, PriceSourceError, Quote
 
 API = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?range=5d&interval=1d"
@@ -112,7 +112,7 @@ class YahooSearch:
     def __init__(self, fetch: Callable[[str], str | None] = fetch_from_yahoo) -> None:
         self.fetch = fetch
 
-    def search(self, query: str) -> list[SearchResult]:
+    def search(self, query: str) -> list[FoundListing]:
         """The listings matching an ISIN, a name or a symbol, each with its quote currency from one chart request
         ("" when that fails) and its Yahoo symbol, plus the Bossa one of a Warsaw listing. Results of an ISIN carry
         it."""
@@ -132,7 +132,7 @@ class YahooSearch:
         with ThreadPoolExecutor(max_workers=8) as pool:
             currencies = list(pool.map(self._currency, listings))
         return [
-            SearchResult(
+            FoundListing(
                 name=str(listing.get("longname") or listing.get("shortname") or symbol),
                 symbol=symbol,
                 market=_market(listing),

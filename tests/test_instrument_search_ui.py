@@ -10,7 +10,7 @@ from nicegui import ui
 from nicegui.testing import User, user_simulation
 from sqlalchemy import Engine
 
-from financial_app.domain.instrument_search import CombinedSearch, InstrumentSearchError, SearchResult
+from financial_app.domain.instrument_search import CombinedSearch, FoundListing, InstrumentSearchError
 from financial_app.domain.instruments import DistributionPolicy, InstrumentDraft
 from financial_app.domain.prices import ANALIZY, BOSSA, YAHOO
 from financial_app.persistence.db import init_db
@@ -211,17 +211,17 @@ async def test_a_class_the_user_does_not_have_is_not_set(user: User, engine: Eng
 
 
 class FakeSearch:
-    def __init__(self, results: list[SearchResult] | None = None, error: str = "") -> None:
+    def __init__(self, results: list[FoundListing] | None = None, error: str = "") -> None:
         self.results = results or []
         self.error = error
 
-    def search(self, query: str) -> list[SearchResult]:
+    def search(self, query: str) -> list[FoundListing]:
         if self.error:
             raise InstrumentSearchError(self.error)
         return self.results
 
 
-PZU60 = SearchResult(
+PZU60 = FoundListing(
     name="PPK inPZU 2060",
     symbol="PZU60",
     market="",
@@ -229,7 +229,7 @@ PZU60 = SearchResult(
     source_symbols={ANALIZY: "PZU60"},
     asset_class="Multi-asset",
 )
-PZU = SearchResult("PZU SA", "PZU.WA", "GPW", "PLN", {YAHOO: "PZU.WA", BOSSA: "PZU"}, asset_class="Akcje polskie")
+PZU = FoundListing("PZU SA", "PZU.WA", "GPW", "PLN", {YAHOO: "PZU.WA", BOSSA: "PZU"}, asset_class="Akcje polskie")
 
 
 async def test_both_searches_results_are_listed_with_their_source(engine: Engine) -> None:

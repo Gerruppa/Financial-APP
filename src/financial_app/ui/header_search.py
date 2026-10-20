@@ -7,8 +7,8 @@ from nicegui import run, ui
 from sqlalchemy import Engine
 
 from financial_app.domain.formatting import format_count
-from financial_app.domain.instrument_card import FoundInstrument, group_results, matching_instruments
-from financial_app.domain.instrument_search import InstrumentSearch, InstrumentSearchError, SearchResults
+from financial_app.domain.header_search import SearchResult, group_results, matching_instruments
+from financial_app.domain.instrument_search import FoundListings, InstrumentSearch, InstrumentSearchError
 from financial_app.domain.instruments import Instrument
 from financial_app.persistence.instruments import list_instruments
 
@@ -35,13 +35,13 @@ class HeaderSearch:
     """The search field with its list of results below it; ``open_card`` opens the Instrument Card on a row."""
 
     def __init__(
-        self, engine: Engine, search: InstrumentSearch, open_card: Callable[[FoundInstrument | Instrument], None]
+        self, engine: Engine, search: InstrumentSearch, open_card: Callable[[SearchResult | Instrument], None]
     ) -> None:
         self.engine = engine
         self.search = search
         self.open_card = open_card
         self.own: list[Instrument] = []
-        self.found: list[FoundInstrument] = []
+        self.found: list[SearchResult] = []
         self.message = ""
         self.searched = ""  # the query the Search Results are of
         self.searching = False
@@ -49,7 +49,7 @@ class HeaderSearch:
         self.pause: ui.timer | None = None
 
     def build(self) -> None:
-        with ui.element("div").classes("relative w-[28rem] max-w-full"):
+        with ui.element("div").classes("relative w-[28rem] max-w-full") as self.box:
             self.field = ui.input(placeholder="Szukaj instrumentu: symbol, ISIN, nazwa")
             self.field.props("dense outlined rounded clearable").classes("w-full k-header-search")
             self.field.mark("header-search")
@@ -114,9 +114,9 @@ class HeaderSearch:
         try:
             # The search answers over the network, so the window keeps working meanwhile
             answer = await run.io_bound(self.search.search, query)
-            # An empty SearchResults still carries its notes, so only None (shutting down) counts as nothing
+            # An empty FoundListings still carries its notes, so only None (shutting down) counts as nothing
             results = [] if answer is None else answer
-            notes = results.notes if isinstance(results, SearchResults) else []
+            notes = results.notes if isinstance(results, FoundListings) else []
             message = " · ".join(notes) if results else " · ".join(["Nic nie znaleziono.", *notes])
         except InstrumentSearchError as error:
             results, message = [], str(error)
@@ -127,16 +127,18 @@ class HeaderSearch:
         self.found, self.message, self.searched = group_results(results)[:FOUND_LIMIT], message, query
         self._show()
 
-    def _rows(self) -> list[FoundInstrument | Instrument]:
+    def _rows(self) -> list[SearchResult | Instrument]:
         return [*self.own, *self.found]
 
     def _show(self) -> None:
         self.panel.visible = bool(self._query())
         self.results.refresh()
 
-    def _open(self, subject: FoundInstrument | Instrument) -> None:
+    def _open(self, subject: SearchResult | Instrument) -> None:
         self.panel.visible = False
-        self.open_card(subject)
+        # A dialog is deleted with the element it was opened in, so not in a row the next results redraw away
+        with self.box:
+            self.open_card(subject)
 
     @ui.refreshable_method
     def results(self) -> None:
@@ -169,7 +171,7 @@ class HeaderSearch:
         with item, ui.item_section().props("side"):
             ui.badge(instrument.asset_class_name).props("outline")
 
-    def _found_row(self, found: FoundInstrument, highlighted: bool) -> None:
+    def _found_row(self, found: SearchResult, highlighted: bool) -> None:
         item = ui.item(on_click=lambda: self._open(found)).classes(_row_classes(highlighted)).mark("found-result")
         with item, ui.item_section():
             ui.item_label(found.name)

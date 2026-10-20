@@ -1,4 +1,5 @@
-"""Instrument search by ISIN, name or symbol (issue #25, spec 4.1): its results and what a chosen one fills in."""
+"""Instrument search by ISIN, name or symbol (issue #25, spec 4.1): the listings found and what a chosen one fills
+in."""
 
 import re
 from collections.abc import Iterable, Mapping
@@ -14,11 +15,12 @@ class InstrumentSearchError(Exception):
 
 
 @dataclass(frozen=True)
-class SearchResult:
-    """One listing found: ``symbol`` is the ticker the search service shows, ``source_symbols`` the Source Symbols
-    it gives (Price Source key to symbol, ``domain.prices``), ``currency`` its quote currency ("" when unknown),
-    ``isin`` its ISIN ("" when unknown, as Yahoo returns none: only an ISIN searched for fills it) and
-    ``asset_class`` the name of the Asset Class it belongs to ("" when its kind does not tell, e.g. an ETF).
+class FoundListing:
+    """One listing found, one of a Search Result's (``domain.header_search.SearchResult``): ``symbol`` is the ticker
+    the search service shows, ``source_symbols`` the Source Symbols it gives (Price Source key to symbol,
+    ``domain.prices``), ``currency`` its quote currency ("" when unknown), ``isin`` its ISIN ("" when unknown, as
+    Yahoo returns none: only an ISIN searched for fills it) and ``asset_class`` the name of the Asset Class it
+    belongs to ("" when its kind does not tell, e.g. an ETF).
     ``fund`` says it is a fund or an ETF, whose ISIN tells its domicile and name its distribution policy.
     ``source`` names the search service that found it, when several are searched together."""
 
@@ -32,17 +34,22 @@ class SearchResult:
     fund: bool = False
     source: str = ""
 
+    @property
+    def currency_label(self) -> str:
+        """Its quote currency as shown, "waluta nieznana" when unknown."""
+        return self.currency or "waluta nieznana"
+
 
 class InstrumentSearch(Protocol):
     """A swappable search service (Yahoo, analizy.pl, both together); raises ``InstrumentSearchError``."""
 
-    def search(self, query: str) -> list[SearchResult]: ...
+    def search(self, query: str) -> list[FoundListing]: ...
 
 
-class SearchResults(list[SearchResult]):
+class FoundListings(list[FoundListing]):
     """The results of several search services, with a ``notes`` line (Polish) for each one that failed."""
 
-    def __init__(self, results: Iterable[SearchResult] = (), notes: Iterable[str] = ()) -> None:
+    def __init__(self, results: Iterable[FoundListing] = (), notes: Iterable[str] = ()) -> None:
         super().__init__(results)
         self.notes = list(notes)
 
@@ -55,7 +62,7 @@ class CombinedSearch:
     def __init__(self, searches: Mapping[str, InstrumentSearch]) -> None:
         self.searches = searches
 
-    def search(self, query: str) -> SearchResults:
+    def search(self, query: str) -> FoundListings:
         with ThreadPoolExecutor(max_workers=len(self.searches)) as pool:
             pending = {name: pool.submit(search.search, query) for name, search in self.searches.items()}
         results, notes, errors = [], [], []
@@ -70,7 +77,7 @@ class CombinedSearch:
                 errors.append(f"Nieoczekiwany błąd wyszukiwarki {name}: {error}")
         if errors and len(errors) == len(self.searches):
             raise InstrumentSearchError(" ".join(errors))
-        return SearchResults(results, notes)
+        return FoundListings(results, notes)
 
 
 @dataclass(frozen=True)
@@ -121,7 +128,7 @@ _POLICY_WORDS = (
 )
 
 
-def fill_empty(fields: FormFields, result: SearchResult) -> FormFields:
+def fill_empty(fields: FormFields, result: FoundListing) -> FormFields:
     """``fields`` with the empty ones taken from ``result``; values already entered are never overwritten. A fund's
     domicile comes from the country of the form's ISIN and its distribution policy from the words of its name."""
 

@@ -6,7 +6,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 import pytest
 
-from financial_app.domain.instrument_search import InstrumentSearchError, SearchResult
+from financial_app.domain.instrument_search import FoundListing, InstrumentSearchError
 from financial_app.domain.prices import BOSSA, YAHOO
 from financial_app.sources.yahoo import YahooSearch
 
@@ -44,7 +44,7 @@ def test_an_isin_finds_every_listing_of_the_fund_with_its_currency() -> None:
 def test_a_name_finds_listings_without_an_isin_and_warsaw_is_gpw() -> None:
     results = YahooSearch(_saved).search("cd projekt")
 
-    assert results[0] == SearchResult(
+    assert results[0] == FoundListing(
         name="CD Projekt Red S.A.",
         symbol="CDR.WA",
         market="GPW",
