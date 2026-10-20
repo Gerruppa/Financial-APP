@@ -21,7 +21,7 @@ The app opens a native pywebview window you cannot see. `main.py --demo` serves 
 ## A visual change
 
 1. Before editing, shoot the tabs the change touches into `shots/before`.
-2. Make the change; run the Delta tests.
+2. Make the change; run the full suite.
 3. Shoot the same tabs into `shots/after`, `Read` both and compare them. Iterate until the after shot shows what was asked.
 4. Show the user the after shot (its full path), and describe the before/after difference in the PR's Evidence section.
 
