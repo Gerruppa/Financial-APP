@@ -185,7 +185,7 @@ A refresh of the Quotes in which not every Instrument fetched failed (one with n
 _Avoid_: last update, sync
 
 **Distribution Policy** (Polityka dywidendowa):
-Whether a fund pays out its income (Dystrybucja) or reinvests it (Akumulacja). Entered by the user, like the fund's TER and domicile.
+Whether a fund pays out its income (Dystrybucja) or reinvests it (Akumulacja). Entered by the user, like the fund's TER and domicile; an external source may suggest the TER, never overriding the user's.
 _Avoid_: dividend type
 
 ## Bonds
