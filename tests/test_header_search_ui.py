@@ -7,10 +7,12 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
+from nicegui import ui
 from nicegui.testing import User, user_simulation
 from sqlalchemy import Engine
 
 from financial_app.domain.accounts import AccountDraft, AccountType
+from financial_app.domain.instrument_card import CardPeriod
 from financial_app.domain.instrument_search import FoundListing, FoundListings, InstrumentSearch
 from financial_app.domain.instruments import InstrumentDraft
 from financial_app.domain.portfolio_history import DayValue
@@ -151,6 +153,22 @@ async def test_a_search_result_is_added_as_an_instrument_from_its_card(engine: E
             "USD",
             {YAHOO: "VUAA.L"},
         )
+
+
+async def test_a_chart_period_chosen_redraws_the_chart_from_its_start(engine: Engine) -> None:
+    async with user_simulation(_shell(engine, FixedSearch([VUAA]), FixedHistory())) as user:
+        await _found_card(user, "vuaa")
+        await user.should_see(marker="chart-price")
+        [toggle] = user.find(marker="card-periods").elements
+        assert isinstance(toggle, ui.toggle)
+        assert [str(period) for period in toggle.options] == ["YTD", "1M", "3M", "6M", "1R", "3L", "5L", "Max"]
+
+        toggle.value = CardPeriod.ONE_MONTH  # as the browser's choice maps back to its option
+
+        await user.should_see(marker="chart-price")
+        [chart] = user.find(marker="chart-price").elements
+        assert isinstance(chart, ui.echart)
+        assert chart.options["xAxis"]["data"] == ["31.12.2025", "19.10.2026", "20.10.2026"]
 
 
 async def test_a_search_result_already_held_shows_it_is_owned_instead_of_the_add_button(engine: Engine) -> None:

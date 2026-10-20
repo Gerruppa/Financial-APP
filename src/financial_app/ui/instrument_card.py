@@ -309,7 +309,7 @@ def _returns(quotes: Sequence[Quote], distributing: bool) -> None:
         ui.label("Stopy zwrotu").classes("text-lg font-bold")
         for row in (
             {str(year): value for year, value in table.years.items()},
-            {period.name_pl: table.periods[period] for period in RETURN_PERIODS},
+            {period.label: table.periods[period] for period in RETURN_PERIODS},
         ):
             with ui.grid(columns=len(row)).classes("w-full text-center gap-y-1"):
                 for label in row:

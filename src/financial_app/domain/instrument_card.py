@@ -26,7 +26,7 @@ class CardPeriod(StrEnum):
     MAX = "Max"
 
     @property
-    def name_pl(self) -> str:
+    def label(self) -> str:
         """Its full Polish name, e.g. "3 miesiące"."""
         return _NAMES[self]
 
