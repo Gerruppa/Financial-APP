@@ -5,15 +5,15 @@ import pytest
 from financial_app.domain.instrument_search import (
     CombinedSearch,
     FormFields,
+    FoundListing,
     InstrumentSearchError,
-    SearchResult,
     fill_empty,
     looks_like_isin,
 )
 from financial_app.domain.instruments import DistributionPolicy
 from financial_app.domain.prices import BOSSA, YAHOO
 
-ISAC = SearchResult(
+ISAC = FoundListing(
     name="iShares MSCI ACWI",
     symbol="ISAC.L",
     market="London",
@@ -21,7 +21,7 @@ ISAC = SearchResult(
     source_symbols={YAHOO: "ISAC.L"},
     isin="IE00B6R52259",
 )
-CDR = SearchResult(
+CDR = FoundListing(
     name="CD Projekt Red S.A.",
     symbol="CDR.WA",
     market="GPW",
@@ -66,7 +66,7 @@ def test_blank_values_count_as_empty() -> None:
 
 
 def test_an_unknown_currency_leaves_the_currency_alone() -> None:
-    unknown = SearchResult(name="X", symbol="X.L", market="London", currency="")
+    unknown = FoundListing(name="X", symbol="X.L", market="London", currency="")
 
     assert fill_empty(FormFields(), unknown).quote_currency == ""
 
@@ -78,7 +78,7 @@ def test_isin_like_queries_are_recognised() -> None:
 
 
 def test_a_result_fills_an_empty_asset_class_only() -> None:
-    stock = SearchResult(name="CDR", symbol="CDR.WA", market="GPW", currency="PLN", asset_class="Akcje polskie")
+    stock = FoundListing(name="CDR", symbol="CDR.WA", market="GPW", currency="PLN", asset_class="Akcje polskie")
 
     assert fill_empty(FormFields(), stock).asset_class == "Akcje polskie"
     assert fill_empty(FormFields(asset_class="Inne"), stock).asset_class == "Inne"
@@ -88,17 +88,17 @@ def test_a_result_fills_an_empty_asset_class_only() -> None:
 
 
 class FakeSearch:
-    def __init__(self, results: list[SearchResult] | None = None, error: str = "") -> None:
+    def __init__(self, results: list[FoundListing] | None = None, error: str = "") -> None:
         self.results = results or []
         self.error = error
 
-    def search(self, query: str) -> list[SearchResult]:
+    def search(self, query: str) -> list[FoundListing]:
         if self.error:
             raise InstrumentSearchError(self.error)
         return self.results
 
 
-PZU60 = SearchResult(
+PZU60 = FoundListing(
     name="PPK inPZU 2060", symbol="PZU60", market="", currency="PLN", source_symbols={"analizy": "PZU60"}
 )
 
@@ -130,7 +130,7 @@ def test_when_every_search_fails_the_combined_search_fails() -> None:
 
 def test_an_unexpected_error_in_one_search_counts_as_it_not_answering() -> None:
     class Broken:
-        def search(self, query: str) -> list[SearchResult]:
+        def search(self, query: str) -> list[FoundListing]:
             raise AttributeError("changed response")
 
     results = CombinedSearch({"Yahoo": FakeSearch([CDR]), "analizy.pl": Broken()}).search("pzu")
@@ -142,7 +142,7 @@ def test_an_unexpected_error_in_one_search_counts_as_it_not_answering() -> None:
 # A chosen result also fills the name and, for a fund, its domicile and distribution policy
 
 
-ETF = SearchResult(
+ETF = FoundListing(
     name="iShares MSCI All Country World UCITS ETF USD Acc",
     symbol="ISAC.L",
     market="London",
@@ -161,12 +161,12 @@ def test_an_empty_name_is_filled_and_an_entered_one_kept() -> None:
 def test_a_funds_domicile_comes_from_its_isins_country() -> None:
     assert fill_empty(FormFields(), ETF).domicile == "Irlandia"
     # Also from an ISIN the user typed
-    no_isin = SearchResult(name="Fund", symbol="X", market="", currency="EUR", fund=True)
+    no_isin = FoundListing(name="Fund", symbol="X", market="", currency="EUR", fund=True)
     assert fill_empty(FormFields(isin="LU0109392836"), no_isin).domicile == "Luksemburg"
 
 
 def test_a_stocks_isin_says_nothing_about_a_domicile() -> None:
-    stock = SearchResult(name="CDR", symbol="CDR.WA", market="GPW", currency="PLN", isin="PLOPTTC00011")
+    stock = FoundListing(name="CDR", symbol="CDR.WA", market="GPW", currency="PLN", isin="PLOPTTC00011")
 
     assert fill_empty(FormFields(), stock).domicile == ""
 
@@ -174,7 +174,7 @@ def test_a_stocks_isin_says_nothing_about_a_domicile() -> None:
 def test_an_unknown_isin_country_leaves_the_domicile_empty() -> None:
     # The ISIN entered stays, so the domicile follows it rather than the result's
     assert fill_empty(FormFields(isin="XS1234567890"), ETF).domicile == ""
-    no_isin = SearchResult(name="Fund", symbol="X", market="", currency="EUR", fund=True)
+    no_isin = FoundListing(name="Fund", symbol="X", market="", currency="EUR", fund=True)
     assert fill_empty(FormFields(isin="XS1234567890"), no_isin).domicile == ""
 
 
@@ -191,13 +191,13 @@ def test_an_unknown_isin_country_leaves_the_domicile_empty() -> None:
     ],
 )
 def test_a_funds_distribution_policy_comes_from_its_name(name: str, policy: DistributionPolicy | None) -> None:
-    fund = SearchResult(name=name, symbol="X", market="", currency="USD", fund=True)
+    fund = FoundListing(name=name, symbol="X", market="", currency="USD", fund=True)
 
     assert fill_empty(FormFields(), fund).distribution_policy == policy
 
 
 def test_a_stocks_name_sets_no_policy() -> None:
-    stock = SearchResult(name="Accenture Acc", symbol="ACN", market="NYSE", currency="USD")
+    stock = FoundListing(name="Accenture Acc", symbol="ACN", market="NYSE", currency="USD")
 
     assert fill_empty(FormFields(), stock).distribution_policy is None
 

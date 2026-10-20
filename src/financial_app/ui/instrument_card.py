@@ -1,7 +1,7 @@
 """The Instrument Card (issue #175): a large dialog on a Search Result or one of the user's Instruments, with its
 price, chart and returns from its whole history fetched live, and "Dodaj jako instrument" or "Edytuj"."""
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
@@ -17,15 +17,9 @@ from financial_app.domain.formatting import (
     format_quantity,
     format_unit_price,
 )
-from financial_app.domain.instrument_card import (
-    CHART_PERIODS,
-    FoundInstrument,
-    chart_window,
-    owned_instrument,
-    price_summary,
-    returns,
-)
-from financial_app.domain.instrument_search import FormFields, SearchResult, fill_empty
+from financial_app.domain.header_search import SearchResult, owned_instrument
+from financial_app.domain.instrument_card import RETURN_PERIODS, CardPeriod, chart_window, price_summary, returns
+from financial_app.domain.instrument_search import FormFields, FoundListing, fill_empty
 from financial_app.domain.instruments import DistributionPolicy, Instrument
 from financial_app.domain.prices import SOURCE_NAMES, PriceSourceError, Quote
 from financial_app.persistence.history import quotes_between
@@ -38,9 +32,9 @@ from financial_app.ui.instruments import InstrumentsSection
 
 
 class ListingHistory(Protocol):
-    """The closes of a listing by its Source Symbols (``sources.instrument_card.CardHistory``)."""
+    """The closes of a listing (``sources.instrument_card.CardHistory``)."""
 
-    def of(self, source_symbols: Mapping[str, str], currency: str, last: date) -> list[Quote]: ...
+    def closes(self, listing: FoundListing, last: date) -> list[Quote]: ...
 
 
 @dataclass
@@ -54,132 +48,136 @@ class CardContext:
     instruments: InstrumentsSection
 
 
-@dataclass
-class _Chosen:
-    """The listing the card shows, and the user's Instrument it was opened on (``None`` for a Search Result)."""
-
-    listing: SearchResult
-    own: Instrument | None
+def open_instrument_card(context: CardContext, subject: SearchResult | Instrument) -> None:
+    """Open the card on a SearchResult (its first listing chosen) or on one of the user's Instruments."""
+    InstrumentCard(context, subject).open()
 
 
-def open_instrument_card(context: CardContext, subject: FoundInstrument | Instrument) -> None:
-    """Open the card on a FoundInstrument (its first listing chosen) or on one of the user's Instruments."""
-    if isinstance(subject, Instrument):
-        listings, chosen = [_listing_of(subject)], _Chosen(_listing_of(subject), subject)
-    else:
-        listings, chosen = subject.listings, _Chosen(subject.listings[0], None)
-    dialog = ui.dialog()
-    dialog.on("hide", dialog.delete)
+class InstrumentCard:
+    """The card's dialog: ``listing`` is the listing it shows, ``own`` the user's Instrument it was opened on
+    (``None`` for a Search Result)."""
 
-    def owner() -> Instrument | None:
+    def __init__(self, context: CardContext, subject: SearchResult | Instrument) -> None:
+        self.context = context
+        self.name = subject.name
+        self.own: Instrument | None
+        if isinstance(subject, Instrument):
+            self.listings, self.own = [_listing_of(subject)], subject
+        else:
+            self.listings, self.own = subject.listings, None
+        self.listing = self.listings[0]
+
+    def open(self) -> None:
+        dialog = ui.dialog()
+        dialog.on("hide", dialog.delete)
+        with dialog, ui.card().classes("w-[1100px] max-w-[95vw] gap-4").mark("instrument-card"):
+            with ui.row().classes("w-full items-start no-wrap"):
+                ui.label(self.name).classes("text-2xl font-bold grow")
+                ui.button(icon="close", on_click=dialog.close).props('flat round aria-label="Zamknij kartę"')
+            with ui.row().classes("w-full items-start no-wrap gap-4"):
+                with ui.column().classes("grow gap-1"):
+                    self.heading()
+                self.actions()
+            if len(self.listings) > 1:
+                options = {index: _listing_label(listing) for index, listing in enumerate(self.listings)}
+                listing_select = ui.select(
+                    options, value=0, label="Giełda i waluta", on_change=lambda e: self._choose(e.value)
+                )
+                listing_select.classes("w-80").mark("card-listing")
+            self.position()
+            self.prices()
+        dialog.open()
+
+    def _owner(self) -> Instrument | None:
         """The Instrument holding the chosen listing: the card's own one, or one added or found by Source Symbol."""
-        return chosen.own or owned_instrument(chosen.listing, list_instruments(context.engine))
+        return self.own or owned_instrument(self.listing, list_instruments(self.context.engine))
 
-    with dialog, ui.card().classes("w-[1100px] max-w-[95vw] gap-4").mark("instrument-card"):
-        with ui.row().classes("w-full items-start no-wrap"):
-            ui.label(subject.name).classes("text-2xl font-bold grow")
-            ui.button(icon="close", on_click=dialog.close).props('flat round aria-label="Zamknij kartę"')
+    @ui.refreshable_method
+    def heading(self) -> None:
+        _heading(self.listing, self.listings, self._owner())
 
-        @ui.refreshable
-        def heading() -> None:
-            _heading(chosen.listing, listings, owner())
+    @ui.refreshable_method
+    def actions(self) -> None:
+        holder = self._owner()
+        with ui.row().classes("items-center gap-2"):
+            if holder is None:
+                ui.button("Dodaj jako instrument", icon="add", on_click=self._add).props("no-caps").mark("card-add")
+            else:
+                ui.label("Masz już ten instrument").classes("k-muted").mark("card-owned")
+                ui.button("Edytuj", icon="edit", on_click=lambda: self._edit(holder)).props("flat no-caps").mark(
+                    "card-edit"
+                )
 
-        @ui.refreshable
-        def actions() -> None:
-            holder = owner()
-            with ui.row().classes("items-center gap-2"):
-                if holder is None:
-                    ui.button("Dodaj jako instrument", icon="add", on_click=add).props("no-caps").mark("card-add")
-                else:
-                    ui.label("Masz już ten instrument").classes("k-muted").mark("card-owned")
-                    ui.button("Edytuj", icon="edit", on_click=lambda: edit(holder)).props("flat no-caps").mark(
-                        "card-edit"
-                    )
+    @ui.refreshable_method
+    def position(self) -> None:
+        holder = self._owner()
+        if holder is not None:
+            _position(self.context, holder)
 
-        @ui.refreshable
-        def position() -> None:
-            holder = owner()
-            if holder is not None:
-                _position(context, holder)
+    @ui.refreshable_method
+    def prices(self) -> None:
+        """A spinner, then the chosen listing's price panel, chart and returns once its closes are fetched."""
+        area = ui.column().classes("w-full gap-4")
+        with area:
+            ui.spinner(size="lg").mark("card-loading")
+        listing = self.listing
+        ui.timer(0, lambda: self._load(listing, area), once=True)
 
-        def redraw() -> None:
-            heading.refresh()
-            actions.refresh()
-            position.refresh()
-
-        def added(instrument: Instrument) -> None:
-            ui.notify(f"Dodano instrument {instrument.name}", type="positive")
-            redraw()
-
-        def add() -> None:
-            context.instruments.open_dialog(None, prefill=chosen.listing, on_saved=added)
-
-        def edit(instrument: Instrument) -> None:
-            def saved(saved: Instrument) -> None:
-                if chosen.own is not None:
-                    chosen.own = saved
-                redraw()
-
-            context.instruments.open_dialog(instrument, on_saved=saved)
-
-        with ui.row().classes("w-full items-start no-wrap gap-4"):
-            with ui.column().classes("grow gap-1"):
-                heading()
-            actions()
-        if len(listings) > 1:
-            options = {index: _listing_label(listing) for index, listing in enumerate(listings)}
-
-            def choose(index: int) -> None:
-                chosen.listing = listings[index]
-                redraw()
-                prices.refresh()
-
-            listing_select = ui.select(options, value=0, label="Giełda i waluta", on_change=lambda e: choose(e.value))
-            listing_select.classes("w-80").mark("card-listing")
-        position()
-
-        @ui.refreshable
-        def prices() -> None:
-            listing = chosen.listing
-            area = ui.column().classes("w-full gap-4")
+    async def _load(self, listing: FoundListing, area: ui.column) -> None:
+        try:
+            # The sources answer over the network, so the window keeps working meanwhile
+            quotes = await run.io_bound(_closes, self.context, listing, self._owner())
+        except PriceSourceError as error:
+            area.clear()
             with area:
-                ui.spinner(size="lg").mark("card-loading")
+                ui.label(str(error)).classes("text-negative").mark("card-history-error")
+            return
+        if quotes is None:  # the app is shutting down
+            return
+        area.clear()
+        with area:
+            _prices(listing, quotes, _distributing(listing, self._owner()))
 
-            async def load() -> None:
-                try:
-                    # The sources answer over the network, so the window keeps working meanwhile
-                    quotes = await run.io_bound(_closes, context, listing, owner())
-                except PriceSourceError as error:
-                    area.clear()
-                    with area:
-                        ui.label(str(error)).classes("text-negative").mark("card-history-error")
-                    return
-                if quotes is None:  # the app is shutting down
-                    return
-                area.clear()
-                with area:
-                    _prices(listing, quotes, _distributing(listing, owner()))
+    def _redraw(self) -> None:
+        self.heading.refresh()
+        self.actions.refresh()
+        self.position.refresh()
 
-            ui.timer(0, load, once=True)
+    def _choose(self, index: int) -> None:
+        self.listing = self.listings[index]
+        self._redraw()
+        self.prices.refresh()
 
-        prices()
-    dialog.open()
+    def _add(self) -> None:
+        self.context.instruments.open_dialog(None, prefill=self.listing, on_saved=self._added)
+
+    def _added(self, instrument: Instrument) -> None:
+        ui.notify(f"Dodano instrument {instrument.name}", type="positive")
+        self._redraw()
+
+    def _edit(self, instrument: Instrument) -> None:
+        self.context.instruments.open_dialog(instrument, on_saved=self._saved)
+
+    def _saved(self, instrument: Instrument) -> None:
+        if self.own is not None:
+            self.own = instrument
+        self._redraw()
 
 
-def _closes(context: CardContext, listing: SearchResult, holder: Instrument | None) -> list[Quote]:
+def _closes(context: CardContext, listing: FoundListing, holder: Instrument | None) -> list[Quote]:
     """The listing's closes fetched live; without any, those saved of the Instrument holding it (e.g. a share priced
     from Bossa only, which gives no history)."""
     today = context.rates.today()
-    quotes = context.history.of(listing.source_symbols, listing.currency, today)
+    quotes = context.history.closes(listing, today)
     if not quotes and holder is not None:
         quotes = quotes_between(context.engine, holder.id, FIRST_DAY, today)
     return quotes
 
 
-def _listing_of(instrument: Instrument) -> SearchResult:
+def _listing_of(instrument: Instrument) -> FoundListing:
     """One of the user's Instruments as the listing its card shows."""
     symbols = dict(instrument.source_symbols)
-    return SearchResult(
+    return FoundListing(
         name=instrument.name,
         symbol=next(iter(symbols.values()), ""),
         market=instrument.market,
@@ -190,12 +188,16 @@ def _listing_of(instrument: Instrument) -> SearchResult:
     )
 
 
-def _listing_label(listing: SearchResult) -> str:
+def _currency(listing: FoundListing) -> str:
+    return listing.currency or "waluta nieznana"
+
+
+def _listing_label(listing: FoundListing) -> str:
     """A listing in the card's choice, e.g. "VUAA.L · LSE · USD"."""
-    return " · ".join([listing.symbol, listing.market or "rynek nieznany", listing.currency or "waluta nieznana"])
+    return " · ".join([listing.symbol, listing.market or "rynek nieznany", _currency(listing)])
 
 
-def _details(listing: SearchResult, holder: Instrument | None) -> tuple[str, DistributionPolicy | None]:
+def _details(listing: FoundListing, holder: Instrument | None) -> tuple[str, DistributionPolicy | None]:
     """The domicile and the distribution policy: the Instrument's own, else what the listing tells (``fill_empty``)."""
     if holder is not None and (holder.domicile or holder.distribution_policy):
         return holder.domicile, holder.distribution_policy
@@ -203,11 +205,11 @@ def _details(listing: SearchResult, holder: Instrument | None) -> tuple[str, Dis
     return told.domicile, told.distribution_policy
 
 
-def _distributing(listing: SearchResult, holder: Instrument | None) -> bool:
+def _distributing(listing: FoundListing, holder: Instrument | None) -> bool:
     return _details(listing, holder)[1] is DistributionPolicy.DISTRIBUTING
 
 
-def _heading(listing: SearchResult, listings: Sequence[SearchResult], holder: Instrument | None) -> None:
+def _heading(listing: FoundListing, listings: Sequence[FoundListing], holder: Instrument | None) -> None:
     """The ISIN (with a copy button), the symbols of every listing, the Asset Class and what else is known."""
     with ui.row().classes("items-center gap-3 text-sm"):
         if listing.isin:
@@ -229,7 +231,7 @@ def _heading(listing: SearchResult, listings: Sequence[SearchResult], holder: In
     )
     details = [
         listing.market,
-        listing.currency or "waluta nieznana",
+        _currency(listing),
         f"Siedziba: {domicile}" if domicile else "",
         policy.label if policy else "",
         sources,
@@ -258,7 +260,7 @@ def _position(context: CardContext, instrument: Instrument) -> None:
             ui.label(" · ".join(parts))
 
 
-def _prices(listing: SearchResult, quotes: Sequence[Quote], distributing: bool) -> None:
+def _prices(listing: FoundListing, quotes: Sequence[Quote], distributing: bool) -> None:
     """The price panel, the chart with its periods and the returns table of ``quotes``; a note without any."""
     summary = price_summary(quotes)
     if summary is None:
@@ -269,11 +271,11 @@ def _prices(listing: SearchResult, quotes: Sequence[Quote], distributing: bool) 
             ui.label(listing.symbol or listing.name).classes("text-sm k-muted")
             with ui.row().classes("items-baseline gap-2"):
                 ui.label(format_unit_price(summary.price, summary.currency)).classes("text-2xl font-bold")
-                _change(summary.day_change_percent)
+                _change_label(summary.day_change_percent)
             ui.label(format_date(summary.day)).classes("text-xs k-muted")
         with ui.column().classes("gap-0"):
             ui.label("YTD").classes("text-xs k-muted")
-            _change(summary.ytd_percent)
+            _change_label(summary.ytd_percent)
         with ui.column().classes("gap-0"):
             ui.label("Najniższa 12M").classes("text-xs k-muted")
             ui.label(format_unit_price(summary.low_12m, summary.currency)).classes("k-loss").mark("card-low-12m")
@@ -282,16 +284,16 @@ def _prices(listing: SearchResult, quotes: Sequence[Quote], distributing: bool) 
             ui.label(format_unit_price(summary.high_12m, summary.currency)).classes("k-gain").mark("card-high-12m")
 
     @ui.refreshable
-    def chart(period: str) -> None:
+    def chart(period: CardPeriod) -> None:
         price_chart(chart_window(quotes, period), summary.currency)
 
-    toggle = ui.toggle(list(CHART_PERIODS), value="Max", on_change=lambda e: chart.refresh(e.value))
+    toggle = ui.toggle(list(CardPeriod), value=CardPeriod.MAX, on_change=lambda e: chart.refresh(e.value))
     toggle.props("no-caps dense").mark("card-periods")
-    chart("Max")
+    chart(CardPeriod.MAX)
     _returns(quotes, distributing)
 
 
-def _change(percent: Decimal | None) -> None:
+def _change_label(percent: Decimal | None) -> None:
     """A change in percent, green up and red down; a dash without one."""
     if percent is None:
         ui.label("—").classes("k-muted")
@@ -307,17 +309,14 @@ def _returns(quotes: Sequence[Quote], distributing: bool) -> None:
         ui.label("Stopy zwrotu").classes("text-lg font-bold")
         for row in (
             {str(year): value for year, value in table.years.items()},
-            {_PERIOD_LABELS[label]: value for label, value in table.periods.items()},
+            {period.name_pl: table.periods[period] for period in RETURN_PERIODS},
         ):
             with ui.grid(columns=len(row)).classes("w-full text-center gap-y-1"):
                 for label in row:
                     ui.label(label).classes("text-sm k-muted")
                 for value in row.values():
-                    _change(value)
+                    _change_label(value)
         note = "Z cen zamknięcia"
         if distributing:
             note += "; cenowe, bez wypłaconych dywidend"
         ui.label(note + ".").classes("text-xs k-muted")
-
-
-_PERIOD_LABELS = {"1M": "1 miesiąc", "3M": "3 miesiące", "6M": "6 miesięcy", "1R": "1 rok", "3L": "3 lata"}

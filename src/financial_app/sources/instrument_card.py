@@ -1,9 +1,10 @@
 """The Instrument Card's price history (issue #175): a listing's whole history fetched live from Yahoo, else
 analizy.pl (funds and PPK), for its chart and returns. Nothing is saved, so a Search Result leaves no trace."""
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from datetime import date
 
+from financial_app.domain.instrument_search import FoundListing
 from financial_app.domain.prices import ANALIZY, YAHOO, PriceSourceError, Quote
 from financial_app.sources.analizy import AnalizySource, fetch_from_analizy
 from financial_app.sources.yahoo import YahooSource, fetch_from_yahoo
@@ -24,16 +25,16 @@ class CardHistory:
         self.yahoo = YahooSource(yahoo_fetch)
         self.analizy = AnalizySource(analizy_fetch)
 
-    def of(self, source_symbols: Mapping[str, str], currency: str, last: date) -> list[Quote]:
-        """The closes in ``currency`` up to ``last``, oldest first, from the Yahoo symbol, else the analizy.pl Fund
-        Code; none without either. Raises ``PriceSourceError`` (Polish) when the source fails."""
-        symbols = {source: symbol.strip() for source, symbol in source_symbols.items() if symbol.strip()}
+    def closes(self, listing: FoundListing, last: date) -> list[Quote]:
+        """The ``listing``'s closes in its currency up to ``last``, oldest first, from its Yahoo symbol, else its
+        analizy.pl Fund Code; none without either. Raises ``PriceSourceError`` (Polish) when the source fails."""
+        symbols = {source: symbol.strip() for source, symbol in listing.source_symbols.items() if symbol.strip()}
         source = next((source for source in (YAHOO, ANALIZY) if source in symbols), None)
         if source is None:
             return []
-        if not currency:
+        if not listing.currency:
             raise PriceSourceError(
                 "Nie wiadomo, w jakiej walucie jest wyceniany, więc nie można pokazać jego historii."
             )
         price_source = self.yahoo if source == YAHOO else self.analizy
-        return price_source.history(symbols[source], currency, FIRST_DAY, last)
+        return price_source.history(symbols[source], listing.currency, FIRST_DAY, last)

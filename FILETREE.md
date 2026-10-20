@@ -151,9 +151,10 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `export.py`: Builds the transaction export rows with columns, amounts, origin and comment, independent of file format.
 - `faq.py`: Parses the Pomoc FAQ Markdown into sections and questions; searches them ignoring case and Polish letters
 - `formatting.py`: Polish number, amount and date formatting and parsing of typed input; the single formatter every screen uses.
+- `header_search.py`: Header search grouping of listings into Search Results, own Instrument matching, and the Instrument already holding a listing.
 - `history.py`: Tracks which days of Quote and NBP Rate history are cached, and computes the missing days to fetch.
 - `inflation.py`: Inflation over a period from GUS monthly CPI, spread across days as the sheet's Benchmarki do, and the real return
-- `instrument_card.py`: Header search grouping of Search Results, own Instrument matching, and Instrument Card price summary, chart window and returns.
+- `instrument_card.py`: Instrument Card figures: price summary, returns table and chart closes for each card period.
 - `instrument_search.py`: Instrument search result types, the swappable search protocol, and filling empty form fields from a chosen result.
 - `instruments.py`: Instrument and Asset Class models, their validation, default Asset Classes, ISIN, metal, distribution policy and Multi-asset Split rules.
 - `investment_goal.py`: Investment Goal for a View Scope: amount or FIRE target, progress, default monthly deposit and real forecast in today's PLN
@@ -414,13 +415,14 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_fund_details_ui.py`: UI tests for a fund's TER, Distribution Policy and domicile in the dialog and Portfolio
 - `test_fx_effect_domain.py`: Tests the FX part of foreign Positions' results from the PLN and foreign costs of FIFO Lots
 - `test_glossary.py`: Test that GLOSSARY.md lists exactly the terms defined in CONTEXT.md
+- `test_header_search_domain.py`: Domain tests for header search grouping of listings, own Instrument matching and owned listings, without the network.
 - `test_header_search_ui.py`: UI tests for the header search and Instrument Card on a test search and history, without the network.
 - `test_help_ui.py`: UI tests of the Pomoc tab search and navigation buttons, and the Dashboard first-steps banner
 - `test_history_domain.py`: Tests which days of a price history still need fetching given cached days
 - `test_history_parity.py`: Parity test of History against the user's spreadsheet Historia tab at each month end, skipped without reference data
 - `test_import_sheet_ui.py`: UI tests for the Ustawienia spreadsheet import: preview first, then save, on a synthetic workbook
 - `test_inflation.py`: Tests inflation over periods from GUS monthly CPI readings and the real return it gives
-- `test_instrument_card_domain.py`: Domain tests for header search grouping and Instrument Card price summary, chart window and returns.
+- `test_instrument_card_domain.py`: Domain tests for the Instrument Card price summary, chart window and returns.
 - `test_instrument_card_history.py`: Tests for Instrument Card price history from saved Yahoo and analizy.pl responses.
 - `test_instrument_search_domain.py`: Tests that a chosen Instrument search result fills only the empty Instrument form fields.
 - `test_instrument_search_ui.py`: Tests searching an Instrument by ISIN, name or symbol in the Instrument dialog on saved Yahoo responses.

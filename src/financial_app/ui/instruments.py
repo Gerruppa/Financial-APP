@@ -18,10 +18,10 @@ from financial_app.domain.formatting import (
 )
 from financial_app.domain.instrument_search import (
     FormFields,
+    FoundListing,
+    FoundListings,
     InstrumentSearch,
     InstrumentSearchError,
-    SearchResult,
-    SearchResults,
     fill_empty,
 )
 from financial_app.domain.instruments import (
@@ -297,7 +297,7 @@ class InstrumentsSection:
         instrument: Instrument | None,
         *,
         query: str = "",
-        prefill: SearchResult | None = None,
+        prefill: FoundListing | None = None,
         on_saved: Callable[[Instrument], None] | None = None,
     ) -> None:
         """Open a fresh form for a new Instrument (``None``) or for editing ``instrument``. A new one's search starts
@@ -435,7 +435,7 @@ class InstrumentsSection:
             show_split()
             error = ui.label().classes("text-negative").mark("instrument-error")
 
-            def choose(result: SearchResult) -> None:
+            def choose(result: FoundListing) -> None:
                 # A new Instrument's default PLN was not typed by the user, so a listing's own currency replaces it
                 untouched_default = instrument is None and currency.value == "PLN"
                 filled = fill_empty(
@@ -468,10 +468,10 @@ class InstrumentsSection:
                 try:
                     # The search answers over the network, so the window keeps working meanwhile
                     found = await run.io_bound(self.search.search, search_input.value)
-                    # An empty SearchResults still carries its notes, so only None (shutting down) counts as nothing
+                    # An empty FoundListings still carries its notes, so only None (shutting down) counts as nothing
                     results = [] if found is None else found
                     # A search service that failed beside the others is noted above their results
-                    notes = results.notes if isinstance(results, SearchResults) else []
+                    notes = results.notes if isinstance(results, FoundListings) else []
                     message = " · ".join(notes) if results else " · ".join(["Nic nie znaleziono.", *notes])
                 except InstrumentSearchError as exc:
                     results, message = [], str(exc)
@@ -585,7 +585,7 @@ def _quote_text(quote: Quote) -> str:
     return f"{format_unit_price(quote.price, quote.currency)} · {format_date(quote.day)}"
 
 
-def _result_row(result: SearchResult, choose: Callable[[SearchResult], None]) -> None:
+def _result_row(result: FoundListing, choose: Callable[[FoundListing], None]) -> None:
     """One listing found; clicking it fills the form's empty fields."""
     details = " · ".join(
         d for d in [result.source, result.market, result.symbol, result.currency or "waluta nieznana"] if d

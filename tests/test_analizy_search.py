@@ -7,7 +7,7 @@ from urllib.parse import parse_qs, urlparse
 
 import pytest
 
-from financial_app.domain.instrument_search import InstrumentSearchError, SearchResult
+from financial_app.domain.instrument_search import FoundListing, InstrumentSearchError
 from financial_app.domain.prices import ANALIZY
 from financial_app.sources.analizy import AnalizySearch
 
@@ -34,7 +34,7 @@ def test_a_name_finds_open_funds_without_insurance_funds_and_their_markup() -> N
 
     # UPZU31 and UALL121 are UFK; the former name ("d. ...") is left out
     assert results == [
-        SearchResult(
+        FoundListing(
             name="PZU Akcji KRAKOWIAK",
             symbol="PZU01",
             market="",
@@ -43,7 +43,7 @@ def test_a_name_finds_open_funds_without_insurance_funds_and_their_markup() -> N
             fund=True,
         ),
         # Its quotation is not saved, as when the request fails
-        SearchResult(
+        FoundListing(
             name="PZU Akcji KRAKOWIAK E",
             symbol="PZE01",
             market="",
@@ -64,7 +64,7 @@ def test_closed_end_funds_are_left_out() -> None:
 def test_a_ppk_fund_belongs_to_multi_asset() -> None:
     [result] = AnalizySearch(_saved).search("PPK 2060 PZU")
 
-    assert result == SearchResult(
+    assert result == FoundListing(
         name="PPK inPZU 2060",
         symbol="PZU60",
         market="",
@@ -78,7 +78,7 @@ def test_a_ppk_fund_belongs_to_multi_asset() -> None:
 def test_an_isin_finds_a_foreign_fund_and_carries_it() -> None:
     [result] = AnalizySearch(_saved).search("lu0109392836")
 
-    assert result == SearchResult(
+    assert result == FoundListing(
         name="Franklin Technology Fund A (Acc) (USD",
         symbol="FTI022_A_USD",
         market="",

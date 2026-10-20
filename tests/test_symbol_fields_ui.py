@@ -9,7 +9,7 @@ import pytest
 from nicegui.testing import User, user_simulation
 from sqlalchemy import Engine
 
-from financial_app.domain.instrument_search import SearchResult
+from financial_app.domain.instrument_search import FoundListing
 from financial_app.domain.instruments import AssetClass, InstrumentDraft
 from financial_app.domain.prices import ANALIZY, BANKIER, BOSSA, STOOQ, YAHOO, Quote
 from financial_app.persistence.db import init_db
@@ -39,15 +39,15 @@ class FakeSource:
 
 
 class FakeSearch:
-    def __init__(self, results: list[SearchResult]) -> None:
+    def __init__(self, results: list[FoundListing]) -> None:
         self.results = results
 
-    def search(self, query: str) -> list[SearchResult]:
+    def search(self, query: str) -> list[FoundListing]:
         return self.results
 
 
 SOURCES = {BOSSA: FakeSource(BOSSA, {"PZU": "69.82"})}
-PZU = SearchResult("PZU SA", "PZU.WA", "WSE", "PLN", {YAHOO: "PZU.WA", BOSSA: "PZU"})
+PZU = FoundListing("PZU SA", "PZU.WA", "WSE", "PLN", {YAHOO: "PZU.WA", BOSSA: "PZU"})
 
 
 @pytest.fixture

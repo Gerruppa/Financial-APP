@@ -1,90 +1,73 @@
-"""The header search (issue #175): Search Results grouped into one row per fund or company, and the Instrument Card's
-figures."""
+"""The Instrument Card's figures (issue #175): its price panel, returns and the chart's closes for each period."""
 
-from collections.abc import Iterable, Sequence
-from dataclasses import dataclass, field
+from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
+from enum import StrEnum
 
-from financial_app.domain.formatting import folded
-from financial_app.domain.instrument_search import SearchResult
-from financial_app.domain.instruments import Instrument
 from financial_app.domain.periods import months_before
 from financial_app.domain.prices import Quote
 
-# How many of the user's own Instruments the header search lists
-OWN_LIMIT = 5
-# The Instrument Card's return periods, by label, in months back from the last close
-RETURN_PERIODS = {"1M": 1, "3M": 3, "6M": 6, "1R": 12, "3L": 36}
-# How many calendar years its returns table shows, this one first
-RETURN_YEARS = 5
-# The chart's periods in months back from the last close; YTD starts at the year's start, Max at the first close
-CHART_PERIODS: dict[str, int | None] = {
-    "YTD": None,
-    "1M": 1,
-    "3M": 3,
-    "6M": 6,
-    "1R": 12,
-    "3L": 36,
-    "5L": 60,
-    "Max": None,
+
+class CardPeriod(StrEnum):
+    """A period of the card's chart or returns, by its short label; it runs from its ``start`` to the last close.
+
+    Not ``domain.periods.PeriodPreset``: the card has 6M and Max, which the period selector has not, and counts back
+    from the last close, not today."""
+
+    YEAR_TO_DATE = "YTD"
+    ONE_MONTH = "1M"
+    THREE_MONTHS = "3M"
+    SIX_MONTHS = "6M"
+    ONE_YEAR = "1R"
+    THREE_YEARS = "3L"
+    FIVE_YEARS = "5L"
+    MAX = "Max"
+
+    @property
+    def name_pl(self) -> str:
+        """Its full Polish name, e.g. "3 miesiące"."""
+        return _NAMES[self]
+
+    def start(self, last: date) -> date | None:
+        """The day its return counts from, by the ``last`` close: the same day its months earlier, the last day of
+        the year before for YTD, ``None`` (the first close) for Max."""
+        if self is CardPeriod.MAX:
+            return None
+        if self is CardPeriod.YEAR_TO_DATE:
+            return date(last.year - 1, 12, 31)
+        return months_before(last, _MONTHS_BACK[self])
+
+
+_NAMES = {
+    CardPeriod.YEAR_TO_DATE: "Od początku roku",
+    CardPeriod.ONE_MONTH: "1 miesiąc",
+    CardPeriod.THREE_MONTHS: "3 miesiące",
+    CardPeriod.SIX_MONTHS: "6 miesięcy",
+    CardPeriod.ONE_YEAR: "1 rok",
+    CardPeriod.THREE_YEARS: "3 lata",
+    CardPeriod.FIVE_YEARS: "5 lat",
+    CardPeriod.MAX: "Cała historia",
 }
-
-
-@dataclass(frozen=True)
-class FoundInstrument:
-    """The listings found of one fund or company, in the order found: those of one ISIN, or of one name when the
-    search gives no ISIN (Yahoo gives one only to an ISIN searched for)."""
-
-    name: str
-    isin: str
-    listings: list[SearchResult] = field(default_factory=list)
-
-    @property
-    def asset_classes(self) -> list[str]:
-        """Each Asset Class name its listings belong to, once; none when their kind does not tell."""
-        return list(dict.fromkeys(listing.asset_class for listing in self.listings if listing.asset_class))
-
-    @property
-    def sources(self) -> list[str]:
-        """Each search service that found its listings, once."""
-        return list(dict.fromkeys(listing.source for listing in self.listings if listing.source))
-
-
-def group_results(results: Iterable[SearchResult]) -> list[FoundInstrument]:
-    """``results`` as one FoundInstrument per ISIN, or per name for those without one, in the order first found."""
-    found: dict[str, FoundInstrument] = {}
-    for result in results:
-        key = result.isin or f"name:{result.name.casefold()}"
-        if key not in found:
-            found[key] = FoundInstrument(result.name, result.isin)
-        found[key].listings.append(result)
-    return list(found.values())
-
-
-def matching_instruments(instruments: Iterable[Instrument], query: str, limit: int = OWN_LIMIT) -> list[Instrument]:
-    """The first ``limit`` of ``instruments`` whose name, ISIN or a Source Symbol contains ``query``, ignoring case and
-    Polish letters; none for an empty query."""
-    wanted = folded(query.strip())
-    if not wanted:
-        return []
-    found = [instrument for instrument in instruments if any(wanted in folded(text) for text in _searched(instrument))]
-    return found[:limit]
-
-
-def _searched(instrument: Instrument) -> tuple[str, ...]:
-    """The texts of an Instrument the header search looks in."""
-    return (instrument.name, instrument.isin, *instrument.source_symbols.values())
-
-
-def owned_instrument(listing: SearchResult, instruments: Sequence[Instrument]) -> Instrument | None:
-    """The Instrument already holding ``listing``: one with any of its Source Symbols. The same ISIN on another
-    exchange or in another currency is another listing, so another Instrument."""
-    wanted = {(source, symbol.casefold()) for source, symbol in listing.source_symbols.items()}
-    for instrument in instruments:
-        if any((source, symbol.casefold()) in wanted for source, symbol in instrument.source_symbols.items()):
-            return instrument
-    return None
+_MONTHS_BACK = {
+    CardPeriod.ONE_MONTH: 1,
+    CardPeriod.THREE_MONTHS: 3,
+    CardPeriod.SIX_MONTHS: 6,
+    CardPeriod.ONE_YEAR: 12,
+    CardPeriod.THREE_YEARS: 36,
+    CardPeriod.FIVE_YEARS: 60,
+}
+# The returns table's periods
+RETURN_PERIODS = (
+    CardPeriod.ONE_MONTH,
+    CardPeriod.THREE_MONTHS,
+    CardPeriod.SIX_MONTHS,
+    CardPeriod.ONE_YEAR,
+    CardPeriod.THREE_YEARS,
+)
+# How many calendar years the returns table shows, this one first
+RETURN_YEARS = 5
 
 
 @dataclass(frozen=True)
@@ -127,7 +110,7 @@ class Returns:
     up to the last close; ``None`` where the history starts later."""
 
     years: dict[int, Decimal | None]
-    periods: dict[str, Decimal | None]
+    periods: dict[CardPeriod, Decimal | None]
 
 
 def returns(quotes: Sequence[Quote]) -> Returns:
@@ -139,10 +122,11 @@ def returns(quotes: Sequence[Quote]) -> Returns:
     for year in range(last.day.year, last.day.year - RETURN_YEARS, -1):
         closing = _close_on(quotes, date(year, 12, 31))
         years[year] = None if closing is None else _change_since(quotes, date(year - 1, 12, 31), closing)
-    periods = {
-        label: _change_since(quotes, months_before(last.day, months), last.price)
-        for label, months in RETURN_PERIODS.items()
-    }
+    periods: dict[CardPeriod, Decimal | None] = {}
+    for period in RETURN_PERIODS:
+        start = period.start(last.day)
+        assert start is not None  # only Max has none
+        periods[period] = _change_since(quotes, start, last.price)
     return Returns(years, periods)
 
 
@@ -162,13 +146,11 @@ def _change(base: Decimal, price: Decimal) -> Decimal:
     return (price / base - 1) * 100
 
 
-def chart_window(quotes: Sequence[Quote], period: str) -> list[Quote]:
-    """The closes of ``quotes`` (oldest first) the chart shows for ``period`` (a key of ``CHART_PERIODS``): from the
-    last close on or before its start, which its returns count from, to the last one."""
-    if not quotes or period == "Max":
+def chart_window(quotes: Sequence[Quote], period: CardPeriod) -> list[Quote]:
+    """The closes of ``quotes`` (oldest first) the chart shows for ``period``: from the last close on or before its
+    start, which its return counts from, to the last one."""
+    start = period.start(quotes[-1].day) if quotes else None
+    if start is None:
         return list(quotes)
-    last = quotes[-1].day
-    months = CHART_PERIODS[period]
-    start = date(last.year - 1, 12, 31) if months is None else months_before(last, months)
     base = max((quote.day for quote in quotes if quote.day <= start), default=quotes[0].day)
     return [quote for quote in quotes if quote.day >= base]

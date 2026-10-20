@@ -16,7 +16,7 @@ from decimal import Decimal
 from urllib.error import HTTPError
 from urllib.parse import quote as url_quote
 
-from financial_app.domain.instrument_search import InstrumentSearchError, SearchResult, looks_like_isin
+from financial_app.domain.instrument_search import FoundListing, InstrumentSearchError, looks_like_isin
 from financial_app.domain.prices import ANALIZY, ANALIZY_HISTORY, CurrencyMismatchError, PriceSourceError, Quote
 
 # The fund type in the path does not change the answer, so every fund is asked for as "fio"
@@ -94,7 +94,7 @@ class AnalizySearch:
     def __init__(self, fetch: Callable[[str], str | None] = fetch_from_analizy) -> None:
         self.fetch = fetch
 
-    def search(self, query: str) -> list[SearchResult]:
+    def search(self, query: str) -> list[FoundListing]:
         """The funds matching a name, a Fund Code with its series or (for foreign funds) an ISIN, each with its quote
         currency from its newest valuation ("" when that fails) and its Fund Code. Results of an ISIN carry it."""
         query = query.strip()
@@ -106,7 +106,7 @@ class AnalizySearch:
             currencies = list(pool.map(self._currency, [code for code, _, _, _ in funds]))
         searched = query.upper() if looks_like_isin(query) else ""
         return [
-            SearchResult(
+            FoundListing(
                 name=name,
                 symbol=code,
                 market="",

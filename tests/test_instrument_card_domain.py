@@ -1,122 +1,10 @@
-"""The header search's results and the Instrument Card's figures (issue #175), without the network."""
+"""The Instrument Card's figures (issue #175), without the network."""
 
 from datetime import date
 from decimal import Decimal
 
-from financial_app.domain.instrument_card import (
-    chart_window,
-    group_results,
-    matching_instruments,
-    owned_instrument,
-    price_summary,
-    returns,
-)
-from financial_app.domain.instrument_search import SearchResult
-from financial_app.domain.instruments import Instrument
-from financial_app.domain.prices import ANALIZY, BOSSA, YAHOO, Quote
-
-
-def _instrument(id: int, name: str, symbols: dict[str, str], isin: str = "", currency: str = "PLN") -> Instrument:
-    return Instrument(
-        name, 1, currency, source_symbols=symbols, isin=isin, id=id, asset_class_name="Akcje", fallback_order=()
-    )
-
-
-OWN_CDR = _instrument(1, "CD Projekt", {YAHOO: "CDR.WA", BOSSA: "CDR"}, isin="PLOPTTC00011")
-OWN_VUAA = _instrument(2, "Vanguard S&P 500 Acc", {YAHOO: "VUAA.L"}, isin="IE00BFMXXD54", currency="USD")
-OWN_ZLOTO = _instrument(3, "Złoto fizyczne", {})
-OWN = [OWN_CDR, OWN_VUAA, OWN_ZLOTO]
-
-VUAA = SearchResult(
-    name="Vanguard S&P 500 UCITS ETF USD Acc",
-    symbol="VUAA.L",
-    market="LSE",
-    currency="USD",
-    source_symbols={YAHOO: "VUAA.L"},
-    isin="IE00BFMXXD54",
-    fund=True,
-    source="Yahoo",
-)
-VUAG = SearchResult(
-    name="Vanguard S&P 500 UCITS ETF USD Acc",
-    symbol="VUAG.L",
-    market="LSE",
-    currency="GBP",
-    source_symbols={YAHOO: "VUAG.L"},
-    isin="IE00BFMXXD54",
-    fund=True,
-    source="Yahoo",
-)
-CDR = SearchResult(
-    name="CD Projekt Red S.A.",
-    symbol="CDR.WA",
-    market="GPW",
-    currency="PLN",
-    source_symbols={YAHOO: "CDR.WA"},
-    asset_class="Akcje polskie",
-    source="Yahoo",
-)
-CDR_DE = SearchResult(
-    name="CD Projekt Red S.A.",
-    symbol="CDR.DE",
-    market="XETRA",
-    currency="EUR",
-    source_symbols={YAHOO: "CDR.DE"},
-    asset_class="Akcje zagraniczne",
-    source="Yahoo",
-)
-QUERCUS = SearchResult(
-    name="Quercus Agresywny",
-    symbol="QRS32",
-    market="",
-    currency="PLN",
-    source_symbols={ANALIZY: "QRS32"},
-    fund=True,
-    source="analizy.pl",
-)
-
-
-def test_listings_of_one_isin_or_one_name_are_one_found_instrument_in_the_order_found() -> None:
-    found = group_results([VUAA, CDR, QUERCUS, VUAG, CDR_DE])
-
-    assert [(f.name, f.isin, [listing.symbol for listing in f.listings]) for f in found] == [
-        ("Vanguard S&P 500 UCITS ETF USD Acc", "IE00BFMXXD54", ["VUAA.L", "VUAG.L"]),
-        ("CD Projekt Red S.A.", "", ["CDR.WA", "CDR.DE"]),
-        ("Quercus Agresywny", "", ["QRS32"]),
-    ]
-
-
-def test_a_found_instrument_shows_each_asset_class_and_source_of_its_listings_once() -> None:
-    [cdr] = group_results([CDR, CDR_DE])
-    [quercus] = group_results([QUERCUS])
-
-    assert cdr.asset_classes == ["Akcje polskie", "Akcje zagraniczne"]
-    assert cdr.sources == ["Yahoo"]
-    assert quercus.asset_classes == []
-    assert quercus.sources == ["analizy.pl"]
-
-
-def test_own_instruments_match_a_query_in_their_name_isin_or_source_symbols_ignoring_case_and_polish_letters() -> None:
-    assert matching_instruments(OWN, "projekt") == [OWN_CDR]
-    assert matching_instruments(OWN, "ie00bfmx") == [OWN_VUAA]
-    assert matching_instruments(OWN, "vuaa") == [OWN_VUAA]
-    assert matching_instruments(OWN, "cdr") == [OWN_CDR]
-    assert matching_instruments(OWN, "zloto") == [OWN_ZLOTO]
-
-
-def test_an_empty_query_matches_no_own_instrument_and_at_most_the_limit_are_given() -> None:
-    assert matching_instruments(OWN, "  ") == []
-    assert matching_instruments(OWN, "o", limit=1) == [OWN_CDR]
-
-
-def test_a_listing_is_owned_when_an_instrument_has_one_of_its_source_symbols() -> None:
-    assert owned_instrument(VUAA, OWN) == OWN_VUAA
-    assert owned_instrument(CDR, OWN) == OWN_CDR
-
-
-def test_the_same_isin_on_another_exchange_or_currency_is_not_owned() -> None:
-    assert owned_instrument(VUAG, OWN) is None
-    assert owned_instrument(QUERCUS, OWN) is None
+from financial_app.domain.instrument_card import CardPeriod, chart_window, price_summary, returns
+from financial_app.domain.prices import YAHOO, Quote
 
 
 def _quotes(*prices: tuple[str, str]) -> list[Quote]:
@@ -175,19 +63,19 @@ def test_each_of_the_last_five_calendar_years_returns_from_the_close_before_it_n
 def test_a_period_returns_from_the_last_close_on_or_before_its_start_none_when_history_is_shorter() -> None:
     table = returns(HISTORY)
 
-    assert round(table.periods["1M"], 4) == Decimal("13.0769")  # type: ignore[arg-type]
-    assert table.periods["3M"] == Decimal("17.6")
-    assert table.periods["6M"] == Decimal("17.6")
-    assert table.periods["1R"] == Decimal("22.5")
-    assert table.periods["3L"] is None
+    assert round(table.periods[CardPeriod.ONE_MONTH], 4) == Decimal("13.0769")  # type: ignore[arg-type]
+    assert table.periods[CardPeriod.THREE_MONTHS] == Decimal("17.6")
+    assert table.periods[CardPeriod.SIX_MONTHS] == Decimal("17.6")
+    assert table.periods[CardPeriod.ONE_YEAR] == Decimal("22.5")
+    assert table.periods[CardPeriod.THREE_YEARS] is None
 
 
 def test_the_chart_shows_the_closes_since_the_period_start_ytd_from_the_last_close_of_the_year_before() -> None:
-    def days(period: str) -> list[str]:
+    def days(period: CardPeriod) -> list[str]:
         return [quote.day.isoformat() for quote in chart_window(HISTORY, period)]
 
-    assert days("1M") == ["2026-09-18", "2026-10-19", "2026-10-20"]
-    assert days("YTD") == ["2025-12-31", "2026-09-18", "2026-10-19", "2026-10-20"]
-    assert days("1R") == ["2025-10-20", "2025-12-31", "2026-09-18", "2026-10-19", "2026-10-20"]
-    assert days("Max") == [quote.day.isoformat() for quote in HISTORY]
-    assert days("5L") == days("Max")
+    assert days(CardPeriod.ONE_MONTH) == ["2026-09-18", "2026-10-19", "2026-10-20"]
+    assert days(CardPeriod.YEAR_TO_DATE) == ["2025-12-31", "2026-09-18", "2026-10-19", "2026-10-20"]
+    assert days(CardPeriod.ONE_YEAR) == ["2025-10-20", "2025-12-31", "2026-09-18", "2026-10-19", "2026-10-20"]
+    assert days(CardPeriod.MAX) == [quote.day.isoformat() for quote in HISTORY]
+    assert days(CardPeriod.FIVE_YEARS) == days(CardPeriod.MAX)
