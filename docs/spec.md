@@ -18,6 +18,7 @@ Re-implement the inwestomat.eu "Portfolio tracker" Google Sheet (v2.0.1, 01.07.2
 - **Domain core**: pure Python package (no UI/DB imports) holding FIFO, valuation, cash, bonds, returns, benchmarks and tax logic. UI and persistence are thin layers around it.
 - **Price Sources** and **Importers** are plug-in modules behind common interfaces.
 - Automatic DB backup at every start, keeping the last 30 copies. Export of transactions to CSV and XLSX.
+- Changelog (grilling of #200, 2026-10-20): `ui/changelog.md`, in Polish, shipped with the app like `faq.md`. Each version has a heading with its date and up to three groups, Nowe funkcje, Poprawki and Zmiany, of one-sentence entries; an "Nieopublikowane" section on top collects the entries until a release numbers and dates it, and the GitHub Release gets the same text. A PR adds an entry only for what the user sees or gets (a feature, a fixed bug, a changed behaviour), never for a refactor, optimisation, architecture, tests, docs or tooling. Clicking the version under the logo opens every released version, newest first; the first start of a new version opens it once with only that version (the last version seen is kept in the User's settings; a new User only records it).
 - Prices refresh at start (if older than the last market close) and on a "Odśwież" button, in the background; status and errors shown on the Dashboard (Q24).
 
 ### 2.1 Users (grilling of #177, 2026-10-20; #195, #196)
