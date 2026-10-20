@@ -7,6 +7,7 @@
 - Nowy wygląd Dashboardu i motyw Golden, przełączany przyciskiem w nagłówku.
 - Sentencja dnia na Dashboardzie i w menu.
 - Kliknięcie numeru wersji pod logo pokazuje historię zmian, a po aktualizacji aplikacja raz pokazuje, co nowego.
+- Rodzaj instrumentu (ETF, ETC, Fundusz, Kryptowaluta i inne): ustawiany automatycznie przy dodawaniu, z sekcjami i wyszukiwarką w Ustawieniach oraz grupowaniem pozycji w Portfolio.
 
 ### Poprawki
 - W motywie Golden czytelne są pasma Strategii inwestycyjnej, mapa Kont, wyróżnione pole Konto, teksty zysków, strat i ostrzeżeń oraz podświetlony wiersz.

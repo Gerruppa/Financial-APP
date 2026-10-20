@@ -74,6 +74,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `history-parity-test.md`: Architecture entry for tests/test_history_parity.py (#70, spec 6.1): main functions, UI markers and decisions.
 - `info-icons.md`: Architecture entry for Info icons and waterfall amounts: main functions, UI markers and decisions.
 - `instrument-search.md`: Architecture entry for domain/instrument_search.py: main functions, UI markers and decisions.
+- `instrument-types.md`: Architecture entry for Instrument Type (#198): inference, sources, migration, Instrumenty sections and Portfolio grouping.
 - `instruments.md`: Architecture entry for domain/instruments.py: main functions, UI markers and decisions.
 - `investment-goal.md`: Architecture entry for Investment Goal (#96): main functions, UI markers and decisions.
 - `investment-strategies.md`: Architecture entry for Investment Strategies (#76, spec 5 and 6.1): main functions, UI markers and decisions.
@@ -166,6 +167,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `multi_asset.py`: Multi-asset Instruments held in the View Scope, with their PLN value and split value per Asset Class, largest first
 - `passive_income.py`: Passive income: Dividends and interest received, coupons forecast, monthly sums, 12-month average and the Monthly Income Goal.
 - `periods.py`: Period presets and custom ranges for charts and results, with date calculation and text persistence
+- `portfolio_groups.py`: Groups an Account's Positions by Instrument Type or Asset Class with each group's value and share
 - `portfolio_history.py`: Computes daily Portfolio value and Net Deposits per Account and Asset Class from transactions and cached prices
 - `prices.py`: Quote model, Price Source keys and names, and the per-Asset-Class Fallback Order deciding which sources to try.
 - `profit_sources.py`: Splits the View Scope's result into price, FX, Dividends, interest, costs and taxes for the Dashboard waterfall
@@ -259,6 +261,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `0034_commission_currency.py`: Migration adding the transactions commission_currency column, defaulting to PLN, for commissions paid in foreign cash.
 - `0035_recurring_rule_target.py`: Migration adding the nullable target_account_id column to recurring_rules for Cash Transfer Recurring Rules.
 - `0036_term_deposits.py`: Alembic migration 0036 creating the term_deposits table and linking interest Transactions to deposit periods
+- `0037_instrument_type.py`: Migration adding the Instrument Type column, filled from saved facts and names
 
 ## src/financial_app/sources/
 
@@ -433,6 +436,8 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_instrument_card_history.py`: Tests for Instrument Card price history from saved Yahoo and analizy.pl responses.
 - `test_instrument_search_domain.py`: Tests that a chosen Instrument search result fills only the empty Instrument form fields.
 - `test_instrument_search_ui.py`: Tests searching an Instrument by ISIN, name or symbol in the Instrument dialog on saved Yahoo responses.
+- `test_instrument_types_domain.py`: Tests the Instrument Type list, its inference for a new Instrument, grouping by Type and the Instrumenty search
+- `test_instrument_types_ui.py`: UI tests for the Instrument Type field, the sections per Type and the search in Ustawienia > Instrumenty
 - `test_instruments_domain.py`: Tests Instrument and Asset Class validation rules, including fund and distribution policy fields.
 - `test_instruments_repository.py`: Tests saving Asset Classes and Instruments in SQLite, including uniqueness and updates.
 - `test_instruments_ui.py`: Tests the Klasy aktywów and Instrumenty sections of Ustawienia, run without a browser.
@@ -450,6 +455,8 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_paths.py`: Tests the default data directory (outside the repository, named KAPITA), the override, and the legacy folder move without overwriting new data.
 - `test_periods_domain.py`: Unit tests for period presets, custom ranges and period text persistence
 - `test_physical_metals_ui.py`: Tests physical metal Instruments with weight per unit and Buyback Spread in the dialog and Portfolio.
+- `test_portfolio_grouping_ui.py`: UI tests for the Portfolio Grupuj switch: group header rows with value and share, remembered choice
+- `test_portfolio_groups_domain.py`: Tests grouping an Account's Positions by Instrument Type or Asset Class with value and share
 - `test_portfolio_history_domain.py`: Unit tests for the History engine: daily value per Account and Asset Class and Net Deposits
 - `test_portfolio_history_service.py`: Tests the Portfolio history service: fetching prices into the cache, then computing history from it, on saved responses.
 - `test_portfolio_parity.py`: Tests that the app's Portfolio matches the user's spreadsheet Portfolio tab within 0.01 PLN, skipped without the workbook.

@@ -11,6 +11,7 @@ from urllib.error import HTTPError
 from urllib.parse import quote as url_quote
 
 from financial_app.domain.instrument_search import FoundListing, InstrumentSearchError, looks_like_isin
+from financial_app.domain.instruments import CRYPTO_CLASS, InstrumentType
 from financial_app.domain.prices import BOSSA, YAHOO, YAHOO_HISTORY, CurrencyMismatchError, PriceSourceError, Quote
 
 API = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?range=5d&interval=1d"
@@ -24,7 +25,14 @@ MARKET_NAMES = {"WSE": "GPW"}
 WARSAW_SUFFIX = ".WA"
 # The Asset Class of a listing by Yahoo's quoteType (stocks also by their market, in asset_class); an ETF's class
 # depends on what it holds, so it and any other type get none
-ASSET_CLASSES = {"CRYPTOCURRENCY": "Kryptowaluty", "FUTURE": "Metale i surowce", "MUTUALFUND": "Inne"}
+ASSET_CLASSES = {"CRYPTOCURRENCY": CRYPTO_CLASS, "FUTURE": "Metale i surowce", "MUTUALFUND": "Inne"}
+# The Instrument Type each of Yahoo's quoteTypes tells (issue #198); any other tells none
+INSTRUMENT_TYPES = {
+    "ETF": InstrumentType.ETF,
+    "EQUITY": InstrumentType.STOCK,
+    "CRYPTOCURRENCY": InstrumentType.CRYPTO,
+    "MUTUALFUND": InstrumentType.FUND,
+}
 # Yahoo's quoteTypes of funds, whose ISIN tells their domicile and name their distribution policy
 FUND_TYPES = frozenset({"ETF", "MUTUALFUND"})
 
@@ -50,9 +58,16 @@ class YahooSource:
 
     def __init__(self, fetch: Callable[[str], str | None] = fetch_from_yahoo) -> None:
         self.fetch = fetch
+        # The instrumentType of each symbol quoted so far, upper case
+        self._kinds: dict[str, str] = {}
 
     def new_refresh(self) -> None:
-        """Yahoo is asked per symbol, so nothing is kept between refreshes."""
+        """Yahoo is asked per symbol, so no Quote is kept between refreshes; the instrument types are forgotten."""
+        self._kinds = {}
+
+    def instrument_type_of(self, symbol: str) -> InstrumentType | None:
+        """The Instrument Type told by the instrumentType of a symbol quoted this refresh (#198); ``None`` before."""
+        return INSTRUMENT_TYPES.get(self._kinds.get(symbol.strip().upper(), ""))
 
     def quote(self, symbol: str, currency: str) -> Quote:
         """The newest Quote of ``symbol`` in ``currency``, the Instrument's quote currency.
@@ -61,6 +76,7 @@ class YahooSource:
         other currency mismatch is an error (spec 4.1).
         """
         price, source_currency, day, kind = _latest(self.fetch, symbol)
+        self._kinds[symbol.strip().upper()] = kind
         if source_currency != currency and kind == "CRYPTOCURRENCY":
             rate, _, _, _ = _latest(self.fetch, f"{source_currency}{currency}=X")
             price, source_currency = price * rate, currency
@@ -141,6 +157,7 @@ class YahooSearch:
                 isin=isin,
                 asset_class=_asset_class(symbol, listing),
                 fund=listing.get("quoteType") in FUND_TYPES,
+                instrument_type=INSTRUMENT_TYPES.get(str(listing.get("quoteType") or "")),
             )
             for (symbol, listing), currency in zip(listings.items(), currencies, strict=True)
         ]

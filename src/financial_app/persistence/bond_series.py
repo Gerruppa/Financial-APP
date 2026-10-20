@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from financial_app.domain.bond_valuation import BondData
 from financial_app.domain.bonds import TREASURY_BOND_CLASS, BondSeries, RateCorrection
-from financial_app.domain.instruments import Instrument, InstrumentDraft, InstrumentError
+from financial_app.domain.instruments import Instrument, InstrumentDraft, InstrumentError, InstrumentType
 from financial_app.persistence.bond_data import (
     NBP_REFERENCE,
     bond_data_statuses,
@@ -77,7 +77,13 @@ def series_instrument(engine: Engine, name: str) -> tuple[Instrument, bool]:
     if asset_class is None:
         asset_class = add_asset_class(engine, TREASURY_BOND_CLASS)
     terms = load_series_terms(engine).get(name)
-    draft = InstrumentDraft(name, asset_class.id, "PLN", isin="" if terms is None else terms.isin)
+    draft = InstrumentDraft(
+        name,
+        asset_class.id,
+        "PLN",
+        isin="" if terms is None else terms.isin,
+        instrument_type=InstrumentType.TREASURY_BOND,
+    )
     return add_instrument(engine, draft), True
 
 

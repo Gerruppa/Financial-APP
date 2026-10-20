@@ -3,6 +3,7 @@
 from datetime import date
 from decimal import Decimal
 
+from financial_app.domain.instruments import InstrumentType
 from financial_app.domain.prices import YAHOO, CurrencyMismatchError, PriceSourceError, Quote
 from financial_app.sources.prices import SymbolCheck, check_symbol
 
@@ -82,3 +83,16 @@ def test_an_empty_symbol_is_not_asked_for() -> None:
 
     assert check_symbol(source, "  ", "USD") == SymbolCheck(error="Wpisz symbol, aby go sprawdzić.")
     assert source.calls == []
+
+
+class TypedSource(FakeSource):
+    """Also tells the Instrument Type of a symbol it quoted, as Bossa does by its category (issue #198)."""
+
+    def instrument_type_of(self, symbol: str) -> InstrumentType | None:
+        return InstrumentType.ETF if symbol == "ETFBDIVPL" else None
+
+
+def test_a_source_telling_the_instrument_type_passes_it_on() -> None:
+    assert check_symbol(TypedSource(AAPL), "ETFBDIVPL", "PLN").instrument_type is InstrumentType.ETF
+    assert check_symbol(TypedSource(AAPL), "AAPL", "USD").instrument_type is None
+    assert check_symbol(FakeSource(AAPL), "ETFBDIVPL", "PLN").instrument_type is None

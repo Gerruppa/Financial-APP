@@ -16,6 +16,7 @@ from typing import Any
 from urllib.error import HTTPError
 
 from financial_app.domain.catalyst import BondFactsSource, bond_price
+from financial_app.domain.instruments import InstrumentType
 from financial_app.domain.prices import BOSSA, CurrencyMismatchError, PriceSourceError, Quote
 from financial_app.sources.catalyst import CatalystFacts
 
@@ -24,6 +25,13 @@ API = "https://bossa.pl/fl_api/API/GPW/v2/Q/C/{category}"
 CATEGORIES = ("_cat_shares", "_cat_nConnect", "_cat_etf", "_cat_bonds")
 # The category quoting Catalyst bonds as a percent of nominal
 BONDS = "_cat_bonds"
+# The Instrument Type each category tells (issue #198)
+INSTRUMENT_TYPES = {
+    "_cat_shares": InstrumentType.STOCK,
+    "_cat_nConnect": InstrumentType.STOCK,
+    "_cat_etf": InstrumentType.ETF,
+    BONDS: InstrumentType.BOND,
+}
 CURRENCY = "PLN"
 
 
@@ -47,10 +55,13 @@ class BossaSource:
         self.bonds = CatalystFacts() if bonds is None else bonds
         # This refresh's categories: their Quotes by upper-case symbol, or why they could not be loaded
         self._loaded: dict[str, dict[str, Quote] | PriceSourceError] = {}
+        # The category each symbol quoted so far was found in, by its key
+        self._categories: dict[str, str] = {}
 
     def new_refresh(self) -> None:
         """Forget the categories and bond facts loaded so far, so that the next Quotes are fetched anew."""
         self._loaded = {}
+        self._categories = {}
         self.bonds.new_refresh()
 
     def quote(self, symbol: str, currency: str) -> Quote:
@@ -70,8 +81,13 @@ class BossaSource:
             raise CurrencyMismatchError(message, quote)
         return self._find(symbol)
 
+    def instrument_type_of(self, symbol: str) -> InstrumentType | None:
+        """The Instrument Type told by the category ``symbol`` was quoted in this refresh; ``None`` before."""
+        category = self._categories.get(_key(symbol))
+        return None if category is None else INSTRUMENT_TYPES[category]
+
     def _find(self, symbol: str) -> Quote:
-        key = symbol.strip().upper().removeprefix("WSE:")
+        key = _key(symbol)
         first_error = None
         for category in CATEGORIES:
             if category not in self._loaded:
@@ -80,6 +96,7 @@ class BossaSource:
             if isinstance(quotes, PriceSourceError):
                 first_error = first_error or quotes
             elif key in quotes:
+                self._categories[key] = category
                 quote = quotes[key]
                 if category != BONDS:
                     return quote
@@ -108,6 +125,11 @@ class BossaSource:
                 by_short[str(listing.get("_symbol_short")).upper()] = quote
         # The short symbol wins if it ever clashes with another listing's full one
         return by_full | by_short
+
+
+def _key(symbol: str) -> str:
+    """A symbol as the categories' Quotes are kept by: upper case, without a ``WSE:`` prefix."""
+    return symbol.strip().upper().removeprefix("WSE:")
 
 
 def _quote(listing: dict[str, Any]) -> Quote | None:

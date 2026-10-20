@@ -10,6 +10,7 @@ from urllib.error import HTTPError, URLError
 import pytest
 
 from financial_app.domain.catalyst import BondFacts
+from financial_app.domain.instruments import InstrumentType
 from financial_app.domain.prices import BOSSA, CurrencyMismatchError, PriceSourceError, Quote
 from financial_app.sources.bossa import BossaSource
 from financial_app.sources.catalyst import CATALYST_LISTING, INDEXATION_PAGE, CatalystFacts
@@ -235,3 +236,20 @@ def test_a_listing_without_a_usable_price_or_day_is_skipped_and_the_others_still
     for symbol in ("ZER", "NDY"):
         with pytest.raises(PriceSourceError, match="nie zna symbolu"):
             source.quote(symbol, "PLN")
+
+
+@pytest.mark.parametrize(
+    ("symbol", "kind"),
+    [
+        ("PZU", InstrumentType.STOCK),
+        ("ONE", InstrumentType.STOCK),
+        ("ETFBDIVPL", InstrumentType.ETF),
+        ("ACH0427", InstrumentType.BOND),
+    ],
+)
+def test_the_category_a_symbol_is_quoted_in_tells_its_instrument_type(symbol: str, kind: InstrumentType) -> None:
+    source = BossaSource(SavedBossa(), ACH0427)
+
+    assert source.instrument_type_of(symbol) is None
+    source.quote(symbol, "PLN")
+    assert source.instrument_type_of(symbol.lower()) is kind

@@ -232,3 +232,50 @@ def test_upgrading_gives_each_instrument_the_decimals_its_quantities_use_and_cry
     decimals = {i.name: i.quantity_decimals for i in list_instruments(upgraded)}
     # Trailing zeros are no decimals the user needed: 2.50 is 2.5
     assert decimals == {"CD Projekt": 1, "Fundusz": 3, "Bitcoin": 8, "Bez transakcji": 0}
+
+
+def test_upgrading_gives_each_instrument_a_type_from_what_is_saved(tmp_path: Path) -> None:
+    db_file = tmp_path / "app.sqlite3"
+    engine = open_engine(db_file)
+    config = Config()
+    config.set_main_option("script_location", str(MIGRATIONS_DIR))
+    with engine.begin() as connection:
+        config.attributes["connection"] = connection
+        command.upgrade(config, "0036")
+        classes: dict[str, int] = dict(connection.execute(text("SELECT name, id FROM asset_classes")).all())
+        for instrument_id, name, class_name, grams in (
+            (1, "EDO0136", "Obligacje skarbowe polskie", None),
+            (2, "Krugerrand", "Metale i surowce", "31.1034768"),
+            (3, "Bitcoin", "Kryptowaluty", None),
+            (4, "PZU Akcji", "Akcje polskie", None),
+            (5, "Beta ETF WIG20TR", "Akcje polskie", None),
+            (6, "WisdomTree Physical Gold ETC", "Metale i surowce", None),
+            (7, "CD Projekt", "Akcje polskie", None),
+            (8, "Etfowy fundusz", "Inne", None),
+        ):
+            connection.execute(
+                text(
+                    "INSERT INTO instruments (id, name, asset_class_id, quote_currency, market, isin, domicile,"
+                    " metal_grams) VALUES (:id, :name, :class_id, 'PLN', '', '', '', :grams)"
+                ),
+                {"id": instrument_id, "name": name, "class_id": classes[class_name], "grams": grams},
+            )
+        connection.execute(
+            text("INSERT INTO source_symbols (instrument_id, source, symbol) VALUES (4, 'analizy', 'PZU60')")
+        )
+    engine.dispose()
+
+    upgraded = init_db(db_file)
+
+    types = {i.name: i.instrument_type.label for i in list_instruments(upgraded)}
+    assert types == {
+        "EDO0136": "Obligacja skarbowa",
+        "Krugerrand": "Metal fizyczny",
+        "Bitcoin": "Kryptowaluta",
+        "PZU Akcji": "Fundusz",
+        "Beta ETF WIG20TR": "ETF",
+        "WisdomTree Physical Gold ETC": "ETC",
+        "CD Projekt": "Inne",
+        # "ETF" counts only as a word of the name
+        "Etfowy fundusz": "Inne",
+    }

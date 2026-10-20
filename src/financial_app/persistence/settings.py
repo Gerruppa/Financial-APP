@@ -19,6 +19,8 @@ PASSIVE_INCOME_GOAL = "passive_income_goal"
 UI_HIDDEN = "ui.hidden"
 # The window's Theme, ``jasny`` or ``golden`` (issue #174); kept on clearing the data like ``UI_HIDDEN``
 UI_THEME = "ui.theme"
+# The Portfolio's "Grupuj" choice, a ``domain.portfolio_groups.Grouping`` (issue #198); kept on clearing the data
+PORTFOLIO_GROUPING = "ui.portfolio_grouping"
 # The last app version whose start was seen, so its first start opens "Co nowego" once (issue #200); kept on clearing
 LAST_SEEN_VERSION = "ui.last_seen_version"
 # The XTB import's remembered matches (L-17): an XTB account number's Account id, a ticker's Instrument id; clearing

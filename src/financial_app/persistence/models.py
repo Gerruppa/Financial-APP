@@ -186,6 +186,8 @@ class InstrumentRow(Base):
     domicile: Mapped[str] = mapped_column(String(100), default="", server_default="")
     # The decimal places a quantity may have, which round the quantity proposed from an amount (#120)
     quantity_decimals: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    # Its Instrument Type, a domain.instruments.InstrumentType, only for browsing (issue #198)
+    instrument_type: Mapped[str] = mapped_column(String(20), default="other", server_default="other")
 
     asset_class: Mapped[AssetClassRow] = relationship()
     source_symbols: Mapped[list[SourceSymbolRow]] = relationship(cascade="all, delete-orphan")

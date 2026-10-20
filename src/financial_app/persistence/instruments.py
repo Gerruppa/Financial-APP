@@ -14,6 +14,7 @@ from financial_app.domain.instruments import (
     Instrument,
     InstrumentDraft,
     InstrumentError,
+    InstrumentType,
     validate_asset_class_name,
 )
 from financial_app.domain.prices import HISTORY_SOURCES, OTHER, default_fallback_order, validate_fallback_order
@@ -239,6 +240,7 @@ def _fill(session: Session, row: InstrumentRow, draft: InstrumentDraft) -> None:
     row.distribution_policy = None if draft.distribution_policy is None else draft.distribution_policy.value
     row.domicile = draft.domicile
     row.quantity_decimals = draft.quantity_decimals
+    row.instrument_type = draft.instrument_type.value
     row.source_symbols = [
         SourceSymbolRow(source=source, symbol=symbol) for source, symbol in draft.source_symbols.items()
     ]
@@ -300,6 +302,7 @@ def _to_instrument(row: InstrumentRow) -> Instrument:
         distribution_policy=None if row.distribution_policy is None else DistributionPolicy(row.distribution_policy),
         domicile=row.domicile,
         quantity_decimals=row.quantity_decimals,
+        instrument_type=InstrumentType(row.instrument_type),
         multi_asset_split={share.asset_class_id: Decimal(share.percent) for share in shares},
         split_class_names={share.asset_class_id: share.asset_class.name for share in shares},
     )

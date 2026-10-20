@@ -1,7 +1,7 @@
 """Ustawienia > Klasy aktywów and Instrumenty: the editable Asset Classes and the Instrument catalog (spec 3.2)."""
 
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal
 
 from nicegui import run, ui
@@ -31,6 +31,10 @@ from financial_app.domain.instruments import (
     Instrument,
     InstrumentDraft,
     InstrumentError,
+    InstrumentType,
+    by_type,
+    infer_instrument_type,
+    instrument_matches,
     parse_optional_number,
 )
 from financial_app.domain.prices import (
@@ -195,34 +199,73 @@ def _order_editor(order: list[str]) -> None:
 class InstrumentsSection:
     """The Instrumenty card; ``refresh`` redraws the catalog after a save or an Asset Class rename, and calls
     ``on_changed`` so that other sections redraw too. ``search`` fills the Instrument dialog from a listing found by
-    ISIN, name or symbol, and ``sources`` give the "Sprawdź" button beside each Source Symbol one Quote (spec 4.1)."""
+    ISIN, name or symbol, and ``sources`` give the "Sprawdź" button beside each Source Symbol one Quote (spec 4.1).
+    The catalog is a collapsible section per Instrument Type, filtered by the "Szukaj" field (issue #198)."""
 
     engine: Engine
     search: InstrumentSearch
     sources: Mapping[str, PriceSource]
     on_changed: Callable[[], None]
+    # The fields below are left out of the comparison: NiceGUI redraws the lists of every equal section, which is how
+    # an Instrument added from the Instrument Card's section shows at once in the Ustawienia one
+    # The "Szukaj" field's text
+    query: str = field(default="", compare=False)
+    # The Instrument Type sections the user collapsed, kept while the search redraws them
+    collapsed: set[InstrumentType] = field(default_factory=set, compare=False)
+    # The card, which a redraw of the list never removes: the rows' dialogs are opened in it
+    box: ui.element | None = field(default=None, compare=False)
 
     def refresh(self) -> None:
         self.instrument_list.refresh()
         self.on_changed()
 
     def build(self) -> None:
-        with ui.card().classes("w-full max-w-4xl"):
+        with ui.card().classes("w-full max-w-4xl") as self.box:
             with ui.row().classes("w-full items-center"):
                 ui.label("Instrumenty").classes("text-xl font-bold")
                 ui.space()
                 ui.button("Dodaj instrument", icon="add", on_click=lambda: self.open_dialog(None)).props("no-caps")
+            search = ui.input("Szukaj (nazwa, ISIN lub symbol w źródle)").props("clearable dense").classes("w-full")
+            search.mark("instruments-search")
+            with search.add_slot("prepend"):
+                ui.icon("search")
+            search.on_value_change(lambda event: self._search(event.value))
             with ui.column().classes("w-full gap-1").mark("instruments"):
                 self.instrument_list()
+
+    def _search(self, query: str | None) -> None:
+        self.query = query or ""
+        self.instrument_list.refresh()
 
     @ui.refreshable_method
     def instrument_list(self) -> None:
         instruments = list_instruments(self.engine)
         if not instruments:
             ui.label("Nie dodano jeszcze żadnego instrumentu.").classes("k-muted")
+            return
+        found = [instrument for instrument in instruments if instrument_matches(instrument, self.query)]
+        if not found:
+            ui.label("Żaden instrument nie pasuje do wyszukiwania.").classes("k-muted")
         bond_series = list_bond_series(self.engine)
-        for instrument in instruments:
-            self._instrument_row(instrument, bond_series.get(instrument.id))
+        for kind, group in by_type(found):
+            section = ui.expansion(f"{kind.label} ({len(group)})", value=kind not in self.collapsed).classes("w-full")
+            section.props("dense header-class=font-medium").mark(f"instrument-type-{kind.value}")
+            section.on_value_change(lambda event, kind=kind: self._collapse(kind, not event.value))
+            with section:
+                for instrument in group:
+                    self._instrument_row(instrument, bond_series.get(instrument.id))
+
+    def _collapse(self, kind: InstrumentType, collapsed: bool) -> None:
+        if collapsed:
+            self.collapsed.add(kind)
+        else:
+            self.collapsed.discard(kind)
+
+    def _outside_list(self, open_dialog: Callable[[], None]) -> None:
+        """Open a row's dialog in the card, as typing in "Szukaj" redraws the row away, and a dialog with it."""
+        assert self.box is not None
+        with self.box:
+            open_dialog()
 
     def _instrument_row(self, instrument: Instrument, series: BondSeries | None) -> None:
         """The Instrument's details; a Bond Series also shows its rates, with a button to correct them."""
@@ -230,6 +273,7 @@ class InstrumentsSection:
             with ui.column().classes("gap-0 grow"):
                 with ui.row().classes("items-center gap-2"):
                     ui.label(instrument.name).classes("font-medium")
+                    ui.badge(instrument.instrument_type.label).props("outline color=grey").mark("instrument-type-badge")
                     ui.badge(instrument.asset_class_name).props("outline")
                 details = [instrument.quote_currency, instrument.market, instrument.isin]
                 if instrument.manual_price is not None:
@@ -245,21 +289,28 @@ class InstrumentsSection:
                 if series is not None:
                     ui.label(rates_summary(series)).classes("text-sm k-muted").mark("bond-rates")
             if series is not None:
-                ui.button(icon="percent", on_click=lambda: open_rates_dialog(self.engine, series, self.refresh)).props(
-                    f'flat round aria-label="Oprocentowanie {instrument.name}"'
-                ).mark("edit-bond-rates")
-            ui.button(icon="edit", on_click=lambda: self.open_dialog(instrument)).props(
+                ui.button(
+                    icon="percent",
+                    on_click=lambda: self._outside_list(lambda: open_rates_dialog(self.engine, series, self.refresh)),
+                ).props(f'flat round aria-label="Oprocentowanie {instrument.name}"').mark("edit-bond-rates")
+            ui.button(icon="edit", on_click=lambda: self._outside_list(lambda: self.open_dialog(instrument))).props(
                 f'flat round aria-label="Edytuj {instrument.name}"'
             ).mark("edit-instrument")
 
     def _symbol_check(
-        self, field: str, sources: Sequence[str], symbols: Callable[[], Mapping[str, str]], currency: ui.input
+        self,
+        field: str,
+        sources: Sequence[str],
+        symbols: Callable[[], Mapping[str, str]],
+        currency: ui.input,
+        told_type: Callable[[InstrumentType], None],
     ) -> None:
         """The "Sprawdź" button under ``field``'s Source Symbol field and the lines it shows for each of ``sources``
         (named when there are two, as for the Fund Code): the Quote with its currency and day, a warning when the
         source quotes in another currency than the one typed, or why there is no Quote. ``symbols`` gives the form's
         Source Symbols; each source is checked with its own, bankier.pl falling back to the Fund Code. Nothing is
-        saved, so the Instrument saves whatever the check found."""
+        saved, so the Instrument saves whatever the check found; an Instrument Type a source tells (Yahoo's
+        instrumentType, Bossa's category) goes to ``told_type``."""
         checked = [(source, self.sources[source]) for source in sources if source in self.sources]
         if not checked:
             return
@@ -285,6 +336,8 @@ class InstrumentsSection:
                     prefix = f"{SOURCE_NAMES[source]}: " if len(checked) > 1 else ""
                     if one.quote is not None:
                         ui.label(prefix + _quote_text(one.quote))
+                    if one.instrument_type is not None:
+                        told_type(one.instrument_type)
                     if one.warning:
                         ui.label(prefix + one.warning).classes("text-warning")
                     if one.error:
@@ -324,6 +377,21 @@ class InstrumentsSection:
                 class_options, label="Klasa aktywów", value=instrument.asset_class_id if instrument else None
             ).classes("w-full")
             asset_class.mark("instrument-class")
+            # A new Instrument's Type left empty is set on saving from what is known about it (issue #198)
+            instrument_type = ui.select(
+                {kind: kind.label for kind in InstrumentType},
+                label="Rodzaj instrumentu",
+                value=instrument.instrument_type if instrument else None,
+                clearable=instrument is None,
+            ).classes("w-full")
+            if instrument is None:
+                instrument_type.props('hint="Puste: ustawiany automatycznie przy zapisie"')
+            instrument_type.mark("instrument-type")
+
+            def tell_type(kind: InstrumentType) -> None:
+                if instrument_type.value is None:
+                    instrument_type.value = kind
+
             currency = ui.input("Waluta notowania", value=instrument.quote_currency if instrument else "PLN")
             currency.classes("w-full").mark("instrument-currency")
             market = ui.input("Rynek", value=instrument.market if instrument else "")
@@ -356,7 +424,7 @@ class InstrumentsSection:
                     symbol_input.props(f'hint="{hint}"').classes("w-full").mark(f"instrument-symbol-{source}")
                     if source != STOOQ:  # history only, it gives no Quote to check
                         checked = (ANALIZY, BANKIER) if source == ANALIZY else (source,)
-                        self._symbol_check(source, checked, typed_symbols, currency)
+                        self._symbol_check(source, checked, typed_symbols, currency, tell_type)
                 fields[source], symbol_inputs[source] = field, symbol_input
 
             def count_more() -> None:
@@ -448,9 +516,11 @@ class InstrumentsSection:
                         asset_class=class_options.get(asset_class.value, ""),
                         domicile=domicile.value or "",
                         distribution_policy=policy.value,
+                        instrument_type=instrument_type.value,
                     ),
                     result,
                 )
+                instrument_type.value = filled.instrument_type
                 name.value, isin.value, market.value = filled.name, filled.isin, filled.market
                 domicile.value, policy.value = filled.domicile, filled.distribution_policy
                 currency.value = filled.quote_currency or currency.value
@@ -496,6 +566,11 @@ class InstrumentsSection:
                     ter_percent = parse_optional_number(ter_input.value, "TER")
                     if asset_class.value is None:
                         raise InstrumentError("Wybierz klasę aktywów.")
+                    # Symbols in sources without a field here are kept
+                    source_symbols = without_fund_code_copy({**symbols, **typed_symbols()})
+                    kind = instrument_type.value or infer_instrument_type(
+                        name.value or "", class_options[asset_class.value], metal_grams, source_symbols
+                    )
                     draft = InstrumentDraft(
                         name=name.value,
                         asset_class_id=asset_class.value,
@@ -503,8 +578,7 @@ class InstrumentsSection:
                         market=market.value,
                         isin=isin.value,
                         manual_price=manual_price,
-                        # Symbols in sources without a field here are kept
-                        source_symbols=without_fund_code_copy({**symbols, **typed_symbols()}),
+                        source_symbols=source_symbols,
                         metal_grams=metal_grams,
                         buyback_spread_percent=buyback_spread,
                         ter_percent=ter_percent,
@@ -512,6 +586,7 @@ class InstrumentsSection:
                         domicile=domicile.value,
                         multi_asset_split=typed_split() if split_section.visible else {},
                         quantity_decimals=decimals.value,
+                        instrument_type=kind,
                     )
                     if instrument is None:
                         saved = add_instrument(self.engine, draft)
@@ -524,6 +599,8 @@ class InstrumentsSection:
                 self.refresh()
                 if on_saved is not None:
                     on_saved(saved)
+                # Gone at once, as a redraw of the list took it before the dialogs opened in the card (issue #198)
+                dialog.delete()
 
             def delete() -> None:
                 if instrument is None:
@@ -535,6 +612,7 @@ class InstrumentsSection:
                     return
                 dialog.close()
                 self.refresh()
+                dialog.delete()
 
             with ui.row().classes("w-full justify-between"):
                 if instrument is not None:

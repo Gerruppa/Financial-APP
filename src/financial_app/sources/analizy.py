@@ -17,6 +17,7 @@ from urllib.error import HTTPError
 from urllib.parse import quote as url_quote
 
 from financial_app.domain.instrument_search import FoundListing, InstrumentSearchError, looks_like_isin
+from financial_app.domain.instruments import InstrumentType
 from financial_app.domain.prices import ANALIZY, ANALIZY_HISTORY, CurrencyMismatchError, PriceSourceError, Quote
 
 # The fund type in the path does not change the answer, so every fund is asked for as "fio"
@@ -115,6 +116,7 @@ class AnalizySearch:
                 isin=searched or isin,
                 asset_class=PPK_CLASS if kind == "PPK" else "",
                 fund=True,
+                instrument_type=InstrumentType.FUND,
             )
             for (code, name, kind, isin), currency in zip(funds, currencies, strict=True)
         ]

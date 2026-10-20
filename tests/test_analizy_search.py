@@ -8,6 +8,7 @@ from urllib.parse import parse_qs, urlparse
 import pytest
 
 from financial_app.domain.instrument_search import FoundListing, InstrumentSearchError
+from financial_app.domain.instruments import InstrumentType
 from financial_app.domain.prices import ANALIZY
 from financial_app.sources.analizy import AnalizySearch
 
@@ -41,6 +42,7 @@ def test_a_name_finds_open_funds_without_insurance_funds_and_their_markup() -> N
             currency="PLN",
             source_symbols={ANALIZY: "PZU01"},
             fund=True,
+            instrument_type=InstrumentType.FUND,
         ),
         # Its quotation is not saved, as when the request fails
         FoundListing(
@@ -50,6 +52,7 @@ def test_a_name_finds_open_funds_without_insurance_funds_and_their_markup() -> N
             currency="",
             source_symbols={ANALIZY: "PZE01"},
             fund=True,
+            instrument_type=InstrumentType.FUND,
         ),
     ]
 
@@ -72,6 +75,7 @@ def test_a_ppk_fund_belongs_to_multi_asset() -> None:
         source_symbols={ANALIZY: "PZU60"},
         asset_class="Multi-asset",
         fund=True,
+        instrument_type=InstrumentType.FUND,
     )
 
 
@@ -86,6 +90,7 @@ def test_an_isin_finds_a_foreign_fund_and_carries_it() -> None:
         source_symbols={ANALIZY: "FTI022_A_USD"},
         isin="LU0109392836",
         fund=True,
+        instrument_type=InstrumentType.FUND,
     )
 
 

@@ -4,11 +4,12 @@ import copy
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 from sqlalchemy import Engine
 
 from financial_app.domain.formatting import format_count, format_datetime
+from financial_app.domain.instruments import InstrumentType
 from financial_app.domain.lots import open_positions
 from financial_app.domain.prices import CurrencyMismatchError, PriceSourceError, Quote, sources_to_try
 from financial_app.domain.valuation import Unpriced, instruments_without_price
@@ -29,6 +30,14 @@ class PriceSource(Protocol):
     def quote(self, symbol: str, currency: str) -> Quote:
         """The newest Quote of ``symbol`` in ``currency``; raises ``PriceSourceError`` when it has none."""
         ...
+
+
+@runtime_checkable
+class TypingSource(Protocol):
+    """A Price Source that also tells the Instrument Type of a symbol it quoted (issue #198), as Bossa does by the
+    category quoting it."""
+
+    def instrument_type_of(self, symbol: str) -> InstrumentType | None: ...
 
 
 @dataclass(frozen=True)
@@ -117,11 +126,13 @@ def refresh_prices(
 @dataclass(frozen=True)
 class SymbolCheck:
     """What the "Sprawdź" button found for one Source Symbol: the source's Quote, with a ``warning`` when it is in
-    another currency than the Instrument's, or an ``error`` (Polish) when there is none."""
+    another currency than the Instrument's, or an ``error`` (Polish) when there is none; ``instrument_type`` is the
+    Instrument Type the source told."""
 
     quote: Quote | None = None
     warning: str = ""
     error: str = ""
+    instrument_type: InstrumentType | None = None
 
 
 def check_symbol(source: PriceSource, symbol: str, currency: str) -> SymbolCheck:
@@ -136,13 +147,17 @@ def check_symbol(source: PriceSource, symbol: str, currency: str) -> SymbolCheck
     source = copy.copy(source)
     source.new_refresh()
     try:
-        return SymbolCheck(quote=source.quote(symbol, currency))
+        return SymbolCheck(quote=source.quote(symbol, currency), instrument_type=_told_type(source, symbol))
     except CurrencyMismatchError as mismatch:
-        return SymbolCheck(quote=mismatch.quote, warning=str(mismatch))
+        return SymbolCheck(quote=mismatch.quote, warning=str(mismatch), instrument_type=_told_type(source, symbol))
     except PriceSourceError as error:
         return SymbolCheck(error=str(error))
     except Exception as error:  # noqa: BLE001 - a broken source is shown like any other failure
         return SymbolCheck(error=_unexpected(error))
+
+
+def _told_type(source: PriceSource, symbol: str) -> InstrumentType | None:
+    return source.instrument_type_of(symbol) if isinstance(source, TypingSource) else None
 
 
 def _unexpected(error: Exception) -> str:
