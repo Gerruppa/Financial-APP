@@ -19,6 +19,7 @@ Rules no config enforces:
 - UI tests use NiceGUI's `user_simulation` and find elements by `.mark(...)` markers; `user.find("text")` matches substrings, so keep labels and markers unique.
 - Each tab redraws through its page's `refresh()`, on the changes its class declares in `CHANGES` (`ui/changes.py`); `ui/shell.py` only publishes the changes (a save, a price or bond data refresh, a scope switch, an Instrument change, History outdated or computed). A new tab declares `CHANGES` and joins the shell's `tabs` list.
 - Open a `ui.dialog` from an element that outlives it (e.g. `with self.box:` in `ui/header_search.py`): NiceGUI deletes a dialog once the element it was opened in is redrawn away and collected, such as a row of a refreshable list.
+- A `ui.refreshable_method` on a dataclass redraws every instance equal to it, which is how two sections of one class (e.g. `InstrumentsSection` in Ustawienia and the Instrument Card) redraw together; give a UI-state field `field(compare=False)`, or it splits them.
 
 The app re-implements the inwestomat.eu "Portfolio tracker" Google Sheet. The agreed spec is `docs/spec.md`, the glossary is `CONTEXT.md` (its Polish-to-English index is `GLOSSARY.md`, kept in step by `tests/test_glossary.py`) and key decisions are in `docs/adr/`. `reference/` holds the user's spreadsheet export and its Apps Script source; it is git-ignored because it contains personal financial data, so never commit it or copy its data into tracked files.
 
@@ -32,7 +33,7 @@ The app re-implements the inwestomat.eu "Portfolio tracker" Google Sheet. The ag
   - Type check: `.venv/Scripts/python.exe -m mypy` (strict)
   - Lint and format: `.venv/Scripts/python.exe -m ruff check .` and `.venv/Scripts/python.exe -m ruff format .`
 - Change source files with the Edit tool, one call per replacement; Python heredocs piped through Git Bash break on quotes.
-- To merge a PR, run `gh pr merge <n> --merge --delete-branch` as a command of its own: only that exact form matches the allow rule in `.claude/settings.json`.
+- To merge a PR, run `gh pr merge <n> --merge --delete-branch` as a command of its own: only that exact form matches the allow rule in `.claude/settings.json`. A PR stacked on another's branch goes to `main` first (`gh pr edit <n> --base main`): `--delete-branch` on the lower PR closes it otherwise.
 - A small task (one PR, no spec or migration: a visual tweak, a label, a doc fix) needs no issue and no triage: branch, change, full suite, PR, then merge it without asking once pre-commit and the full suite pass. Ask before merging anything larger, a migration or a change to `domain/lots.py`.
 - Review the uncommitted diff (`git diff main`) before the first commit, apply the fixes, then commit once.
 - Changelog (`src/financial_app/ui/changelog.md`, Polish): a PR that changes what the user sees or gets (a new feature, a fixed bug, a changed behaviour) adds one sentence to its "Nieopublikowane" section, under Nowe funkcje, Poprawki or Zmiany, without issue numbers; a refactor, optimisation, architecture, tests, docs or tooling gets none. A release renames the section to "1.1.0 — <date>" as `__version__` changes (`tests/test_changelog_ui.py` checks the section exists), and the GitHub Release takes the same text.
