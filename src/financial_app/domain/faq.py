@@ -6,9 +6,10 @@ names the tab its answer is about, and the Markdown up to the next heading is th
 """
 
 import re
-import unicodedata
 from collections.abc import Iterable
 from dataclasses import dataclass, field
+
+from financial_app.domain.formatting import folded
 
 _SECTION = re.compile(r"^# (?P<title>.+?)\s*$")
 _QUESTION = re.compile(r"^## (?P<title>.+?)\s*(?:\{#(?P<slug>[a-z0-9-]+)\})?\s*$")
@@ -95,16 +96,10 @@ def parse_faq(text: str) -> list[Section]:
 
 def matching(sections: Iterable[Section], query: str) -> list[Question]:
     """The questions whose title or answer contains ``query``, ignoring case and Polish letters; all for none."""
-    wanted = _folded(query.strip())
+    wanted = folded(query.strip())
     return [
         question
         for section in sections
         for question in section.questions
-        if wanted in _folded(question.title) or wanted in _folded(question.answer)
+        if wanted in folded(question.title) or wanted in folded(question.answer)
     ]
-
-
-def _folded(text: str) -> str:
-    """``text`` in lower case without diacritics, so "zaczac" finds "zacząć"."""
-    decomposed = unicodedata.normalize("NFKD", text.casefold().replace("ł", "l"))
-    return "".join(char for char in decomposed if not unicodedata.combining(char))

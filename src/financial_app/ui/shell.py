@@ -1,4 +1,5 @@
-"""App shell (issues #1 and #174): left menu with the logo, header with View Scope and Theme, "+" button."""
+"""App shell (issues #1, #174 and #175): left menu with the logo, header with the search, View Scope and Theme, "+"
+button."""
 
 import asyncio
 from collections.abc import Callable, Mapping
@@ -22,6 +23,7 @@ from financial_app.sources.bankier import BankierSource
 from financial_app.sources.bond_data import BondDataSources, bond_data_due, refresh_bond_data
 from financial_app.sources.bossa import BossaSource
 from financial_app.sources.history import QuoteHistory
+from financial_app.sources.instrument_card import CardHistory
 from financial_app.sources.nbp import NbpRates
 from financial_app.sources.portfolio_history import PortfolioHistory
 from financial_app.sources.prices import PriceSource, RefreshResult, last_refresh, refresh_prices, refresh_summary
@@ -34,8 +36,11 @@ from financial_app.ui.bonds import BondsPage
 from financial_app.ui.changes import Change, ChangeEvents, Redrawing
 from financial_app.ui.dashboard import DashboardPage
 from financial_app.ui.dialogs import install_movable_dialogs
+from financial_app.ui.header_search import HeaderSearch
 from financial_app.ui.help import HELP_PATH, build_help_page
 from financial_app.ui.history import history_status, shared_history
+from financial_app.ui.instrument_card import CardContext, ListingHistory, open_instrument_card
+from financial_app.ui.instruments import InstrumentsSection
 from financial_app.ui.multi_asset import MultiAssetPage
 from financial_app.ui.passive_income import PassiveIncomePage
 from financial_app.ui.periods import PeriodChoice
@@ -98,6 +103,7 @@ def build_shell(
     search: InstrumentSearch | None = None,
     history: PortfolioHistory | None = None,
     bond_data: BondDataSources | None = None,
+    card_history: ListingHistory | None = None,
 ) -> None:
     """Build the whole window; tabs are client-side sub-pages backed by the database at ``engine``.
 
@@ -108,6 +114,7 @@ def build_shell(
     default fetched from Yahoo and Stooq, computed in the process pool); with ``refresh_at_start`` its missing days are
     fetched after the price refresh. ``bond_data`` gives the MF file, GUS CPI and the NBP reference rate, fetched
     with the price refresh at most once a day (by default the real sources, or none when test ``sources`` are given).
+    ``card_history`` gives the Instrument Card its closes (by default fetched live from Yahoo and analizy.pl).
     """
     rates = rates or NbpRates(engine)
     if sources is None:
@@ -259,7 +266,13 @@ def build_shell(
     # A new Theme restyles the whole window, its charts drawn on canvas too, so the window is built again in it
     theme.on_change(ui.navigate.reload)
 
+    # The header search's Instrument Card opens the Instrument dialog of Ustawienia > Instrumenty (issue #175)
+    card_instruments = InstrumentsSection(engine, search, sources, on_changed=instruments_changed)
+    card = CardContext(engine, rates, card_history or CardHistory(), card_instruments)
+    header_search = HeaderSearch(engine, search, lambda subject: open_instrument_card(card, subject))
+
     with ui.header().classes("k-header items-center px-6").props("bordered=false").mark("header") as header:
+        header_search.build()
         ui.space()
         # MF's new rates may value a matured Series, so the bond data refresh redraws it too
         drafts_state = ui.refreshable(lambda: drafts_count(engine, rates.today()))

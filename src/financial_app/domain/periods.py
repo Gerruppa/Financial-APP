@@ -81,7 +81,7 @@ def period_dates(period: Period, today: date, inception: date | None) -> tuple[d
     elif period.preset is PeriodPreset.SINCE_INCEPTION:
         first = inception or today
     else:
-        first = _months_before(today, _MONTHS_BACK[period.preset])
+        first = months_before(today, _MONTHS_BACK[period.preset])
     if inception is not None:
         first = max(first, inception)
     return min(first, last), last
@@ -108,7 +108,7 @@ def parse_period(text: str | None) -> Period:
         return SINCE_INCEPTION
 
 
-def _months_before(day: date, months: int) -> date:
+def months_before(day: date, months: int) -> date:
     """The same day ``months`` earlier, or that month's last day when it is shorter."""
     year, month = divmod(day.year * 12 + day.month - 1 - months, 12)
     return date(year, month + 1, min(day.day, calendar.monthrange(year, month + 1)[1]))

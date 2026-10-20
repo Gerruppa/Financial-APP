@@ -4,6 +4,7 @@ Thousands are grouped with non-breaking spaces and a non-breaking space separate
 the number from its unit, so an amount never wraps across lines.
 """
 
+import unicodedata
 from datetime import date, datetime
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
@@ -130,3 +131,9 @@ def parse_ratio(text: str) -> tuple[int, int]:
 def parse_date(text: str) -> date:
     """Read a day-first date ('07.03.2026'); raises ValueError for any other format or an impossible date."""
     return datetime.strptime(text.strip(), DATE_FORMAT).date()
+
+
+def folded(text: str) -> str:
+    """``text`` in lower case without diacritics, so a search for "zaczac" finds "zacząć"."""
+    decomposed = unicodedata.normalize("NFKD", text.casefold().replace("ł", "l"))
+    return "".join(char for char in decomposed if not unicodedata.combining(char))

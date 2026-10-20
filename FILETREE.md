@@ -67,6 +67,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `early-redemption.md`: Architecture entry for Early Redemption (L-5, spec 3.4.1, ADR-0007): main functions, UI markers and decisions.
 - `edo-valuation.md`: Architecture entry for EDO valuation (L-3, spec 3.4.1): main functions, UI markers and decisions.
 - `export.md`: Architecture entry for Export: main functions, UI markers and decisions.
+- `header-search.md`: Architecture entry for the header search and Instrument Card (#175): main functions, UI markers and decisions.
 - `help-faq.md`: Architecture entry for Pomoc / FAQ (#156): main functions, UI markers and decisions.
 - `history-parity-test.md`: Architecture entry for tests/test_history_parity.py (#70, spec 6.1): main functions, UI markers and decisions.
 - `info-icons.md`: Architecture entry for Info icons and waterfall amounts: main functions, UI markers and decisions.
@@ -152,6 +153,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `formatting.py`: Polish number, amount and date formatting and parsing of typed input; the single formatter every screen uses.
 - `history.py`: Tracks which days of Quote and NBP Rate history are cached, and computes the missing days to fetch.
 - `inflation.py`: Inflation over a period from GUS monthly CPI, spread across days as the sheet's Benchmarki do, and the real return
+- `instrument_card.py`: Header search grouping of Search Results, own Instrument matching, and Instrument Card price summary, chart window and returns.
 - `instrument_search.py`: Instrument search result types, the swappable search protocol, and filling empty form fields from a chosen result.
 - `instruments.py`: Instrument and Asset Class models, their validation, default Asset Classes, ISIN, metal, distribution policy and Multi-asset Split rules.
 - `investment_goal.py`: Investment Goal for a View Scope: amount or FIRE target, progress, default monthly deposit and real forecast in today's PLN
@@ -268,6 +270,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `demo_data.py`: Seeds the made-up demo Portfolio (two Accounts, DEMO Instruments, a year of Transactions, a Total Investment Strategy) for the --demo start
 - `export.py`: Writes the Transactions list to CSV and XLSX files for export
 - `history.py`: Returns an Instrument's Quotes in a date range, fetching missing days from Yahoo, analizy.pl or Stooq into cache
+- `instrument_card.py`: Instrument Card price history fetched live from Yahoo, else analizy.pl; nothing is saved.
 - `nbp.py`: Gets NBP exchange rates from the NBP API through the local cache
 - `passive_income.py`: Loads the passive-income items: income received from Transactions and the coupons and Term Deposit interest not entered for the next 12 months.
 - `portfolio_history.py`: Fetches History prices and NBP Rates into cache and computes daily values, cached until invalidated
@@ -298,10 +301,12 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `dialogs.py`: Draggable dialog support with no backdrop, so the screen behind stays readable
 - `faq.md`: Polish FAQ text shown on the Pomoc tab; sections, questions with slugs, and links to tabs
 - `fund_details.py`: Builds the short fund detail texts (TER, Distribution Policy, domicile) shared by Instrument list and Portfolio
+- `header_search.py`: Header search field and results list of own Instruments and Search Results; opens the Instrument Card on a chosen row.
 - `help.py`: Pomoc tab; shows the FAQ as collapsible questions with a search and Przejdź do buttons to tabs
 - `history.py`: Shared per-database History window state: background fetch, progress and failure status, cached days
 - `import_sheet.py`: Ustawienia import section that previews the Transakcje spreadsheet and saves it only after user decisions
 - `info.py`: Hover "i" icon and card title helper that show explanatory text in Dashboard and Wyniki cards
+- `instrument_card.py`: Instrument Card dialog: listings, details, price, chart and returns, with Add as Instrument or Edit.
 - `instruments.py`: Ustawienia Klasy aktywów and Instrumenty cards: editable Asset Classes and the Instrument catalog with its dialog
 - `investment_goal.py`: Dashboard Investment Goal tile with progress and real forecast, and a dialog to set the goal as amount or FIRE
 - `multi_asset.py`: Multi-asset tab and split editor: edits an Instrument's Multi-asset Split and lists held Multi-asset Instruments by Asset Class
@@ -409,11 +414,14 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_fund_details_ui.py`: UI tests for a fund's TER, Distribution Policy and domicile in the dialog and Portfolio
 - `test_fx_effect_domain.py`: Tests the FX part of foreign Positions' results from the PLN and foreign costs of FIFO Lots
 - `test_glossary.py`: Test that GLOSSARY.md lists exactly the terms defined in CONTEXT.md
+- `test_header_search_ui.py`: UI tests for the header search and Instrument Card on a test search and history, without the network.
 - `test_help_ui.py`: UI tests of the Pomoc tab search and navigation buttons, and the Dashboard first-steps banner
 - `test_history_domain.py`: Tests which days of a price history still need fetching given cached days
 - `test_history_parity.py`: Parity test of History against the user's spreadsheet Historia tab at each month end, skipped without reference data
 - `test_import_sheet_ui.py`: UI tests for the Ustawienia spreadsheet import: preview first, then save, on a synthetic workbook
 - `test_inflation.py`: Tests inflation over periods from GUS monthly CPI readings and the real return it gives
+- `test_instrument_card_domain.py`: Domain tests for header search grouping and Instrument Card price summary, chart window and returns.
+- `test_instrument_card_history.py`: Tests for Instrument Card price history from saved Yahoo and analizy.pl responses.
 - `test_instrument_search_domain.py`: Tests that a chosen Instrument search result fills only the empty Instrument form fields.
 - `test_instrument_search_ui.py`: Tests searching an Instrument by ISIN, name or symbol in the Instrument dialog on saved Yahoo responses.
 - `test_instruments_domain.py`: Tests Instrument and Asset Class validation rules, including fund and distribution policy fields.
