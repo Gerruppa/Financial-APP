@@ -1,7 +1,7 @@
 name: CI
 
-# The Regression tests: the full suite on main. A solo project checks each change locally (pre-commit runs ruff and
-# mypy, the Delta tests run after each change), so CI runs when a milestone closes, on a release tag and on demand.
+# The full suite on main. A solo project checks each change locally (pre-commit runs ruff and mypy, the full suite
+# runs before each commit), so CI runs when a milestone closes, on a release tag and on demand.
 on:
   milestone:
     types: [closed]

@@ -1,16 +1,10 @@
 """Shared test setup."""
 
-import os
 from collections.abc import Iterator
 from typing import Any
 
 import pytest
 from nicegui.testing import User
-
-# pytest-testmon (the Delta tests) records each test's coverage; on Python 3.14 coverage defaults to the sysmon core,
-# which loses the per-test contexts, so testmon misses tests that reach a change indirectly. Testmon ignores coverage
-# config files, hence the variable; it is set here, before testmon and the xdist workers start.
-os.environ.setdefault("COVERAGE_CORE", "ctrace")
 
 
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
