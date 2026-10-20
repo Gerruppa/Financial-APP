@@ -291,7 +291,7 @@
   "src/financial_app/ui/view_scope.py": "8c1a9064",
   "src/financial_app/ui/visibility.py": "af087806",
   "src/financial_app/ui/xtb_import.py": "cc375d95",
-  "tests/conftest.py": "735dd9d6",
+  "tests/conftest.py": "5cd02718",
   "tests/fixtures/analizy/FTI022_A_USD.json": "8339f31d",
   "tests/fixtures/analizy/FTI068_AH_EUR.json": "0e84090d",
   "tests/fixtures/analizy/PZU01.json": "33d8d378",
