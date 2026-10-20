@@ -188,13 +188,9 @@ def _listing_of(instrument: Instrument) -> FoundListing:
     )
 
 
-def _currency(listing: FoundListing) -> str:
-    return listing.currency or "waluta nieznana"
-
-
 def _listing_label(listing: FoundListing) -> str:
     """A listing in the card's choice, e.g. "VUAA.L · LSE · USD"."""
-    return " · ".join([listing.symbol, listing.market or "rynek nieznany", _currency(listing)])
+    return " · ".join([listing.symbol, listing.market or "rynek nieznany", listing.currency_label])
 
 
 def _details(listing: FoundListing, holder: Instrument | None) -> tuple[str, DistributionPolicy | None]:
@@ -231,7 +227,7 @@ def _heading(listing: FoundListing, listings: Sequence[FoundListing], holder: In
     )
     details = [
         listing.market,
-        _currency(listing),
+        listing.currency_label,
         f"Siedziba: {domicile}" if domicile else "",
         policy.label if policy else "",
         sources,

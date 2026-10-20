@@ -14,50 +14,36 @@ class CardPeriod(StrEnum):
     """A period of the card's chart or returns, by its short label; it runs from its ``start`` to the last close.
 
     Not ``domain.periods.PeriodPreset``: the card has 6M and Max, which the period selector has not, and counts back
-    from the last close, not today."""
+    from the last close, not today. Each has its full Polish ``label`` and the ``months`` it counts back, if any."""
 
-    YEAR_TO_DATE = "YTD"
-    ONE_MONTH = "1M"
-    THREE_MONTHS = "3M"
-    SIX_MONTHS = "6M"
-    ONE_YEAR = "1R"
-    THREE_YEARS = "3L"
-    FIVE_YEARS = "5L"
-    MAX = "Max"
+    label: str
+    months: int | None
 
-    @property
-    def label(self) -> str:
-        """Its full Polish name, e.g. "3 miesiące"."""
-        return _NAMES[self]
+    def __new__(cls, short: str, label: str, months: int | None) -> CardPeriod:
+        period = str.__new__(cls, short)
+        period._value_ = short
+        period.label, period.months = label, months
+        return period
 
-    def start(self, last: date) -> date | None:
+    YEAR_TO_DATE = "YTD", "Od początku roku", None
+    ONE_MONTH = "1M", "1 miesiąc", 1
+    THREE_MONTHS = "3M", "3 miesiące", 3
+    SIX_MONTHS = "6M", "6 miesięcy", 6
+    ONE_YEAR = "1R", "1 rok", 12
+    THREE_YEARS = "3L", "3 lata", 36
+    FIVE_YEARS = "5L", "5 lat", 60
+    MAX = "Max", "Cała historia", None
+
+    def start(self, last: date) -> date:
         """The day its return counts from, by the ``last`` close: the same day its months earlier, the last day of
-        the year before for YTD, ``None`` (the first close) for Max."""
-        if self is CardPeriod.MAX:
-            return None
+        the year before for YTD, and for Max a day before any close, so from the first one."""
+        if self.months is not None:
+            return months_before(last, self.months)
         if self is CardPeriod.YEAR_TO_DATE:
             return date(last.year - 1, 12, 31)
-        return months_before(last, _MONTHS_BACK[self])
+        return date.min
 
 
-_NAMES = {
-    CardPeriod.YEAR_TO_DATE: "Od początku roku",
-    CardPeriod.ONE_MONTH: "1 miesiąc",
-    CardPeriod.THREE_MONTHS: "3 miesiące",
-    CardPeriod.SIX_MONTHS: "6 miesięcy",
-    CardPeriod.ONE_YEAR: "1 rok",
-    CardPeriod.THREE_YEARS: "3 lata",
-    CardPeriod.FIVE_YEARS: "5 lat",
-    CardPeriod.MAX: "Cała historia",
-}
-_MONTHS_BACK = {
-    CardPeriod.ONE_MONTH: 1,
-    CardPeriod.THREE_MONTHS: 3,
-    CardPeriod.SIX_MONTHS: 6,
-    CardPeriod.ONE_YEAR: 12,
-    CardPeriod.THREE_YEARS: 36,
-    CardPeriod.FIVE_YEARS: 60,
-}
 # The returns table's periods
 RETURN_PERIODS = (
     CardPeriod.ONE_MONTH,
@@ -122,11 +108,7 @@ def returns(quotes: Sequence[Quote]) -> Returns:
     for year in range(last.day.year, last.day.year - RETURN_YEARS, -1):
         closing = _close_on(quotes, date(year, 12, 31))
         years[year] = None if closing is None else _change_since(quotes, date(year - 1, 12, 31), closing)
-    periods: dict[CardPeriod, Decimal | None] = {}
-    for period in RETURN_PERIODS:
-        start = period.start(last.day)
-        assert start is not None  # only Max has none
-        periods[period] = _change_since(quotes, start, last.price)
+    periods = {period: _change_since(quotes, period.start(last.day), last.price) for period in RETURN_PERIODS}
     return Returns(years, periods)
 
 
@@ -149,8 +131,8 @@ def _change(base: Decimal, price: Decimal) -> Decimal:
 def chart_window(quotes: Sequence[Quote], period: CardPeriod) -> list[Quote]:
     """The closes of ``quotes`` (oldest first) the chart shows for ``period``: from the last close on or before its
     start, which its return counts from, to the last one."""
-    start = period.start(quotes[-1].day) if quotes else None
-    if start is None:
-        return list(quotes)
+    if not quotes:
+        return []
+    start = period.start(quotes[-1].day)
     base = max((quote.day for quote in quotes if quote.day <= start), default=quotes[0].day)
     return [quote for quote in quotes if quote.day >= base]

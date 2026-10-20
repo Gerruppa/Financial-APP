@@ -34,6 +34,11 @@ class FoundListing:
     fund: bool = False
     source: str = ""
 
+    @property
+    def currency_label(self) -> str:
+        """Its quote currency as shown, "waluta nieznana" when unknown."""
+        return self.currency or "waluta nieznana"
+
 
 class InstrumentSearch(Protocol):
     """A swappable search service (Yahoo, analizy.pl, both together); raises ``InstrumentSearchError``."""

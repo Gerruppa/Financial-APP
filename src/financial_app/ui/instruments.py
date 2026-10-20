@@ -587,9 +587,7 @@ def _quote_text(quote: Quote) -> str:
 
 def _result_row(result: FoundListing, choose: Callable[[FoundListing], None]) -> None:
     """One listing found; clicking it fills the form's empty fields."""
-    details = " · ".join(
-        d for d in [result.source, result.market, result.symbol, result.currency or "waluta nieznana"] if d
-    )
+    details = " · ".join(d for d in [result.source, result.market, result.symbol, result.currency_label] if d)
     item = ui.item(on_click=lambda: choose(result)).classes("w-full rounded").mark(f"search-result-{result.symbol}")
     with item, ui.item_section():
         ui.item_label(result.name)
