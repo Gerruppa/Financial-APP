@@ -56,6 +56,7 @@ The Polish UI labels with the English terms the code and the docs use, in Polish
 | Typ konta | [Account Type](CONTEXT.md#accounts-and-instruments) | Accounts and instruments |
 | Udane odświeżenie | [Successful Refresh](CONTEXT.md#transactions-and-holdings) | Transactions and holdings |
 | Uzgadnianie | [Reconciliation](CONTEXT.md#results) | Results |
+| Użytkownik | [User](CONTEXT.md#users) | Users |
 | Waluta rachunku | [Cash Currency](CONTEXT.md#accounts-and-instruments) | Accounts and instruments |
 | Wartość netto | [Net Value](CONTEXT.md#bonds) | Bonds |
 | Wcześniejszy wykup | [Early Redemption](CONTEXT.md#bonds) | Bonds |

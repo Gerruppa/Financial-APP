@@ -6,7 +6,7 @@ Status: agreed with the product owner on 2026-10-08 (design interview Q1–Q55).
 
 Re-implement the inwestomat.eu "Portfolio tracker" Google Sheet (v2.0.1, 01.07.2026; source copy and Apps Script in `reference/`, git-ignored) as a local desktop application with the **same functionality and calculation logic** and a better UI (forms, validation, filtering), then extend it beyond the sheet.
 
-- Single user, local Windows PC, no login (Q1, Q8, Q29). Architecture must allow a later move to multiple users / a server (ADR-0001). Stage 7 moves the app to an EU VPS behind Cloudflare Access, still single-user; the cloud copy becomes the only copy of the data (ADR-0009).
+- Several Users on a local Windows PC, each with their own data, signing in with a pseudonym and a password (2.1, ADR-0010; until then single user, no login: Q1, Q8, Q29, ADR-0001). The cloud move of Stage 7 (ADR-0009) is shelved.
 - UI in Polish; code, DB names and technical docs in English (Q6).
 - Spreadsheet bugs are fixed, not replicated; every fix that changes a number is a documented deviation (Q33, ADR-0004).
 - Not needed: spreadsheet version check, migration between sheet versions, Apps Script triggers (Q37).
@@ -19,6 +19,17 @@ Re-implement the inwestomat.eu "Portfolio tracker" Google Sheet (v2.0.1, 01.07.2
 - **Price Sources** and **Importers** are plug-in modules behind common interfaces.
 - Automatic DB backup at every start, keeping the last 30 copies. Export of transactions to CSV and XLSX.
 - Prices refresh at start (if older than the last market close) and on a "Odśwież" button, in the background; status and errors shown on the Dashboard (Q24).
+
+### 2.1 Users (grilling of #177, 2026-10-20; #195, #196)
+
+- Several Users may share one computer (and one Windows account); a single installation is the case of one User. A User is a pseudonym and a password (CONTEXT.md).
+- Each User has a folder of their own in the app-data folder, named by a fixed id, with their whole database, backups and log; only the list of Users (pseudonym, scrypt hash of the password) is shared. Settings, the Stooq key and every cache (prices, NBP rates, CPI, bond data) are per User (ADR-0010).
+- The login screen opens at every start: a list of the pseudonyms, the password, and "Nowy użytkownik"; with no Users yet it opens straight on creating one. Anyone may create a User; there is no administrator. Pseudonyms are unique regardless of case; the password is required, at least 4 characters. There is no "remember me".
+- A wrong password shows "Nieprawidłowe hasło", with no limit on attempts. "Nie pamiętam hasła" explains the reset by hand: remove the User's hash from the list of Users, then set a new password at the next sign-in. The password is a lock, not encryption, and the app says so.
+- On the first start of the version with Users, the existing database, backups and log move into the folder of the first User created; no data is lost.
+- "Przełącz użytkownika" (in the header avatar's menu, #177; in Ustawienia until then) returns to the login screen in the same window, without a restart: the previous User's background work (price refresh, History computation) stops and the next User's database opens.
+- Ustawienia has a "Użytkownik" section: change the pseudonym, change the password (the current one required), delete the User (password and the pseudonym typed as confirmation), which deletes their folder, backups included.
+- `--demo` skips the login screen with a made-up User "Demo" without a password; `--browser` signs in like the window. `FINANCIAL_APP_DATA_DIR` points at the folder holding the list of Users; tests get one User without the login screen.
 
 ## 3. Data model
 

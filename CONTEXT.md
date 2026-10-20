@@ -1,6 +1,12 @@
 # Personal Investment Tracker
 
-A single-user, local application for tracking a personal investment portfolio: the user records every transaction by hand (or imports it), and the app values holdings, computes results and prepares tax data. It re-implements the inwestomat.eu "Portfolio tracker" Google Sheet (v2.0.1). UI is Polish; code is English — each term below gives the Polish UI label in parentheses.
+A local application for tracking personal investment portfolios, one per User: the user records every transaction by hand (or imports it), and the app values holdings, computes results and prepares tax data. It re-implements the inwestomat.eu "Portfolio tracker" Google Sheet (v2.0.1). UI is Polish; code is English — each term below gives the Polish UI label in parentheses.
+
+## Users
+
+**User** (Użytkownik):
+A person who uses the app, known by a pseudonym and kept apart from others by a password. Each User has their own portfolio — Accounts, Transactions, settings — and sees no other User's. Several Users may share one computer and switch between them. The password keeps others out of the app, not out of the files on disk.
+_Avoid_: account, profile, login
 
 ## Accounts and instruments
 
