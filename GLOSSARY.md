@@ -44,6 +44,7 @@ The Polish UI labels with the English terms the code and the docs use, in Polish
 | Pozycja | [Position](CONTEXT.md#transactions-and-holdings) | Transactions and holdings |
 | Profil widoku | [View Profile](CONTEXT.md#accounts-and-instruments) | Accounts and instruments |
 | Reguła cykliczna | [Recurring Rule](CONTEXT.md#transactions-and-holdings) | Transactions and holdings |
+| Rodzaj instrumentu | [Instrument Type](CONTEXT.md#accounts-and-instruments) | Accounts and instruments |
 | Saldo gotówki | [Cash Balance](CONTEXT.md#transactions-and-holdings) | Transactions and holdings |
 | Seria obligacji | [Bond Series](CONTEXT.md#bonds) | Bonds |
 | Sposób opodatkowania | [Tax Regime](CONTEXT.md#accounts-and-instruments) | Accounts and instruments |

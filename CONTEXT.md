@@ -38,6 +38,10 @@ _Avoid_: spread, FX commission
 Anything that can be held and priced: a stock, ETF, fund, bond series, metal, crypto pair or a manually priced asset. Has one Asset Class, a quote currency, an optional ISIN, a Source Symbol per Price Source and the number of decimal places its quantity may have (0 for whole units, up to 8 for crypto or fractional shares). Each listing is its own Instrument: the same ISIN on two exchanges or in two currencies gives two Instruments.
 _Avoid_: ticker, security, asset, symbol
 
+**Instrument Type** (Rodzaj instrumentu):
+The form of product an Instrument is, from a fixed list — Akcja, ETF, ETC (ETNs too), Fundusz, Obligacja skarbowa (a Bond Series), Obligacja, Kryptowaluta, Metal fizyczny or Inne — by which the user groups and filters Instruments to browse them; it changes no calculation. Independent of the Asset Class: a bond ETF is of the ETF type and of a bond Asset Class.
+_Avoid_: category, group, kind
+
 **Source Symbol** (Symbol w źródle):
 The identifier of an Instrument in one Price Source (e.g. `PZU.WA` in Yahoo, `pzu` in Stooq).
 _Avoid_: ticker
