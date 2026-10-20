@@ -55,7 +55,9 @@ Single-context: one `CONTEXT.md` plus `docs/adr/` at the repo root. See `docs/ag
 
 `FILETREE.md` indexes every file with a one-line role summary, grouped by
 directory. Read it to find code by purpose before `ls`/`grep`/`find`: it
-turns "search the repo" into "look it up". Auto-maintained; don't hand-edit.
+turns "search the repo" into "look it up". Refresh it once per PR: run
+`/filetree:update` before opening the PR and commit `FILETREE.md` and
+`FILETREE.hash.json` with it; don't hand-edit.
 
 ```
 ## (root)/
