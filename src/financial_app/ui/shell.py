@@ -33,6 +33,7 @@ from financial_app.ui.benchmarks import BenchmarksPage
 from financial_app.ui.bond_data import bond_data_status
 from financial_app.ui.bond_drafts import drafts_count
 from financial_app.ui.bonds import BondsPage
+from financial_app.ui.changelog import announce_new_version, version_label
 from financial_app.ui.changes import Change, ChangeEvents, Redrawing
 from financial_app.ui.dashboard import DashboardPage
 from financial_app.ui.dialogs import install_movable_dialogs
@@ -328,7 +329,9 @@ def build_shell(
             ui.image(APP_LOGO).props("no-transition no-spinner").classes("w-10 h-10 shrink-0").mark("app-logo")
             with ui.column().classes("gap-0"):
                 ui.label(APP_TITLE).classes("text-xl font-bold tracking-widest text-white")
-                ui.label(__version__).classes("text-xs opacity-60")
+                version_label(__version__)
+                # Opened here, in the menu that is never redrawn, as a dialog dies with the element it was opened in
+                announce_new_version(engine, __version__)
         menu()
     events.subscribe(menu.refresh, {Change.LAYOUT})
 
