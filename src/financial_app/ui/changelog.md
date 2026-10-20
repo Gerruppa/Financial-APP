@@ -2,6 +2,8 @@
 
 ## Nieopublikowane
 
+## 1.0.1 — 2026-10-20
+
 ### Nowe funkcje
 - Wyszukiwarka w nagłówku znajduje instrumenty po nazwie, ISIN lub symbolu i otwiera Kartę instrumentu z wykresem notowań.
 - Nowy wygląd Dashboardu i motyw Golden, przełączany przyciskiem w nagłówku.
