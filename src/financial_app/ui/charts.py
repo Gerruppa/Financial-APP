@@ -25,9 +25,10 @@ from financial_app.domain.charts import (
     xirr_series,
 )
 from financial_app.domain.dashboard import Dashboard, Totals
-from financial_app.domain.formatting import format_date
+from financial_app.domain.formatting import currency_unit, format_date
 from financial_app.domain.metrics import drawdowns
 from financial_app.domain.portfolio_history import DayValue
+from financial_app.domain.prices import Quote
 from financial_app.domain.profit_sources import ProfitSources
 from financial_app.domain.transactions import TransactionDraft
 from financial_app.ui.info import card_title
@@ -208,6 +209,40 @@ def hero_value_chart(history: Sequence[DayValue], first: date, last: date, accou
         ],
     }
     echart(options).classes("w-full h-64").mark("chart-hero")
+
+
+def price_chart(quotes: Sequence[Quote], currency: str) -> None:
+    """The closes in ``currency`` as a line over a fading area, in the Theme's colour, marked ``chart-price`` (the
+    Instrument Card, issue #175)."""
+    colours = LINE_COLOURS[current_theme()]
+    unit = currency_unit(currency)
+    price = (
+        "value => value == null ? '—' : new Intl.NumberFormat('pl-PL', {minimumFractionDigits: 2, "
+        rf"maximumFractionDigits: 4, useGrouping: 'always'}}).format(value).replace(/\s/g, '{_NBSP}') + '{_NBSP}{unit}'"
+    )
+    options = {
+        "tooltip": {"trigger": "axis", ":valueFormatter": price},
+        "grid": {"containLabel": True, "left": 8, "right": 8, "top": 12, "bottom": 8},
+        "xAxis": {
+            "type": "category",
+            "boundaryGap": False,
+            "data": [format_date(quote.day) for quote in quotes],
+            "axisTick": {"show": False},
+        },
+        "yAxis": {"type": "value", "scale": True, "position": "right"},
+        "series": [
+            {
+                "name": "Cena",
+                "type": "line",
+                "showSymbol": False,
+                "data": [float(quote.price) for quote in quotes],
+                "lineStyle": {"color": colours["value"], "width": 2},
+                "itemStyle": {"color": colours["value"]},
+                "areaStyle": {"color": _fading(colours["area"])},
+            }
+        ],
+    }
+    echart(options).classes("w-full h-72").mark("chart-price")
 
 
 def sparkline(values: Sequence[Decimal], name: str) -> None:

@@ -297,10 +297,13 @@ class InstrumentsSection:
         instrument: Instrument | None,
         *,
         query: str = "",
+        prefill: SearchResult | None = None,
         on_saved: Callable[[Instrument], None] | None = None,
     ) -> None:
         """Open a fresh form for a new Instrument (``None``) or for editing ``instrument``. A new one's search starts
-        from ``query`` (e.g. an imported ticker), and ``on_saved`` gets the saved Instrument."""
+        from ``query`` (e.g. an imported ticker), or its empty fields are filled from ``prefill`` as if chosen among
+        the results (the Instrument Card's "Dodaj jako instrument", issue #175); ``on_saved`` gets the saved
+        Instrument."""
         dialog = movable_dialog()
         dialog.on("hide", dialog.delete)
         asset_classes = list_asset_classes(self.engine)
@@ -482,6 +485,8 @@ class InstrumentsSection:
 
             search_button.on_click(find)
             search_input.on("keydown.enter", find)
+            if prefill is not None:
+                choose(prefill)
 
             def save() -> None:
                 try:
