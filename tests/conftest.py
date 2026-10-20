@@ -3,8 +3,10 @@
 from collections.abc import Iterator
 from typing import Any
 
+import httpx
 import pytest
 from nicegui.testing import User
+from nicegui.testing.user_download import UserDownload
 
 
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
@@ -19,6 +21,8 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
 # (a refresh, a search) shows; give both 5 s. A passing check still returns as soon as the page matches.
 _SEE_RETRIES = 50  # 0.1 s each
 _NOT_SEE_RETRIES = 100  # 0.05 s each
+# user.download.next() waits 1 s for an export's file, which a busy machine misses; give it 5 s as well
+_DOWNLOAD_TIMEOUT = 5.0
 # A failed check prints the whole page tree, hundreds of lines with the Dashboard's charts; the first ones tell enough
 _FAILURE_LINES = 40
 
@@ -48,4 +52,11 @@ def patient_user(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 
     monkeypatch.setattr(User, "should_see", see)
     monkeypatch.setattr(User, "should_not_see", not_see)
+
+    next_download = UserDownload.next
+
+    async def download(self: UserDownload, *, timeout: float = _DOWNLOAD_TIMEOUT) -> httpx.Response:
+        return await next_download(self, timeout=timeout)
+
+    monkeypatch.setattr(UserDownload, "next", download)
     yield
