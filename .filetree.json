@@ -3,6 +3,6 @@
   "exclude": [],
   "include": [],
   "language": null,
-  "commit_guard": true,
+  "commit_guard": false,
   "self_only": false
 }
