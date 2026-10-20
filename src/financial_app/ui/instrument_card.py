@@ -28,7 +28,9 @@ from financial_app.domain.instrument_card import (
 from financial_app.domain.instrument_search import FormFields, SearchResult, fill_empty
 from financial_app.domain.instruments import DistributionPolicy, Instrument
 from financial_app.domain.prices import SOURCE_NAMES, PriceSourceError, Quote
+from financial_app.persistence.history import quotes_between
 from financial_app.persistence.instruments import list_instruments
+from financial_app.sources.instrument_card import FIRST_DAY
 from financial_app.sources.nbp import NbpRates
 from financial_app.sources.todays_view import todays_view
 from financial_app.ui.charts import price_chart
@@ -132,7 +134,7 @@ def open_instrument_card(context: CardContext, subject: FoundInstrument | Instru
                 redraw()
                 prices.refresh()
 
-            listing_select = ui.select(options, value=0, label="Notowanie", on_change=lambda e: choose(e.value))
+            listing_select = ui.select(options, value=0, label="Giełda i waluta", on_change=lambda e: choose(e.value))
             listing_select.classes("w-80").mark("card-listing")
         position()
 
@@ -146,9 +148,7 @@ def open_instrument_card(context: CardContext, subject: FoundInstrument | Instru
             async def load() -> None:
                 try:
                     # The sources answer over the network, so the window keeps working meanwhile
-                    quotes = await run.io_bound(
-                        context.history.of, listing.source_symbols, listing.currency, context.rates.today()
-                    )
+                    quotes = await run.io_bound(_closes, context, listing, owner())
                 except PriceSourceError as error:
                     area.clear()
                     with area:
@@ -164,6 +164,16 @@ def open_instrument_card(context: CardContext, subject: FoundInstrument | Instru
 
         prices()
     dialog.open()
+
+
+def _closes(context: CardContext, listing: SearchResult, holder: Instrument | None) -> list[Quote]:
+    """The listing's closes fetched live; without any, those saved of the Instrument holding it (e.g. a share priced
+    from Bossa only, which gives no history)."""
+    today = context.rates.today()
+    quotes = context.history.of(listing.source_symbols, listing.currency, today)
+    if not quotes and holder is not None:
+        quotes = quotes_between(context.engine, holder.id, FIRST_DAY, today)
+    return quotes
 
 
 def _listing_of(instrument: Instrument) -> SearchResult:
@@ -265,11 +275,11 @@ def _prices(listing: SearchResult, quotes: Sequence[Quote], distributing: bool) 
             ui.label("YTD").classes("text-xs k-muted")
             _change(summary.ytd_percent)
         with ui.column().classes("gap-0"):
-            ui.label("Min 12M").classes("text-xs k-muted")
-            ui.label(format_unit_price(summary.low_12m, summary.currency)).classes("k-loss")
+            ui.label("Najniższa 12M").classes("text-xs k-muted")
+            ui.label(format_unit_price(summary.low_12m, summary.currency)).classes("k-loss").mark("card-low-12m")
         with ui.column().classes("gap-0"):
-            ui.label("Max 12M").classes("text-xs k-muted")
-            ui.label(format_unit_price(summary.high_12m, summary.currency)).classes("k-gain")
+            ui.label("Najwyższa 12M").classes("text-xs k-muted")
+            ui.label(format_unit_price(summary.high_12m, summary.currency)).classes("k-gain").mark("card-high-12m")
 
     @ui.refreshable
     def chart(period: str) -> None:

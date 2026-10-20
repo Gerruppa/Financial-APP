@@ -32,6 +32,8 @@ class CardHistory:
         if source is None:
             return []
         if not currency:
-            raise PriceSourceError("Nieznana waluta notowania, więc nie można pokazać jego historii.")
+            raise PriceSourceError(
+                "Nie wiadomo, w jakiej walucie jest wyceniany, więc nie można pokazać jego historii."
+            )
         price_source = self.yahoo if source == YAHOO else self.analizy
         return price_source.history(symbols[source], currency, FIRST_DAY, last)

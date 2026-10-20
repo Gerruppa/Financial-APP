@@ -3,9 +3,10 @@ services after a pause or on Enter, each opening its Instrument Card."""
 
 from collections.abc import Callable
 
-from nicegui import events, run, ui
+from nicegui import run, ui
 from sqlalchemy import Engine
 
+from financial_app.domain.formatting import format_count
 from financial_app.domain.instrument_card import FoundInstrument, group_results, matching_instruments
 from financial_app.domain.instrument_search import InstrumentSearch, InstrumentSearchError, SearchResults
 from financial_app.domain.instruments import Instrument
@@ -16,6 +17,18 @@ MIN_QUERY = 3
 PAUSE = 0.5
 # How many Search Results the list shows
 FOUND_LIMIT = 8
+# Ctrl+K anywhere, or "/" outside a field, puts the cursor in the search; in the browser, so that the key is not typed
+_SHORTCUT_SCRIPT = """
+<script>
+document.addEventListener('keydown', (e) => {
+  const inField = e.target.closest('input, textarea, select, [contenteditable]');
+  if ((e.ctrlKey && e.key.toLowerCase() === 'k') || (e.key === '/' && !inField)) {
+    const field = document.querySelector('.k-header-search input');
+    if (field) { e.preventDefault(); field.focus(); }
+  }
+});
+</script>
+"""
 
 
 class HeaderSearch:
@@ -37,8 +50,8 @@ class HeaderSearch:
 
     def build(self) -> None:
         with ui.element("div").classes("relative w-[28rem] max-w-full"):
-            self.field = ui.input(placeholder="Szukaj instrumentu: ticker, ISIN, nazwa")
-            self.field.props("dense outlined rounded clearable").classes("w-full")
+            self.field = ui.input(placeholder="Szukaj instrumentu: symbol, ISIN, nazwa")
+            self.field.props("dense outlined rounded clearable").classes("w-full k-header-search")
             self.field.mark("header-search")
             with self.field.add_slot("prepend"):
                 ui.icon("search")
@@ -51,12 +64,7 @@ class HeaderSearch:
                 self.panel.mark("header-search-results")
                 self.results()
             self.panel.visible = False
-        # Ctrl+K or "/" outside a field puts the cursor in the search
-        ui.keyboard(on_key=self._shortcut)
-
-    def _shortcut(self, event: events.KeyEventArguments) -> None:
-        if event.action.keydown and (event.key == "/" or (event.key == "k" and event.modifiers.ctrl)):
-            self.field.run_method("focus")
+        ui.add_head_html(_SHORTCUT_SCRIPT)
 
     def _query(self) -> str:
         return (self.field.value or "").strip()
@@ -76,9 +84,10 @@ class HeaderSearch:
         self._show()
 
     async def _entered(self) -> None:
-        """Enter opens the highlighted row once the search services answered this query, else asks them now."""
+        """Enter opens the highlighted row: an own Instrument at once, a Search Result once the search services
+        answered this query; otherwise it asks them now."""
         rows = self._rows()
-        if self._query() == self.searched and rows:
+        if self.highlighted < len(self.own) or (self._query() == self.searched and rows):
             self._open(rows[self.highlighted])
         else:
             await self._find()
@@ -143,7 +152,8 @@ class HeaderSearch:
         if self.message:
             ui.label(self.message).classes("text-sm k-muted px-2").mark("header-search-message")
         if not self.searching and not self.found and not self.message:
-            ui.label(f"Wpisz co najmniej {MIN_QUERY} znaki i poczekaj chwilę albo naciśnij Enter.").classes(
+            typed = format_count(MIN_QUERY, "znak", "znaki", "znaków")
+            ui.label(f"Wpisz co najmniej {typed} i poczekaj chwilę albo naciśnij Enter.").classes(
                 "text-sm k-muted px-2"
             )
         for found in self.found:

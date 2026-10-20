@@ -59,5 +59,5 @@ def test_without_a_yahoo_or_analizy_symbol_there_is_no_history_to_show() -> None
 def test_an_unknown_currency_cannot_be_checked_so_gives_an_error_in_polish() -> None:
     history = CardHistory(yahoo_fetch=_not_asked, analizy_fetch=_not_asked)
 
-    with pytest.raises(PriceSourceError, match="Nieznana waluta"):
+    with pytest.raises(PriceSourceError, match="Nie wiadomo, w jakiej walucie"):
         history.of({YAHOO: "BP.L"}, "", date(2026, 1, 6))

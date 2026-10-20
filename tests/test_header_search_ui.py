@@ -17,6 +17,7 @@ from financial_app.domain.prices import BOSSA, YAHOO, Quote
 from financial_app.domain.transactions import TransactionDraft, TransactionType, buy_or_sell
 from financial_app.persistence.accounts import add_account
 from financial_app.persistence.db import init_db
+from financial_app.persistence.history import save_quote_history
 from financial_app.persistence.instruments import add_instrument, list_asset_classes, list_instruments
 from financial_app.persistence.transactions import add_transactions
 from financial_app.sources.history import QuoteHistory
@@ -180,12 +181,67 @@ async def test_an_own_instruments_card_shows_its_position_on_each_account(engine
 
 async def test_a_listing_without_history_says_so_on_its_card(engine: Engine) -> None:
     listing = SearchResult("CD Projekt", "CDR", "GPW", "PLN", source_symbols={BOSSA: "CDR"}, source="Yahoo")
-
-    class NoHistory:
-        def of(self, source_symbols: Mapping[str, str], currency: str, last: date) -> list[Quote]:
-            return []
-
     async with user_simulation(_shell(engine, FixedSearch([listing]), NoHistory())) as user:
         await _found_card(user, "cdr")
 
         await user.should_see(marker="card-no-history")
+
+
+async def test_an_instrument_added_from_the_card_is_listed_at_once_in_ustawienia(engine: Engine) -> None:
+    search, history = FixedSearch([VUAA]), FixedHistory()
+    async with user_simulation(_shell(engine, search, history)) as user:
+        await user.open("/ustawienia")
+        await user.should_see("Nie dodano jeszcze żadnego instrumentu.")
+        user.find(marker="header-search").type("vuaa").trigger("keydown.enter")
+        await user.should_see(marker="found-result")
+        user.find(marker="found-result").click()
+        await user.should_see(marker="card-add")
+        user.find(marker="card-add").click()
+        with user.scope(marker="instrument-dialog"):
+            user.find(marker="instrument-class").click()
+            user.find("Akcje zagraniczne").click()
+            user.find("Zapisz").click()
+
+        await user.should_see(marker="card-owned")
+        await user.should_not_see("Nie dodano jeszcze żadnego instrumentu.")
+        await user.should_see(marker="edit-instrument")
+
+
+async def test_enter_opens_the_highlighted_own_instrument_without_waiting_for_the_search_services(
+    engine: Engine,
+) -> None:
+    add_instrument(
+        engine,
+        InstrumentDraft("CD Projekt", _class_id(engine, "Akcje polskie"), "PLN", source_symbols={YAHOO: "CDR.WA"}),
+    )
+    async with user_simulation(_shell(engine, FixedSearch([VUAA]), FixedHistory())) as user:
+        await user.open("/")
+        field = user.find(marker="header-search").type("cd")
+        await user.should_see(marker="own-result")
+        field.trigger("keydown.enter")
+
+        await user.should_see(marker="instrument-card")
+        await user.should_see(marker="card-edit")
+
+
+class NoHistory:
+    """Gives no listing any close, as for one with neither a Yahoo nor an analizy.pl symbol."""
+
+    def of(self, source_symbols: Mapping[str, str], currency: str, last: date) -> list[Quote]:
+        return []
+
+
+async def test_an_own_instrument_without_a_live_history_shows_its_saved_quotes(engine: Engine) -> None:
+    pzu = add_instrument(
+        engine, InstrumentDraft("PZU", _class_id(engine, "Akcje polskie"), "PLN", source_symbols={BOSSA: "PZU"})
+    ).id
+    saved = [Quote(Decimal(price), "PLN", date(2026, 10, day), BOSSA) for day, price in [(19, "40"), (20, "42")]]
+    save_quote_history(engine, pzu, saved, None, NOW)
+    async with user_simulation(_shell(engine, FixedSearch([]), NoHistory())) as user:
+        await user.open("/")
+        user.find(marker="header-search").type("pzu")
+        await user.should_see(marker="own-result")
+        user.find(marker="own-result").click()
+
+        await user.should_see("42,00 zł")
+        await user.should_see("+5,00 %")
