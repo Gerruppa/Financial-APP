@@ -14,6 +14,7 @@ The Polish UI labels with the English terms the code and the docs use, in Polish
 | Dywidenda / odsetki | [Dividend](CONTEXT.md#transactions-and-holdings) | Transactions and holdings |
 | Historia | [History](CONTEXT.md#results) | Results |
 | Instrument | [Instrument](CONTEXT.md#accounts-and-instruments) | Accounts and instruments |
+| Karta instrumentu | [Instrument Card](CONTEXT.md#accounts-and-instruments) | Accounts and instruments |
 | Klasa aktywów | [Asset Class](CONTEXT.md#accounts-and-instruments) | Accounts and instruments |
 | Kod funduszu | [Fund Code](CONTEXT.md#accounts-and-instruments) | Accounts and instruments |
 | Kolejność źródeł | [Fallback Order](CONTEXT.md#transactions-and-holdings) | Transactions and holdings |
@@ -60,6 +61,7 @@ The Polish UI labels with the English terms the code and the docs use, in Polish
 | Widok | [View Scope](CONTEXT.md#accounts-and-instruments) | Accounts and instruments |
 | Wpłaty netto | [Net Deposits](CONTEXT.md#results) | Results |
 | Wynik realny | [Real Return](CONTEXT.md#results) | Results |
+| Wynik wyszukiwania | [Search Result](CONTEXT.md#accounts-and-instruments) | Accounts and instruments |
 | XIRR | [XIRR](CONTEXT.md#results) | Results |
 | Zamiana | [Rollover](CONTEXT.md#bonds) | Bonds |
 | Źródło wycen | [Price Source](CONTEXT.md#transactions-and-holdings) | Transactions and holdings |
