@@ -7,6 +7,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 import pytest
 
 from financial_app.domain.instrument_search import FoundListing, InstrumentSearchError
+from financial_app.domain.instruments import InstrumentType
 from financial_app.domain.prices import BOSSA, YAHOO
 from financial_app.sources.yahoo import YahooSearch
 
@@ -51,6 +52,7 @@ def test_a_name_finds_listings_without_an_isin_and_warsaw_is_gpw() -> None:
         currency="PLN",
         source_symbols={YAHOO: "CDR.WA", BOSSA: "CDR"},
         asset_class="Akcje polskie",
+        instrument_type=InstrumentType.STOCK,
     )
     assert len(results) == 7
 
@@ -136,3 +138,15 @@ def test_etfs_and_mutual_funds_are_funds_and_stocks_are_not() -> None:
 
 def _funds(query: str) -> dict[str, bool]:
     return {r.symbol: r.fund for r in YahooSearch(_saved).search(query)}
+
+
+def test_yahoos_quote_type_gives_the_instrument_type() -> None:
+    def types(query: str) -> dict[str, InstrumentType | None]:
+        return {r.symbol: r.instrument_type for r in YahooSearch(_saved).search(query)}
+
+    assert set(types("IE00B6R52259").values()) == {InstrumentType.ETF}
+    assert types("cd projekt")["CDR.WA"] is InstrumentType.STOCK
+    assert types("bitcoin")["BTC-USD"] is InstrumentType.CRYPTO
+    # A future is no Instrument Type Yahoo tells
+    assert types("bitcoin")["BTC=F"] is None
+    assert types("GC=F")["0P0000V2MI.SA"] is InstrumentType.FUND

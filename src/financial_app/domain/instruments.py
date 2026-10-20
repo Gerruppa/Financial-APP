@@ -1,15 +1,15 @@
 """Instruments and the Asset Classes they belong to (spec 3.2)."""
 
 import re
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from decimal import Decimal
 from enum import StrEnum
 
 from financial_app.domain.bonds import bond_type_of
 from financial_app.domain.currencies import is_currency_code
-from financial_app.domain.formatting import format_percent, parse_number
-from financial_app.domain.prices import STAGE_3_CLASSES
+from financial_app.domain.formatting import folded, format_percent, parse_number
+from financial_app.domain.prices import ANALIZY, BANKIER, STAGE_3_CLASSES
 
 # The sheet's Asset Classes in its order (spec 3.2): migration 0004 seeds them and clearing the portfolio restores them
 DEFAULT_ASSET_CLASSES = [
@@ -52,6 +52,64 @@ class DistributionPolicy(StrEnum):
 
 
 _POLICY_LABELS = {DistributionPolicy.ACCUMULATING: "Akumulacja", DistributionPolicy.DISTRIBUTING: "Dystrybucja"}
+
+
+class InstrumentType(StrEnum):
+    """The form of product an Instrument is (issue #198), only for browsing: it changes no calculation, tax,
+    allocation, Strategy or report. Listed in this order; values are stored in the database, so never rename them."""
+
+    STOCK = "stock"
+    ETF = "etf"
+    # ETNs too; no source tells it, so the user sets it
+    ETC = "etc"
+    FUND = "fund"
+    TREASURY_BOND = "treasury_bond"
+    BOND = "bond"
+    CRYPTO = "crypto"
+    METAL = "metal"
+    OTHER = "other"
+
+    @property
+    def label(self) -> str:
+        return _TYPE_LABELS[self]
+
+
+_TYPE_LABELS = {
+    InstrumentType.STOCK: "Akcja",
+    InstrumentType.ETF: "ETF",
+    InstrumentType.ETC: "ETC",
+    InstrumentType.FUND: "Fundusz",
+    InstrumentType.TREASURY_BOND: "Obligacja skarbowa",
+    InstrumentType.BOND: "Obligacja",
+    InstrumentType.CRYPTO: "Kryptowaluta",
+    InstrumentType.METAL: "Metal fizyczny",
+    InstrumentType.OTHER: "Inne",
+}
+# The seeded crypto class by its name
+CRYPTO_CLASS = "Kryptowaluty"
+
+
+def infer_instrument_type(
+    name: str,
+    asset_class_name: str,
+    metal_grams: Decimal | None,
+    source_symbols: Mapping[str, str],
+    found: InstrumentType | None = None,
+) -> InstrumentType:
+    """The Type a new Instrument gets when the user picks none: a Bond Series or a metal weight first, then what a
+    search or a Price Source said (``found``: Yahoo's quoteType, Bossa's category, analizy.pl), a Fund Code, the
+    crypto class, else Inne."""
+    if asset_class_name in STAGE_3_CLASSES and bond_type_of(name) is not None:
+        return InstrumentType.TREASURY_BOND
+    if metal_grams is not None:
+        return InstrumentType.METAL
+    if found is not None:
+        return found
+    if source_symbols.get(ANALIZY) or source_symbols.get(BANKIER):
+        return InstrumentType.FUND
+    if asset_class_name == CRYPTO_CLASS:
+        return InstrumentType.CRYPTO
+    return InstrumentType.OTHER
 
 
 class InstrumentError(ValueError):
@@ -112,6 +170,8 @@ class InstrumentDraft:
     # How many decimal places a quantity of it may have: 0 for whole units, up to 8 for crypto or fractional shares;
     # it only rounds the quantity the transaction dialog proposes from an amount (#120)
     quantity_decimals: int = 0
+    # Only for browsing (issue #198); a new Instrument's comes from ``infer_instrument_type`` unless the user picks one
+    instrument_type: InstrumentType = InstrumentType.OTHER
 
     def __post_init__(self) -> None:
         name = self.name.strip()
@@ -146,6 +206,7 @@ class InstrumentDraft:
         object.__setattr__(self, "domicile", self.domicile.strip())
         if self.distribution_policy is not None:
             object.__setattr__(self, "distribution_policy", DistributionPolicy(self.distribution_policy))
+        object.__setattr__(self, "instrument_type", InstrumentType(self.instrument_type))
         # A blank symbol means none in that source
         symbols = {source: symbol.strip() for source, symbol in self.source_symbols.items() if symbol.strip()}
         object.__setattr__(self, "source_symbols", symbols)
@@ -206,6 +267,27 @@ class Instrument(InstrumentDraft):
         name, _ = parts[-1]
         parts[-1] = (name, value - sum((part for _, part in parts[:-1]), Decimal(0)))
         return parts
+
+
+def instrument_matches(instrument: InstrumentDraft, query: str) -> bool:
+    """Whether the Instrumenty search ``query`` is in the name, ISIN or a Source Symbol, ignoring case and Polish
+    letters; an empty one matches all (issue #198)."""
+    wanted = folded(query.strip())
+    return any(
+        wanted in folded(text) for text in (instrument.name, instrument.isin, *instrument.source_symbols.values())
+    )
+
+
+def by_type[I: InstrumentDraft](instruments: Iterable[I]) -> list[tuple[InstrumentType, list[I]]]:
+    """The Instruments by Instrument Type in the list's order, each sorted by name; a Type without any left out."""
+    groups: dict[InstrumentType, list[I]] = {kind: [] for kind in InstrumentType}
+    for instrument in instruments:
+        groups[instrument.instrument_type].append(instrument)
+    return [
+        (kind, sorted(group, key=lambda instrument: instrument.name.casefold()))
+        for kind, group in groups.items()
+        if group
+    ]
 
 
 def parse_optional_number(text: str | None, field: str) -> Decimal | None:

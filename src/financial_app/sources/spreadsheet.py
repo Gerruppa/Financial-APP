@@ -17,7 +17,7 @@ from sqlalchemy import Engine
 
 from financial_app.domain.currencies import MissingNbpRateError, NbpRate
 from financial_app.domain.formatting import format_date
-from financial_app.domain.instruments import Instrument, InstrumentDraft
+from financial_app.domain.instruments import Instrument, InstrumentDraft, infer_instrument_type
 from financial_app.domain.spreadsheet_import import (
     SheetError,
     SheetLine,
@@ -167,7 +167,9 @@ def save_import(engine: Engine, lines: Sequence[SheetLine], rates: NbpLookup, de
             class_key = line.asset_class.casefold()
             if class_key not in class_ids:
                 class_ids[class_key] = add_asset_class(engine, line.asset_class).id
-            created.append(add_instrument(engine, InstrumentDraft(name, class_ids[class_key], line.currency)).id)
+            kind = infer_instrument_type(name, line.asset_class, None, {})
+            draft = InstrumentDraft(name, class_ids[class_key], line.currency, instrument_type=kind)
+            created.append(add_instrument(engine, draft).id)
         # Now the new Instruments exist, so the drafts can name them
         final = preview_import(engine, lines, rates, decisions)
         add_transactions(engine, [item.draft for item in final.lines if item.status == "ok" and item.draft is not None])

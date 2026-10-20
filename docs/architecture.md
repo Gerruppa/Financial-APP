@@ -43,6 +43,7 @@ Layout (`src/financial_app/`, see ADR-0001):
 - [Info icons and waterfall amounts](architecture/info-icons.md)
 - [`tests/test_history_parity.py` (#70, spec 6.1)](architecture/history-parity-test.md)
 - [`domain/instruments.py`](architecture/instruments.md)
+- [Instrument Type (#198, spec 3.2)](architecture/instrument-types.md)
 - [`sources/nbp.py`](architecture/nbp-rates.md)
 - [Bond data (Stage 3, L-1, spec 3.4.1)](architecture/bond-data.md)
 - [Bond Series (L-2, spec 3.4.1)](architecture/bond-series.md)

@@ -10,6 +10,7 @@ from urllib.parse import unquote
 
 import pytest
 
+from financial_app.domain.instruments import InstrumentType
 from financial_app.domain.prices import CurrencyMismatchError, PriceSourceError, Quote
 from financial_app.sources.yahoo import YahooSource
 
@@ -102,3 +103,19 @@ def test_history_gives_each_days_close_not_the_adjusted_one_in_pounds() -> None:
 def test_history_in_another_currency_than_the_instruments_is_an_error() -> None:
     with pytest.raises(PriceSourceError, match="GBP"):
         YahooSource(_saved_history).history("BP.L", "USD", date(2026, 1, 2), date(2026, 1, 6))
+
+
+def test_a_quoted_symbol_tells_its_instrument_type_until_the_next_refresh() -> None:
+    source = YahooSource(_saved)
+    assert source.instrument_type_of("AAPL") is None
+
+    source.quote("AAPL", "USD")
+    with pytest.raises(CurrencyMismatchError):
+        source.quote("ISAC.L", "GBP")
+    source.quote("BTC-USD", "PLN")
+
+    assert source.instrument_type_of("aapl") is InstrumentType.STOCK
+    assert source.instrument_type_of("ISAC.L") is InstrumentType.ETF
+    assert source.instrument_type_of("BTC-USD") is InstrumentType.CRYPTO
+    source.new_refresh()
+    assert source.instrument_type_of("AAPL") is None

@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field, replace
 from typing import Protocol
 
-from financial_app.domain.instruments import ISIN_PATTERN, DistributionPolicy
+from financial_app.domain.instruments import ISIN_PATTERN, DistributionPolicy, InstrumentType
 
 
 class InstrumentSearchError(Exception):
@@ -21,7 +21,8 @@ class FoundListing:
     ``domain.prices``), ``currency`` its quote currency ("" when unknown), ``isin`` its ISIN ("" when unknown, as
     Yahoo returns none: only an ISIN searched for fills it) and ``asset_class`` the name of the Asset Class it
     belongs to ("" when its kind does not tell, e.g. an ETF).
-    ``fund`` says it is a fund or an ETF, whose ISIN tells its domicile and name its distribution policy.
+    ``fund`` says it is a fund or an ETF, whose ISIN tells its domicile and name its distribution policy, and
+    ``instrument_type`` its Instrument Type when the service tells it (issue #198).
     ``source`` names the search service that found it, when several are searched together."""
 
     name: str
@@ -33,6 +34,7 @@ class FoundListing:
     asset_class: str = ""
     fund: bool = False
     source: str = ""
+    instrument_type: InstrumentType | None = None
 
     @property
     def currency_label(self) -> str:
@@ -93,6 +95,8 @@ class FormFields:
     asset_class: str = ""
     domicile: str = ""
     distribution_policy: DistributionPolicy | None = None
+    # None until picked or told by a result; saving infers one (``infer_instrument_type``)
+    instrument_type: InstrumentType | None = None
 
 
 # A fund's domicile by its ISIN's country code, for the usual fund domiciles; any other leaves it to the user
@@ -150,6 +154,7 @@ def fill_empty(fields: FormFields, result: FoundListing) -> FormFields:
         asset_class=pick(fields.asset_class, result.asset_class),
         domicile=pick(fields.domicile, domicile),
         distribution_policy=fields.distribution_policy or policy,
+        instrument_type=fields.instrument_type or result.instrument_type,
     )
 
 

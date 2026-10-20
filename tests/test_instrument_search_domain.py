@@ -10,7 +10,7 @@ from financial_app.domain.instrument_search import (
     fill_empty,
     looks_like_isin,
 )
-from financial_app.domain.instruments import DistributionPolicy
+from financial_app.domain.instruments import DistributionPolicy, InstrumentType
 from financial_app.domain.prices import BOSSA, YAHOO
 
 ISAC = FoundListing(
@@ -82,6 +82,13 @@ def test_a_result_fills_an_empty_asset_class_only() -> None:
 
     assert fill_empty(FormFields(), stock).asset_class == "Akcje polskie"
     assert fill_empty(FormFields(asset_class="Inne"), stock).asset_class == "Inne"
+
+
+def test_a_result_fills_an_unset_instrument_type_only() -> None:
+    etf = FoundListing(name="ETF", symbol="IWDA.AS", market="", currency="EUR", instrument_type=InstrumentType.ETF)
+
+    assert fill_empty(FormFields(), etf).instrument_type is InstrumentType.ETF
+    assert fill_empty(FormFields(instrument_type=InstrumentType.ETC), etf).instrument_type is InstrumentType.ETC
 
 
 # Yahoo and analizy.pl searched side by side (issue #60)

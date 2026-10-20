@@ -1,3 +1,3 @@
 # `sources/yahoo.py`
 
-`YahooSource(fetch).quote(symbol, currency)`, from the chart API: the price in the Instrument's quote currency (GBp ÷ 100; crypto in another currency through Yahoo's own `XXXYYY=X` rate; any other mismatch is a `PriceSourceError`), on the exchange's day (`regularMarketTime` + `gmtoffset`). Tests run on `tests/fixtures/yahoo/`.
+`YahooSource(fetch).quote(symbol, currency)`, from the chart API: the price in the Instrument's quote currency (GBp ÷ 100; crypto in another currency through Yahoo's own `XXXYYY=X` rate; any other mismatch is a `PriceSourceError`), on the exchange's day (`regularMarketTime` + `gmtoffset`). Tests run on `tests/fixtures/yahoo/`. The search's listings carry the Instrument Type their quoteType tells (`INSTRUMENT_TYPES`, #198, `instrument-types.md`). `YahooSource.instrument_type_of(symbol)` tells the Instrument Type of a symbol quoted this refresh, from the chart's instrumentType.

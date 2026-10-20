@@ -216,6 +216,9 @@ def _heading(listing: FoundListing, listings: Sequence[FoundListing], holder: In
         symbols = ", ".join(dict.fromkeys(item.symbol for item in listings if item.symbol))
         if symbols:
             ui.label(f"Symbol: {symbols}").classes("font-medium")
+        kind = holder.instrument_type if holder is not None else listing.instrument_type
+        if kind is not None:
+            ui.badge(kind.label).props("outline color=grey").mark("card-instrument-type")
         asset_class = holder.asset_class_name if holder is not None else listing.asset_class
         if asset_class:
             ui.badge(asset_class).props("outline")

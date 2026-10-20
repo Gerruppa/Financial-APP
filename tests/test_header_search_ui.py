@@ -2,6 +2,7 @@
 
 import gc
 from collections.abc import Callable
+from dataclasses import replace
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -14,7 +15,7 @@ from sqlalchemy import Engine
 from financial_app.domain.accounts import AccountDraft, AccountType
 from financial_app.domain.instrument_card import CardPeriod
 from financial_app.domain.instrument_search import FoundListing, FoundListings, InstrumentSearch
-from financial_app.domain.instruments import InstrumentDraft
+from financial_app.domain.instruments import InstrumentDraft, InstrumentType
 from financial_app.domain.portfolio_history import DayValue
 from financial_app.domain.prices import BOSSA, YAHOO, Quote
 from financial_app.domain.transactions import TransactionDraft, TransactionType, buy_or_sell
@@ -282,3 +283,22 @@ async def test_an_own_instrument_without_a_live_history_shows_its_saved_quotes(e
 
         await user.should_see("42,00 zł")
         await user.should_see("+5,00 %")
+
+
+async def test_the_card_shows_the_instrument_type_a_search_told_and_adding_keeps_it(engine: Engine) -> None:
+    etf = replace(VUAA, instrument_type=InstrumentType.ETF)
+    async with user_simulation(_shell(engine, FixedSearch([etf]), FixedHistory())) as user:
+        await _found_card(user, "vuaa")
+        with user.scope(marker="instrument-card"):
+            await user.should_see(marker="card-instrument-type")
+
+        user.find(marker="card-add").click()
+        await user.should_see(marker="instrument-dialog")
+        with user.scope(marker="instrument-dialog"):
+            user.find(marker="instrument-class").click()
+            user.find("Akcje zagraniczne").click()
+            user.find("Zapisz").click()
+
+        await user.should_see(marker="card-owned")
+    [saved] = list_instruments(engine)
+    assert saved.instrument_type is InstrumentType.ETF

@@ -9,7 +9,7 @@ from decimal import Decimal
 from sqlalchemy import Engine
 
 from financial_app.domain.accounts import AccountDraft, AccountType
-from financial_app.domain.instruments import InstrumentDraft
+from financial_app.domain.instruments import InstrumentDraft, InstrumentType
 from financial_app.domain.strategy import ClassTarget, Strategy
 from financial_app.domain.transactions import TransactionType, buy_or_sell, deposit_or_withdrawal, dividend
 from financial_app.persistence.accounts import add_account
@@ -19,11 +19,11 @@ from financial_app.persistence.transactions import add_transactions
 
 # Made-up names, so a screenshot never passes for a real holding
 _INSTRUMENTS = [
-    # name, asset class, Manual Price
-    ("DEMO Akcje PL", "Akcje polskie", Decimal("48.20")),
-    ("DEMO ETF Świat", "Akcje zagraniczne", Decimal("131.75")),
-    ("DEMO Obligacje", "Obligacje korporacyjne polskie", Decimal("101.30")),
-    ("DEMO Złoto", "Metale i surowce", Decimal("392.10")),
+    # name, asset class, Manual Price, Instrument Type
+    ("DEMO Akcje PL", "Akcje polskie", Decimal("48.20"), InstrumentType.STOCK),
+    ("DEMO ETF Świat", "Akcje zagraniczne", Decimal("131.75"), InstrumentType.ETF),
+    ("DEMO Obligacje", "Obligacje korporacyjne polskie", Decimal("101.30"), InstrumentType.BOND),
+    ("DEMO Złoto", "Metale i surowce", Decimal("392.10"), InstrumentType.ETC),
 ]
 
 
@@ -32,8 +32,10 @@ def seed_demo_data(engine: Engine, today: date) -> None:
     Total Investment Strategy whose classes fall in each band colour."""
     classes = {asset_class.name: asset_class.id for asset_class in list_asset_classes(engine)}
     akcje, etf, obligacje, zloto = (
-        add_instrument(engine, InstrumentDraft(name, classes[class_name], "PLN", manual_price=price)).id
-        for name, class_name, price in _INSTRUMENTS
+        add_instrument(
+            engine, InstrumentDraft(name, classes[class_name], "PLN", manual_price=price, instrument_type=kind)
+        ).id
+        for name, class_name, price, kind in _INSTRUMENTS
     )
     regular = add_account(engine, AccountDraft("Konto maklerskie", "Dom Maklerski Demo", AccountType.REGULAR, ("PLN",)))
     ike = add_account(engine, AccountDraft("IKE", "Dom Maklerski Demo", AccountType.IKE, ("PLN",)))

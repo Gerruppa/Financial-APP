@@ -8,7 +8,8 @@ today; one without a price or a rate counts at cost and adds nothing to the resu
 with both costs, below the fund's TER, Distribution Policy and domicile when entered. Foreign cash is valued at the same
 NBP Rate; its FX result (realised and unrealised) counts in the Account's result unless the Account excludes it (spec
 3.1, 3.5). Each card also sums the Account's net Dividends and interest and its commissions and costs. In an Account's
-View Scope only its card shows, under the breadcrumbs back to Total.
+View Scope only its card shows, under the breadcrumbs back to Total. "Grupuj" heads the Positions of each Instrument
+Type or Asset Class with their value and share of the Account (issue #198), the choice kept in the settings.
 """
 
 from dataclasses import dataclass
@@ -31,9 +32,11 @@ from financial_app.domain.formatting import (
 )
 from financial_app.domain.instruments import Instrument
 from financial_app.domain.lots import ForeignCash, Lot, Position
+from financial_app.domain.portfolio_groups import Grouping, PositionGroup, group_positions
 from financial_app.domain.prices import SOURCE_NAMES
 from financial_app.domain.transactions import costs_by_account, dividends_by_account
 from financial_app.domain.valuation import Badge, InstrumentPrice, PriceStatus
+from financial_app.persistence.settings import PORTFOLIO_GROUPING, load_setting, save_setting
 from financial_app.sources.nbp import NbpRates
 from financial_app.sources.todays_view import TodaysView, todays_view
 from financial_app.ui.changes import TODAYS_VALUE
@@ -73,10 +76,23 @@ class PortfolioPage:
         self.cards.refresh()
 
     def build(self) -> None:
-        ui.label("Portfolio").classes("text-2xl font-bold")
+        with ui.row().classes("w-full max-w-screen-2xl items-center"):
+            ui.label("Portfolio").classes("text-2xl font-bold")
+            ui.space()
+            grouping = ui.select(
+                {choice: choice.label for choice in Grouping},
+                label="Grupuj",
+                value=Grouping.parse(load_setting(self.engine, PORTFOLIO_GROUPING)),
+            ).classes("w-56")
+            grouping.mark("portfolio-grouping")
+            grouping.on_value_change(lambda event: self._group(event.value))
         # The marker sits outside the refreshable cards so it survives a refresh
         with ui.column().classes("w-full max-w-screen-2xl").mark("portfolio"):
             self.cards()
+
+    def _group(self, grouping: Grouping) -> None:
+        save_setting(self.engine, PORTFOLIO_GROUPING, grouping.value)
+        self.cards.refresh()
 
     @ui.refreshable_method
     def cards(self) -> None:
@@ -90,13 +106,14 @@ class PortfolioPage:
             accounts = [a for a in view.accounts if a.id == self.scope.account_id]
         if not accounts:
             ui.label("Brak kont. Dodaj konto w zakładce Ustawienia.").classes("k-muted")
+        grouping = Grouping.parse(load_setting(self.engine, PORTFOLIO_GROUPING))
         for account in accounts:
             own = sorted(
                 (p for p in view.positions if p.account_id == account.id),
                 key=lambda p: view.instruments[p.instrument_id].name.casefold(),
             )
             own_cash = sorted((c for c in view.foreign if c.account_id == account.id), key=lambda c: c.currency)
-            _account_card(account, values[account.id], own, own_cash, view, totals)
+            _account_card(account, values[account.id], own, own_cash, view, totals, grouping)
 
 
 def _account_card(
@@ -106,6 +123,7 @@ def _account_card(
     foreign: list[ForeignCash],
     view: TodaysView,
     totals: _Totals,
+    grouping: Grouping,
 ) -> None:
     with ui.card().classes("w-full p-0"), ui.expansion(value=True).classes("w-full") as card:
         with card.add_slot("header"), ui.row().classes("w-full items-center"):
@@ -141,7 +159,8 @@ def _account_card(
                 fx_label = ui.label(f"{format_pln(value.fx, signed=True)}{excluded}").classes(_result_color(value.fx))
                 fx_label.mark("fx-result")
         if positions:
-            _positions_table(positions, view.prices, view.instruments)
+            groups = group_positions(positions, view.instruments, view.pln_prices, grouping, value.value)
+            _positions_table(groups, view.prices, view.instruments)
 
 
 def _foreign_cash_table(foreign: list[ForeignCash], rates: dict[str, Decimal]) -> None:
@@ -166,11 +185,25 @@ def _foreign_cash_table(foreign: list[ForeignCash], rates: dict[str, Decimal]) -
 
 
 def _positions_table(
-    positions: list[Position], prices: dict[int, InstrumentPrice], instruments_by_id: dict[int, Instrument]
+    groups: list[PositionGroup], prices: dict[int, InstrumentPrice], instruments_by_id: dict[int, Instrument]
 ) -> None:
+    """The Positions, under a header row per group when they are grouped."""
     with ui.element("div").classes("grid w-full gap-x-4 border-b py-1 font-medium").style(COLUMNS):
         for header in HEADERS:
             ui.label(header).classes("text-right" if header != "Instrument" else "")
+    for group in groups:
+        if group.title:
+            with ui.row().classes("w-full items-center border-b pt-3 pb-1 font-medium"):
+                ui.label(group.title).classes("text-base").mark("position-group")
+                ui.space()
+                share = "" if group.share is None else f" · {format_percent(group.share)} konta"
+                ui.label(f"{format_pln(group.value)}{share}").mark("position-group-value")
+        _position_rows(group.positions, prices, instruments_by_id)
+
+
+def _position_rows(
+    positions: list[Position], prices: dict[int, InstrumentPrice], instruments_by_id: dict[int, Instrument]
+) -> None:
     for position in positions:
         row = ui.element("div").classes("grid w-full gap-x-4 border-b py-1 cursor-pointer k-hover")
         with row.style(COLUMNS).mark("position-row"):
