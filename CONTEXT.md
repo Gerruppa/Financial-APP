@@ -36,6 +36,14 @@ _Avoid_: ticker, security, asset, symbol
 The identifier of an Instrument in one Price Source (e.g. `PZU.WA` in Yahoo, `pzu` in Stooq).
 _Avoid_: ticker
 
+**Search Result** (Wynik wyszukiwania):
+An instrument found in an external search service (Yahoo, analizy.pl) that the user does not hold as an Instrument yet: its name, ISIN when known, and its listings, each with a market, a quote currency and Source Symbols. It becomes an Instrument only when the user saves one of its listings as one.
+_Avoid_: listing, quote, notowanie
+
+**Instrument Card** (Karta instrumentu):
+The view of one Search Result, one of the user's Instruments or one Bond Series type: what it is, its recent price and returns, and the step that follows (add it as an Instrument, edit it, or buy the bond type).
+_Avoid_: instrument page, profile, factsheet
+
 **Fund Code** (Kod funduszu):
 The code of a Polish fund or PPK shared by analizy.pl and bankier.pl (e.g. `PZU60`, `QRS32`), stored as the Instrument's analizy.pl Source Symbol. bankier.pl uses it whenever the Instrument has no bankier.pl Source Symbol of its own (needed only when the codes differ, e.g. a unit category). Foreign fund series (e.g. `FTI068_AH_EUR`) exist only in analizy.pl.
 _Avoid_: fund ID, fund symbol
