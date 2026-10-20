@@ -68,4 +68,5 @@ Layout (`src/financial_app/`, see ADR-0001):
 - [`app.py`](architecture/app.md)
 - [Browser and demo mode, screenshots](architecture/demo-mode.md)
 - [Version and installer (#99)](architecture/version-installer.md)
+- [Changelog (#200, spec 2)](architecture/changelog.md)
 - [Contribution Limits (#95, spec 8.1)](architecture/contribution-limits.md)

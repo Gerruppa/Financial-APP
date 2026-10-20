@@ -60,6 +60,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `bond-series.md`: Architecture entry for Bond Series (L-2, spec 3.4.1): main functions, UI markers and decisions.
 - `bossa.md`: Architecture entry for sources/bossa.py: main functions, UI markers and decisions.
 - `catalyst-bonds.md`: Architecture entry for Catalyst bonds (L-23, L-24, spec 4.2): main functions, UI markers and decisions.
+- `changelog.md`: Architecture entry for the changelog (#200): parser, shipped file, version click and Co nowego dialog.
 - `changes.md`: Architecture entry for ui/changes.py (#112): main functions, UI markers and decisions.
 - `contribution-limits.md`: Architecture entry for Contribution Limits (#95, spec 8.1): main functions, UI markers and decisions.
 - `dashboard-charts.md`: Architecture entry for Dashboard charts (#73, spec 6.1): main functions, UI markers and decisions.
@@ -145,6 +146,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `bond_valuation.py`: Values Bond Series by MF letters and CPI or NBP estimates, including COI, ROR and DOR coupon accrual and the coupons they pay
 - `bonds.py`: Polish retail treasury bond types, their terms, GUS CPI readings and NBP reference rates as pure-Python values
 - `catalyst.py`: Price per Catalyst bond from its percent of nominal plus accrued interest, and the indexed nominal of IZ bonds
+- `changelog.py`: Parses the changelog Markdown into Releases and decides when a new version's first start announces it
 - `charts.py`: Dashboard chart data from History and Transactions: value, profit, XIRR, class shares and dividends by year, per scope and period
 - `contribution_limits.py`: Contribution Limits rules: which transactions count towards each IKE, IKZE or OIPE yearly limit, bars and over-limit warnings
 - `currencies.py`: Currency code check and the NBP Rate value type, plus the error raised when a rate is missing.
@@ -295,6 +297,8 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `bond_drafts.py`: Dochód stały tab's "Do zatwierdzenia" list of bond maturities, unpaid coupons, and Term Deposit interest and maturities, with its header count.
 - `bond_series.py`: Bond Series rate summary and dialog for correcting MF rates by hand in Ustawienia Instrumenty
 - `bonds.py`: Dochód stały tab UI: Term Deposits section, expandable Bond Series table with Lots and values, the "Do zatwierdzenia" list, and the 12-month calendar.
+- `changelog.md`: Polish history of user-visible changes per app version, shipped with the app
+- `changelog.py`: Version label under the logo opening the changelog dialog, and the one-time Co nowego dialog after an update
 - `changes.py`: Window change events: the Change enum, the TODAYS_VALUE set, and ChangeEvents, which redraws each tab or header element that declared the published changes.
 - `charts.py`: Dashboard's nine ECharts charts, the profit waterfall, and shared PLN line and bar chart helpers for other tabs.
 - `contribution_limits.py`: Contribution Limits UI: yearly limits in Ustawienia and this year's Dashboard bars
@@ -378,6 +382,8 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_bossa_source.py`: Tests the Bossa JSON API quote source against saved responses
 - `test_catalyst_domain.py`: Tests Catalyst bond price per bond and the IZ indexed nominal
 - `test_catalyst_source.py`: Tests Catalyst nominal and accrued interest parsing and IZ indexation on saved pages
+- `test_changelog_domain.py`: Tests the changelog parser, its format errors and when a version is announced
+- `test_changelog_ui.py`: Tests the shipped changelog covers the current version, the version click and the Co nowego dialog
 - `test_changes.py`: Tests for the change events: each change reaches its declared subscribers once, in subscription order, including changes published during a publish.
 - `test_chart_zoom_ui.py`: UI tests that a chart card's zoom button opens the same chart in a near-window-sized dialog.
 - `test_charts_domain.py`: Unit tests for the Dashboard chart data: value, profit, XIRR, class shares and dividends by year

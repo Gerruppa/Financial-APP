@@ -19,6 +19,8 @@ PASSIVE_INCOME_GOAL = "passive_income_goal"
 UI_HIDDEN = "ui.hidden"
 # The window's Theme, ``jasny`` or ``golden`` (issue #174); kept on clearing the data like ``UI_HIDDEN``
 UI_THEME = "ui.theme"
+# The last app version whose start was seen, so its first start opens "Co nowego" once (issue #200); kept on clearing
+LAST_SEEN_VERSION = "ui.last_seen_version"
 # The XTB import's remembered matches (L-17): an XTB account number's Account id, a ticker's Instrument id; clearing
 # the data removes every key starting with ``XTB_PREFIX``, as they name ids new rows may take again
 XTB_PREFIX = "xtb_"

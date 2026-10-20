@@ -37,6 +37,7 @@ The app re-implements the inwestomat.eu "Portfolio tracker" Google Sheet. The ag
 - To merge a PR, run `gh pr merge <n> --merge --delete-branch` as a command of its own: only that exact form matches the allow rule in `.claude/settings.json`.
 - A small task (one PR, no spec or migration: a visual tweak, a label, a doc fix) needs no issue and no triage: branch, change, Delta tests, PR, then merge it without asking once pre-commit and the Delta tests pass. Ask before merging anything larger, a migration or a change to `domain/lots.py`.
 - Review the uncommitted diff (`git diff main`) before the first commit, apply the fixes, then commit once.
+- Changelog (`src/financial_app/ui/changelog.md`, Polish): a PR that changes what the user sees or gets (a new feature, a fixed bug, a changed behaviour) adds one sentence to its "Nieopublikowane" section, under Nowe funkcje, Poprawki or Zmiany, without issue numbers; a refactor, optimisation, architecture, tests, docs or tooling gets none. A release renames the section to "1.1.0 — <date>" as `__version__` changes (`tests/test_changelog_ui.py` checks the section exists), and the GitHub Release takes the same text.
 
 ## Agent skills
 
