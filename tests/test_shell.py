@@ -8,6 +8,7 @@ from nicegui import ui
 from nicegui.testing import User, user_simulation
 from sqlalchemy import Engine
 
+from financial_app import __version__
 from financial_app.persistence.db import init_db
 from financial_app.persistence.settings import UI_THEME, load_setting
 from financial_app.ui.shell import build_shell
@@ -59,7 +60,7 @@ async def test_clicking_a_menu_entry_opens_its_tab(user: User, tab: str) -> None
 async def test_the_menu_names_the_app_and_its_version(user: User) -> None:
     with user.scope(marker="nav-menu"):
         await user.should_see("KAPITA")
-        await user.should_see("1.0.0")
+        await user.should_see(__version__)
         user.find(marker="app-logo")
 
 
