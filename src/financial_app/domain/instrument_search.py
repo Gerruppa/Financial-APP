@@ -5,6 +5,7 @@ import re
 from collections.abc import Iterable, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field, replace
+from decimal import Decimal
 from typing import Protocol
 
 from financial_app.domain.instruments import ISIN_PATTERN, DistributionPolicy, InstrumentType
@@ -23,7 +24,8 @@ class FoundListing:
     belongs to ("" when its kind does not tell, e.g. an ETF).
     ``fund`` says it is a fund or an ETF, whose ISIN tells its domicile and name its distribution policy, and
     ``instrument_type`` its Instrument Type when the service tells it (issue #198).
-    ``source`` names the search service that found it, when several are searched together."""
+    ``source`` names the search service that found it, when several are searched together, and ``ter_percent`` the
+    TER a fund profile told (issue #188), which the Instrument form takes while its own is empty."""
 
     name: str
     symbol: str
@@ -35,6 +37,7 @@ class FoundListing:
     fund: bool = False
     source: str = ""
     instrument_type: InstrumentType | None = None
+    ter_percent: Decimal | None = None
 
     @property
     def currency_label(self) -> str:
@@ -97,6 +100,7 @@ class FormFields:
     distribution_policy: DistributionPolicy | None = None
     # None until picked or told by a result; saving infers one (``infer_instrument_type``)
     instrument_type: InstrumentType | None = None
+    ter_percent: Decimal | None = None
 
 
 # A fund's domicile by its ISIN's country code, for the usual fund domiciles; any other leaves it to the user
@@ -155,6 +159,7 @@ def fill_empty(fields: FormFields, result: FoundListing) -> FormFields:
         domicile=pick(fields.domicile, domicile),
         distribution_policy=fields.distribution_policy or policy,
         instrument_type=fields.instrument_type or result.instrument_type,
+        ter_percent=fields.ter_percent if fields.ter_percent is not None else result.ter_percent,
     )
 
 
