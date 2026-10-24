@@ -137,6 +137,8 @@ body.theme-golden .k-side { background:var(--k-side) MOUNTAINS no-repeat bottom 
 body.theme-golden .k-menu-item.k-active { color:var(--k-accent) !important; }
 .q-card { border:1px solid var(--k-border); border-radius:14px; box-shadow:0 1px 3px rgba(15,23,42,.06); }
 body.theme-golden .q-card { background:linear-gradient(180deg,#171717,#101010); }
+.k-faq { background:#fff; border-radius:4px; }
+body.theme-golden .k-faq { background:#171717; }
 .k-muted { color:var(--k-muted); }
 .k-gain { color:var(--k-gain); }
 .k-loss { color:var(--k-loss); }

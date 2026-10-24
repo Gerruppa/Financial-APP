@@ -104,3 +104,9 @@ async def test_the_dashboard_has_no_first_steps_banner_once_a_transaction_is_sav
 
         await user.should_see(marker="dashboard")
         await user.should_not_see(marker="first-steps")
+
+
+def test_faq_questions_are_dark_in_golden() -> None:
+    from financial_app.ui.theme import CSS
+
+    assert "body.theme-golden .k-faq { background:#171717; }" in CSS
