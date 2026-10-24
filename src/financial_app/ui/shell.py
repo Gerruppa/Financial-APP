@@ -40,7 +40,7 @@ from financial_app.ui.dashboard import DashboardPage
 from financial_app.ui.dialogs import install_movable_dialogs
 from financial_app.ui.header_search import HeaderSearch
 from financial_app.ui.help import HELP_PATH, build_help_page
-from financial_app.ui.history import history_status, shared_history
+from financial_app.ui.history import forget_history, history_status, shared_history
 from financial_app.ui.instrument_card import CardContext, FundProfiles, ListingHistory, open_instrument_card
 from financial_app.ui.instruments import InstrumentsSection
 from financial_app.ui.multi_asset import MultiAssetPage
@@ -96,6 +96,14 @@ WITHOUT_ADD_BUTTON = frozenset({"/", SETTINGS_PATH, HELP_PATH})
 _running_refreshes: dict[Engine, asyncio.Future[RefreshResult | None]] = {}
 
 
+def stop_background_work(engine: Engine) -> None:
+    """Drop the refresh and the History of ``engine``'s database, as its User signs out: no window waits for them any
+    more. A request already on the network finishes in its worker thread and its result is thrown away."""
+    if (refresh := _running_refreshes.pop(engine, None)) is not None:
+        refresh.cancel()
+    forget_history(engine)
+
+
 def build_shell(
     engine: Engine,
     rates: NbpRates | None = None,
@@ -107,6 +115,7 @@ def build_shell(
     bond_data: BondDataSources | None = None,
     card_history: ListingHistory | None = None,
     fund_profiles: FundProfiles | None = None,
+    on_switch_user: Callable[[], None] | None = None,
 ) -> None:
     """Build the whole window; tabs are client-side sub-pages backed by the database at ``engine``.
 
@@ -118,7 +127,8 @@ def build_shell(
     fetched after the price refresh. ``bond_data`` gives the MF file, GUS CPI and the NBP reference rate, fetched
     with the price refresh at most once a day (by default the real sources, or none when test ``sources`` are given).
     ``card_history`` gives the Instrument Card its closes (by default fetched live from Yahoo and analizy.pl) and
-    ``fund_profiles`` its funds' TER, size and issuer (by default from Yahoo).
+    ``fund_profiles`` its funds' TER, size and issuer (by default from Yahoo). ``on_switch_user`` returns to the login
+    screen (Ustawienia offers it only when given).
     """
     rates = rates or NbpRates(engine)
     if sources is None:
@@ -391,6 +401,7 @@ def build_shell(
         lambda: events.publish(Change.RECURRING_RULES),
         layout,
         theme,
+        on_switch_user,
     )
     pages[HELP_PATH] = lambda: build_help_page({tab.path: tab.label for tab in TABS})
     pages = {path: showing_add_button(path, build, path not in WITHOUT_ADD_BUTTON) for path, build in pages.items()}

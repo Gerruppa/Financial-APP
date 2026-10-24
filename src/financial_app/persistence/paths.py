@@ -13,6 +13,10 @@ DATA_DIR_ENV = "FINANCIAL_APP_DATA_DIR"
 DATABASE_FILE = "financial_app.sqlite3"
 BACKUPS_DIR = "backups"
 LOG_FILE = "financial_app.log"
+# The list of Users, the one file the Users share (ADR-0010); each User's folder is named by a fixed id
+USERS_FILE = "users.json"
+# Before anyone has signed in there is no User's folder to log to
+STARTUP_LOG_FILE = "startup.log"
 
 
 def data_dir() -> Path:
@@ -21,16 +25,21 @@ def data_dir() -> Path:
     return Path(override) if override else Path(user_data_dir(APP_NAME, appauthor=False))
 
 
-def database_path() -> Path:
-    return data_dir() / DATABASE_FILE
+def startup_log_path() -> Path:
+    return data_dir() / STARTUP_LOG_FILE
 
 
-def backups_dir() -> Path:
-    return data_dir() / BACKUPS_DIR
+def database_path(folder: Path | None = None) -> Path:
+    """The database in ``folder`` (a User's), or in the app-data folder itself, where it lay before Users."""
+    return (folder or data_dir()) / DATABASE_FILE
 
 
-def log_path() -> Path:
-    return data_dir() / LOG_FILE
+def backups_dir(folder: Path | None = None) -> Path:
+    return (folder or data_dir()) / BACKUPS_DIR
+
+
+def log_path(folder: Path | None = None) -> Path:
+    return (folder or data_dir()) / LOG_FILE
 
 
 def adopt_legacy_data_dir() -> None:

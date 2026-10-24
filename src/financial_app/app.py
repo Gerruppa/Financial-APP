@@ -1,4 +1,5 @@
-"""Application entry point: back up and prepare the database, then open the NiceGUI window."""
+"""Application entry point: the login screen, then the User's database backed up and prepared and the NiceGUI shell
+on it (spec 2.1, ADR-0010)."""
 
 import argparse
 import ctypes
@@ -6,11 +7,13 @@ import os
 import sys
 import tempfile
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 from typing import Any, TextIO
 
 from nicegui import ui
+from sqlalchemy import Engine
 
 from financial_app.persistence.backup import backup_database
 from financial_app.persistence.db import init_db
@@ -18,13 +21,18 @@ from financial_app.persistence.paths import (
     DATA_DIR_ENV,
     adopt_legacy_data_dir,
     backups_dir,
+    data_dir,
     database_path,
     log_path,
+    startup_log_path,
 )
+from financial_app.persistence.users import User, UserStore
 from financial_app.sources.demo_data import seed_demo_data
-from financial_app.ui.shell import APP_ICON, APP_TITLE, build_shell
+from financial_app.ui.login import build_login
+from financial_app.ui.shell import APP_ICON, APP_TITLE, build_shell, stop_background_work
 
 MB_ICONERROR = 0x10
+DEMO_USER = "Demo"
 LEGACY_MOVE_FAILED = (
     r"KAPITA nie może przenieść danych z folderu %LOCALAPPDATA%\FinancialApp do %LOCALAPPDATA%\KAPITA, "
     "bo są w użyciu. Zamknij poprzednią wersję aplikacji i uruchom KAPITA ponownie."
@@ -36,17 +44,30 @@ def _no_console(stream: TextIO | None) -> bool:
     return stream is None or getattr(stream, "name", None) == os.devnull
 
 
+# The log file this module opened, kept open for the life of the process
+_log: TextIO | None = None
+
+
 def attach_log_when_windowless(path: Path) -> None:
-    """Send output to ``path`` without a console (pythonw, KAPITA.exe), where uvicorn would crash on None."""
-    if not _no_console(sys.stdout) and not _no_console(sys.stderr):
+    """Send output to ``path`` without a console (pythonw, KAPITA.exe), where uvicorn would crash on None.
+
+    Called again at a sign-in, it moves the output from the startup log to that User's log."""
+    global _log
+    ours = _log
+    out = _no_console(sys.stdout) or (ours is not None and sys.stdout is ours)
+    err = _no_console(sys.stderr) or (ours is not None and sys.stderr is ours)
+    if not (out or err):
         return
     path.parent.mkdir(parents=True, exist_ok=True)
-    # Kept open for the life of the process; overwritten at each start so it never grows unbounded.
+    # Overwritten at each start so it never grows unbounded.
     log = open(path, "w", encoding="utf-8", buffering=1)
-    if _no_console(sys.stdout):
+    if out:
         sys.stdout = log
-    if _no_console(sys.stderr):
+    if err:
         sys.stderr = log
+    _log = log
+    if ours is not None:
+        ours.close()
 
 
 def show_startup_error(message: str) -> None:
@@ -82,6 +103,37 @@ def start_demo_database() -> None:
     engine.dispose()
 
 
+@dataclass
+class SignedIn:
+    """The User at the window: whose folder it is and the open database in it."""
+
+    pseudonym: str
+    folder: Path
+    engine: Engine
+
+
+class Session:
+    """Who is signed in; at most one User at a time, as the app serves one computer."""
+
+    def __init__(self) -> None:
+        self.current: SignedIn | None = None
+
+    def open(self, pseudonym: str, folder: Path) -> None:
+        """Open the database in ``folder`` for ``pseudonym``, backed up first and then migrated."""
+        attach_log_when_windowless(log_path(folder))
+        # Back up before migrating, so a failed migration never touches the only copy.
+        backup_database(database_path(folder), backups_dir(folder))
+        self.current = SignedIn(pseudonym, folder, init_db(database_path(folder)))
+
+    def close(self) -> None:
+        """Sign out: the User's background work stops and their database closes."""
+        if self.current is not None:
+            engine = self.current.engine
+            stop_background_work(engine)
+            engine.dispose()
+            self.current = None
+
+
 def main(argv: Sequence[str] | None = None) -> None:
     args = parse_args(sys.argv[1:] if argv is None else argv)
     browser = args.browser or args.demo
@@ -94,19 +146,41 @@ def main(argv: Sequence[str] | None = None) -> None:
         # Nothing was moved and the KAPITA folder was not created, so the next start tries again
         show_startup_error(LEGACY_MOVE_FAILED)
         raise SystemExit(1) from None
-    attach_log_when_windowless(log_path())
-    # Back up before migrating, so a failed migration never touches the only copy.
-    backup_database(database_path(), backups_dir())
-    engine = init_db(database_path())
+    attach_log_when_windowless(startup_log_path())
+    store = UserStore(data_dir())
+    session = Session()
+    if args.demo:
+        # The demo skips the login screen with a made-up User without a password
+        session.open(DEMO_USER, data_dir())
     # The demo skips the refresh at start: its Instruments have Manual Prices only and screenshots stay offline
     refresh_at_start = not args.demo
+
+    def signed_in(user: User) -> None:
+        session.open(user.pseudonym, store.folder(user))
+        ui.navigate.reload()
+
+    def switch_user() -> None:
+        session.close()
+        # The address of the User who left is of no use to the next one
+        ui.run_javascript("window.location.assign('/')")
+
+    def root() -> None:
+        if session.current is None:
+            build_login(store, signed_in)
+        else:
+            build_shell(
+                session.current.engine,
+                refresh_at_start=refresh_at_start,
+                on_switch_user=None if args.demo else switch_user,
+            )
+
     # window_size alone switches NiceGUI to native mode, so the browser mode leaves it out; the native window finds a
     # free port itself, the browser mode opens no tab (the URL is in the console)
     window: dict[str, Any] = (
         {"port": args.port, "show": False} if browser else {"native": True, "window_size": (1400, 900)}
     )
     ui.run(
-        lambda: build_shell(engine, refresh_at_start=refresh_at_start),
+        root,
         title=APP_TITLE,
         # In native mode on Windows the .ico is also the window's icon
         favicon=APP_ICON,

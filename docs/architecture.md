@@ -67,6 +67,7 @@ Layout (`src/financial_app/`, see ADR-0001):
 - [Saying of the day (#178)](architecture/sayings.md)
 - [Pomoc / FAQ (#156)](architecture/help-faq.md)
 - [`app.py`](architecture/app.md)
+- [Users, login and switching](architecture/users.md)
 - [Browser and demo mode, screenshots](architecture/demo-mode.md)
 - [Version and installer (#99)](architecture/version-installer.md)
 - [Changelog (#200, spec 2)](architecture/changelog.md)

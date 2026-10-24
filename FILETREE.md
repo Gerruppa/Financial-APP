@@ -106,6 +106,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `treemap-ranking-waterfall.md`: Architecture entry for Treemap, Account ranking, waterfall and after-tax toggle (#89, spec 6.1): main functions, UI markers and decisions.
 - `ui-visibility.md`: Architecture entry for Wygląd i widoczność (#155): main functions, UI markers and decisions.
 - `unpriced-instruments.md`: Architecture entry for Unpriced Instruments: main functions, UI markers and decisions.
+- `users.md`: Architecture entry for Users: password rules and scrypt hash, the user list and folders, login screen markers, switching users
 - `valuation-snapshots.md`: Architecture entry for Valuation Snapshots (#115, ADR-0008): main functions, UI markers and decisions.
 - `valuation.md`: Architecture entry for domain/valuation.py: main functions, UI markers and decisions.
 - `version-installer.md`: Architecture entry for Version and installer (#99): main functions, UI markers and decisions.
@@ -131,7 +132,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 
 - `__init__.py`: Package marker for financial_app; holds the one version number, __version__ = 1.0.0
 - `__main__.py`: Module entry point so the package can be run with python -m financial_app, starting the app.
-- `app.py`: Application start-up: backs up and migrates the database, opens the native window or, with --browser or --demo, serves the UI in a browser; --demo seeds a made-up database in TEMP.
+- `app.py`: Application start-up: shows the login screen, opens the signed-in User's backed-up and migrated database, runs the native window or browser UI; --demo skips login on a made-up database in TEMP.
 
 ## src/financial_app/domain/
 
@@ -186,6 +187,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `transaction_form.py`: Transaction dialog rules without widgets: fields per Transaction Type and the Transaction they describe, or the field error
 - `transactions.py`: Transaction types, drafts and builders for every kind, plus cash balances and cost and dividend totals per Account.
 - `ui_visibility.py`: Hideable Dashboard elements, tabs and the menu's saying, View Profiles (Podstawowy, Pełny, Własny), and the hidden set saved as JSON text
+- `users.py`: Pure rules for User pseudonyms and passwords with Polish messages, and scrypt password hashing and verification
 - `valuation.py`: Decides each Instrument's price and status from Manual Price or Quote, including metal spot conversion and badges.
 - `valuation_snapshots.py`: Valuation Snapshot figures per View Scope and the change since one, split into market change and Net Deposits in between
 - `view_scope.py`: View Scope logic: Total or one Account, its remembered setting, switcher entries and transaction filtering
@@ -208,7 +210,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `investment_goals.py`: Loads, saves and deletes the Investment Goal of each View Scope in the database
 - `models.py`: SQLAlchemy ORM models describing the database tables; schema changes go through migrations
 - `nbp_rates.py`: SQLite cache of NBP Rates keyed by currency and day
-- `paths.py`: Resolves the user's data, backup and log folders outside the repository; moves the legacy FinancialApp data folder to KAPITA.
+- `paths.py`: Resolves the app-data folder and the list of Users, database, backup and log paths outside the repository; moves the legacy FinancialApp data folder to KAPITA.
 - `quotes.py`: Saves and reads daily Instrument Quotes and the last price refresh status
 - `reconciliation.py`: Saves a broker Reconciliation's choices all or none and reads handled, unreconciled and incoming transfers
 - `recurring_rules.py`: Saves Recurring Rules and their skips, computes their Drafts and confirms them as Transactions
@@ -217,6 +219,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `strategies.py`: Reads and saves Investment Strategies for Total and each Account, with their Allocation and Instrument Targets
 - `term_deposits.py`: Saves, edits, ends, renews and deletes Term Deposits on Deposit Accounts, and lists them
 - `transactions.py`: Saves, edits, deletes and lists Transactions, replaying positions to block invalid changes
+- `users.py`: User list file (pseudonyms, password hashes) and per-User folders; creates, signs in, resets passwords, moves pre-Users data to the first User
 - `valuation_snapshots.py`: Saves Valuation Snapshots per View Scope and day, and reads the newest snapshot from an earlier day
 
 ## src/financial_app/persistence/migrations/
@@ -320,6 +323,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `instrument_card.py`: Instrument Card dialog: listings, details, price, chart and returns, with Add as Instrument or Edit; fund TER, size and issuer from Yahoo.
 - `instruments.py`: Ustawienia Klasy aktywów and Instrumenty cards: editable Asset Classes and the Instrument catalog with its dialog
 - `investment_goal.py`: Dashboard Investment Goal tile with progress and real forecast, and a dialog to set the goal as amount or FIRE
+- `login.py`: Login screen in the default Theme: pick a User and enter the password, create a User, explain a forgotten password
 - `multi_asset.py`: Multi-asset tab and split editor: edits an Instrument's Multi-asset Split and lists held Multi-asset Instruments by Asset Class
 - `passive_income.py`: Dochód pasywny tab: year navigation, Monthly Income Goal, tiles, monthly chart and table with progress, forecast coupons.
 - `periods.py`: Period selector UI: preset buttons and custom range inputs, remembered per user and redrawing listeners
@@ -486,7 +490,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_splits_and_transfers_repository.py`: Tests saving Splits, Cash Transfers and Security Transfers in SQLite.
 - `test_splits_and_transfers_ui.py`: Tests Splits, Cash Transfers and Security Transfers in the transaction dialog and Transakcje list.
 - `test_spreadsheet_import.py`: Tests importing the Transakcje sheet on a synthetic workbook with no real data.
-- `test_startup.py`: Smoke test of the real entry point: builds the database and shows the window.
+- `test_startup.py`: Smoke tests of the real entry point: login screen, creating and signing in Users, per-User database and backup, switching users.
 - `test_startup_refresh_ui.py`: Tests the background price refresh at start-up with fake sources and a fixed clock.
 - `test_stooq_source.py`: Tests the Stooq price history source on saved CSV and browser-challenge responses, without the network.
 - `test_strategies_repository.py`: Tests saving Investment Strategies for Total and per Account, and their removal on deletes and portfolio reset
@@ -515,6 +519,8 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_ui_visibility_ui.py`: UI tests of hiding Dashboard tiles, charts and tabs, and of the Ustawienia View Profile presets
 - `test_unpriced_domain.py`: Domain tests for the Instrumenty bez wyceny list: which held Instruments lack an automatic price and why
 - `test_unpriced_ui.py`: UI tests for the Instrumenty bez wyceny section in Ustawienia, including opening and fixing a symbol
+- `test_users_domain.py`: Tests of pseudonym and password rules and of password hashing
+- `test_users_store.py`: Tests of the User list: creating, unique pseudonyms, sign-in, password reset by hand, adopting existing data
 - `test_valuation_domain.py`: Domain tests for Instrument price selection, PLN conversion, staleness badges and metal spot valuation
 - `test_valuation_snapshots_domain.py`: Tests the change since a Valuation Snapshot split into market change and Net Deposits
 - `test_valuation_snapshots_repository.py`: Tests saving Valuation Snapshots: one per View Scope and day, and reading the newest earlier one

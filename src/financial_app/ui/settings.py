@@ -35,14 +35,25 @@ def build_settings_page(
     on_rules_changed: Callable[[], None] | None = None,
     layout: Layout | None = None,
     theme: ThemeChoice | None = None,
+    on_switch_user: Callable[[], None] | None = None,
 ) -> None:
     """``unpriced`` is kept by the shell, which redraws it on the changes it declares; ``on_instruments_changed`` is
     called after an Instrument or Asset Class is saved; ``sources`` check the Source Symbols typed in the Instrument
     dialog. ``on_transactions_changed`` redraws the other tabs after an XTB Reconciliation is applied;
     ``on_account_deleted`` gets the id of an Account deleted in Konta; ``on_rules_changed`` redraws the Recurring
     Rules' Drafts after a rule or its skips change; ``layout`` is the window's hidden elements, which the shell
-    redraws on, and ``theme`` its Theme, which the shell reloads the window on."""
+    redraws on, and ``theme`` its Theme, which the shell reloads the window on. ``on_switch_user`` (none in the demo)
+    returns to the login screen."""
     ui.label("Ustawienia").classes("text-2xl font-bold")
+    if on_switch_user is not None:
+        with ui.card().classes("w-full").mark("user-section"):
+            ui.label("Użytkownik").classes("text-lg font-bold")
+            ui.label("Wraca do ekranu logowania; dane bieżącego użytkownika zostają na dysku.").classes(
+                "text-sm k-muted"
+            )
+            ui.button("Przełącz użytkownika", icon="switch_account", on_click=on_switch_user).props(
+                "no-caps outline"
+            ).mark("switch-user")
     limits = ContributionLimitsSection(engine)
     rules = RecurringRulesSection(engine, rates.today, on_changed=on_rules_changed)
     accounts = AccountsSection(
