@@ -13,6 +13,7 @@ from nicegui.testing import User, user_simulation
 from sqlalchemy import Engine
 
 from financial_app.domain.accounts import AccountDraft, AccountType
+from financial_app.domain.bonds import SeriesTerms
 from financial_app.domain.currencies import NbpRate
 from financial_app.domain.formatting import NBSP
 from financial_app.domain.fund_profile import FundProfile, Holding
@@ -24,6 +25,7 @@ from financial_app.domain.portfolio_history import DayValue
 from financial_app.domain.prices import ANALIZY, BOSSA, YAHOO, Quote
 from financial_app.domain.transactions import TransactionDraft, TransactionType, buy_or_sell
 from financial_app.persistence.accounts import add_account
+from financial_app.persistence.bond_data import save_series_terms
 from financial_app.persistence.db import init_db
 from financial_app.persistence.history import save_nbp_history, save_quote_history
 from financial_app.persistence.instruments import add_instrument, list_asset_classes, list_instruments
@@ -564,3 +566,88 @@ async def test_a_profile_without_holdings_has_no_holdings_section(engine: Engine
         await user.should_see("Emitent:")
 
         await user.should_not_see(marker="card-holdings")
+
+
+def _value(user: User, marker: str) -> object:
+    [element] = user.find(marker=marker).elements
+    assert isinstance(element, ui.select | ui.input)
+    return element.value
+
+
+def _edo_offer(engine: Engine) -> None:
+    save_series_terms(
+        engine,
+        [
+            SeriesTerms(
+                "EDO1036",
+                "PL0000119566",
+                date(2026, 10, 1),
+                date(2026, 10, 31),
+                Decimal(100),
+                Decimal("99.9"),
+                Decimal("0.02"),
+                (Decimal("0.0535"), None),
+                (None,),
+            )
+        ],
+    )
+
+
+async def test_a_bond_type_is_found_by_its_term_and_shows_the_offer_on_sale(engine: Engine) -> None:
+    _edo_offer(engine)
+    rates = NbpRates(engine, today=lambda: TODAY)
+    async with user_simulation(_shell(engine, FixedSearch([]), FixedHistory(), rates=rates)) as user:
+        await user.open("/")
+        user.find(marker="header-search").type("10-letnie")
+        await user.should_see(marker="bond-result")
+
+        user.find(marker="bond-result").click()
+
+        await user.should_see(marker="bond-type-card")
+        await user.should_see("Seria EDO1036")
+        await user.should_see("Okres: 10 lat")
+        await user.should_see("Oprocentowanie w 1. okresie: 5,35")
+        await user.should_see("inflacja + marża (2,00")
+        await user.should_see("Nie masz jeszcze obligacji tego typu.")
+        await user.should_not_see(marker="card-add")
+
+
+async def test_a_bond_type_card_lists_the_users_series_of_that_type(engine: Engine) -> None:
+    _edo_offer(engine)
+    account = add_account(engine, AccountDraft("PKO Obligacje", "PKO BP", AccountType.BONDS, ("PLN",))).id
+    treasury = _class_id(engine, "Obligacje skarbowe polskie")
+    series = add_instrument(engine, InstrumentDraft("EDO0735", treasury, "PLN"))
+    add_transactions(
+        engine,
+        [buy_or_sell(account, date(2025, 7, 1), TransactionType.BUY, series.id, Decimal(10), Decimal(100))],
+    )
+    rates = NbpRates(engine, today=lambda: TODAY)
+    async with user_simulation(_shell(engine, FixedSearch([]), FixedHistory(), rates=rates)) as user:
+        await user.open("/")
+        user.find(marker="header-search").type("edo")
+        await user.should_see(marker="bond-result")
+        user.find(marker="bond-result").click()
+
+        await user.should_see(marker="bond-own-row")
+        await user.should_see("EDO0735 · 10 szt.")
+
+
+async def test_buy_opens_the_transaction_dialog_on_a_purchase_of_the_bond_type(engine: Engine) -> None:
+    _edo_offer(engine)
+    add_account(engine, AccountDraft("mBank IKE", "mBank", AccountType.IKE, ("PLN",)))
+    bonds = add_account(engine, AccountDraft("PKO Obligacje", "PKO BP", AccountType.BONDS, ("PLN",))).id
+    rates = NbpRates(engine, today=lambda: TODAY)
+    async with user_simulation(_shell(engine, FixedSearch([]), FixedHistory(), rates=rates)) as user:
+        await user.open("/")
+        user.find(marker="header-search").type("COI")
+        await user.should_see(marker="bond-result")
+        user.find(marker="bond-result").click()
+        await user.should_see(marker="bond-buy")
+
+        user.find(marker="bond-buy").click()
+
+        await user.should_see("Nowa transakcja")
+        await user.should_see("Seria COI1030")
+        assert _value(user, "transaction-account") == bonds
+        assert _value(user, "transaction-bond-type") == "COI"
+        assert _value(user, "transaction-date") == "20.10.2026"

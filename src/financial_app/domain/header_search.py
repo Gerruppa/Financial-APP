@@ -4,12 +4,26 @@ Search Result per fund or company, and the Instrument already holding a listing.
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 
+from financial_app.domain.bonds import BondType
 from financial_app.domain.formatting import folded
 from financial_app.domain.instrument_search import FoundListing
 from financial_app.domain.instruments import Instrument
 
 # How many of the user's own Instruments the header search lists
 OWN_LIMIT = 5
+# The shortest query that finds a bond type
+BOND_MIN_QUERY = 2
+# What a bond type is called besides its code, as the issuer's offer words it: the term in digits and in words
+BOND_TYPE_TERMS = {
+    BondType.OTS: ("3-miesięczne", "3 miesięczne", "trzymiesięczne"),
+    BondType.ROR: ("1-roczne", "1 roczne", "roczne", "jednoroczne"),
+    BondType.DOR: ("2-letnie", "2 letnie", "dwuletnie"),
+    BondType.TOS: ("3-letnie", "3 letnie", "trzyletnie"),
+    BondType.COI: ("4-letnie", "4 letnie", "czteroletnie"),
+    BondType.EDO: ("10-letnie", "10 letnie", "dziesięcioletnie"),
+    BondType.ROS: ("6-letnie", "6 letnie", "sześcioletnie", "rodzinne"),
+    BondType.ROD: ("12-letnie", "12 letnie", "dwunastoletnie", "rodzinne"),
+}
 
 
 @dataclass(frozen=True)
@@ -51,6 +65,20 @@ def matching_instruments(instruments: Iterable[Instrument], query: str, limit: i
         return []
     found = [instrument for instrument in instruments if any(wanted in folded(text) for text in _searched(instrument))]
     return found[:limit]
+
+
+def matching_bond_types(query: str) -> list[BondType]:
+    """The bond types whose code or term starts with ``query``, ignoring case and Polish letters, in the order of
+    ``BondType``; none for a query shorter than ``BOND_MIN_QUERY``. From the start, so that "2-letnie" is not the
+    12-year bond."""
+    wanted = folded(query.strip())
+    if len(wanted) < BOND_MIN_QUERY:
+        return []
+    return [
+        bond_type
+        for bond_type, terms in BOND_TYPE_TERMS.items()
+        if any(folded(name).startswith(wanted) for name in (bond_type.value, *terms))
+    ]
 
 
 def _searched(instrument: Instrument) -> tuple[str, ...]:
