@@ -155,6 +155,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `export.py`: Builds the transaction export rows with columns, amounts, origin and comment, independent of file format.
 - `faq.py`: Parses the Pomoc FAQ Markdown into sections and questions; searches them ignoring case and Polish letters
 - `formatting.py`: Polish number, amount and date formatting and parsing of typed input; the single formatter every screen uses.
+- `fund_profile.py`: Fund profile value type holding optional TER, fund size with currency and issuer from Yahoo; formats the fund size.
 - `header_search.py`: Header search grouping of listings into Search Results, own Instrument matching, and the Instrument already holding a listing.
 - `history.py`: Tracks which days of Quote and NBP Rate history are cached, and computes the missing days to fetch.
 - `inflation.py`: Inflation over a period from GUS monthly CPI, spread across days as the sheet's Benchmarki do, and the real return
@@ -276,6 +277,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `dashboard.py`: Computes today's Dashboard of a View Scope from the database, shared by the Dashboard and the Investment Strategy
 - `demo_data.py`: Seeds the made-up demo Portfolio (two Accounts, DEMO Instruments, a year of Transactions, a Total Investment Strategy) for the --demo start
 - `export.py`: Writes the Transactions list to CSV and XLSX files for export
+- `fund_profile.py`: Yahoo quoteSummary client fetching a fund's TER, size and issuer with session cookie and crumb; failures give no profile.
 - `history.py`: Returns an Instrument's Quotes in a date range, fetching missing days from Yahoo, analizy.pl or Stooq into cache
 - `instrument_card.py`: Instrument Card price history fetched live from Yahoo, else analizy.pl; nothing is saved.
 - `nbp.py`: Gets NBP exchange rates from the NBP API through the local cache
@@ -315,7 +317,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `history.py`: Shared per-database History window state: background fetch, progress and failure status, cached days
 - `import_sheet.py`: Ustawienia import section that previews the Transakcje spreadsheet and saves it only after user decisions
 - `info.py`: Hover "i" icon and card title helper that show explanatory text in Dashboard and Wyniki cards
-- `instrument_card.py`: Instrument Card dialog: listings, details, price, chart and returns, with Add as Instrument or Edit.
+- `instrument_card.py`: Instrument Card dialog: listings, details, price, chart and returns, with Add as Instrument or Edit; fund TER, size and issuer from Yahoo.
 - `instruments.py`: Ustawienia Klasy aktywów and Instrumenty cards: editable Asset Classes and the Instrument catalog with its dialog
 - `investment_goal.py`: Dashboard Investment Goal tile with progress and real forecast, and a dialog to set the goal as amount or FIRE
 - `multi_asset.py`: Multi-asset tab and split editor: edits an Instrument's Multi-asset Split and lists held Multi-asset Instruments by Asset Class
@@ -423,6 +425,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_foreign_trades_ui.py`: End-to-end UI tests for foreign-currency Buys and Sells using the NBP Rate
 - `test_formatting.py`: Tests the Polish number, date and count formatting and typed-input parsing helpers
 - `test_fund_details_ui.py`: UI tests for a fund's TER, Distribution Policy and domicile in the dialog and Portfolio
+- `test_fund_profile.py`: Tests fund profile parsing from saved Yahoo responses, cookie and crumb handling, and fund size formatting.
 - `test_fx_effect_domain.py`: Tests the FX part of foreign Positions' results from the PLN and foreign costs of FIFO Lots
 - `test_glossary.py`: Test that GLOSSARY.md lists exactly the terms defined in CONTEXT.md
 - `test_header_search_domain.py`: Domain tests for header search grouping of listings, own Instrument matching and owned listings, without the network.
@@ -621,3 +624,9 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `bitcoin.json`: Saved Yahoo search response for the bitcoin query, used by search tests
 - `cd_projekt.json`: Saved Yahoo search response for the name query CD Projekt, used by instrument search tests
 - `iShares_MSCI_All_Country_World_UCITS_ETF_USD_Acc.json`: Saved Yahoo search response for an iShares ACWI ETF name query, used by instrument search tests
+
+## tests/fixtures/yahoo/summary/
+
+- `ETFBW20TR.WA.json`: Saved Yahoo quoteSummary response for a Warsaw ETF, used by the fund profile tests.
+- `IWDA.AS.json`: Saved Yahoo quoteSummary response for an Amsterdam ETF, used by the fund profile tests.
+- `VUAA.L.json`: Saved Yahoo quoteSummary response for a London ETF, used by the fund profile tests.
