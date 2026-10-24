@@ -1,6 +1,7 @@
 """A fund's profile (issues #188, #204, #203): from Yahoo the TER, the fund size, the issuer and the largest holdings,
 from analizy.pl the TFI, the group, the benchmark and, for a Polish fund, the largest holdings, each known or not."""
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
@@ -9,6 +10,8 @@ from financial_app.domain.formatting import NBSP, format_number
 
 BILLION = Decimal(10) ** 9
 MILLION = Decimal(10) ** 6
+# How many of a fund's largest holdings the profile keeps
+HOLDINGS_SHOWN = 10
 
 
 @dataclass(frozen=True)
@@ -17,6 +20,15 @@ class Holding:
 
     name: str
     percent: Decimal
+
+
+def largest_holdings(shares: Iterable[tuple[str, Decimal]]) -> tuple[Holding, ...]:
+    """The ``HOLDINGS_SHOWN`` largest of (name, share as a fraction) pairs, largest first, in percent; a pair without a
+    name or a positive share is dropped."""
+    holdings = [
+        Holding(name.strip(), (share * 100).normalize()) for name, share in shares if name.strip() and share > 0
+    ]
+    return tuple(sorted(holdings, key=lambda holding: holding.percent, reverse=True)[:HOLDINGS_SHOWN])
 
 
 @dataclass(frozen=True)
@@ -39,12 +51,17 @@ class FundProfile:
     source: str = "Yahoo"
 
     @property
-    def empty(self) -> bool:
+    def has_facts(self) -> bool:
+        """Whether it tells anything but the holdings."""
         return (
-            self.ter_percent is None
-            and self.size is None
-            and not (self.issuer or self.tfi or self.group or self.benchmark or self.holdings)
+            self.ter_percent is not None
+            or self.size is not None
+            or bool(self.issuer or self.tfi or self.group or self.benchmark)
         )
+
+    @property
+    def empty(self) -> bool:
+        return not (self.has_facts or self.holdings)
 
 
 def format_fund_size(size: Decimal, currency: str) -> str:

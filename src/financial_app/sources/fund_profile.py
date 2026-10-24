@@ -11,7 +11,7 @@ from decimal import Decimal, InvalidOperation
 from urllib.error import HTTPError
 from urllib.parse import quote as url_quote
 
-from financial_app.domain.fund_profile import FundProfile, Holding
+from financial_app.domain.fund_profile import FundProfile, Holding, largest_holdings
 
 COOKIE_URL = "https://fc.yahoo.com"
 CRUMB_URL = "https://query1.finance.yahoo.com/v1/test/getcrumb"
@@ -118,17 +118,13 @@ def _parse(body: str) -> FundProfile | None:
 
 
 def _holdings(top: object) -> tuple[Holding, ...]:
-    """The holdings of Yahoo's ``topHoldings``, largest first, each with a name and a positive share."""
+    """The holdings of Yahoo's ``topHoldings``: each with a name and a positive share."""
     entries = top.get("holdings") if isinstance(top, dict) else None
-    holdings = []
+    shares = []
     for entry in entries if isinstance(entries, list) else []:
-        if not isinstance(entry, dict):
-            continue
-        share = _raw(entry.get("holdingPercent"))
-        name = str(entry.get("holdingName") or entry.get("symbol") or "").strip()
-        if share is not None and name:
-            holdings.append(Holding(name, (share * 100).normalize()))
-    return tuple(sorted(holdings, key=lambda holding: holding.percent, reverse=True))
+        if isinstance(entry, dict) and (share := _raw(entry.get("holdingPercent"))) is not None:
+            shares.append((str(entry.get("holdingName") or entry.get("symbol") or ""), share))
+    return largest_holdings(shares)
 
 
 def _raw(value: object) -> Decimal | None:

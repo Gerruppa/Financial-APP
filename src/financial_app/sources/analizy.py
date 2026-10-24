@@ -18,7 +18,7 @@ from decimal import Decimal
 from urllib.error import HTTPError
 from urllib.parse import quote as url_quote
 
-from financial_app.domain.fund_profile import FundProfile, Holding
+from financial_app.domain.fund_profile import FundProfile, Holding, largest_holdings
 from financial_app.domain.instrument_search import FoundListing, InstrumentSearchError, looks_like_isin
 from financial_app.domain.instruments import InstrumentType
 from financial_app.domain.prices import ANALIZY, ANALIZY_HISTORY, CurrencyMismatchError, PriceSourceError, Quote
@@ -185,14 +185,11 @@ class AnalizyFundProfiles:
         """The ten largest holdings of the fund and the day of their state, none when analizy.pl gives none."""
         try:
             data = json.loads(self.fetch(TOP10_API.format(code=url_quote(code, safe=""))) or "", parse_float=Decimal)
-            entries = data["struct"]
-            holdings = tuple(
-                Holding(str(entry["name"]).strip(), (Decimal(entry["value"]) * 100).normalize()) for entry in entries
-            )
+            holdings = largest_holdings((str(entry["name"]), Decimal(entry["value"])) for entry in data["struct"])
             day = date.fromisoformat(str(data["date"])[:10]) if data.get("date") else None
         except OSError, ValueError, KeyError, TypeError, ArithmeticError:
             return (), None
-        return tuple(sorted(holdings, key=lambda holding: holding.percent, reverse=True)), day
+        return holdings, day
 
     def _found(self, query: str) -> list[dict[str, object]]:
         if not query:

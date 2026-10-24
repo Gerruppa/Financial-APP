@@ -5,7 +5,7 @@ from decimal import Decimal
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
-from financial_app.domain.fund_profile import FundProfile, Holding, format_fund_size
+from financial_app.domain.fund_profile import FundProfile, Holding, format_fund_size, largest_holdings
 from financial_app.domain.instrument_search import FormFields, FoundListing, fill_empty
 from financial_app.sources.fund_profile import COOKIE_URL, CRUMB_URL, Reply, YahooFundProfiles
 
@@ -125,3 +125,12 @@ def test_ishares_etf_has_its_ten_largest_holdings_with_their_shares_in_percent()
 
 def test_a_profile_with_only_holdings_is_not_empty() -> None:
     assert not FundProfile(holdings=(Holding("X", Decimal(1)),)).empty
+
+
+def test_largest_holdings_keeps_ten_in_percent_largest_first_and_drops_nameless_or_empty_shares() -> None:
+    shares = [(f"H{n}", Decimal(n) / 100) for n in range(1, 13)] + [(" ", Decimal("0.5")), ("Zero", Decimal(0))]
+
+    holdings = largest_holdings(shares)
+
+    assert [holding.name for holding in holdings] == [f"H{n}" for n in range(12, 2, -1)]
+    assert holdings[0].percent == Decimal(12)
