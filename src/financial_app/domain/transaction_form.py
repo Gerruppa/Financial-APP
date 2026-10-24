@@ -206,7 +206,7 @@ class FormState:
 class FormPrefill:
     """What a new Transaction's form opens with instead of being empty, e.g. a Recurring Rule's Draft (issue #97): a
     Deposit's, Cost's or Cash Transfer's amount, currency and target Account, or a Buy's Instrument with its quantity
-    and price left to type."""
+    and price left to type, or a Buy of a bond type (``bond_type``) in the bond mode."""
 
     account_id: int
     kind: TransactionType
@@ -216,6 +216,7 @@ class FormPrefill:
     instrument_id: int | None = None
     comment: str = ""
     target_id: int | None = None
+    bond_type: BondType | None = None
 
 
 @dataclass(frozen=True)
@@ -338,7 +339,7 @@ class TransactionForm:
         one."""
         if prefill is not None and self.edited is None and prefill.account_id in self.accounts:
             bought = self._instruments.get(prefill.instrument_id) if prefill.instrument_id is not None else None
-            bond_type = bond_type_of(bought.name) if bought is not None and bought.is_bond_series else None
+            bond_type = bond_type_of(bought.name) if bought is not None and bought.is_bond_series else prefill.bond_type
             return FormState(
                 account_id=prefill.account_id,
                 kind=prefill.kind,

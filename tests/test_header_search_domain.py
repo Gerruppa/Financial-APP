@@ -1,6 +1,15 @@
 """The header search's own Instruments and Search Results (issue #175), without the network."""
 
-from financial_app.domain.header_search import group_results, matching_instruments, owned_instrument
+from datetime import date
+from decimal import Decimal
+
+from financial_app.domain.bonds import BondType, SeriesTerms, current_offer
+from financial_app.domain.header_search import (
+    group_results,
+    matching_bond_types,
+    matching_instruments,
+    owned_instrument,
+)
 from financial_app.domain.instrument_search import FoundListing
 from financial_app.domain.instruments import Instrument
 from financial_app.domain.prices import ANALIZY, BOSSA, YAHOO
@@ -107,3 +116,39 @@ def test_a_listing_is_owned_when_an_instrument_has_one_of_its_source_symbols() -
 def test_the_same_isin_on_another_exchange_or_currency_is_not_owned() -> None:
     assert owned_instrument(VUAG, OWN) is None
     assert owned_instrument(QUERCUS, OWN) is None
+
+
+def test_a_bond_type_is_found_by_its_code_ignoring_case() -> None:
+    assert matching_bond_types("edo") == [BondType.EDO]
+    assert matching_bond_types(" CO ") == [BondType.COI]
+
+
+def test_a_bond_type_is_found_by_its_polish_term() -> None:
+    assert matching_bond_types("10-letnie") == [BondType.EDO]
+    assert matching_bond_types("czteroletnie") == [BondType.COI]
+    assert matching_bond_types("sześcio") == [BondType.ROS]
+    assert matching_bond_types("rodzinne") == [BondType.ROS, BondType.ROD]
+
+
+def test_a_term_matches_from_its_start_so_that_two_years_is_not_twelve() -> None:
+    assert matching_bond_types("2-letnie") == [BondType.DOR]
+
+
+def test_a_single_character_or_an_unrelated_query_finds_no_bond_type() -> None:
+    assert matching_bond_types("e") == []
+    assert matching_bond_types("vanguard") == []
+
+
+def _terms(series: str, start: date, end: date) -> SeriesTerms:
+    return SeriesTerms(series, "PL", start, end, Decimal(100), None, Decimal("0.02"), (Decimal("0.0535"),), (None,))
+
+
+def test_the_current_offer_is_the_series_of_the_type_on_sale_today() -> None:
+    sold = [
+        _terms("EDO0935", date(2025, 9, 1), date(2025, 9, 30)),
+        _terms("EDO1036", date(2026, 10, 1), date(2026, 10, 31)),
+        _terms("COI1030", date(2026, 10, 1), date(2026, 10, 31)),
+    ]
+    assert current_offer(sold, BondType.EDO, date(2026, 10, 24)) == sold[1]
+    assert current_offer(sold, BondType.TOS, date(2026, 10, 24)) is None
+    assert current_offer(sold, BondType.EDO, date(2026, 11, 2)) is None

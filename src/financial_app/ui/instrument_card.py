@@ -10,6 +10,7 @@ from typing import Protocol
 from nicegui import run, ui
 from sqlalchemy import Engine
 
+from financial_app.domain.bonds import BondType
 from financial_app.domain.currencies import MissingNbpRateError
 from financial_app.domain.formatting import (
     format_date,
@@ -39,6 +40,7 @@ from financial_app.sources.instrument_card import FIRST_DAY
 from financial_app.sources.nbp import LOOKBACK, NbpRates
 from financial_app.sources.todays_view import todays_view
 from financial_app.sources.yahoo import WARSAW_SUFFIX
+from financial_app.ui.bond_type_card import open_bond_type_card
 from financial_app.ui.charts import price_chart
 from financial_app.ui.instruments import InstrumentsSection
 
@@ -76,11 +78,16 @@ class CardContext:
     profiles: FundProfiles
     polish_profiles: PolishFundProfiles
     instruments: InstrumentsSection
+    on_bought: Callable[[], None] = lambda: None
 
 
-def open_instrument_card(context: CardContext, subject: SearchResult | Instrument) -> None:
-    """Open the card on a SearchResult (its first listing chosen) or on one of the user's Instruments."""
-    InstrumentCard(context, subject).open()
+def open_instrument_card(context: CardContext, subject: SearchResult | Instrument | BondType) -> None:
+    """Open the card on a SearchResult (its first listing chosen), on one of the user's Instruments or on a treasury
+    bond type (#185)."""
+    if isinstance(subject, BondType):
+        open_bond_type_card(context.engine, context.rates, context.on_bought, subject)
+    else:
+        InstrumentCard(context, subject).open()
 
 
 class InstrumentCard:

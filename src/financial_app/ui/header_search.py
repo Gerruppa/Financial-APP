@@ -1,13 +1,20 @@
-"""The header search (issue #175): the user's own Instruments listed while typing, Search Results from the search
-services after a pause or on Enter, each opening its Instrument Card."""
+"""The header search (issue #175): the user's own Instruments and treasury bond types (#185) listed while typing,
+Search Results from the search services after a pause or on Enter, each opening its card."""
 
 from collections.abc import Callable
 
 from nicegui import run, ui
 from sqlalchemy import Engine
 
+from financial_app.domain.bonds import BondType
 from financial_app.domain.formatting import format_count
-from financial_app.domain.header_search import SearchResult, group_results, matching_instruments
+from financial_app.domain.header_search import (
+    BOND_TYPE_TERMS,
+    SearchResult,
+    group_results,
+    matching_bond_types,
+    matching_instruments,
+)
 from financial_app.domain.instrument_search import FoundListings, InstrumentSearch, InstrumentSearchError
 from financial_app.domain.instruments import Instrument
 from financial_app.persistence.instruments import list_instruments
@@ -35,12 +42,16 @@ class HeaderSearch:
     """The search field with its list of results below it; ``open_card`` opens the Instrument Card on a row."""
 
     def __init__(
-        self, engine: Engine, search: InstrumentSearch, open_card: Callable[[SearchResult | Instrument], None]
+        self,
+        engine: Engine,
+        search: InstrumentSearch,
+        open_card: Callable[[SearchResult | Instrument | BondType], None],
     ) -> None:
         self.engine = engine
         self.search = search
         self.open_card = open_card
         self.own: list[Instrument] = []
+        self.bonds: list[BondType] = []
         self.found: list[SearchResult] = []
         self.message = ""
         self.searched = ""  # the query the Search Results are of
@@ -73,6 +84,7 @@ class HeaderSearch:
         """Lists the own Instruments matching at once and asks the search services after a pause."""
         query = self._query()
         self.own = matching_instruments(list_instruments(self.engine), query)
+        self.bonds = matching_bond_types(query)
         if query != self.searched:
             self.found, self.message = [], ""
         self.highlighted = 0
@@ -84,10 +96,10 @@ class HeaderSearch:
         self._show()
 
     async def _entered(self) -> None:
-        """Enter opens the highlighted row: an own Instrument at once, a Search Result once the search services
-        answered this query; otherwise it asks them now."""
+        """Enter opens the highlighted row: an own Instrument or a bond type at once, a Search Result once the search
+        services answered this query; otherwise it asks them now."""
         rows = self._rows()
-        if self.highlighted < len(self.own) or (self._query() == self.searched and rows):
+        if self.highlighted < len(self.own) + len(self.bonds) or (self._query() == self.searched and rows):
             self._open(rows[self.highlighted])
         else:
             await self._find()
@@ -127,14 +139,14 @@ class HeaderSearch:
         self.found, self.message, self.searched = group_results(results)[:FOUND_LIMIT], message, query
         self._show()
 
-    def _rows(self) -> list[SearchResult | Instrument]:
-        return [*self.own, *self.found]
+    def _rows(self) -> list[SearchResult | Instrument | BondType]:
+        return [*self.own, *self.bonds, *self.found]
 
     def _show(self) -> None:
         self.panel.visible = bool(self._query())
         self.results.refresh()
 
-    def _open(self, subject: SearchResult | Instrument) -> None:
+    def _open(self, subject: SearchResult | Instrument | BondType) -> None:
         self.panel.visible = False
         # A dialog is deleted with the element it was opened in, so not in a row the next results redraw away
         with self.box:
@@ -147,6 +159,11 @@ class HeaderSearch:
             ui.label("Twoje instrumenty").classes("text-xs font-bold k-muted px-2 pt-1")
             for instrument in self.own:
                 self._own_row(instrument, index == self.highlighted)
+                index += 1
+        if self.bonds:
+            ui.label("Obligacje skarbowe").classes("text-xs font-bold k-muted px-2 pt-2")
+            for bond_type in self.bonds:
+                self._bond_row(bond_type, index == self.highlighted)
                 index += 1
         ui.label("Znalezione").classes("text-xs font-bold k-muted px-2 pt-2")
         if self.searching:
@@ -170,6 +187,14 @@ class HeaderSearch:
             ui.item_label(" · ".join(d for d in details if d)).props("caption")
         with item, ui.item_section().props("side"):
             ui.badge(instrument.asset_class_name).props("outline")
+
+    def _bond_row(self, bond_type: BondType, highlighted: bool) -> None:
+        item = ui.item(on_click=lambda: self._open(bond_type)).classes(_row_classes(highlighted)).mark("bond-result")
+        with item, ui.item_section():
+            ui.item_label(bond_type.value)
+            ui.item_label(f"obligacje {BOND_TYPE_TERMS[bond_type][0]}").props("caption")
+        with item, ui.item_section().props("side"):
+            ui.badge("Obligacja skarbowa").props("outline")
 
     def _found_row(self, found: SearchResult, highlighted: bool) -> None:
         item = ui.item(on_click=lambda: self._open(found)).classes(_row_classes(highlighted)).mark("found-result")

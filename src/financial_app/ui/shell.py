@@ -301,6 +301,7 @@ def build_shell(
         fund_profiles or YahooFundProfiles(),
         polish_profiles or AnalizyFundProfiles(),
         card_instruments,
+        transactions_changed,
     )
     header_search = HeaderSearch(engine, search, lambda subject: open_instrument_card(card, subject))
 

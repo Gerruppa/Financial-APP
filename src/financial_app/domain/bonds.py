@@ -59,6 +59,17 @@ MONTHLY_TYPES = frozenset({BondType.ROR, BondType.DOR})
 COUPON_TYPES = frozenset({BondType.COI, BondType.ROR, BondType.DOR})
 # The family bonds, bought only with the 800+ benefit and never in a Rollover
 FAMILY_TYPES = frozenset({BondType.ROS, BondType.ROD})
+# How each type's interest is set after the first period, as the Bond Series card words it
+RATE_RULES = {
+    BondType.OTS: "stałe oprocentowanie przez cały okres",
+    BondType.ROR: "stopa referencyjna NBP + marża",
+    BondType.DOR: "stopa referencyjna NBP + marża",
+    BondType.TOS: "stałe oprocentowanie przez cały okres",
+    BondType.COI: "inflacja + marża",
+    BondType.EDO: "inflacja + marża",
+    BondType.ROS: "inflacja + marża",
+    BondType.ROD: "inflacja + marża",
+}
 # The price of one bond bought in a Rollover when the MF file does not give it (spec 3.4)
 DEFAULT_ROLLOVER_PRICE = Decimal("99.90")
 ISSUE_PRICE = Decimal(100)
@@ -239,6 +250,12 @@ def correction_of(mf: SeriesTerms | None, margin: Decimal | None, rates: tuple[D
 def series_of_type(terms: Iterable[SeriesTerms], bond_type: BondType) -> list[SeriesTerms]:
     """The MF Series of ``bond_type``, the newest sold first (L-26)."""
     return sorted((t for t in terms if t.bond_type is bond_type), key=lambda t: t.sale_start, reverse=True)
+
+
+def current_offer(terms: Iterable[SeriesTerms], bond_type: BondType, today: date) -> SeriesTerms | None:
+    """The MF Series of ``bond_type`` on sale on ``today`` (the newest if several), ``None`` when the type is not sold
+    now."""
+    return next((t for t in series_of_type(terms, bond_type) if t.sale_start <= today <= t.sale_end), None)
 
 
 def sold_on(terms: SeriesTerms, purchase_day: date, rollover: bool) -> bool:
