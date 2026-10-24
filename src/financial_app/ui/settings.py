@@ -1,6 +1,6 @@
-"""The Ustawienia tab: Accounts, Asset Classes, Instruments, the price sources' settings, the sheet import (spec
-section 5, issue #20), the Instruments without an automatic price (issue #40), Wygląd i widoczność (issue #155) and
-clearing the data."""
+"""The Ustawienia tab: the User, Accounts, Asset Classes, Instruments, the price sources' settings, the sheet import
+(spec section 5, issue #20), the Instruments without an automatic price (issue #40), Wygląd i widoczność (issue #155)
+and clearing the data."""
 
 from collections.abc import Callable, Mapping
 
@@ -19,6 +19,7 @@ from financial_app.ui.recurring_rules import RecurringRulesSection
 from financial_app.ui.reset import ClearDataSection
 from financial_app.ui.theme import ThemeChoice
 from financial_app.ui.unpriced import UnpricedSection
+from financial_app.ui.user_section import UserSection
 from financial_app.ui.visibility import Layout, VisibilitySection
 from financial_app.ui.xtb_import import XtbImportSection
 
@@ -35,6 +36,7 @@ def build_settings_page(
     on_rules_changed: Callable[[], None] | None = None,
     layout: Layout | None = None,
     theme: ThemeChoice | None = None,
+    user_section: UserSection | None = None,
 ) -> None:
     """``unpriced`` is kept by the shell, which redraws it on the changes it declares; ``on_instruments_changed`` is
     called after an Instrument or Asset Class is saved; ``sources`` check the Source Symbols typed in the Instrument
@@ -43,6 +45,8 @@ def build_settings_page(
     Rules' Drafts after a rule or its skips change; ``layout`` is the window's hidden elements, which the shell
     redraws on, and ``theme`` its Theme, which the shell reloads the window on."""
     ui.label("Ustawienia").classes("text-2xl font-bold")
+    if user_section is not None:
+        user_section.build()
     limits = ContributionLimitsSection(engine)
     rules = RecurringRulesSection(engine, rates.today, on_changed=on_rules_changed)
     accounts = AccountsSection(

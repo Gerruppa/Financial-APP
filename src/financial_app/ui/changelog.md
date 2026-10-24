@@ -9,6 +9,7 @@
 - Karta funduszu lub ETF-u pokazuje jego dziesięć największych składników z udziałami (Yahoo, a dla polskich funduszy i PPK analizy.pl wraz z dniem stanu).
 - Wykres, ceny i stopy zwrotu na Karcie instrumentu można przełączyć na inną walutę (PLN, EUR, USD); ceny są przeliczane kursami NBP z dnia notowania.
 - Awatar z inicjałami i pseudonimem w prawym górnym rogu otwiera menu: Ustawienia, motyw, Pomoc i przełączenie użytkownika; przycisk motywu przeniósł się do tego menu.
+- W Ustawieniach jest sekcja Użytkownik: zmiana pseudonimu i hasła oraz usunięcie użytkownika razem z jego folderem i kopiami zapasowymi.
 
 ### Poprawki
 - Górny pasek z wyszukiwarką ma pełne tło, więc przewijana treść nie nachodzi już na napisy w pasku.

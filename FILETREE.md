@@ -219,7 +219,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `strategies.py`: Reads and saves Investment Strategies for Total and each Account, with their Allocation and Instrument Targets
 - `term_deposits.py`: Saves, edits, ends, renews and deletes Term Deposits on Deposit Accounts, and lists them
 - `transactions.py`: Saves, edits, deletes and lists Transactions, replaying positions to block invalid changes
-- `users.py`: User list file (pseudonyms, password hashes) and per-User folders; creates, signs in, resets passwords, moves pre-Users data to the first User
+- `users.py`: User list file (pseudonyms, password hashes) and per-User folders; creates, renames, signs in, changes passwords, deletes Users with their folders
 - `valuation_snapshots.py`: Saves Valuation Snapshots per View Scope and day, and reads the newest snapshot from an earlier day
 
 ## src/financial_app/persistence/migrations/
@@ -345,6 +345,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `transactions.py`: Transakcje tab: the Transaction list with column sorting and filters
 - `unpriced.py`: Ustawienia Instrumenty bez wyceny card listing held Instruments lacking an automatic price, with reasons
 - `user_menu.py`: Header avatar button with the User's initials and pseudonym; opens the menu for Settings, Theme, Help and switching user
+- `user_section.py`: Ustawienia Użytkownik card: change the User's pseudonym and password, and delete the User with their folder after password and pseudonym confirmation.
 - `view_scope.py`: View Scope header switcher and breadcrumbs, listing Accounts by value with share and daily change
 - `visibility.py`: Window Layout of hidden elements, plus the Ustawienia switches and View Profile presets that change it
 - `xtb_import.py`: Ustawienia card for importing XTB statements and resolving the Reconciliation before applying
