@@ -35,7 +35,7 @@ def build_help_page(tab_labels: Mapping[str, str]) -> None:
                 ui.label(section.title).classes("text-lg font-bold")
                 items: list[tuple[str, ui.expansion]] = []
                 for question in section.questions:
-                    expansion = ui.expansion(question.title).classes("w-full bg-white rounded")
+                    expansion = ui.expansion(question.title).classes("w-full k-faq")
                     with expansion.mark(f"faq-{question.slug}"):
                         ui.markdown(question.answer).classes("text-sm")
                         if question.goto is not None:
