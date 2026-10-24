@@ -179,15 +179,18 @@ class AnalizyFundProfiles:
             return []
         with self._lock:
             if query not in self._products:
-                self._products[query] = self._search(query)
+                found = self._search(query)
+                if found is None:  # a failure may pass, so it is asked again next time
+                    return []
+                self._products[query] = found
             return self._products[query]
 
-    def _search(self, query: str) -> list[dict[str, object]]:
+    def _search(self, query: str) -> list[dict[str, object]] | None:
         try:
             products = json.loads(self.fetch(SEARCH_API.format(query=url_quote(query, safe=""))) or "")["products"]
         except OSError, ValueError, KeyError, TypeError:
-            return []
-        return [p for p in products if isinstance(p, dict)] if isinstance(products, list) else []
+            return None
+        return [p for p in products if isinstance(p, dict)] if isinstance(products, list) else None
 
 
 def _profile_of(product: dict[str, object]) -> FundProfile | None:
