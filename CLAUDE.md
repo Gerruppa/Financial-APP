@@ -60,7 +60,8 @@ Single-context: one `CONTEXT.md` plus `docs/adr/` at the repo root. See `docs/ag
 directory. Read it to find code by purpose before `ls`/`grep`/`find`: it
 turns "search the repo" into "look it up". Refresh it once per PR: run
 `/filetree:update` before opening the PR and commit `FILETREE.md` and
-`FILETREE.hash.json` with it; don't hand-edit.
+`FILETREE.hash.json` with it; don't hand-edit. In the same step run
+`graphify update .` (see "Finding code" below; `graphify-out/` is not committed).
 
 ```
 ## (root)/
@@ -72,3 +73,12 @@ turns "search the repo" into "look it up". Refresh it once per PR: run
 - `lots.py`: FIFO engine; builds open Positions and Lots from Transactions
 - `formatting.py`: Polish number and date formatting and parsing
 ```
+
+### Finding code: FILETREE.md vs graphify
+
+A test of five "which files implement X" questions (2026-10-24, one run each) gave about the same tokens for `FILETREE.md`, graphify and plain Grep/Glob (about 47-53k per agent, mostly the agent's own start-up cost). What differs is time and completeness:
+
+- "Where is X?": `Grep` `FILETREE.md` for the feature or file name; don't `Read` the whole file (about 23k tokens for 514 of its lines, and it gave no better answer than the `Grep`). It gave the most complete lists, including persistence, migrations and tests.
+- "What calls or depends on X?": `graphify query "<question>" --budget 1500` (the interpreter is in `graphify-out/.graphify_python`). It was 2-3 times faster than the other two, but broad queries came back truncated (about 45 of several hundred nodes) and missed UI, persistence and `__version__`; use narrow queries and `explain` or `path`.
+- The graph goes stale: `graphify-out/` is git-ignored and was 313 commits behind when the test began. Run `graphify update .` (no LLM cost) first when `git rev-parse HEAD` differs from the commit in `graphify-out/GRAPH_REPORT.md`.
+- Whatever the source, confirm a file's role by reading it before relying on it; agents that skipped this inferred roles from file names.
