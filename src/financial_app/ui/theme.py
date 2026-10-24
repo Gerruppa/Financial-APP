@@ -124,8 +124,8 @@ body.theme-golden { --k-side:#0e0e0f; --k-side-text:#d4d4d4; --k-side-active:#2a
   --k-hero:#e8c766; --k-chip:#262626; --k-highlight:#2a2416; }
 body { background:var(--k-page); color:var(--k-text); }
 body.theme-golden { background:var(--k-page) MOUNTAINS no-repeat right top / 70% 260px; }
-.k-header { background:transparent; color:var(--k-text); border-bottom:1px solid var(--k-border); }
-body.theme-jasny .k-header { background:var(--k-page); }
+.k-header { background:var(--k-page); color:var(--k-text); border-bottom:1px solid var(--k-border); }
+body.theme-golden .k-header { background:var(--k-page) MOUNTAINS no-repeat right top / 70% 260px fixed; }
 .k-avatar { display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px;
   border-radius:50%; color:#fff; font-weight:700; font-size:0.85rem; }
 .k-side { background:var(--k-side); color:var(--k-side-text); }
