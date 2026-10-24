@@ -13,6 +13,8 @@ from nicegui.testing import User, user_simulation
 from sqlalchemy import Engine
 
 from financial_app.domain.accounts import AccountDraft, AccountType
+from financial_app.domain.formatting import NBSP
+from financial_app.domain.fund_profile import FundProfile
 from financial_app.domain.instrument_card import CardPeriod
 from financial_app.domain.instrument_search import FoundListing, FoundListings, InstrumentSearch
 from financial_app.domain.instruments import InstrumentDraft, InstrumentType
@@ -27,7 +29,7 @@ from financial_app.persistence.transactions import add_transactions
 from financial_app.sources.history import QuoteHistory
 from financial_app.sources.nbp import NbpRates
 from financial_app.sources.portfolio_history import PortfolioHistory
-from financial_app.ui.instrument_card import ListingHistory
+from financial_app.ui.instrument_card import FundProfiles, ListingHistory
 from financial_app.ui.shell import build_shell
 
 TODAY = date(2026, 10, 20)
@@ -74,12 +76,29 @@ async def _inline(function: Callable[..., list[DayValue]], *args: object) -> lis
     return function(*args)
 
 
-def _shell(engine: Engine, search: InstrumentSearch, history: ListingHistory) -> Callable[[], None]:
-    """The window on ``search`` and the card's ``history``, its History computed inline rather than in the process
-    pool, with no Quotes fetched."""
+class FixedProfiles:
+    """Gives every symbol the same ``profile`` (by default none), recording the symbols asked."""
+
+    def __init__(self, profile: FundProfile | None = None) -> None:
+        self.profile_given = profile
+        self.asked: list[str] = []
+
+    def profile(self, symbol: str) -> FundProfile | None:
+        self.asked.append(symbol)
+        return self.profile_given
+
+
+def _shell(
+    engine: Engine, search: InstrumentSearch, history: ListingHistory, profiles: FundProfiles | None = None
+) -> Callable[[], None]:
+    """The window on ``search``, the card's ``history`` and fund ``profiles`` (none by default), its History
+    computed inline rather than in the process pool, with no Quotes fetched."""
     quotes = QuoteHistory(engine, lambda url: "Brak danych", lambda: TODAY, lambda: NOW, lambda url: None)
     portfolio = PortfolioHistory(engine, quotes, NbpRates(engine), lambda: TODAY, _inline)
-    return lambda: build_shell(engine, now=lambda: NOW, search=search, card_history=history, history=portfolio)
+    fund_profiles = profiles or FixedProfiles()
+    return lambda: build_shell(
+        engine, now=lambda: NOW, search=search, card_history=history, history=portfolio, fund_profiles=fund_profiles
+    )
 
 
 def _class_id(engine: Engine, name: str) -> int:
@@ -302,3 +321,76 @@ async def test_the_card_shows_the_instrument_type_a_search_told_and_adding_keeps
         await user.should_see(marker="card-owned")
     [saved] = list_instruments(engine)
     assert saved.instrument_type is InstrumentType.ETF
+
+
+PROFILE = FundProfile(Decimal("0.2"), Decimal("88972738560"), "USD", "Vanguard Group (Ireland) Limited")
+
+
+async def test_the_card_shows_the_fund_profile_marked_as_from_yahoo(engine: Engine) -> None:
+    profiles = FixedProfiles(PROFILE)
+    async with user_simulation(_shell(engine, FixedSearch([VUAA]), FixedHistory(), profiles)) as user:
+        await _found_card(user, "vuaa")
+
+        await user.should_see(f"TER: 0,20{NBSP}% (Yahoo)")
+        await user.should_see(f"Wielkość funduszu: 88,97{NBSP}mld{NBSP}USD (wg Yahoo)")
+        await user.should_see("Emitent: Vanguard Group (Ireland) Limited (wg Yahoo)")
+    assert profiles.asked == ["VUAA.L"]
+
+
+async def test_the_card_shows_no_profile_section_when_none_comes_or_for_a_warsaw_listing(engine: Engine) -> None:
+    warsaw = replace(VUAA, symbol="ETFBW20TR.WA", source_symbols={YAHOO: "ETFBW20TR.WA"})
+    profiles = FixedProfiles(PROFILE)
+    async with user_simulation(_shell(engine, FixedSearch([warsaw]), FixedHistory(), profiles)) as user:
+        await _found_card(user, "etf")
+        await user.should_see(marker="chart-price")
+
+        await user.should_not_see(marker="card-profile")
+    assert profiles.asked == []
+
+
+async def test_the_card_has_no_profile_section_without_a_profile(engine: Engine) -> None:
+    async with user_simulation(_shell(engine, FixedSearch([VUAA]), FixedHistory())) as user:
+        await _found_card(user, "vuaa")
+        await user.should_see(marker="chart-price")
+
+        await user.should_not_see(marker="card-profile")
+
+
+async def test_an_instruments_own_ter_wins_over_yahoos(engine: Engine) -> None:
+    add_instrument(
+        engine,
+        InstrumentDraft(
+            "Vanguard S&P 500",
+            _class_id(engine, "Akcje zagraniczne"),
+            "USD",
+            source_symbols={YAHOO: "VUAA.L"},
+            ter_percent=Decimal("0.07"),
+            instrument_type=InstrumentType.ETF,
+        ),
+    )
+    async with user_simulation(_shell(engine, FixedSearch([]), FixedHistory(), FixedProfiles(PROFILE))) as user:
+        await user.open("/")
+        user.find(marker="header-search").type("vanguard")
+        await user.should_see(marker="own-result")
+        user.find(marker="own-result").click()
+
+        await user.should_see(f"TER: 0,07{NBSP}%")
+        await user.should_see(f"Wielkość funduszu: 88,97{NBSP}mld{NBSP}USD (wg Yahoo)")
+        await user.should_not_see("(Yahoo)")
+
+
+async def test_adding_a_search_result_fills_the_empty_ter_from_yahoo(engine: Engine) -> None:
+    async with user_simulation(_shell(engine, FixedSearch([VUAA]), FixedHistory(), FixedProfiles(PROFILE))) as user:
+        await _found_card(user, "vuaa")
+        await user.should_see(f"TER: 0,20{NBSP}% (Yahoo)")
+
+        user.find(marker="card-add").click()
+        await user.should_see(marker="instrument-dialog")
+        with user.scope(marker="instrument-dialog"):
+            user.find(marker="instrument-class").click()
+            user.find("Akcje zagraniczne").click()
+            user.find("Zapisz").click()
+
+        await user.should_see(marker="card-owned")
+    [saved] = list_instruments(engine)
+    assert saved.ter_percent == Decimal("0.2")

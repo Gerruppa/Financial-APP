@@ -2,7 +2,7 @@
 price, chart and returns from its whole history fetched live, and "Dodaj jako instrument" or "Edytuj"."""
 
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 from decimal import Decimal
 from typing import Protocol
@@ -12,21 +12,24 @@ from sqlalchemy import Engine
 
 from financial_app.domain.formatting import (
     format_date,
+    format_exact_percent,
     format_percent,
     format_pln,
     format_quantity,
     format_unit_price,
 )
+from financial_app.domain.fund_profile import FundProfile, format_fund_size
 from financial_app.domain.header_search import SearchResult, owned_instrument
 from financial_app.domain.instrument_card import RETURN_PERIODS, CardPeriod, chart_window, price_summary, returns
 from financial_app.domain.instrument_search import FormFields, FoundListing, fill_empty
-from financial_app.domain.instruments import DistributionPolicy, Instrument
-from financial_app.domain.prices import SOURCE_NAMES, PriceSourceError, Quote
+from financial_app.domain.instruments import DistributionPolicy, Instrument, InstrumentType
+from financial_app.domain.prices import SOURCE_NAMES, YAHOO, PriceSourceError, Quote
 from financial_app.persistence.history import quotes_between
 from financial_app.persistence.instruments import list_instruments
 from financial_app.sources.instrument_card import FIRST_DAY
 from financial_app.sources.nbp import NbpRates
 from financial_app.sources.todays_view import todays_view
+from financial_app.sources.yahoo import WARSAW_SUFFIX
 from financial_app.ui.charts import price_chart
 from financial_app.ui.instruments import InstrumentsSection
 
@@ -37,14 +40,21 @@ class ListingHistory(Protocol):
     def closes(self, listing: FoundListing, last: date) -> list[Quote]: ...
 
 
+class FundProfiles(Protocol):
+    """The profile of a fund by its Yahoo symbol, ``None`` when none comes (``sources.fund_profile``)."""
+
+    def profile(self, symbol: str) -> FundProfile | None: ...
+
+
 @dataclass
 class CardContext:
-    """What a card needs: the database, today's NBP Rates for "Twoja pozycja", the ``history`` its closes come from
-    and the Instrument dialog (``instruments``) its buttons open."""
+    """What a card needs: the database, today's NBP Rates for "Twoja pozycja", the ``history`` its closes come from,
+    the ``profiles`` of its funds and the Instrument dialog (``instruments``) its buttons open."""
 
     engine: Engine
     rates: NbpRates
     history: ListingHistory
+    profiles: FundProfiles
     instruments: InstrumentsSection
 
 
@@ -66,6 +76,8 @@ class InstrumentCard:
         else:
             self.listings, self.own = subject.listings, None
         self.listing = self.listings[0]
+        # The fund profiles that came, by Yahoo symbol
+        self.profiles: dict[str, FundProfile] = {}
 
     def open(self) -> None:
         dialog = ui.dialog()
@@ -77,6 +89,7 @@ class InstrumentCard:
             with ui.row().classes("w-full items-start no-wrap gap-4"):
                 with ui.column().classes("grow gap-1"):
                     self.heading()
+                    self.profile()
                 self.actions()
             if len(self.listings) > 1:
                 options = {index: _listing_label(listing) for index, listing in enumerate(self.listings)}
@@ -95,6 +108,27 @@ class InstrumentCard:
     @ui.refreshable_method
     def heading(self) -> None:
         _heading(self.listing, self.listings, self._owner())
+
+    @ui.refreshable_method
+    def profile(self) -> None:
+        """The fund's TER, size and issuer from Yahoo, in the background: nothing shows while it loads or when none
+        comes."""
+        area = ui.column().classes("w-full gap-0")
+        listing, holder = self.listing, self._owner()
+        symbol = _profile_symbol(listing, holder)
+        if symbol is not None:
+            ui.timer(0, lambda: self._load_profile(symbol, listing, area), once=True)
+
+    async def _load_profile(self, symbol: str, listing: FoundListing, area: ui.column) -> None:
+        # The source answers over the network, so the window keeps working meanwhile
+        profile = await run.io_bound(self.context.profiles.profile, symbol)
+        if profile is None:  # none came, or the app is shutting down
+            return
+        self.profiles[symbol] = profile
+        if listing is self.listing and not area.is_deleted:
+            area.clear()
+            with area:
+                _profile(profile, self._owner())
 
     @ui.refreshable_method
     def actions(self) -> None:
@@ -140,6 +174,7 @@ class InstrumentCard:
 
     def _redraw(self) -> None:
         self.heading.refresh()
+        self.profile.refresh()
         self.actions.refresh()
         self.position.refresh()
 
@@ -149,7 +184,9 @@ class InstrumentCard:
         self.prices.refresh()
 
     def _add(self) -> None:
-        self.context.instruments.open_dialog(None, prefill=self.listing, on_saved=self._added)
+        profile = self.profiles.get(_yahoo_symbol(self.listing))
+        prefill = replace(self.listing, ter_percent=profile.ter_percent) if profile else self.listing
+        self.context.instruments.open_dialog(None, prefill=prefill, on_saved=self._added)
 
     def _added(self, instrument: Instrument) -> None:
         ui.notify(f"Dodano instrument {instrument.name}", type="positive")
@@ -191,6 +228,33 @@ def _listing_of(instrument: Instrument) -> FoundListing:
 def _listing_label(listing: FoundListing) -> str:
     """A listing in the card's choice, e.g. "VUAA.L · LSE · USD"."""
     return " · ".join([listing.symbol, listing.market or "rynek nieznany", listing.currency_label])
+
+
+def _yahoo_symbol(listing: FoundListing) -> str:
+    return listing.source_symbols.get(YAHOO, "").strip().upper()
+
+
+def _profile_symbol(listing: FoundListing, holder: Instrument | None) -> str | None:
+    """The Yahoo symbol to ask for a fund profile: the listing's, when it is a fund or ETF and not a Warsaw listing,
+    for which Yahoo gives nothing."""
+    symbol = _yahoo_symbol(listing)
+    kind = holder.instrument_type if holder is not None else listing.instrument_type
+    is_fund = listing.fund or kind in (InstrumentType.ETF, InstrumentType.FUND)
+    return symbol if symbol and is_fund and not symbol.endswith(WARSAW_SUFFIX) else None
+
+
+def _profile(profile: FundProfile, holder: Instrument | None) -> None:
+    """The TER (the Instrument's own, else Yahoo's marked as such), the fund size and the issuer, those that came."""
+    with ui.row().classes("items-center gap-x-4 text-sm").mark("card-profile"):
+        if holder is not None and holder.ter_percent is not None:
+            ui.label(f"TER: {format_exact_percent(holder.ter_percent)}").mark("card-ter")
+        elif profile.ter_percent is not None:
+            ui.label(f"TER: {format_exact_percent(profile.ter_percent)} (Yahoo)").mark("card-ter")
+        if profile.size is not None:
+            size = format_fund_size(profile.size, profile.size_currency)
+            ui.label(f"Wielkość funduszu: {size} (wg Yahoo)").mark("card-fund-size")
+        if profile.issuer:
+            ui.label(f"Emitent: {profile.issuer} (wg Yahoo)").mark("card-issuer")
 
 
 def _details(listing: FoundListing, holder: Instrument | None) -> tuple[str, DistributionPolicy | None]:

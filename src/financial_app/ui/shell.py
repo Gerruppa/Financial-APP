@@ -22,6 +22,7 @@ from financial_app.sources.analizy import AnalizySearch, AnalizySource
 from financial_app.sources.bankier import BankierSource
 from financial_app.sources.bond_data import BondDataSources, bond_data_due, refresh_bond_data
 from financial_app.sources.bossa import BossaSource
+from financial_app.sources.fund_profile import YahooFundProfiles
 from financial_app.sources.history import QuoteHistory
 from financial_app.sources.instrument_card import CardHistory
 from financial_app.sources.nbp import NbpRates
@@ -40,7 +41,7 @@ from financial_app.ui.dialogs import install_movable_dialogs
 from financial_app.ui.header_search import HeaderSearch
 from financial_app.ui.help import HELP_PATH, build_help_page
 from financial_app.ui.history import history_status, shared_history
-from financial_app.ui.instrument_card import CardContext, ListingHistory, open_instrument_card
+from financial_app.ui.instrument_card import CardContext, FundProfiles, ListingHistory, open_instrument_card
 from financial_app.ui.instruments import InstrumentsSection
 from financial_app.ui.multi_asset import MultiAssetPage
 from financial_app.ui.passive_income import PassiveIncomePage
@@ -105,6 +106,7 @@ def build_shell(
     history: PortfolioHistory | None = None,
     bond_data: BondDataSources | None = None,
     card_history: ListingHistory | None = None,
+    fund_profiles: FundProfiles | None = None,
 ) -> None:
     """Build the whole window; tabs are client-side sub-pages backed by the database at ``engine``.
 
@@ -115,7 +117,8 @@ def build_shell(
     default fetched from Yahoo and Stooq, computed in the process pool); with ``refresh_at_start`` its missing days are
     fetched after the price refresh. ``bond_data`` gives the MF file, GUS CPI and the NBP reference rate, fetched
     with the price refresh at most once a day (by default the real sources, or none when test ``sources`` are given).
-    ``card_history`` gives the Instrument Card its closes (by default fetched live from Yahoo and analizy.pl).
+    ``card_history`` gives the Instrument Card its closes (by default fetched live from Yahoo and analizy.pl) and
+    ``fund_profiles`` its funds' TER, size and issuer (by default from Yahoo).
     """
     rates = rates or NbpRates(engine)
     if sources is None:
@@ -269,7 +272,9 @@ def build_shell(
 
     # The header search's Instrument Card opens the Instrument dialog of Ustawienia > Instrumenty (issue #175)
     card_instruments = InstrumentsSection(engine, search, sources, on_changed=instruments_changed)
-    card = CardContext(engine, rates, card_history or CardHistory(), card_instruments)
+    card = CardContext(
+        engine, rates, card_history or CardHistory(), fund_profiles or YahooFundProfiles(), card_instruments
+    )
     header_search = HeaderSearch(engine, search, lambda subject: open_instrument_card(card, subject))
 
     with ui.header().classes("k-header items-center px-6").props("bordered=false").mark("header") as header:

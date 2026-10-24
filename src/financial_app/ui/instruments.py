@@ -523,6 +523,9 @@ class InstrumentsSection:
                 instrument_type.value = filled.instrument_type
                 name.value, isin.value, market.value = filled.name, filled.isin, filled.market
                 domicile.value, policy.value = filled.domicile, filled.distribution_policy
+                # The TER field is text that may not parse yet, so a result's TER only fills it while it is blank
+                if not (ter_input.value or "").strip():
+                    ter_input.value = _exact_text(filled.ter_percent)
                 currency.value = filled.quote_currency or currency.value
                 for source, field in symbol_inputs.items():
                     field.value = filled.source_symbols[source]

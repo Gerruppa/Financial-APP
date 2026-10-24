@@ -2,6 +2,9 @@
 
 ## Nieopublikowane
 
+### Nowe funkcje
+- Karta instrumentu pokazuje dla funduszy i ETF-ów TER, wielkość funduszu i emitenta według Yahoo (tylko to, co Yahoo podaje), a "Dodaj jako instrument" uzupełnia pusty TER.
+
 ## 1.0.1 — 2026-10-20
 
 ### Nowe funkcje
