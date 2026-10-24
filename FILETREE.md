@@ -304,6 +304,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `bond_data.py`: Header status listing failing bond data sources with their reasons, shown only while one keeps failing
 - `bond_drafts.py`: Dochód stały tab's "Do zatwierdzenia" list of bond maturities, unpaid coupons, and Term Deposit interest and maturities, with its header count.
 - `bond_series.py`: Bond Series rate summary and dialog for correcting MF rates by hand in Ustawienia Instrumenty
+- `bond_type_card.py`: Treasury bond type card opened from the header search: current MF offer, the user's Bond Series of the type and a Buy button.
 - `bonds.py`: Dochód stały tab UI: Term Deposits section, expandable Bond Series table with Lots and values, the "Do zatwierdzenia" list, and the 12-month calendar.
 - `changelog.md`: Polish history of user-visible changes per app version, shipped with the app
 - `changelog.py`: Version label under the logo opening the changelog dialog, and the one-time Co nowego dialog after an update
