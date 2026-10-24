@@ -25,10 +25,6 @@ def data_dir() -> Path:
     return Path(override) if override else Path(user_data_dir(APP_NAME, appauthor=False))
 
 
-def users_path() -> Path:
-    return data_dir() / USERS_FILE
-
-
 def startup_log_path() -> Path:
     return data_dir() / STARTUP_LOG_FILE
 

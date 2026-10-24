@@ -128,8 +128,9 @@ class Session:
     def close(self) -> None:
         """Sign out: the User's background work stops and their database closes."""
         if self.current is not None:
-            stop_background_work(self.current.engine)
-            self.current.engine.dispose()
+            engine = self.current.engine
+            stop_background_work(engine)
+            engine.dispose()
             self.current = None
 
 
