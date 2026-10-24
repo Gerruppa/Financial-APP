@@ -8,6 +8,7 @@ before.
 import html
 import json
 import re
+import threading
 import urllib.request
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
@@ -16,6 +17,7 @@ from decimal import Decimal
 from urllib.error import HTTPError
 from urllib.parse import quote as url_quote
 
+from financial_app.domain.fund_profile import FundProfile
 from financial_app.domain.instrument_search import FoundListing, InstrumentSearchError, looks_like_isin
 from financial_app.domain.instruments import InstrumentType
 from financial_app.domain.prices import ANALIZY, ANALIZY_HISTORY, CurrencyMismatchError, PriceSourceError, Quote
@@ -30,6 +32,9 @@ SEARCH_API = (
 # The kinds of products the search keeps: open-end funds, PPK and foreign funds; insurance (UFK), closed-end (FIZ)
 # funds and ETFs are left out
 FUND_KINDS = frozenset({"FIO", "SFIO", "PPK", "FZG"})
+# The kind of a GPW-listed ETF in the search, and the text it gives as the benchmark of a fund without one
+ETF_KIND = "ETF"
+NO_BENCHMARK = "fundusz nie posiada benchmarku"
 # The Asset Class a PPK fund belongs to; the class of any other fund depends on what it holds
 PPK_CLASS = "Multi-asset"
 # The search marks the words found with tags and adds a fund's former name, "(d. ...)", in a trailing span
@@ -146,6 +151,58 @@ class AnalizySearch:
             return _newest(self.fetch, code).currency
         except PriceSourceError:
             return ""
+
+
+class AnalizyFundProfiles:
+    """The TFI, group and benchmark of a Polish fund, PPK or GPW ETF from the same search (issue #204), each query
+    asked once per session; ``fetch`` is injectable so tests run on saved responses. Every failure gives no
+    profile, as the card then shows nothing."""
+
+    def __init__(self, fetch: Callable[[str], str | None] = fetch_from_analizy) -> None:
+        self.fetch = fetch
+        self._lock = threading.Lock()
+        self._products: dict[str, list[dict[str, object]]] = {}
+
+    def fund_profile(self, code: str) -> FundProfile | None:
+        """The profile of the fund or PPK with Fund Code ``code``."""
+        code = code.strip().upper()
+        hits = [p for p in self._found(code) if str(p.get("kod", "")).upper() == code]
+        return _profile_of(hits[0]) if hits else None
+
+    def etf_profile(self, ticker: str) -> FundProfile | None:
+        """The profile of the GPW ETF with ``ticker``, only when the search finds exactly one ETF for it."""
+        hits = [p for p in self._found(ticker.strip().upper()) if p.get("kodRodzaju") == ETF_KIND]
+        return _profile_of(hits[0]) if len(hits) == 1 else None
+
+    def _found(self, query: str) -> list[dict[str, object]]:
+        if not query:
+            return []
+        with self._lock:
+            if query not in self._products:
+                found = self._search(query)
+                if found is None:  # a failure may pass, so it is asked again next time
+                    return []
+                self._products[query] = found
+            return self._products[query]
+
+    def _search(self, query: str) -> list[dict[str, object]] | None:
+        try:
+            products = json.loads(self.fetch(SEARCH_API.format(query=url_quote(query, safe=""))) or "")["products"]
+        except OSError, ValueError, KeyError, TypeError:
+            return None
+        return [p for p in products if isinstance(p, dict)] if isinstance(products, list) else None
+
+
+def _profile_of(product: dict[str, object]) -> FundProfile | None:
+    """The TFI, group and benchmark of a found product, ``None`` when it gives none of them."""
+    benchmark = str(product.get("searchBenchmark") or "").strip()
+    profile = FundProfile(
+        tfi=str(product.get("firmaZarz") or "").strip(),
+        group=str(product.get("nazwaGrupy") or "").strip(),
+        benchmark="" if benchmark.lower() == NO_BENCHMARK else benchmark,
+        source="analizy.pl",
+    )
+    return None if profile.empty else profile
 
 
 def _plain(name: str) -> str:

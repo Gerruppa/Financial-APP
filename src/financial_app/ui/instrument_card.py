@@ -32,7 +32,7 @@ from financial_app.domain.instrument_card import (
 )
 from financial_app.domain.instrument_search import FormFields, FoundListing, fill_empty
 from financial_app.domain.instruments import DistributionPolicy, Instrument, InstrumentType
-from financial_app.domain.prices import SOURCE_NAMES, YAHOO, PriceSourceError, Quote
+from financial_app.domain.prices import ANALIZY, BOSSA, SOURCE_NAMES, YAHOO, PriceSourceError, Quote
 from financial_app.persistence.history import quotes_between
 from financial_app.persistence.instruments import list_instruments
 from financial_app.sources.instrument_card import FIRST_DAY
@@ -55,15 +55,26 @@ class FundProfiles(Protocol):
     def profile(self, symbol: str) -> FundProfile | None: ...
 
 
+class PolishFundProfiles(Protocol):
+    """The profile of a Polish fund or PPK by its Fund Code, or of a GPW ETF by its ticker, ``None`` when none comes
+    (``sources.analizy.AnalizyFundProfiles``)."""
+
+    def fund_profile(self, code: str) -> FundProfile | None: ...
+
+    def etf_profile(self, ticker: str) -> FundProfile | None: ...
+
+
 @dataclass
 class CardContext:
     """What a card needs: the database, today's NBP Rates for "Twoja pozycja", the ``history`` its closes come from,
-    the ``profiles`` of its funds and the Instrument dialog (``instruments``) its buttons open."""
+    the ``profiles`` of its funds (Yahoo's, and analizy.pl's ``polish_profiles``) and the Instrument dialog
+    (``instruments``) its buttons open."""
 
     engine: Engine
     rates: NbpRates
     history: ListingHistory
     profiles: FundProfiles
+    polish_profiles: PolishFundProfiles
     instruments: InstrumentsSection
 
 
@@ -120,17 +131,23 @@ class InstrumentCard:
 
     @ui.refreshable_method
     def profile(self) -> None:
-        """The fund's TER, size and issuer from Yahoo, in the background: nothing shows while it loads or when none
-        comes."""
+        """The fund's TER, size and issuer from Yahoo, or a Polish fund's or GPW ETF's TFI, group and benchmark from
+        analizy.pl, in the background: nothing shows while it loads or when none comes."""
         area = ui.column().classes("w-full gap-0")
         listing, holder = self.listing, self._owner()
-        symbol = _profile_symbol(listing, holder)
-        if symbol is not None:
-            ui.timer(0, lambda: self._load_profile(symbol, listing, area), once=True)
+        request = _profile_request(listing, holder)
+        if request is not None:
+            ui.timer(0, lambda: self._load_profile(request, listing, area), once=True)
 
-    async def _load_profile(self, symbol: str, listing: FoundListing, area: ui.column) -> None:
+    async def _load_profile(self, request: tuple[str, str], listing: FoundListing, area: ui.column) -> None:
+        kind, symbol = request
+        asks = {
+            "yahoo": self.context.profiles.profile,
+            "fund": self.context.polish_profiles.fund_profile,
+            "etf": self.context.polish_profiles.etf_profile,
+        }
         # The source answers over the network, so the window keeps working meanwhile
-        profile = await run.io_bound(self.context.profiles.profile, symbol)
+        profile = await run.io_bound(asks[kind], symbol)
         if profile is None:  # none came, or the app is shutting down
             return
         self.profiles[symbol] = profile
@@ -280,27 +297,43 @@ def _yahoo_symbol(listing: FoundListing) -> str:
     return listing.source_symbols.get(YAHOO, "").strip().upper()
 
 
-def _profile_symbol(listing: FoundListing, holder: Instrument | None) -> str | None:
-    """The Yahoo symbol to ask for a fund profile: the listing's, when it is a fund or ETF and not a Warsaw listing,
-    for which Yahoo gives nothing."""
-    symbol = _yahoo_symbol(listing)
+def _profile_request(listing: FoundListing, holder: Instrument | None) -> tuple[str, str] | None:
+    """What to ask for a fund profile, as (source, symbol), for a listing that is a fund or ETF: Yahoo by the
+    listing's symbol, but for a Warsaw listing, for which Yahoo gives nothing, analizy.pl by the Fund Code (a Polish
+    fund or PPK) or else by the ticker (a GPW ETF)."""
     kind = holder.instrument_type if holder is not None else listing.instrument_type
-    is_fund = listing.fund or kind in (InstrumentType.ETF, InstrumentType.FUND)
-    return symbol if symbol and is_fund and not symbol.endswith(WARSAW_SUFFIX) else None
+    if not (listing.fund or kind in (InstrumentType.ETF, InstrumentType.FUND)):
+        return None
+    symbol = _yahoo_symbol(listing)
+    if symbol and not symbol.endswith(WARSAW_SUFFIX):
+        return "yahoo", symbol
+    code = listing.source_symbols.get(ANALIZY, "").strip().upper()
+    if code:
+        return "fund", code
+    ticker = (symbol.removesuffix(WARSAW_SUFFIX) or listing.source_symbols.get(BOSSA, "").strip()).upper()
+    return ("etf", ticker) if ticker else None
 
 
 def _profile(profile: FundProfile, holder: Instrument | None) -> None:
-    """The TER (the Instrument's own, else Yahoo's marked as such), the fund size and the issuer, those that came."""
+    """The TER (the Instrument's own, else the source's marked as such), the fund size, the issuer, the TFI, the group
+    and the benchmark, those that came, each marked with the profile's source."""
+    by = f"wg {profile.source}"
     with ui.row().classes("items-center gap-x-4 text-sm").mark("card-profile"):
         if holder is not None and holder.ter_percent is not None:
             ui.label(f"TER: {format_exact_percent(holder.ter_percent)}").mark("card-ter")
         elif profile.ter_percent is not None:
-            ui.label(f"TER: {format_exact_percent(profile.ter_percent)} (Yahoo)").mark("card-ter")
+            ui.label(f"TER: {format_exact_percent(profile.ter_percent)} ({profile.source})").mark("card-ter")
         if profile.size is not None:
             size = format_fund_size(profile.size, profile.size_currency)
-            ui.label(f"Wielkość funduszu: {size} (wg Yahoo)").mark("card-fund-size")
+            ui.label(f"Wielkość funduszu: {size} ({by})").mark("card-fund-size")
         if profile.issuer:
-            ui.label(f"Emitent: {profile.issuer} (wg Yahoo)").mark("card-issuer")
+            ui.label(f"Emitent: {profile.issuer} ({by})").mark("card-issuer")
+        if profile.tfi:
+            ui.label(f"TFI: {profile.tfi} ({by})").mark("card-tfi")
+        if profile.group:
+            ui.label(f"Grupa analizy.pl: {profile.group} ({by})").mark("card-group")
+        if profile.benchmark:
+            ui.label(f"Benchmark: {profile.benchmark} ({by})").mark("card-benchmark")
 
 
 def _details(listing: FoundListing, holder: Instrument | None) -> tuple[str, DistributionPolicy | None]:

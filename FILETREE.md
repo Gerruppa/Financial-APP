@@ -156,7 +156,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `export.py`: Builds the transaction export rows with columns, amounts, origin and comment, independent of file format.
 - `faq.py`: Parses the Pomoc FAQ Markdown into sections and questions; searches them ignoring case and Polish letters
 - `formatting.py`: Polish number, amount and date formatting and parsing of typed input; the single formatter every screen uses.
-- `fund_profile.py`: Fund profile value type holding optional TER, fund size with currency and issuer from Yahoo; formats the fund size.
+- `fund_profile.py`: Fund profile value type holding TER, fund size and issuer from Yahoo, or TFI, group and benchmark from analizy.pl; formats the fund size.
 - `header_search.py`: Header search grouping of listings into Search Results, own Instrument matching, and the Instrument already holding a listing.
 - `history.py`: Tracks which days of Quote and NBP Rate history are cached, and computes the missing days to fetch.
 - `inflation.py`: Inflation over a period from GUS monthly CPI, spread across days as the sheet's Benchmarki do, and the real return
@@ -270,7 +270,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 ## src/financial_app/sources/
 
 - `__init__.py`: Package marker describing the external price sources package
-- `analizy.py`: Fund and PPK Quotes, valuation history for History, and fund search through the undocumented analizy.pl API
+- `analizy.py`: Fund and PPK Quotes, valuation history, fund search and TFI/group/benchmark profiles through the undocumented analizy.pl API.
 - `bankier.py`: Fetches fund and PPK Quotes from bankier.pl pages as the fallback price source
 - `benchmarks.py`: Builds each saved benchmark's growth from the CPI, price and NBP caches and compares it with History.
 - `bond_data.py`: Fetches and parses the MF bond file, GUS CPI and NBP reference rates, refreshing their SQLite copies at most once a day
@@ -320,7 +320,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `history.py`: Shared per-database History window state: background fetch, progress and failure status, cached days
 - `import_sheet.py`: Ustawienia import section that previews the Transakcje spreadsheet and saves it only after user decisions
 - `info.py`: Hover "i" icon and card title helper that show explanatory text in Dashboard and Wyniki cards
-- `instrument_card.py`: Instrument Card dialog: listings, details, price, chart and returns with a chart currency switch, with Add as Instrument or Edit; fund TER, size and issuer from Yahoo.
+- `instrument_card.py`: Instrument Card dialog: listings, price, chart, returns, currency switch, Add as Instrument or Edit; fund TER, size, issuer (Yahoo), TFI, group, benchmark (analizy.pl).
 - `instruments.py`: Ustawienia Klasy aktywów and Instrumenty cards: editable Asset Classes and the Instrument catalog with its dialog
 - `investment_goal.py`: Dashboard Investment Goal tile with progress and real forecast, and a dialog to set the goal as amount or FIRE
 - `login.py`: Login screen in the default Theme: pick a User and enter the password, create a User, explain a forgotten password
@@ -363,6 +363,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_accounts_without_pln_repository.py`: Tests saving and listing a trade whose commission is paid in foreign cash on an Account without PLN.
 - `test_accounts_without_pln_ui.py`: End-to-end UI test of a Buy on an Account without PLN, paying the commission from its foreign cash.
 - `test_analizy_history.py`: Tests fund and PPK valuation history from analizy.pl on saved responses, and the source order for History
+- `test_analizy_profile.py`: Tests for analizy.pl fund, PPK and GPW ETF profiles (TFI, group, benchmark) on saved search responses, without the network.
 - `test_analizy_search.py`: Tests for analizy.pl fund and PPK search on saved, trimmed responses without network
 - `test_analizy_source.py`: Tests the analizy.pl fund and PPK quote source against saved API responses
 - `test_architecture.py`: Architecture test enforcing that the domain core does not import UI or database code
@@ -549,9 +550,12 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 
 ## tests/fixtures/analizy/search/
 
+- `ETFBW20TR.json`: Saved analizy.pl search response for the GPW ETF ETFBW20TR; test fixture for TFI, group and benchmark lookups.
 - `LU0109392836.json`: Saved analizy.pl search response for an ISIN query returning one Franklin fund
 - `PPK_2060_PZU.json`: Saved analizy.pl search response for a PPK query returning the PPK inPZU 2060 fund
+- `PZU60.json`: Saved analizy.pl search response for the PPK fund PZU60; test fixture for PPK profile lookups.
 - `PZU_Akcji_Krakowiak.json`: Saved analizy.pl search response for PZU Akcji Krakowiak, including a former-name listing
+- `QRS20.json`: Saved analizy.pl search response listing Quercus funds, including QRS20; test fixture for fund profile lookups.
 - `Quercus.json`: Saved analizy.pl search response for Quercus funds, used by search tests
 
 ## tests/fixtures/bankier/

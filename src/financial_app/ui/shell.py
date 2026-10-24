@@ -18,7 +18,7 @@ from financial_app.domain.themes import Theme
 from financial_app.domain.ui_visibility import tab_key
 from financial_app.persistence.bond_data import bond_data_statuses
 from financial_app.persistence.quotes import last_successful_refresh
-from financial_app.sources.analizy import AnalizySearch, AnalizySource
+from financial_app.sources.analizy import AnalizyFundProfiles, AnalizySearch, AnalizySource
 from financial_app.sources.bankier import BankierSource
 from financial_app.sources.bond_data import BondDataSources, bond_data_due, refresh_bond_data
 from financial_app.sources.bossa import BossaSource
@@ -41,7 +41,13 @@ from financial_app.ui.dialogs import install_movable_dialogs
 from financial_app.ui.header_search import HeaderSearch
 from financial_app.ui.help import HELP_PATH, build_help_page
 from financial_app.ui.history import forget_history, history_status, shared_history
-from financial_app.ui.instrument_card import CardContext, FundProfiles, ListingHistory, open_instrument_card
+from financial_app.ui.instrument_card import (
+    CardContext,
+    FundProfiles,
+    ListingHistory,
+    PolishFundProfiles,
+    open_instrument_card,
+)
 from financial_app.ui.instruments import InstrumentsSection
 from financial_app.ui.multi_asset import MultiAssetPage
 from financial_app.ui.passive_income import PassiveIncomePage
@@ -115,6 +121,7 @@ def build_shell(
     bond_data: BondDataSources | None = None,
     card_history: ListingHistory | None = None,
     fund_profiles: FundProfiles | None = None,
+    polish_profiles: PolishFundProfiles | None = None,
     on_switch_user: Callable[[], None] | None = None,
 ) -> None:
     """Build the whole window; tabs are client-side sub-pages backed by the database at ``engine``.
@@ -127,7 +134,8 @@ def build_shell(
     fetched after the price refresh. ``bond_data`` gives the MF file, GUS CPI and the NBP reference rate, fetched
     with the price refresh at most once a day (by default the real sources, or none when test ``sources`` are given).
     ``card_history`` gives the Instrument Card its closes (by default fetched live from Yahoo and analizy.pl) and
-    ``fund_profiles`` its funds' TER, size and issuer (by default from Yahoo). ``on_switch_user`` returns to the login
+    ``fund_profiles`` its funds' TER, size and issuer (by default from Yahoo) and ``polish_profiles`` the TFI, group
+    and benchmark of its Polish funds and GPW ETFs (by default from analizy.pl). ``on_switch_user`` returns to the login
     screen (Ustawienia offers it only when given).
     """
     rates = rates or NbpRates(engine)
@@ -283,7 +291,12 @@ def build_shell(
     # The header search's Instrument Card opens the Instrument dialog of Ustawienia > Instrumenty (issue #175)
     card_instruments = InstrumentsSection(engine, search, sources, on_changed=instruments_changed)
     card = CardContext(
-        engine, rates, card_history or CardHistory(), fund_profiles or YahooFundProfiles(), card_instruments
+        engine,
+        rates,
+        card_history or CardHistory(),
+        fund_profiles or YahooFundProfiles(),
+        polish_profiles or AnalizyFundProfiles(),
+        card_instruments,
     )
     header_search = HeaderSearch(engine, search, lambda subject: open_instrument_card(card, subject))
 

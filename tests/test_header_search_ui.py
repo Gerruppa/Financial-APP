@@ -21,7 +21,7 @@ from financial_app.domain.instrument_card import CardPeriod
 from financial_app.domain.instrument_search import FoundListing, FoundListings, InstrumentSearch
 from financial_app.domain.instruments import InstrumentDraft, InstrumentType
 from financial_app.domain.portfolio_history import DayValue
-from financial_app.domain.prices import BOSSA, YAHOO, Quote
+from financial_app.domain.prices import ANALIZY, BOSSA, YAHOO, Quote
 from financial_app.domain.transactions import TransactionDraft, TransactionType, buy_or_sell
 from financial_app.persistence.accounts import add_account
 from financial_app.persistence.db import init_db
@@ -31,7 +31,7 @@ from financial_app.persistence.transactions import add_transactions
 from financial_app.sources.history import QuoteHistory
 from financial_app.sources.nbp import NbpRates
 from financial_app.sources.portfolio_history import PortfolioHistory
-from financial_app.ui.instrument_card import FundProfiles, ListingHistory
+from financial_app.ui.instrument_card import FundProfiles, ListingHistory, PolishFundProfiles
 from financial_app.ui.shell import build_shell
 
 TODAY = date(2026, 10, 20)
@@ -90,12 +90,29 @@ class FixedProfiles:
         return self.profile_given
 
 
+class FixedPolishProfiles:
+    """Gives every fund code and ETF ticker the same ``profile`` (by default none), recording what was asked."""
+
+    def __init__(self, profile: FundProfile | None = None) -> None:
+        self.profile_given = profile
+        self.asked: list[tuple[str, str]] = []
+
+    def fund_profile(self, code: str) -> FundProfile | None:
+        self.asked.append(("fund", code))
+        return self.profile_given
+
+    def etf_profile(self, ticker: str) -> FundProfile | None:
+        self.asked.append(("etf", ticker))
+        return self.profile_given
+
+
 def _shell(
     engine: Engine,
     search: InstrumentSearch,
     history: ListingHistory,
     profiles: FundProfiles | None = None,
     rates: NbpRates | None = None,
+    polish: PolishFundProfiles | None = None,
 ) -> Callable[[], None]:
     """The window on ``search``, the card's ``history`` and fund ``profiles`` (none by default), its History
     computed inline rather than in the process pool, with no Quotes fetched, and ``rates`` (by default NBP's)."""
@@ -110,6 +127,7 @@ def _shell(
         card_history=history,
         history=portfolio,
         fund_profiles=fund_profiles,
+        polish_profiles=polish or FixedPolishProfiles(),
     )
 
 
@@ -407,6 +425,65 @@ async def test_the_card_has_no_profile_section_without_a_profile(engine: Engine)
         await user.should_see(marker="chart-price")
 
         await user.should_not_see(marker="card-profile")
+
+
+POLISH = FundProfile(
+    tfi="AgioFunds TFI", group="akcji polskich uniwersalne", benchmark="WIG20TR Indeks", source="analizy.pl"
+)
+WARSAW_ETF = replace(
+    VUAA, name="Beta ETF WIG20TR", symbol="ETFBW20TR.WA", currency="PLN", source_symbols={YAHOO: "ETFBW20TR.WA"}
+)
+POLISH_FUND = FoundListing(
+    name="QUERCUS Gold",
+    symbol="QRS20",
+    market="",
+    currency="PLN",
+    source_symbols={ANALIZY: "QRS20"},
+    fund=True,
+    source="analizy.pl",
+)
+
+
+async def test_a_gpw_etf_card_shows_tfi_group_and_benchmark_marked_as_from_analizy(engine: Engine) -> None:
+    yahoo, polish = FixedProfiles(PROFILE), FixedPolishProfiles(POLISH)
+    async with user_simulation(_shell(engine, FixedSearch([WARSAW_ETF]), FixedHistory(), yahoo, polish=polish)) as user:
+        await _found_card(user, "etf")
+
+        await user.should_see("TFI: AgioFunds TFI (wg analizy.pl)")
+        await user.should_see("Grupa analizy.pl: akcji polskich uniwersalne (wg analizy.pl)")
+        await user.should_see("Benchmark: WIG20TR Indeks (wg analizy.pl)")
+        await user.should_not_see(marker="card-ter")
+    assert polish.asked == [("etf", "ETFBW20TR")]
+    assert yahoo.asked == []
+
+
+async def test_a_polish_fund_card_asks_analizy_by_its_fund_code(engine: Engine) -> None:
+    polish = FixedPolishProfiles(replace(POLISH, benchmark=""))
+    async with user_simulation(_shell(engine, FixedSearch([POLISH_FUND]), FixedHistory(), polish=polish)) as user:
+        await _found_card(user, "quercus")
+
+        await user.should_see("TFI: AgioFunds TFI (wg analizy.pl)")
+        await user.should_not_see(marker="card-benchmark")
+    assert polish.asked == [("fund", "QRS20")]
+
+
+async def test_a_card_without_an_analizy_profile_shows_no_section(engine: Engine) -> None:
+    async with user_simulation(_shell(engine, FixedSearch([WARSAW_ETF]), FixedHistory())) as user:
+        await _found_card(user, "etf")
+        await user.should_see(marker="chart-price")
+
+        await user.should_not_see(marker="card-profile")
+
+
+async def test_a_warsaw_stock_is_not_asked_of_analizy(engine: Engine) -> None:
+    stock = replace(WARSAW_ETF, name="CD Projekt", symbol="CDR.WA", source_symbols={YAHOO: "CDR.WA"}, fund=False)
+    polish = FixedPolishProfiles(POLISH)
+    async with user_simulation(_shell(engine, FixedSearch([stock]), FixedHistory(), polish=polish)) as user:
+        await _found_card(user, "cdr")
+        await user.should_see(marker="chart-price")
+
+        await user.should_not_see(marker="card-profile")
+    assert polish.asked == []
 
 
 async def test_an_instruments_own_ter_wins_over_yahoos(engine: Engine) -> None:

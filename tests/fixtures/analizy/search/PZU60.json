@@ -1,0 +1,33 @@
+{
+ "page": 0,
+ "limit": "20",
+ "total": 1,
+ "products": [
+  {
+   "kod": "PZU60",
+   "rodzaj": null,
+   "nazwa": "PPK inPZU 2060",
+   "nazwaParasola": "PPK inPZU SFIO",
+   "kodParasola": "PAR_PZU03",
+   "nazwaGrupy": "zdefiniowanej daty PPK 2060",
+   "kodGrupy": "PPK_60",
+   "nazwaSegmentu": "PPK",
+   "segmentBgColor": "ppk",
+   "firmaZarz": "TFI PZU",
+   "kodFirmaZarz": "TFIPZU",
+   "profileRoute": "profile_ppk",
+   "catalogRoute": "catalog_ppk",
+   "type": "fundusz",
+   "czyDostepnyOnline": false,
+   "nazwaDawniej": null,
+   "isin": null,
+   "isActive": true,
+   "kodRodzaju": "PPK",
+   "searchBenchmark": null,
+   "tickers": null
+  }
+ ],
+ "aggregations": {
+  "PPK": 1
+ }
+}

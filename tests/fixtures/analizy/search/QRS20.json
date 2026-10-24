@@ -1,0 +1,33 @@
+{
+ "page": 0,
+ "limit": "20",
+ "total": 1,
+ "products": [
+  {
+   "kod": "QRS20",
+   "rodzaj": null,
+   "nazwa": "QUERCUS Gold",
+   "nazwaParasola": "QUERCUS Parasolowy SFIO",
+   "kodParasola": "PAR_QRS01",
+   "nazwaGrupy": "rynku surowców - metale szlachetne",
+   "kodGrupy": "COM_ZL",
+   "nazwaSegmentu": "Pozostałe",
+   "segmentBgColor": "other",
+   "firmaZarz": "QUERCUS TFI",
+   "kodFirmaZarz": "TFIQRS",
+   "profileRoute": "profile_fio",
+   "catalogRoute": "catalog_fio",
+   "type": "fundusz",
+   "czyDostepnyOnline": true,
+   "nazwaDawniej": null,
+   "isin": null,
+   "isActive": true,
+   "kodRodzaju": "FIO",
+   "searchBenchmark": "fundusz nie posiada benchmarku",
+   "tickers": null
+  }
+ ],
+ "aggregations": {
+  "FIO": 1
+ }
+}
