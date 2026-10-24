@@ -13,8 +13,10 @@ from nicegui.testing import User, user_simulation
 from sqlalchemy import Engine
 
 from financial_app.domain.accounts import AccountDraft, AccountType
+from financial_app.domain.currencies import NbpRate
 from financial_app.domain.formatting import NBSP
 from financial_app.domain.fund_profile import FundProfile
+from financial_app.domain.history import Cover
 from financial_app.domain.instrument_card import CardPeriod
 from financial_app.domain.instrument_search import FoundListing, FoundListings, InstrumentSearch
 from financial_app.domain.instruments import InstrumentDraft, InstrumentType
@@ -23,7 +25,7 @@ from financial_app.domain.prices import BOSSA, YAHOO, Quote
 from financial_app.domain.transactions import TransactionDraft, TransactionType, buy_or_sell
 from financial_app.persistence.accounts import add_account
 from financial_app.persistence.db import init_db
-from financial_app.persistence.history import save_quote_history
+from financial_app.persistence.history import save_nbp_history, save_quote_history
 from financial_app.persistence.instruments import add_instrument, list_asset_classes, list_instruments
 from financial_app.persistence.transactions import add_transactions
 from financial_app.sources.history import QuoteHistory
@@ -89,15 +91,25 @@ class FixedProfiles:
 
 
 def _shell(
-    engine: Engine, search: InstrumentSearch, history: ListingHistory, profiles: FundProfiles | None = None
+    engine: Engine,
+    search: InstrumentSearch,
+    history: ListingHistory,
+    profiles: FundProfiles | None = None,
+    rates: NbpRates | None = None,
 ) -> Callable[[], None]:
     """The window on ``search``, the card's ``history`` and fund ``profiles`` (none by default), its History
-    computed inline rather than in the process pool, with no Quotes fetched."""
+    computed inline rather than in the process pool, with no Quotes fetched, and ``rates`` (by default NBP's)."""
     quotes = QuoteHistory(engine, lambda url: "Brak danych", lambda: TODAY, lambda: NOW, lambda url: None)
     portfolio = PortfolioHistory(engine, quotes, NbpRates(engine), lambda: TODAY, _inline)
     fund_profiles = profiles or FixedProfiles()
     return lambda: build_shell(
-        engine, now=lambda: NOW, search=search, card_history=history, history=portfolio, fund_profiles=fund_profiles
+        engine,
+        rates,
+        now=lambda: NOW,
+        search=search,
+        card_history=history,
+        history=portfolio,
+        fund_profiles=fund_profiles,
     )
 
 
@@ -189,6 +201,47 @@ async def test_a_chart_period_chosen_redraws_the_chart_from_its_start(engine: En
         [chart] = user.find(marker="chart-price").elements
         assert isinstance(chart, ui.echart)
         assert chart.options["xAxis"]["data"] == ["31.12.2025", "19.10.2026", "20.10.2026"]
+
+
+def _save_rates(engine: Engine, currency: str, rate: str) -> None:
+    """One NBP Rate from 20.12.2025, with days to TODAY covered, so that the card fetches none."""
+    days = Cover(date(2025, 12, 1), TODAY)
+    save_nbp_history(engine, currency, [NbpRate(currency, Decimal(rate), date(2025, 12, 20), "1/A/NBP/2025")], days)
+
+
+async def test_the_chart_currency_chosen_converts_the_prices_at_nbp_rates(engine: Engine) -> None:
+    _save_rates(engine, "USD", "4")
+    _save_rates(engine, "EUR", "5")
+    rates = NbpRates(engine, today=lambda: TODAY)
+    async with user_simulation(_shell(engine, FixedSearch([VUAA]), FixedHistory(), rates=rates)) as user:
+        await _found_card(user, "vuaa")
+        await user.should_see(marker="card-currency")
+        [select] = user.find(marker="card-currency").elements
+        assert isinstance(select, ui.select)
+        assert select.value == "USD" and select.options == ["USD", "PLN", "EUR"]
+
+        select.value = "EUR"
+
+        await user.should_see(marker="card-converted")
+        await user.should_see(f"117,60{NBSP}EUR")  # 147 USD * 4 / 5
+        [chart] = user.find(marker="chart-price").elements
+        assert isinstance(chart, ui.echart)
+        assert chart.options["series"][0]["data"][-1] == pytest.approx(117.6)
+
+
+async def test_a_currency_without_nbp_rates_is_noted_and_the_quote_currency_stays(engine: Engine) -> None:
+    def no_network(url: str) -> str | None:
+        raise OSError
+
+    rates = NbpRates(engine, no_network, lambda: TODAY)
+    async with user_simulation(_shell(engine, FixedSearch([VUAA]), FixedHistory(), rates=rates)) as user:
+        await _found_card(user, "vuaa")
+        await user.should_see(marker="card-currency")
+        [select] = user.find(marker="card-currency").elements
+        assert isinstance(select, ui.select)
+        select.value = "PLN"
+        await user.should_see("Nie udało się pobrać kursów NBP USD")
+        await user.should_not_see(marker="card-converted")
 
 
 async def test_a_search_result_already_held_shows_it_is_owned_instead_of_the_add_button(engine: Engine) -> None:

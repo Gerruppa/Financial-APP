@@ -1,7 +1,7 @@
 """The Instrument Card (issue #175): a large dialog on a Search Result or one of the user's Instruments, with its
 price, chart and returns from its whole history fetched live, and "Dodaj jako instrument" or "Edytuj"."""
 
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, replace
 from datetime import date
 from decimal import Decimal
@@ -10,6 +10,7 @@ from typing import Protocol
 from nicegui import run, ui
 from sqlalchemy import Engine
 
+from financial_app.domain.currencies import MissingNbpRateError
 from financial_app.domain.formatting import (
     format_date,
     format_exact_percent,
@@ -20,14 +21,22 @@ from financial_app.domain.formatting import (
 )
 from financial_app.domain.fund_profile import FundProfile, format_fund_size
 from financial_app.domain.header_search import SearchResult, owned_instrument
-from financial_app.domain.instrument_card import RETURN_PERIODS, CardPeriod, chart_window, price_summary, returns
+from financial_app.domain.instrument_card import (
+    RETURN_PERIODS,
+    CardPeriod,
+    chart_currencies,
+    chart_window,
+    convert_quotes,
+    price_summary,
+    returns,
+)
 from financial_app.domain.instrument_search import FormFields, FoundListing, fill_empty
 from financial_app.domain.instruments import DistributionPolicy, Instrument, InstrumentType
 from financial_app.domain.prices import SOURCE_NAMES, YAHOO, PriceSourceError, Quote
 from financial_app.persistence.history import quotes_between
 from financial_app.persistence.instruments import list_instruments
 from financial_app.sources.instrument_card import FIRST_DAY
-from financial_app.sources.nbp import NbpRates
+from financial_app.sources.nbp import LOOKBACK, NbpRates
 from financial_app.sources.todays_view import todays_view
 from financial_app.sources.yahoo import WARSAW_SUFFIX
 from financial_app.ui.charts import price_chart
@@ -168,9 +177,38 @@ class InstrumentCard:
             return
         if quotes is None:  # the app is shutting down
             return
+        await self._show(listing, area, quotes, quotes[0].currency if quotes else "")
+
+    async def _show(self, listing: FoundListing, area: ui.column, quotes: list[Quote], currency: str) -> None:
+        """The price part of ``quotes`` (in their own currency) shown in ``currency``, converted at NBP Rates."""
+        shown = quotes
+        if quotes and currency != quotes[0].currency:
+            try:
+                # The NBP answers over the network, so the window keeps working meanwhile
+                converted = await run.io_bound(_converted, self.context.rates, quotes, currency)
+            except MissingNbpRateError as error:
+                ui.notify(str(error), type="negative")
+                currency = quotes[0].currency
+            else:
+                if converted is None:  # the app is shutting down
+                    return
+                shown = converted
+        if listing is not self.listing or area.is_deleted:  # another listing was chosen, or the card closed
+            return
         area.clear()
         with area:
-            _prices(listing, quotes, _distributing(listing, self._owner()))
+
+            def choose(chosen: str) -> Awaitable[None]:
+                return self._show(listing, area, quotes, chosen)
+
+            _prices(
+                listing,
+                shown,
+                _distributing(listing, self._owner()),
+                currency,
+                quotes[0].currency if quotes else "",
+                choose,
+            )
 
     def _redraw(self) -> None:
         self.heading.refresh()
@@ -209,6 +247,14 @@ def _closes(context: CardContext, listing: FoundListing, holder: Instrument | No
     if not quotes and holder is not None:
         quotes = quotes_between(context.engine, holder.id, FIRST_DAY, today)
     return quotes
+
+
+def _converted(rates: NbpRates, quotes: list[Quote], currency: str) -> list[Quote]:
+    """``quotes`` in ``currency`` at NBP Rates, those of every currency involved fetched for the whole history (and
+    cached), from before its first close so that this one has a rate; raises ``MissingNbpRateError``."""
+    first, last = quotes[0].day - LOOKBACK, quotes[-1].day
+    needed = {quotes[0].currency, currency} - {"PLN"}
+    return convert_quotes(quotes, currency, {code: rates.history(code, first, last) for code in needed})
 
 
 def _listing_of(instrument: Instrument) -> FoundListing:
@@ -323,8 +369,16 @@ def _position(context: CardContext, instrument: Instrument) -> None:
             ui.label(" · ".join(parts))
 
 
-def _prices(listing: FoundListing, quotes: Sequence[Quote], distributing: bool) -> None:
-    """The price panel, the chart with its periods and the returns table of ``quotes``; a note without any."""
+def _prices(
+    listing: FoundListing,
+    quotes: Sequence[Quote],
+    distributing: bool,
+    currency: str,
+    quote_currency: str,
+    choose: Callable[[str], Awaitable[None]],
+) -> None:
+    """The price panel, the chart with its periods and the returns table of ``quotes`` (in ``currency``, the quote
+    currency or one chosen by ``choose``); a note without any."""
     summary = price_summary(quotes)
     if summary is None:
         ui.label("Brak historii notowań dla tego instrumentu.").classes("k-muted").mark("card-no-history")
@@ -332,6 +386,11 @@ def _prices(listing: FoundListing, quotes: Sequence[Quote], distributing: bool) 
     with ui.row().classes("w-full items-end gap-8").mark("card-price"):
         with ui.column().classes("gap-0"):
             ui.label(listing.symbol or listing.name).classes("text-sm k-muted")
+            if quote_currency:
+                currency_select = ui.select(
+                    chart_currencies(quote_currency), value=currency, on_change=lambda e: choose(e.value)
+                )
+                currency_select.props("dense options-dense borderless").classes("w-24").mark("card-currency")
             with ui.row().classes("items-baseline gap-2"):
                 ui.label(format_unit_price(summary.price, summary.currency)).classes("text-2xl font-bold")
                 _change_label(summary.day_change_percent)
@@ -354,6 +413,10 @@ def _prices(listing: FoundListing, quotes: Sequence[Quote], distributing: bool) 
     toggle.props("no-caps dense").mark("card-periods")
     chart(CardPeriod.MAX)
     _returns(quotes, distributing)
+    if currency != quote_currency:
+        ui.label(f"Ceny przeliczone na {currency} kursami NBP z dnia notowania.").classes("text-xs k-muted").mark(
+            "card-converted"
+        )
 
 
 def _change_label(percent: Decimal | None) -> None:

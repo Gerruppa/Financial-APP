@@ -1,11 +1,12 @@
 """The Instrument Card's figures (issue #175): its price panel, returns and the chart's closes for each period."""
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 from enum import StrEnum
 
+from financial_app.domain.currencies import NbpRate
 from financial_app.domain.periods import months_before
 from financial_app.domain.prices import Quote
 
@@ -136,3 +137,38 @@ def chart_window(quotes: Sequence[Quote], period: CardPeriod) -> list[Quote]:
     start = period.start(quotes[-1].day)
     base = max((quote.day for quote in quotes if quote.day <= start), default=quotes[0].day)
     return [quote for quote in quotes if quote.day >= base]
+
+
+def chart_currencies(quote_currency: str) -> list[str]:
+    """The currencies the chart can show: the quote currency first, then PLN, EUR and USD, each once."""
+    return list(dict.fromkeys([quote_currency, "PLN", "EUR", "USD"]))
+
+
+def convert_quotes(quotes: Sequence[Quote], currency: str, rates: Mapping[str, Sequence[NbpRate]]) -> list[Quote]:
+    """``quotes`` (oldest first, in one currency) in ``currency`` through PLN at the NBP Rate in force on each day
+    (the last one published on or before it); a close with no rate yet is left out. ``rates`` holds each non-PLN
+    currency involved, oldest first (``NbpRates.history``)."""
+    converted = []
+    for quote in quotes:
+        in_pln = _in_pln(quote.price, quote.currency, quote.day, rates)
+        value = None if in_pln is None else _from_pln(in_pln, currency, quote.day, rates)
+        if value is not None:
+            converted.append(Quote(value, currency, quote.day, quote.source))
+    return converted
+
+
+def _rate_on(currency: str, day: date, rates: Mapping[str, Sequence[NbpRate]]) -> Decimal | None:
+    if currency == "PLN":
+        return Decimal(1)
+    found = [rate.rate for rate in rates.get(currency, ()) if rate.published_on <= day]
+    return found[-1] if found else None
+
+
+def _in_pln(price: Decimal, currency: str, day: date, rates: Mapping[str, Sequence[NbpRate]]) -> Decimal | None:
+    rate = _rate_on(currency, day, rates)
+    return None if rate is None else price * rate
+
+
+def _from_pln(amount: Decimal, currency: str, day: date, rates: Mapping[str, Sequence[NbpRate]]) -> Decimal | None:
+    rate = _rate_on(currency, day, rates)
+    return None if rate is None else amount / rate
