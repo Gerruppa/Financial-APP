@@ -5,6 +5,7 @@ The password is a lock, not encryption: the hash only decides who gets past the 
 import hashlib
 import hmac
 import secrets
+import zlib
 from collections.abc import Iterable
 
 MIN_PASSWORD_LENGTH = 4
@@ -67,3 +68,21 @@ def _scrypt(password: str, salt: bytes, n: int, r: int, p: int) -> bytes:
 
 def _format(n: int, r: int, p: int, salt: bytes, digest: bytes) -> str:
     return f"scrypt${n}${r}${p}${salt.hex()}${digest.hex()}"
+
+
+# Mid-tone colours that keep white initials readable on both Themes
+AVATAR_COLOURS = ("#2563eb", "#0d9488", "#7c3aed", "#c2410c", "#be185d", "#4d7c0f", "#0369a1", "#a16207")
+
+
+def initials(pseudonym: str) -> str:
+    """Capitals of the first two words' first letters, or of a single word's first two."""
+    words = pseudonym.split()
+    if not words:
+        return ""
+    letters = words[0][0] + words[1][0] if len(words) > 1 else words[0][:2]
+    return letters.upper()
+
+
+def avatar_colour(pseudonym: str) -> str:
+    """The avatar's colour: one of ``AVATAR_COLOURS``, always the same for a pseudonym."""
+    return AVATAR_COLOURS[zlib.crc32(pseudonym.encode()) % len(AVATAR_COLOURS)]

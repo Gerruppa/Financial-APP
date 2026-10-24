@@ -1,5 +1,5 @@
-"""App shell (issues #1, #174 and #175): left menu with the logo, header with the search, View Scope and Theme, "+"
-button."""
+"""App shell (issues #1, #174, #175 and #177): left menu with the logo, header with the search, View Scope and the
+User's avatar, "+" button."""
 
 import asyncio
 from collections.abc import Callable, Mapping
@@ -14,7 +14,6 @@ from financial_app import __version__
 from financial_app.domain.formatting import format_datetime
 from financial_app.domain.instrument_search import CombinedSearch, InstrumentSearch
 from financial_app.domain.prices import ANALIZY, BANKIER, BOSSA, SOURCE_NAMES, YAHOO, refresh_due, source_reason
-from financial_app.domain.themes import Theme
 from financial_app.domain.ui_visibility import tab_key
 from financial_app.persistence.bond_data import bond_data_statuses
 from financial_app.persistence.quotes import last_successful_refresh
@@ -63,6 +62,7 @@ from financial_app.ui.theme import ThemeChoice, apply_theme
 from financial_app.ui.transaction_dialog import open_transaction_dialog
 from financial_app.ui.transactions import TransactionsPage
 from financial_app.ui.unpriced import UnpricedSection
+from financial_app.ui.user_menu import build_user_menu
 from financial_app.ui.view_scope import ScopeSwitcher, ViewScope, breadcrumbs
 from financial_app.ui.visibility import Layout
 
@@ -123,6 +123,7 @@ def build_shell(
     fund_profiles: FundProfiles | None = None,
     polish_profiles: PolishFundProfiles | None = None,
     on_switch_user: Callable[[], None] | None = None,
+    pseudonym: str = "Demo",
 ) -> None:
     """Build the whole window; tabs are client-side sub-pages backed by the database at ``engine``.
 
@@ -136,7 +137,7 @@ def build_shell(
     ``card_history`` gives the Instrument Card its closes (by default fetched live from Yahoo and analizy.pl) and
     ``fund_profiles`` its funds' TER, size and issuer (by default from Yahoo) and ``polish_profiles`` the TFI, group
     and benchmark of its Polish funds and GPW ETFs (by default from analizy.pl). ``on_switch_user`` returns to the login
-    screen (Ustawienia offers it only when given).
+    screen (the avatar's menu offers it only when given), ``pseudonym`` is the signed-in User's.
     """
     rates = rates or NbpRates(engine)
     if sources is None:
@@ -326,12 +327,7 @@ def build_shell(
         refresh_button.tooltip("Odśwież wyceny").mark("refresh-prices")
         switcher = ScopeSwitcher(scope, lambda: shared.days)
         events.subscribe(switcher.refresh, switcher.CHANGES)
-        other = Theme.LIGHT if theme.theme is Theme.GOLDEN else Theme.GOLDEN
-        theme_button = ui.button(
-            icon="light_mode" if theme.theme is Theme.GOLDEN else "dark_mode", on_click=lambda: theme.choose(other)
-        )
-        theme_button.props(f'flat round color=primary aria-label="Motyw: {other.label}"').mark("theme-toggle")
-        theme_button.tooltip(f"Motyw: {other.label}")
+        build_user_menu(pseudonym, theme, SETTINGS_PATH, HELP_PATH, on_switch_user)
 
     # The tab on screen, lit in the menu
     shown_path = {"path": "/"}
@@ -414,7 +410,6 @@ def build_shell(
         lambda: events.publish(Change.RECURRING_RULES),
         layout,
         theme,
-        on_switch_user,
     )
     pages[HELP_PATH] = lambda: build_help_page({tab.path: tab.label for tab in TABS})
     pages = {path: showing_add_button(path, build, path not in WITHOUT_ADD_BUTTON) for path, build in pages.items()}

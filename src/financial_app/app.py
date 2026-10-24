@@ -172,6 +172,7 @@ def main(argv: Sequence[str] | None = None) -> None:
                 session.current.engine,
                 refresh_at_start=refresh_at_start,
                 on_switch_user=None if args.demo else switch_user,
+                pseudonym=session.current.pseudonym,
             )
 
     # window_size alone switches NiceGUI to native mode, so the browser mode leaves it out; the native window finds a

@@ -75,12 +75,36 @@ async def test_the_menu_lights_the_tab_on_screen(user: User) -> None:
     assert lit_tabs == ["Wyniki"]
 
 
-async def test_the_theme_button_switches_to_golden_and_remembers_it(user: User, engine: Engine) -> None:
+async def test_the_avatar_menu_switches_the_theme_and_remembers_it(user: User, engine: Engine) -> None:
+    user.find(marker="user-menu").click()
     await user.should_see(marker="theme-toggle")
 
     user.find(marker="theme-toggle").click()
 
     assert load_setting(engine, UI_THEME) == "golden"
+
+
+async def test_the_avatar_shows_the_initials_and_the_pseudonym(user: User) -> None:
+    with user.scope(marker="header"):
+        await user.should_see("DE")
+        await user.should_see("Demo")
+
+
+async def test_the_avatar_menu_opens_ustawienia_and_pomoc(user: User) -> None:
+    user.find(marker="user-menu").click()
+    user.find(marker="menu-settings").click()
+    await user.should_see(marker="page-content")
+    await user.should_see("Konta")
+
+    user.find(marker="user-menu").click()
+    user.find(marker="menu-help").click()
+    await user.should_see("Pomoc")
+
+
+async def test_the_avatar_menu_offers_no_switch_without_a_login_screen(user: User) -> None:
+    user.find(marker="user-menu").click()
+
+    await user.should_not_see(marker="switch-user")
 
 
 async def test_header_offers_total_view_scope(user: User) -> None:

@@ -121,7 +121,7 @@ async def test_switching_user_returns_to_the_login_screen(monkeypatch: pytest.Mo
         await user.open("/")
         _sign_in(user, "sekret")
         await user.should_see("Dashboard")
-        await user.open("/ustawienia")
+        user.find(marker="user-menu").click()
         user.find(marker="switch-user").click()
         await user.open("/")
 
