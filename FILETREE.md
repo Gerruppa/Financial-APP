@@ -344,6 +344,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `transaction_dialog.py`: Transaction dialog for adding, editing and deleting every supported transaction type, bound to the form model
 - `transactions.py`: Transakcje tab: the Transaction list with column sorting and filters
 - `unpriced.py`: Ustawienia Instrumenty bez wyceny card listing held Instruments lacking an automatic price, with reasons
+- `user_menu.py`: Header avatar button with the User's initials and pseudonym; opens the menu for Settings, Theme, Help and switching user
 - `view_scope.py`: View Scope header switcher and breadcrumbs, listing Accounts by value with share and daily change
 - `visibility.py`: Window Layout of hidden elements, plus the Ustawienia switches and View Profile presets that change it
 - `xtb_import.py`: Ustawienia card for importing XTB statements and resolving the Reconciliation before applying

@@ -3,11 +3,12 @@
 ## Nieopublikowane
 
 ### Nowe funkcje
-- Aplikacja ma użytkowników: ekran logowania (pseudonim i hasło) przy każdym starcie, osobne dane dla każdego i przełączanie użytkownika w Ustawieniach; dotychczasowe dane trafiają do pierwszego utworzonego użytkownika.
+- Aplikacja ma użytkowników: ekran logowania (pseudonim i hasło) przy każdym starcie, osobne dane dla każdego i przełączanie użytkownika w menu awatara; dotychczasowe dane trafiają do pierwszego utworzonego użytkownika.
 - Karta instrumentu pokazuje dla funduszy i ETF-ów TER, wielkość funduszu i emitenta według Yahoo (tylko to, co Yahoo podaje), a "Dodaj jako instrument" uzupełnia pusty TER.
 - Karta polskiego funduszu, PPK lub ETF-u z GPW pokazuje TFI, grupę i benchmark według analizy.pl (tylko to, co analizy.pl podaje).
 - Karta funduszu lub ETF-u pokazuje jego dziesięć największych składników z udziałami (Yahoo, a dla polskich funduszy i PPK analizy.pl wraz z dniem stanu).
 - Wykres, ceny i stopy zwrotu na Karcie instrumentu można przełączyć na inną walutę (PLN, EUR, USD); ceny są przeliczane kursami NBP z dnia notowania.
+- Awatar z inicjałami i pseudonimem w prawym górnym rogu otwiera menu: Ustawienia, motyw, Pomoc i przełączenie użytkownika; przycisk motywu przeniósł się do tego menu.
 
 ## 1.0.1 — 2026-10-20
 
