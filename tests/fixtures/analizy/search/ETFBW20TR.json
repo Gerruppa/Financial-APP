@@ -1,0 +1,33 @@
+{
+ "page": 0,
+ "limit": "20",
+ "total": 1,
+ "products": [
+  {
+   "kod": "E_AGF73_A_PLN",
+   "rodzaj": null,
+   "nazwa": "Beta ETF WIG20TR Portfelowy FIZ (Acc) (PLN [<span class=\"searchFundCellKeywords\">ETFBW20TR</span>]",
+   "nazwaParasola": null,
+   "kodParasola": null,
+   "nazwaGrupy": "akcji polskich uniwersalne",
+   "kodGrupy": "AKP_UN",
+   "nazwaSegmentu": "Akcje",
+   "segmentBgColor": "share",
+   "firmaZarz": "AgioFunds TFI",
+   "kodFirmaZarz": "TFIAGF",
+   "profileRoute": "profile_etf",
+   "catalogRoute": "catalog_etf",
+   "type": "fundusz",
+   "czyDostepnyOnline": false,
+   "nazwaDawniej": null,
+   "isin": null,
+   "isActive": true,
+   "kodRodzaju": "ETF",
+   "searchBenchmark": "WIG20TR Indeks",
+   "tickers": null
+  }
+ ],
+ "aggregations": {
+  "ETF": 1
+ }
+}
