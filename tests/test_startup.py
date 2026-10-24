@@ -140,3 +140,125 @@ def test_failed_move_stops_the_start_with_a_polish_message(monkeypatch: pytest.M
         app.main()
 
     assert len(shown) == 1 and "Zamknij" in shown[0]
+
+
+async def _open_user_settings(user: User) -> None:
+    await user.open("/")
+    _sign_in(user, "sekret")
+    await user.should_see("Dashboard")
+    user.find(marker="user-menu").click()
+    user.find(marker="menu-settings").click()
+    await user.should_see(marker="user-section")
+
+
+async def test_renaming_the_user_changes_the_pseudonym_but_not_the_folder(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("FINANCIAL_APP_DATA_DIR", str(tmp_path))
+    anna = UserStore(tmp_path).create("Anna", "sekret")
+
+    async with user_simulation(main_file=MAIN_FILE) as user:
+        await _open_user_settings(user)
+        user.find(marker="user-pseudonym").clear().type("Anna K.")
+        user.find(marker="user-rename").click()
+        await user.should_see("Zmieniono pseudonim.")
+
+    [renamed] = UserStore(tmp_path).users()
+    assert (renamed.id, renamed.pseudonym) == (anna.id, "Anna K.")
+
+
+async def test_taken_pseudonym_is_refused(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("FINANCIAL_APP_DATA_DIR", str(tmp_path))
+    UserStore(tmp_path).create("Anna", "sekret")
+    UserStore(tmp_path).create("Ewa", "sekret")
+
+    async with user_simulation(main_file=MAIN_FILE) as user:
+        await _open_user_settings(user)
+        user.find(marker="user-pseudonym").clear().type("ewa")
+        user.find(marker="user-rename").click()
+
+        await user.should_see("już istnieje")
+
+
+async def test_changing_the_password_needs_the_current_one(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("FINANCIAL_APP_DATA_DIR", str(tmp_path))
+    UserStore(tmp_path).create("Anna", "sekret")
+
+    async with user_simulation(main_file=MAIN_FILE) as user:
+        await _open_user_settings(user)
+        user.find(marker="user-password-current").type("zle")
+        user.find(marker="user-password-new").type("nowe-haslo")
+        user.find(marker="user-password-repeated").type("nowe-haslo")
+        user.find(marker="user-password-change").click()
+        await user.should_see("Nieprawidłowe hasło")
+
+    assert UserStore(tmp_path).sign_in("Anna", "sekret")
+
+
+async def test_changing_the_password(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("FINANCIAL_APP_DATA_DIR", str(tmp_path))
+    UserStore(tmp_path).create("Anna", "sekret")
+
+    async with user_simulation(main_file=MAIN_FILE) as user:
+        await _open_user_settings(user)
+        user.find(marker="user-password-current").type("sekret")
+        user.find(marker="user-password-new").type("nowe-haslo")
+        user.find(marker="user-password-repeated").type("nowe-haslo")
+        user.find(marker="user-password-change").click()
+        await user.should_see("Zmieniono hasło.")
+
+    assert UserStore(tmp_path).sign_in("Anna", "nowe-haslo")
+
+
+async def test_new_password_must_be_repeated_and_long_enough(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("FINANCIAL_APP_DATA_DIR", str(tmp_path))
+    UserStore(tmp_path).create("Anna", "sekret")
+
+    async with user_simulation(main_file=MAIN_FILE) as user:
+        await _open_user_settings(user)
+        user.find(marker="user-password-current").type("sekret")
+        user.find(marker="user-password-new").type("abc")
+        user.find(marker="user-password-change").click()
+        await user.should_see("co najmniej 4")
+
+    assert UserStore(tmp_path).sign_in("Anna", "sekret")
+
+
+async def test_deleting_the_user_needs_the_password_and_the_pseudonym(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("FINANCIAL_APP_DATA_DIR", str(tmp_path))
+    anna = UserStore(tmp_path).create("Anna", "sekret")
+
+    async with user_simulation(main_file=MAIN_FILE) as user:
+        await _open_user_settings(user)
+        user.find(marker="user-delete").click()
+        user.find(marker="user-delete-password").type("zle")
+        user.find(marker="user-delete-pseudonym").type("anna")
+        user.find(marker="user-delete-confirm").click()
+        await user.should_see("Nieprawidłowe hasło")
+
+    assert (tmp_path / anna.id).is_dir()
+    assert UserStore(tmp_path).users() == [anna]
+
+
+async def test_deleting_the_user_removes_the_folder_and_returns_to_login(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("FINANCIAL_APP_DATA_DIR", str(tmp_path))
+    store = UserStore(tmp_path)
+    anna = store.create("Anna", "sekret")
+    store.create("Ewa", "inne")
+
+    async with user_simulation(main_file=MAIN_FILE) as user:
+        await _open_user_settings(user)
+        user.find(marker="user-delete").click()
+        user.find(marker="user-delete-password").type("sekret")
+        user.find(marker="user-delete-pseudonym").type("Anna")
+        user.find(marker="user-delete-confirm").click()
+        await user.open("/")
+
+        await user.should_see("Zaloguj się")
+
+    assert [u.pseudonym for u in store.users()] == ["Ewa"]
+    assert not (tmp_path / anna.id).exists()

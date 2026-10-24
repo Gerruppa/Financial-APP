@@ -5,6 +5,7 @@ import json
 import os
 import secrets
 import shutil
+import time
 from dataclasses import dataclass, replace
 from pathlib import Path
 
@@ -32,6 +33,9 @@ class User:
     # None after the hash was removed by hand to reset a forgotten password: the next sign-in sets a new one
     password_hash: str | None = None
 
+
+_DELETE_ATTEMPTS = 5
+_DELETE_PAUSE = 0.3
 
 # What lay in the app-data folder before Users, with SQLite's journal files beside the database
 _LEGACY_FILES = (DATABASE_FILE, f"{DATABASE_FILE}-wal", f"{DATABASE_FILE}-shm", f"{DATABASE_FILE}-journal", LOG_FILE)
@@ -68,16 +72,50 @@ class UserStore:
 
     def sign_in(self, pseudonym: str, password: str) -> User:
         user = self.find(pseudonym)
-        if user.password_hash is None or not verify_password(password, user.password_hash):
-            raise UserError(WRONG_PASSWORD)
+        self.check_password(user, password)
         return user
 
     def set_password(self, user: User, password: str) -> User:
         if error := password_error(password):
             raise UserError(error)
         changed = replace(user, password_hash=hash_password(password))
-        self._save([changed if u.id == user.id else u for u in self.users()])
+        self._replace(changed)
         return changed
+
+    def rename(self, user: User, pseudonym: str) -> User:
+        """Give ``user`` another pseudonym; the id, and so the folder, stays. Only the other Users' pseudonyms count as
+        taken, so the case of one's own may change."""
+        others = [u.pseudonym for u in self.users() if u.id != user.id]
+        if error := pseudonym_error(pseudonym, others):
+            raise UserError(error)
+        changed = replace(user, pseudonym=clean_pseudonym(pseudonym))
+        self._replace(changed)
+        return changed
+
+    def change_password(self, user: User, current: str, new: str) -> User:
+        self.check_password(user, current)
+        return self.set_password(user, new)
+
+    def check_password(self, user: User, password: str) -> None:
+        if user.password_hash is None or not verify_password(password, user.password_hash):
+            raise UserError(WRONG_PASSWORD)
+
+    def delete(self, user: User, password: str) -> None:
+        """Remove ``user`` and their whole folder, backups included. The folder goes first, so a folder that cannot be
+        removed (a file still open, tried again for a moment) leaves the User listed."""
+        self.check_password(user, password)
+        for attempt in range(_DELETE_ATTEMPTS):
+            try:
+                shutil.rmtree(self.folder(user))
+                break
+            except FileNotFoundError:
+                break
+            except OSError as error:
+                if attempt == _DELETE_ATTEMPTS - 1:
+                    raise UserError(f"Nie udało się usunąć folderu użytkownika: {error}") from error
+                # A request of the User who just signed out may still hold a file for a moment
+                time.sleep(_DELETE_PAUSE)
+        self._save([u for u in self.users() if u.id != user.id])
 
     def find(self, pseudonym: str) -> User:
         for user in self.users():
@@ -89,6 +127,9 @@ class UserStore:
         for name in (*_LEGACY_FILES, BACKUPS_DIR):
             if (self.root / name).exists():
                 shutil.move(self.root / name, folder / name)
+
+    def _replace(self, changed: User) -> None:
+        self._save([changed if u.id == changed.id else u for u in self.users()])
 
     def _save(self, users: list[User]) -> None:
         data = {"users": [{k: v for k, v in vars(u).items() if v is not None} for u in users]}

@@ -63,6 +63,7 @@ from financial_app.ui.transaction_dialog import open_transaction_dialog
 from financial_app.ui.transactions import TransactionsPage
 from financial_app.ui.unpriced import UnpricedSection
 from financial_app.ui.user_menu import build_user_menu
+from financial_app.ui.user_section import UserSection
 from financial_app.ui.view_scope import ScopeSwitcher, ViewScope, breadcrumbs
 from financial_app.ui.visibility import Layout
 
@@ -124,6 +125,7 @@ def build_shell(
     polish_profiles: PolishFundProfiles | None = None,
     on_switch_user: Callable[[], None] | None = None,
     pseudonym: str = "Demo",
+    user_section: UserSection | None = None,
 ) -> None:
     """Build the whole window; tabs are client-side sub-pages backed by the database at ``engine``.
 
@@ -137,7 +139,8 @@ def build_shell(
     ``card_history`` gives the Instrument Card its closes (by default fetched live from Yahoo and analizy.pl) and
     ``fund_profiles`` its funds' TER, size and issuer (by default from Yahoo) and ``polish_profiles`` the TFI, group
     and benchmark of its Polish funds and GPW ETFs (by default from analizy.pl). ``on_switch_user`` returns to the login
-    screen (the avatar's menu offers it only when given), ``pseudonym`` is the signed-in User's.
+    screen (the avatar's menu offers it only when given), ``pseudonym`` is the signed-in User's and
+    ``user_section`` the Użytkownik card of Ustawienia (none in the demo).
     """
     rates = rates or NbpRates(engine)
     if sources is None:
@@ -410,6 +413,7 @@ def build_shell(
         lambda: events.publish(Change.RECURRING_RULES),
         layout,
         theme,
+        user_section,
     )
     pages[HELP_PATH] = lambda: build_help_page({tab.path: tab.label for tab in TABS})
     pages = {path: showing_add_button(path, build, path not in WITHOUT_ADD_BUTTON) for path, build in pages.items()}

@@ -9,6 +9,7 @@ import tempfile
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
+from functools import partial
 from pathlib import Path
 from typing import Any, TextIO
 
@@ -26,10 +27,11 @@ from financial_app.persistence.paths import (
     log_path,
     startup_log_path,
 )
-from financial_app.persistence.users import User, UserStore
+from financial_app.persistence.users import User, UserError, UserStore
 from financial_app.sources.demo_data import seed_demo_data
 from financial_app.ui.login import build_login
 from financial_app.ui.shell import APP_ICON, APP_TITLE, build_shell, stop_background_work
+from financial_app.ui.user_section import UserSection
 
 MB_ICONERROR = 0x10
 DEMO_USER = "Demo"
@@ -110,6 +112,8 @@ class SignedIn:
     pseudonym: str
     folder: Path
     engine: Engine
+    # None for the demo's made-up User, who is not in the list of Users
+    user: User | None = None
 
 
 class Session:
@@ -118,12 +122,12 @@ class Session:
     def __init__(self) -> None:
         self.current: SignedIn | None = None
 
-    def open(self, pseudonym: str, folder: Path) -> None:
+    def open(self, pseudonym: str, folder: Path, user: User | None = None) -> None:
         """Open the database in ``folder`` for ``pseudonym``, backed up first and then migrated."""
         attach_log_when_windowless(log_path(folder))
         # Back up before migrating, so a failed migration never touches the only copy.
         backup_database(database_path(folder), backups_dir(folder))
-        self.current = SignedIn(pseudonym, folder, init_db(database_path(folder)))
+        self.current = SignedIn(pseudonym, folder, init_db(database_path(folder)), user)
 
     def close(self) -> None:
         """Sign out: the User's background work stops and their database closes."""
@@ -156,7 +160,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     refresh_at_start = not args.demo
 
     def signed_in(user: User) -> None:
-        session.open(user.pseudonym, store.folder(user))
+        session.open(user.pseudonym, store.folder(user), user)
         ui.navigate.reload()
 
     def switch_user() -> None:
@@ -164,15 +168,36 @@ def main(argv: Sequence[str] | None = None) -> None:
         # The address of the User who left is of no use to the next one
         ui.run_javascript("window.location.assign('/')")
 
+    def changed(user: User) -> None:
+        assert session.current is not None
+        renamed = user.pseudonym != session.current.pseudonym
+        session.current.user = user
+        session.current.pseudonym = user.pseudonym
+        if renamed:
+            # The avatar and its menu carry the pseudonym
+            ui.navigate.reload()
+
+    def deleted(user: User, password: str) -> None:
+        # The database and the log are closed first: Windows refuses to delete a folder with an open file in it
+        session.close()
+        attach_log_when_windowless(startup_log_path())
+        try:
+            store.delete(user, password)
+        except UserError as refusal:
+            ui.notify(str(refusal), type="negative")
+        ui.run_javascript("window.location.assign('/')")
+
     def root() -> None:
         if session.current is None:
             build_login(store, signed_in)
         else:
+            signed = session.current.user
             build_shell(
                 session.current.engine,
                 refresh_at_start=refresh_at_start,
                 on_switch_user=None if args.demo else switch_user,
                 pseudonym=session.current.pseudonym,
+                user_section=None if signed is None else UserSection(store, signed, changed, partial(deleted, signed)),
             )
 
     # window_size alone switches NiceGUI to native mode, so the browser mode leaves it out; the native window finds a
