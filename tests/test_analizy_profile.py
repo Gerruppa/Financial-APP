@@ -54,7 +54,7 @@ def test_nothing_is_given_for_a_code_the_search_does_not_return() -> None:
     assert profiles.fund_profile("QRS99") is None
 
 
-def test_an_etf_ticker_with_several_etf_hits_gives_nothing(tmp_path: Path) -> None:
+def test_an_etf_ticker_with_several_etf_hits_gives_nothing() -> None:
     def two(url: str) -> str:
         product = {"kod": "E_1", "kodRodzaju": "ETF", "firmaZarz": "X TFI", "nazwaGrupy": "g"}
         return json.dumps({"products": [product, {**product, "kod": "E_2"}]})
@@ -87,3 +87,18 @@ def test_each_query_is_asked_once_per_session() -> None:
     profiles.etf_profile("ETFBW20TR")
 
     assert search.keywords == ["PZU60", "ETFBW20TR"]
+
+
+def test_a_failed_search_is_asked_again_next_time() -> None:
+    answers = [None, (SEARCHES / "PZU60.json").read_text(encoding="utf-8")]
+
+    def flaky(url: str) -> str | None:
+        answer = answers.pop(0)
+        if answer is None:
+            raise URLError("offline")
+        return answer
+
+    profiles = AnalizyFundProfiles(flaky)
+
+    assert profiles.fund_profile("PZU60") is None
+    assert profiles.fund_profile("PZU60") is not None
