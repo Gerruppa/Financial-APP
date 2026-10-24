@@ -3,7 +3,15 @@
 from datetime import date
 from decimal import Decimal
 
-from financial_app.domain.instrument_card import CardPeriod, chart_window, price_summary, returns
+from financial_app.domain.currencies import NbpRate
+from financial_app.domain.instrument_card import (
+    CardPeriod,
+    chart_currencies,
+    chart_window,
+    convert_quotes,
+    price_summary,
+    returns,
+)
 from financial_app.domain.prices import YAHOO, Quote
 
 
@@ -79,3 +87,33 @@ def test_the_chart_shows_the_closes_since_the_period_start_ytd_from_the_last_clo
     assert days(CardPeriod.ONE_YEAR) == ["2025-10-20", "2025-12-31", "2026-09-18", "2026-10-19", "2026-10-20"]
     assert days(CardPeriod.MAX) == [quote.day.isoformat() for quote in HISTORY]
     assert days(CardPeriod.FIVE_YEARS) == days(CardPeriod.MAX)
+
+
+def _rates(currency: str, *rates: tuple[str, str]) -> list[NbpRate]:
+    return [NbpRate(currency, Decimal(rate), date.fromisoformat(day), "") for day, rate in rates]
+
+
+def test_closes_convert_through_pln_at_the_rate_in_force_on_each_day() -> None:
+    rates = {"USD": _rates("USD", ("2025-06-30", "4"), ("2025-10-20", "5")), "EUR": _rates("EUR", ("2025-01-02", "4"))}
+
+    in_eur = convert_quotes(HISTORY[1:3], "EUR", rates)
+    in_pln = convert_quotes(HISTORY[1:3], "PLN", rates)
+
+    assert [(q.price, q.currency) for q in in_eur] == [(Decimal(110), "EUR"), (Decimal(150), "EUR")]
+    assert [q.price for q in in_pln] == [Decimal(440), Decimal(600)]
+
+
+def test_a_close_with_no_rate_yet_is_left_out_and_pln_needs_none() -> None:
+    assert [q.day for q in convert_quotes(HISTORY, "PLN", {"USD": _rates("USD", ("2025-12-31", "4"))})] == [
+        date(2025, 12, 31),
+        date(2026, 9, 18),
+        date(2026, 10, 19),
+        date(2026, 10, 20),
+    ]
+    pln = [Quote(Decimal(7), "PLN", date(2026, 1, 5), YAHOO)]
+    assert convert_quotes(pln, "PLN", {}) == pln
+
+
+def test_the_chart_offers_the_quote_currency_then_pln_eur_and_usd_once_each() -> None:
+    assert chart_currencies("GBP") == ["GBP", "PLN", "EUR", "USD"]
+    assert chart_currencies("EUR") == ["EUR", "PLN", "USD"]

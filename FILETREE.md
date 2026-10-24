@@ -160,7 +160,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `header_search.py`: Header search grouping of listings into Search Results, own Instrument matching, and the Instrument already holding a listing.
 - `history.py`: Tracks which days of Quote and NBP Rate history are cached, and computes the missing days to fetch.
 - `inflation.py`: Inflation over a period from GUS monthly CPI, spread across days as the sheet's Benchmarki do, and the real return
-- `instrument_card.py`: Instrument Card figures: price summary, returns table and chart closes for each card period.
+- `instrument_card.py`: Instrument Card figures: price summary, returns table, chart closes for each card period and conversion of closes to another currency at NBP Rates.
 - `instrument_search.py`: Instrument search result types, the swappable search protocol, and filling empty form fields from a chosen result.
 - `instruments.py`: Instrument and Asset Class models, their validation, default Asset Classes, ISIN, metal, distribution policy and Multi-asset Split rules.
 - `investment_goal.py`: Investment Goal for a View Scope: amount or FIRE target, progress, default monthly deposit and real forecast in today's PLN
@@ -320,7 +320,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `history.py`: Shared per-database History window state: background fetch, progress and failure status, cached days
 - `import_sheet.py`: Ustawienia import section that previews the Transakcje spreadsheet and saves it only after user decisions
 - `info.py`: Hover "i" icon and card title helper that show explanatory text in Dashboard and Wyniki cards
-- `instrument_card.py`: Instrument Card dialog: listings, details, price, chart and returns, with Add as Instrument or Edit; fund TER, size and issuer from Yahoo.
+- `instrument_card.py`: Instrument Card dialog: listings, details, price, chart and returns with a chart currency switch, with Add as Instrument or Edit; fund TER, size and issuer from Yahoo.
 - `instruments.py`: Ustawienia Klasy aktywów and Instrumenty cards: editable Asset Classes and the Instrument catalog with its dialog
 - `investment_goal.py`: Dashboard Investment Goal tile with progress and real forecast, and a dialog to set the goal as amount or FIRE
 - `login.py`: Login screen in the default Theme: pick a User and enter the password, create a User, explain a forgotten password
@@ -433,13 +433,13 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_fx_effect_domain.py`: Tests the FX part of foreign Positions' results from the PLN and foreign costs of FIFO Lots
 - `test_glossary.py`: Test that GLOSSARY.md lists exactly the terms defined in CONTEXT.md
 - `test_header_search_domain.py`: Domain tests for header search grouping of listings, own Instrument matching and owned listings, without the network.
-- `test_header_search_ui.py`: UI tests for the header search and Instrument Card on a test search and history, without the network.
+- `test_header_search_ui.py`: UI tests for the header search and Instrument Card, including the chart currency switch, on a test search, history and NBP Rates without the network.
 - `test_help_ui.py`: UI tests of the Pomoc tab search and navigation buttons, and the Dashboard first-steps banner
 - `test_history_domain.py`: Tests which days of a price history still need fetching given cached days
 - `test_history_parity.py`: Parity test of History against the user's spreadsheet Historia tab at each month end, skipped without reference data
 - `test_import_sheet_ui.py`: UI tests for the Ustawienia spreadsheet import: preview first, then save, on a synthetic workbook
 - `test_inflation.py`: Tests inflation over periods from GUS monthly CPI readings and the real return it gives
-- `test_instrument_card_domain.py`: Domain tests for the Instrument Card price summary, chart window and returns.
+- `test_instrument_card_domain.py`: Domain tests for the Instrument Card price summary, chart window, returns and currency conversion.
 - `test_instrument_card_history.py`: Tests for Instrument Card price history from saved Yahoo and analizy.pl responses.
 - `test_instrument_search_domain.py`: Tests that a chosen Instrument search result fills only the empty Instrument form fields.
 - `test_instrument_search_ui.py`: Tests searching an Instrument by ISIN, name or symbol in the Instrument dialog on saved Yahoo responses.
