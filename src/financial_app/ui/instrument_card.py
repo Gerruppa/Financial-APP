@@ -316,24 +316,50 @@ def _profile_request(listing: FoundListing, holder: Instrument | None) -> tuple[
 
 def _profile(profile: FundProfile, holder: Instrument | None) -> None:
     """The TER (the Instrument's own, else the source's marked as such), the fund size, the issuer, the TFI, the group
-    and the benchmark, those that came, each marked with the profile's source."""
+    and the benchmark, those that came, each marked with the profile's source, and the largest holdings below them."""
     by = f"wg {profile.source}"
-    with ui.row().classes("items-center gap-x-4 text-sm").mark("card-profile"):
-        if holder is not None and holder.ter_percent is not None:
-            ui.label(f"TER: {format_exact_percent(holder.ter_percent)}").mark("card-ter")
-        elif profile.ter_percent is not None:
-            ui.label(f"TER: {format_exact_percent(profile.ter_percent)} ({profile.source})").mark("card-ter")
-        if profile.size is not None:
-            size = format_fund_size(profile.size, profile.size_currency)
-            ui.label(f"Wielkość funduszu: {size} ({by})").mark("card-fund-size")
-        if profile.issuer:
-            ui.label(f"Emitent: {profile.issuer} ({by})").mark("card-issuer")
-        if profile.tfi:
-            ui.label(f"TFI: {profile.tfi} ({by})").mark("card-tfi")
-        if profile.group:
-            ui.label(f"Grupa analizy.pl: {profile.group} ({by})").mark("card-group")
-        if profile.benchmark:
-            ui.label(f"Benchmark: {profile.benchmark} ({by})").mark("card-benchmark")
+    if _has_facts(profile, holder):
+        with ui.row().classes("items-center gap-x-4 text-sm").mark("card-profile"):
+            if holder is not None and holder.ter_percent is not None:
+                ui.label(f"TER: {format_exact_percent(holder.ter_percent)}").mark("card-ter")
+            elif profile.ter_percent is not None:
+                ui.label(f"TER: {format_exact_percent(profile.ter_percent)} ({profile.source})").mark("card-ter")
+            if profile.size is not None:
+                size = format_fund_size(profile.size, profile.size_currency)
+                ui.label(f"Wielkość funduszu: {size} ({by})").mark("card-fund-size")
+            if profile.issuer:
+                ui.label(f"Emitent: {profile.issuer} ({by})").mark("card-issuer")
+            if profile.tfi:
+                ui.label(f"TFI: {profile.tfi} ({by})").mark("card-tfi")
+            if profile.group:
+                ui.label(f"Grupa analizy.pl: {profile.group} ({by})").mark("card-group")
+            if profile.benchmark:
+                ui.label(f"Benchmark: {profile.benchmark} ({by})").mark("card-benchmark")
+    if profile.holdings:
+        _holdings(profile)
+
+
+def _has_facts(profile: FundProfile, holder: Instrument | None) -> bool:
+    """Whether the profile has anything but its holdings to show (the Instrument's own TER counts)."""
+    own_ter = holder is not None and holder.ter_percent is not None
+    return bool(
+        own_ter
+        or profile.ter_percent is not None
+        or profile.size is not None
+        or profile.issuer
+        or profile.tfi
+        or profile.group
+        or profile.benchmark
+    )
+
+
+def _holdings(profile: FundProfile) -> None:
+    """The largest holdings with their shares, headed by the source and, when it gives one, the day of their state."""
+    state = f", stan na {format_date(profile.holdings_date)}" if profile.holdings_date else ""
+    with ui.column().classes("gap-0 text-sm").mark("card-holdings"):
+        ui.label(f"Największe składniki (wg {profile.source}{state})").classes("font-semibold")
+        for holding in profile.holdings:
+            ui.label(f"{holding.name}: {format_percent(holding.percent)}").mark("card-holding")
 
 
 def _details(listing: FoundListing, holder: Instrument | None) -> tuple[str, DistributionPolicy | None]:

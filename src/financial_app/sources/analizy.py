@@ -12,12 +12,13 @@ import threading
 import urllib.request
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from datetime import date
 from decimal import Decimal
 from urllib.error import HTTPError
 from urllib.parse import quote as url_quote
 
-from financial_app.domain.fund_profile import FundProfile
+from financial_app.domain.fund_profile import FundProfile, Holding
 from financial_app.domain.instrument_search import FoundListing, InstrumentSearchError, looks_like_isin
 from financial_app.domain.instruments import InstrumentType
 from financial_app.domain.prices import ANALIZY, ANALIZY_HISTORY, CurrencyMismatchError, PriceSourceError, Quote
@@ -34,6 +35,8 @@ SEARCH_API = (
 FUND_KINDS = frozenset({"FIO", "SFIO", "PPK", "FZG"})
 # The kind of a GPW-listed ETF in the search, and the text it gives as the benchmark of a fund without one
 ETF_KIND = "ETF"
+# The ten largest holdings of a Polish fund or PPK, as shares (0.1 for 10%) at the end of a quarter (issue #203)
+TOP10_API = "https://www.analizy.pl/api/assets/top10/{code}"
 NO_BENCHMARK = "fundusz nie posiada benchmarku"
 # The Asset Class a PPK fund belongs to; the class of any other fund depends on what it holds
 PPK_CLASS = "Multi-asset"
@@ -167,12 +170,29 @@ class AnalizyFundProfiles:
         """The profile of the fund or PPK with Fund Code ``code``."""
         code = code.strip().upper()
         hits = [p for p in self._found(code) if str(p.get("kod", "")).upper() == code]
-        return _profile_of(hits[0]) if hits else None
+        profile = _profile_of(hits[0]) if hits else None
+        if profile is None:
+            return None
+        holdings, day = self._top10(code)
+        return replace(profile, holdings=holdings, holdings_date=day)
 
     def etf_profile(self, ticker: str) -> FundProfile | None:
         """The profile of the GPW ETF with ``ticker``, only when the search finds exactly one ETF for it."""
         hits = [p for p in self._found(ticker.strip().upper()) if p.get("kodRodzaju") == ETF_KIND]
         return _profile_of(hits[0]) if len(hits) == 1 else None
+
+    def _top10(self, code: str) -> tuple[tuple[Holding, ...], date | None]:
+        """The ten largest holdings of the fund and the day of their state, none when analizy.pl gives none."""
+        try:
+            data = json.loads(self.fetch(TOP10_API.format(code=url_quote(code, safe=""))) or "", parse_float=Decimal)
+            entries = data["struct"]
+            holdings = tuple(
+                Holding(str(entry["name"]).strip(), (Decimal(entry["value"]) * 100).normalize()) for entry in entries
+            )
+            day = date.fromisoformat(str(data["date"])[:10]) if data.get("date") else None
+        except OSError, ValueError, KeyError, TypeError, ArithmeticError:
+            return (), None
+        return tuple(sorted(holdings, key=lambda holding: holding.percent, reverse=True)), day
 
     def _found(self, query: str) -> list[dict[str, object]]:
         if not query:
