@@ -1,10 +1,11 @@
 """A fund's profile from Yahoo quoteSummary (issue #188), on saved responses without the network."""
 
+from dataclasses import replace
 from decimal import Decimal
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
-from financial_app.domain.fund_profile import FundProfile, format_fund_size
+from financial_app.domain.fund_profile import FundProfile, Holding, format_fund_size, largest_holdings
 from financial_app.domain.instrument_search import FormFields, FoundListing, fill_empty
 from financial_app.sources.fund_profile import COOKIE_URL, CRUMB_URL, Reply, YahooFundProfiles
 
@@ -41,13 +42,19 @@ class Yahoo:
 def test_ishares_etf_has_a_ter_and_an_issuer_but_no_size() -> None:
     profile = YahooFundProfiles(Yahoo()).profile("IWDA.AS")
 
-    assert profile == FundProfile(Decimal("0.2"), None, "", "BlackRock Asset Management Ireland - ETF")
+    assert profile is not None
+    assert replace(profile, holdings=()) == FundProfile(
+        Decimal("0.2"), None, "", "BlackRock Asset Management Ireland - ETF"
+    )
 
 
 def test_vanguard_etf_has_a_size_in_its_currency_and_an_issuer_but_no_ter() -> None:
     profile = YahooFundProfiles(Yahoo()).profile("VUAA.L")
 
-    assert profile == FundProfile(None, Decimal("88972738560"), "USD", "Vanguard Group (Ireland) Limited")
+    assert profile is not None
+    assert replace(profile, holdings=()) == FundProfile(
+        None, Decimal("88972738560"), "USD", "Vanguard Group (Ireland) Limited"
+    )
 
 
 def test_a_warsaw_listing_has_no_profile() -> None:
@@ -105,3 +112,25 @@ def test_fill_empty_takes_the_ter_only_while_the_form_has_none() -> None:
 
     assert fill_empty(FormFields(), found).ter_percent == Decimal("0.2")
     assert fill_empty(FormFields(ter_percent=Decimal("0.07")), found).ter_percent == Decimal("0.07")
+
+
+def test_ishares_etf_has_its_ten_largest_holdings_with_their_shares_in_percent() -> None:
+    profile = YahooFundProfiles(Yahoo()).profile("IWDA.AS")
+
+    assert profile is not None
+    assert len(profile.holdings) == 10
+    assert profile.holdings[0] == Holding("NVIDIA Corp", Decimal("5.78801"))
+    assert profile.holdings_date is None
+
+
+def test_a_profile_with_only_holdings_is_not_empty() -> None:
+    assert not FundProfile(holdings=(Holding("X", Decimal(1)),)).empty
+
+
+def test_largest_holdings_keeps_ten_in_percent_largest_first_and_drops_nameless_or_empty_shares() -> None:
+    shares = [(f"H{n}", Decimal(n) / 100) for n in range(1, 13)] + [(" ", Decimal("0.5")), ("Zero", Decimal(0))]
+
+    holdings = largest_holdings(shares)
+
+    assert [holding.name for holding in holdings] == [f"H{n}" for n in range(12, 2, -1)]
+    assert holdings[0].percent == Decimal(12)

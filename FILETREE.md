@@ -156,7 +156,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `export.py`: Builds the transaction export rows with columns, amounts, origin and comment, independent of file format.
 - `faq.py`: Parses the Pomoc FAQ Markdown into sections and questions; searches them ignoring case and Polish letters
 - `formatting.py`: Polish number, amount and date formatting and parsing of typed input; the single formatter every screen uses.
-- `fund_profile.py`: Fund profile value type holding TER, fund size and issuer from Yahoo, or TFI, group and benchmark from analizy.pl; formats the fund size.
+- `fund_profile.py`: Fund profile value type: TER, fund size, issuer and largest holdings from Yahoo; TFI, group, benchmark and holdings from analizy.pl.
 - `header_search.py`: Header search grouping of listings into Search Results, own Instrument matching, and the Instrument already holding a listing.
 - `history.py`: Tracks which days of Quote and NBP Rate history are cached, and computes the missing days to fetch.
 - `inflation.py`: Inflation over a period from GUS monthly CPI, spread across days as the sheet's Benchmarki do, and the real return
@@ -557,6 +557,10 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `PZU_Akcji_Krakowiak.json`: Saved analizy.pl search response for PZU Akcji Krakowiak, including a former-name listing
 - `QRS20.json`: Saved analizy.pl search response listing Quercus funds, including QRS20; test fixture for fund profile lookups.
 - `Quercus.json`: Saved analizy.pl search response for Quercus funds, used by search tests
+
+## tests/fixtures/analizy/top10/
+
+- `PZU60.json`: Saved analizy.pl top-ten holdings response for the PZU60 PPK fund, used by the analizy profile tests.
 
 ## tests/fixtures/bankier/
 

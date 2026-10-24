@@ -15,7 +15,7 @@ from sqlalchemy import Engine
 from financial_app.domain.accounts import AccountDraft, AccountType
 from financial_app.domain.currencies import NbpRate
 from financial_app.domain.formatting import NBSP
-from financial_app.domain.fund_profile import FundProfile
+from financial_app.domain.fund_profile import FundProfile, Holding
 from financial_app.domain.history import Cover
 from financial_app.domain.instrument_card import CardPeriod
 from financial_app.domain.instrument_search import FoundListing, FoundListings, InstrumentSearch
@@ -524,3 +524,43 @@ async def test_adding_a_search_result_fills_the_empty_ter_from_yahoo(engine: Eng
         await user.should_see(marker="card-owned")
     [saved] = list_instruments(engine)
     assert saved.ter_percent == Decimal("0.2")
+
+
+HOLDINGS = (Holding("NVIDIA Corp", Decimal("5.79")), Holding("Apple Inc", Decimal("5.39")))
+
+
+async def test_the_card_lists_the_largest_holdings_marked_with_their_source(engine: Engine) -> None:
+    profiles = FixedProfiles(replace(PROFILE, holdings=HOLDINGS))
+    async with user_simulation(_shell(engine, FixedSearch([VUAA]), FixedHistory(), profiles)) as user:
+        await _found_card(user, "vuaa")
+
+        await user.should_see("Największe składniki (wg Yahoo)")
+        await user.should_see(f"NVIDIA Corp: 5,79{NBSP}%")
+        await user.should_see(f"Apple Inc: 5,39{NBSP}%")
+
+
+async def test_the_holdings_of_a_polish_fund_name_the_day_of_their_state(engine: Engine) -> None:
+    profile = replace(POLISH, holdings=HOLDINGS, holdings_date=date(2026, 6, 30))
+    polish = FixedPolishProfiles(profile)
+    async with user_simulation(_shell(engine, FixedSearch([POLISH_FUND]), FixedHistory(), polish=polish)) as user:
+        await _found_card(user, "quercus")
+
+        await user.should_see("Największe składniki (wg analizy.pl, stan na 30.06.2026)")
+        await user.should_see(f"NVIDIA Corp: 5,79{NBSP}%")
+
+
+async def test_a_profile_with_only_holdings_shows_them_and_no_empty_profile_row(engine: Engine) -> None:
+    profiles = FixedProfiles(FundProfile(holdings=HOLDINGS))
+    async with user_simulation(_shell(engine, FixedSearch([VUAA]), FixedHistory(), profiles)) as user:
+        await _found_card(user, "vuaa")
+
+        await user.should_see(marker="card-holdings")
+        await user.should_not_see(marker="card-profile")
+
+
+async def test_a_profile_without_holdings_has_no_holdings_section(engine: Engine) -> None:
+    async with user_simulation(_shell(engine, FixedSearch([VUAA]), FixedHistory(), FixedProfiles(PROFILE))) as user:
+        await _found_card(user, "vuaa")
+        await user.should_see("Emitent:")
+
+        await user.should_not_see(marker="card-holdings")
