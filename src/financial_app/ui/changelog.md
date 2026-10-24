@@ -3,6 +3,7 @@
 ## Nieopublikowane
 
 ### Nowe funkcje
+- Aplikacja ma użytkowników: ekran logowania (pseudonim i hasło) przy każdym starcie, osobne dane dla każdego i przełączanie użytkownika w Ustawieniach; dotychczasowe dane trafiają do pierwszego utworzonego użytkownika.
 - Karta instrumentu pokazuje dla funduszy i ETF-ów TER, wielkość funduszu i emitenta według Yahoo (tylko to, co Yahoo podaje), a "Dodaj jako instrument" uzupełnia pusty TER.
 
 ## 1.0.1 — 2026-10-20

@@ -46,3 +46,18 @@ def test_streams_pywebview_sent_to_devnull_go_to_the_log(monkeypatch: pytest.Mon
         sys.stdout.flush()
 
     assert log_file.read_text(encoding="utf-8").splitlines() == ["hello"]
+
+
+def test_a_sign_in_moves_the_output_to_the_users_log(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(sys, "stdout", None)
+    monkeypatch.setattr(sys, "stderr", None)
+    startup, users = tmp_path / "startup.log", tmp_path / "anna" / "app.log"
+
+    attach_log_when_windowless(startup)
+    print("before")
+    attach_log_when_windowless(users)
+    print("after")
+    sys.stdout.flush()
+
+    assert startup.read_text(encoding="utf-8").splitlines() == ["before"]
+    assert users.read_text(encoding="utf-8").splitlines() == ["after"]

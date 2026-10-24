@@ -74,6 +74,12 @@ def shared_history(engine: Engine, make: Callable[[], PortfolioHistory]) -> Shar
     return _shared[engine]
 
 
+def forget_history(engine: Engine) -> None:
+    """Stop sharing ``engine``'s History, its fetch cancelled, as its User signs out."""
+    if (shared := _shared.pop(engine, None)) is not None and shared.fetching is not None:
+        shared.fetching.cancel()
+
+
 def history_status(engine: Engine, shared: SharedHistory) -> None:
     """ "Historia: pobieranie… (n/N)" during a fetch, red "Historia: n błędów" listing them after one that failed,
     nothing otherwise."""
