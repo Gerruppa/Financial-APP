@@ -332,3 +332,27 @@ def test_the_bond_mode_proposes_bonds_at_their_price() -> None:
     state = _state(TransactionType.BUY, bond_mode=True, spend="1050", price="100")
 
     assert _form().proposed_quantity(state) == "10"
+
+
+def test_a_buy_without_the_cash_hints_before_the_save_and_names_the_balance_it_falls_to() -> None:
+    deposit = Transaction(IKE, date(2026, 3, 1), TransactionType.DEPOSIT, Decimal(1000), id=1)
+    form = _form([deposit])
+
+    buy = _state(TransactionType.BUY, instrument_id=CDR, quantity="10", price="150")
+
+    assert form.cash_hint(buy) == (
+        "Za mało gotówki: saldo konta mBank IKE spadnie do -500,00\xa0zł. "
+        "Dodaj wpłatę z datą nie późniejszą niż ta transakcja."
+    )
+    assert form.cash_hint(replace(buy, texts=replace(buy.texts, quantity="5"))) == ""
+
+
+def test_the_cash_hint_is_silent_for_a_form_that_does_not_read_and_ignores_the_edited_transactions_old_form() -> None:
+    form = _form()
+    assert form.cash_hint(_state(TransactionType.BUY, instrument_id=CDR, quantity="x", price="150")) == ""
+    assert form.cash_hint(_state(TransactionType.DEPOSIT, amount="100")) == ""
+
+    deposit = Transaction(IKE, date(2026, 3, 1), TransactionType.DEPOSIT, Decimal(1000), id=1)
+    withdrawal = Transaction(IKE, date(2026, 3, 2), TransactionType.WITHDRAWAL, Decimal(900), id=2)
+    editing = _form([deposit, withdrawal], edited=withdrawal)
+    assert editing.cash_hint(_state(TransactionType.WITHDRAWAL, amount="900")) == ""
