@@ -156,6 +156,28 @@ async def test_other_accounts_buy_instruments_until_the_bond_mode_is_chosen(engi
         await user.should_not_see(marker="transaction-instrument")
 
 
+async def test_the_bond_mode_on_a_regular_account_hints_at_a_bonds_account(engine: Engine) -> None:
+    add_account(engine, AccountDraft("XTB", "XTB", AccountType.REGULAR, ("PLN",)))
+    async with user_simulation(lambda: build_shell(engine)) as user:
+        await user.open("/transakcje")
+        _open_bond_purchase(user)
+
+        await user.should_not_see(marker="transaction-bond-hint")
+        user.find(marker="transaction-bond-mode").click()
+
+        await user.should_see(marker="transaction-bond-hint")
+        await user.should_see("załóż konto typu Obligacje")
+
+
+async def test_a_bonds_account_shows_no_hint(engine: Engine, bonds: int) -> None:
+    async with user_simulation(lambda: build_shell(engine)) as user:
+        await user.open("/transakcje")
+        _open_bond_purchase(user)
+
+        await user.should_see("Seria EDO1036")
+        await user.should_not_see(marker="transaction-bond-hint")
+
+
 async def test_a_bond_purchase_opens_in_the_bond_mode_for_editing(engine: Engine, bonds: int) -> None:
     treasury = next(c for c in list_asset_classes(engine) if c.name == "Obligacje skarbowe polskie")
     edo = add_instrument(engine, InstrumentDraft("EDO0836", treasury.id, "PLN")).id
