@@ -170,3 +170,18 @@ async def test_withdrawal_within_the_cash_balance_gives_no_warning(engine: Engin
         _save_transaction(user, type_label="Wypłata", amount="100")
 
         await user.should_not_see("jest ujemne")
+
+
+async def test_a_withdrawal_over_the_cash_hints_before_the_save(engine: Engine, ike: int) -> None:
+    async with user_simulation(lambda: build_shell(engine)) as user:
+        await user.open("/transakcje")
+        user.find(marker="add-transaction").click()
+        user.find(marker="transaction-type").click()
+        user.find("Wypłata").click()
+        user.find(marker="transaction-date").clear().type("05.10.2026")
+
+        await user.should_not_see(marker="transaction-cash-hint")
+        user.find(marker="transaction-amount").type("300")
+
+        await user.should_see(marker="transaction-cash-hint")
+        await user.should_see("Za mało gotówki")

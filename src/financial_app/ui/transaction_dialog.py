@@ -157,6 +157,7 @@ def open_transaction_dialog(
         fx_rate.classes("w-full").mark("transaction-fx-rate")
         commission = ui.input("Prowizja (zł)", value=texts.commission).classes("w-full")
         commission.mark("transaction-commission")
+        cash_hint = ui.label().classes("text-sm text-negative").mark("transaction-cash-hint")
         convert = ui.checkbox(value=start.convert).mark("transaction-conversion")
         charged = ui.input("Kwota pobrana przez brokera (zł)", value=texts.charged).classes("w-full")
         charged.props('hint="Za liczbę × cenę, bez prowizji"').mark("transaction-charged")
@@ -262,6 +263,7 @@ def open_transaction_dialog(
             prefill_redemption()
             propose_quantity()
             show_net()
+            show_cash_hint()
             fx_rate.visible = layout.fx_rate.visible
             fx_rate.props(f'label="{layout.fx_rate.label}" hint="{layout.fx_rate.hint}"')
             paid_from.visible = layout.paid_from.visible
@@ -304,6 +306,10 @@ def open_transaction_dialog(
 
         def show_net() -> None:
             net.text = form.net_text(state())
+
+        def show_cash_hint() -> None:
+            cash_hint.text = form.cash_hint(state())
+            cash_hint.visible = bool(cash_hint.text)
 
         set_price = [""]  # the price the bond mode set last, which it may set again
         # What the Early Redemption prefill set last in each field, which it may set again; a value the user typed (or
@@ -386,6 +392,8 @@ def open_transaction_dialog(
             redemption_input.on_value_change(prefill_redemption)
         for net_input in (gross, withholding_tax, quantity, price, commission):
             net_input.on_value_change(show_net)
+        for cash_input in (amount, foreign_amount, quantity, price, commission, fx_rate, charged):
+            cash_input.on_value_change(show_cash_hint)
         for proposal_input in (spend, price, commission, fx_rate):
             proposal_input.on_value_change(propose_quantity)
 

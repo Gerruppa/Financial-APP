@@ -60,6 +60,7 @@ from financial_app.domain.transactions import (
     deposit_or_withdrawal,
     dividend,
     drip,
+    lowest_cash_balance,
     security_transfer,
     split,
 )
@@ -709,6 +710,25 @@ class TransactionForm:
         except ValueError:
             return ""
         return f"Netto: {format_amount(value, self.trade_currency(state))}"
+
+    def cash_hint(self, state: FormState) -> str:
+        """Before the save: the Account's cash falling below zero (more than it already did) from the form's day on, or
+        nothing while the form does not read yet. The save itself only warns (spec 3.3)."""
+        try:
+            # A bond-mode Buy names its Series only on save; any id prices the cash
+            draft = self.draft(state, series_id=0 if self.bonds_chosen(state) else None)
+        except TransactionError, ValueError:
+            return ""
+        others = [t for t in self.context.transactions if self.edited is None or t.id != self.edited.id]
+        currency = draft.cash_currency
+        lowest = lowest_cash_balance([*others, draft], state.account_id, start=draft.date, currency=currency)
+        if lowest >= 0 or lowest >= lowest_cash_balance(others, state.account_id, start=draft.date, currency=currency):
+            return ""
+        account = self._accounts[state.account_id]
+        return (
+            f"Za mało gotówki: saldo konta {account.name} spadnie do {format_amount(lowest, currency)}. "
+            "Dodaj wpłatę z datą nie późniejszą niż ta transakcja."
+        )
 
     # The layout
 
