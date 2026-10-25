@@ -177,7 +177,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `recurring.py`: Recurring Rules: validated rule fields, occurrence schedule, and Drafts left after matching Transactions and skips
 - `results.py`: Wyniki tab figures: period XIRR, TWR, drawdown, volatility and fixed-period returns per Total and Account, from History
 - `sale_summary.py`: Sell Summary: Sale Pairs from the FIFO replay with attributed Dividends, and closed-position statistics (win rate, days, best, worst).
-- `save_warnings.py`: Warnings a save of Transactions shows (cash shortfalls, over-limit contributions, unsplit Multi-asset), computed before and after the save; never blocks it
+- `save_warnings.py`: Warnings a Transactions save shows (cash shortfalls, over-limit contributions, unsplit Multi-asset, bonds on a Regular Account); never blocks the save
 - `sayings.py`: Saying of the day: fixed list of lines from Walaszek's cartoons (Kapitan Bomba, Egzorcysta, Chłopaki z baraków) and the day-based pick shown at the foot of the menu
 - `spreadsheet_import.py`: Pure conversion of the user's Inwestomat Transakcje sheet rows into Transaction drafts, with fingerprints for re-import skipping.
 - `strategy.py`: Investment Strategy rules: Allocation Targets with tolerance bands, Instrument Targets, and the water-filling split of the Planned Deposit
@@ -317,7 +317,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `faq.md`: Polish FAQ text shown on the Pomoc tab; sections, questions with slugs, and links to tabs
 - `fund_details.py`: Builds the short fund detail texts (TER, Distribution Policy, domicile) shared by Instrument list and Portfolio
 - `header_search.py`: Header search field and results list of own Instruments and Search Results; opens the Instrument Card on a chosen row.
-- `help.py`: Pomoc tab; shows the FAQ as collapsible questions with a search and Przejdź do buttons to tabs
+- `help.py`: Help tab (Pomoc); shows the FAQ as collapsible questions with a search and Przejdź do buttons to tabs
 - `history.py`: Shared per-database History window state: background fetch, progress and failure status, cached days
 - `import_sheet.py`: Ustawienia import section that previews the Transakcje spreadsheet and saves it only after user decisions
 - `info.py`: Hover "i" icon and card title helper that show explanatory text in Dashboard and Wyniki cards
@@ -345,7 +345,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `transaction_dialog.py`: Transaction dialog for adding, editing and deleting every supported transaction type, bound to the form model
 - `transactions.py`: Transakcje tab: the Transaction list with column sorting and filters
 - `unpriced.py`: Ustawienia Instrumenty bez wyceny card listing held Instruments lacking an automatic price, with reasons
-- `user_menu.py`: Header avatar button with the User's initials and pseudonym; opens the menu for Settings, Theme, Help and switching user
+- `user_menu.py`: Header avatar menu with initials and pseudonym (Settings, Theme, Help, switch user) and the Wesprzyj button to buycoffee.to
 - `user_section.py`: Ustawienia Użytkownik card: change the User's pseudonym and password, and delete the User with their folder after password and pseudonym confirmation.
 - `view_scope.py`: View Scope header switcher and breadcrumbs, listing Accounts by value with share and daily change
 - `visibility.py`: Window Layout of hidden elements, plus the Ustawienia switches and View Profile presets that change it
