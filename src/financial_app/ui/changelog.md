@@ -10,6 +10,7 @@
 - Wykres, ceny i stopy zwrotu na Karcie instrumentu można przełączyć na inną walutę (PLN, EUR, USD); ceny są przeliczane kursami NBP z dnia notowania.
 - Awatar z inicjałami i pseudonimem w prawym górnym rogu otwiera menu: Ustawienia, motyw, Pomoc i przełączenie użytkownika; przycisk motywu przeniósł się do tego menu.
 - W Ustawieniach jest sekcja Użytkownik: zmiana pseudonimu i hasła oraz usunięcie użytkownika razem z jego folderem i kopiami zapasowymi.
+- Menu awatara ma pozycję „Wesprzyj projekt”, która otwiera stronę Buy Me a Coffee w przeglądarce.
 - Wyszukiwarka w nagłówku znajduje typ obligacji skarbowych po kodzie (np. EDO) lub okresie (np. „10-letnie”); jego karta pokazuje bieżącą ofertę MF, Twoje serie tego typu i przycisk „Kup”, który otwiera zakup obligacji.
 
 ### Poprawki
