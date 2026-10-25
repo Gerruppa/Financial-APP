@@ -1,5 +1,6 @@
 """The signed-in User's avatar at the right end of the header, with its menu (issue #177, spec 2.1)."""
 
+import webbrowser
 from collections.abc import Callable
 
 from nicegui import ui
@@ -7,6 +8,16 @@ from nicegui import ui
 from financial_app.domain.themes import Theme
 from financial_app.domain.users import avatar_colour, initials
 from financial_app.ui.theme import ThemeChoice
+
+# Opened in the system browser: in the native window a plain link would replace the app itself.
+SUPPORT_URL = "https://buycoffee.to/gerruppa"
+
+
+def build_support_button() -> None:
+    """The "Wesprzyj" button in the header: opens the buycoffee.to page in the system browser."""
+    button = ui.button("Wesprzyj", icon="coffee", on_click=lambda: webbrowser.open(SUPPORT_URL))
+    button.props('flat no-caps color=ink aria-label="Wesprzyj projekt"').classes("gt-xs").mark("support-button")
+    button.tooltip("Wesprzyj projekt na buycoffee.to")
 
 
 def build_user_menu(

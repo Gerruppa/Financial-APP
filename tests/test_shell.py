@@ -12,6 +12,7 @@ from financial_app import __version__
 from financial_app.persistence.db import init_db
 from financial_app.persistence.settings import UI_THEME, load_setting
 from financial_app.ui.shell import build_shell
+from financial_app.ui.user_menu import SUPPORT_URL
 
 TABS = [
     "Dashboard",
@@ -99,6 +100,17 @@ async def test_the_avatar_menu_opens_ustawienia_and_pomoc(user: User) -> None:
     user.find(marker="user-menu").click()
     user.find(marker="menu-help").click()
     await user.should_see("Pomoc")
+
+
+async def test_the_header_support_button_opens_the_support_page_in_the_system_browser(
+    user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    opened: list[str] = []
+    monkeypatch.setattr("financial_app.ui.user_menu.webbrowser.open", opened.append)
+
+    user.find(marker="support-button").click()
+
+    assert opened == [SUPPORT_URL]
 
 
 async def test_the_avatar_menu_offers_no_switch_without_a_login_screen(user: User) -> None:
