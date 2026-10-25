@@ -96,6 +96,36 @@ def test_a_buy_of_a_multi_asset_instrument_without_a_split_names_it() -> None:
     assert warnings.messages("Zapisano", unsplit=False) == []
 
 
+def _bond_buy(transaction_id: int, account_id: int) -> Transaction:
+    return Transaction(
+        account_id, date(2026, 3, 2), TransactionType.BUY, Decimal(100),
+        instrument_id=3, quantity=Decimal(1), price=Decimal(100), id=transaction_id,
+    )  # fmt: skip
+
+
+def test_a_bond_series_bought_on_a_regular_account_warns_to_use_a_bonds_account() -> None:
+    series = _instrument(3, "EDO0336", bond_class=True)
+
+    deposit = _saved(9, REGULAR, TransactionType.DEPOSIT, 1000, day=1)
+
+    warnings = save_warnings([deposit], [deposit, _bond_buy(1, REGULAR)], ACCOUNTS, [series], [series], LIMITS)
+
+    assert warnings.any
+    assert warnings.messages("Zapisano") == [
+        "Obligacje EDO0336 kupiono na koncie XTB typu Regular, które ma zwykłe zasady podatku. "
+        "Do obligacji skarbowych detalicznych załóż konto typu Obligacje."
+    ]
+
+
+def test_a_bond_series_bought_on_a_bonds_or_ike_account_or_deleted_warns_of_nothing() -> None:
+    series = _instrument(3, "EDO0336", bond_class=True)
+    accounts = [*ACCOUNTS, Account("PKO obligacje", "PKO", AccountType.BONDS, ("PLN",), id=3)]
+    bought = [_bond_buy(1, 3), _bond_buy(2, IKE)]
+
+    assert save_warnings([], bought, accounts, [series], [series], LIMITS).bonds_on_regular == ()
+    assert save_warnings([_bond_buy(4, REGULAR)], [], accounts, [series], [series], LIMITS).bonds_on_regular == ()
+
+
 def test_bond_series_created_or_removed_by_the_save_are_named() -> None:
     kept = _instrument(1, "EDO0136", bond_class=True)
     old = _instrument(2, "EDO0236", bond_class=True)

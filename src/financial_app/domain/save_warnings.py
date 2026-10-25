@@ -57,11 +57,26 @@ class LockedCash:
 
 
 @dataclass(frozen=True)
+class BondsOnRegular:
+    """Bond Series bought on a Regular Account, which has the ordinary tax regime instead of the Bonds Account's."""
+
+    account_name: str
+    series: tuple[str, ...]
+
+    def message(self) -> str:
+        return (
+            f"Obligacje {', '.join(self.series)} kupiono na koncie {self.account_name} typu "
+            f"{AccountType.REGULAR.label}, które ma zwykłe zasady podatku. Do obligacji skarbowych detalicznych "
+            f"załóż konto typu {AccountType.BONDS.label}."
+        )
+
+
+@dataclass(frozen=True)
 class SaveWarnings:
     """What the UI tells the user after a save: the Contribution Limit bars the save has just taken over their limit,
     the negative Cash Balances from the earliest day it touched, the Multi-asset Instruments it bought that have no
-    split yet, the Bond Series Instruments it created or removed, and the Accounts whose cash it took below the
-    capital of their running Term Deposits."""
+    split yet, the Bond Series Instruments it created or removed, the Accounts whose cash it took below the
+    capital of their running Term Deposits, and the Bond Series it bought on a Regular Account."""
 
     over_limit: tuple[LimitBar, ...] = ()
     negative_cash: tuple[CashShortfall, ...] = ()
@@ -69,16 +84,18 @@ class SaveWarnings:
     series_created: tuple[str, ...] = ()
     series_dropped: tuple[str, ...] = ()
     locked_cash: tuple[LockedCash, ...] = ()
+    bonds_on_regular: tuple[BondsOnRegular, ...] = ()
 
     @property
     def any(self) -> bool:
-        return bool(self.over_limit or self.negative_cash or self.unsplit or self.locked_cash)
+        return bool(self.over_limit or self.negative_cash or self.unsplit or self.locked_cash or self.bonds_on_regular)
 
     def messages(self, done: str, *, unsplit: bool = True) -> list[str]:
         """The Polish warnings; ``done`` opens a cash one ("Zapisano", "Usunięto"). Without ``unsplit`` the caller
         asks for the split itself (the transaction dialog opens the split dialog)."""
         texts = [shortfall.message(done) for shortfall in self.negative_cash]
         texts += [locked.message(done) for locked in self.locked_cash]
+        texts += [bonds.message() for bonds in self.bonds_on_regular]
         texts += [over_limit_warning(bar) for bar in self.over_limit]
         if unsplit and self.unsplit:
             names = ", ".join(instrument.name for instrument in self.unsplit)
@@ -130,7 +147,28 @@ def save_warnings(
         tuple(sorted(series_after - series_before)),
         tuple(sorted(series_before - series_after)),
         tuple(_locked_cash(before, after, accounts, changed, deposits)),
+        tuple(_bonds_on_regular(after, accounts, changed, instruments)),
     )
+
+
+def _bonds_on_regular(
+    after: Sequence[Transaction],
+    accounts: Sequence[Account],
+    changed: Iterable[Transaction],
+    instruments: Mapping[int, Instrument],
+) -> list[BondsOnRegular]:
+    """The Bond Series each Regular Account was just bought in; an edit's old form or a deletion asks for nothing."""
+    saved = set(after)
+    series: dict[int, dict[str, None]] = {}
+    for t in changed:
+        instrument = instruments.get(t.instrument_id) if t.instrument_id is not None else None
+        if t in saved and t.transaction_type is TransactionType.BUY and instrument and instrument.is_bond_series:
+            series.setdefault(t.account_id, {})[instrument.name] = None
+    return [
+        BondsOnRegular(account.name, tuple(sorted(series[account.id])))
+        for account in accounts
+        if account.id in series and account.account_type is AccountType.REGULAR
+    ]
 
 
 def _locked_cash(
