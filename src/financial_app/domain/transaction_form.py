@@ -725,10 +725,14 @@ class TransactionForm:
         if lowest >= 0 or lowest >= lowest_cash_balance(others, state.account_id, start=draft.date, currency=currency):
             return ""
         account = self._accounts[state.account_id]
-        return (
+        hint = (
             f"Za mało gotówki: saldo konta {account.name} spadnie do {format_amount(lowest, currency)}. "
-            "Dodaj wpłatę z datą nie późniejszą niż ta transakcja."
+            "Dodaj wpłatę z datą nie późniejszą niż ta transakcja"
         )
+        paid_from = self._paid_from(state)
+        if paid_from.visible and currency != PLN and PLN in paid_from.options:
+            return f"{hint} albo wybierz Płatność: {paid_from.options[PLN]}."
+        return f"{hint}."
 
     # The layout
 
