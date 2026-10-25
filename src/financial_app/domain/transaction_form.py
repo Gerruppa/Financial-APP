@@ -258,6 +258,7 @@ class FormLayout:
     bond_fields: bool
     series: Choice[str]
     series_text: str
+    bond_hint: str
     rollover: bool
     instrument: bool
     lot: Choice[int]
@@ -646,6 +647,15 @@ class TransactionForm:
                 parts.append(f"data zakupu poza sprzedażą serii ({window})")
         return " · ".join(parts)
 
+    def _bond_hint(self, state: FormState) -> str:
+        """Why a Regular Account is a poor home for bonds; the same advice the save warns with (BondsOnRegular)."""
+        if self._accounts[state.account_id].account_type is not AccountType.REGULAR:
+            return ""
+        return (
+            f"Konto typu {AccountType.REGULAR.label} ma zwykłe zasady podatku. Do obligacji skarbowych detalicznych "
+            f"załóż konto typu {AccountType.BONDS.label}."
+        )
+
     def bond_price(self, state: FormState) -> str | None:
         """The price of one bond the bond mode buys: 100 zł, or the Rollover price of the Series; ``None`` outside
         the bond mode or without a Series."""
@@ -753,6 +763,7 @@ class TransactionForm:
             bond_fields=bonds,
             series=self._series_choice(state, series) if bonds else Choice(False),
             series_text=self._series_text(state, series, rollover) if bonds else "",
+            bond_hint=self._bond_hint(state) if bonds else "",
             rollover=rollover,
             instrument=not bonds,
             lot=self._lot(state),

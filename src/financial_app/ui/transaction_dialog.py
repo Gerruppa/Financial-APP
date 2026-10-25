@@ -125,6 +125,7 @@ def open_transaction_dialog(
             series_choice = ui.select({}, label="Seria", with_input=True).classes("w-full")
             series_choice.mark("transaction-bond-series-choice")
             series_text = ui.label().classes("text-sm k-muted").mark("transaction-bond-series")
+            bond_hint = ui.label().classes("text-sm k-muted").mark("transaction-bond-hint")
             rollover = ui.checkbox("z rolowania", value=start.rollover).mark("transaction-rollover")
             # A Dividend without an Instrument is interest, e.g. on the Account's cash
             instrument = ui.select(form.instruments, label="Instrument", value=start.instrument_id, clearable=True)
@@ -248,6 +249,8 @@ def open_transaction_dialog(
             if layout.bond_fields:
                 list_series(layout.series.options, layout.series.value)
             series_text.text = layout.series_text
+            bond_hint.text = layout.bond_hint
+            bond_hint.visible = bool(layout.bond_hint)
             lot.visible = layout.lot.visible
             if layout.lot.visible:
                 lot.set_options(dict(layout.lot.options), value=layout.lot.value)
