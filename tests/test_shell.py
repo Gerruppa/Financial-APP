@@ -102,14 +102,13 @@ async def test_the_avatar_menu_opens_ustawienia_and_pomoc(user: User) -> None:
     await user.should_see("Pomoc")
 
 
-async def test_the_avatar_menu_opens_the_support_page_in_the_system_browser(
+async def test_the_header_support_button_opens_the_support_page_in_the_system_browser(
     user: User, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     opened: list[str] = []
     monkeypatch.setattr("financial_app.ui.user_menu.webbrowser.open", opened.append)
 
-    user.find(marker="user-menu").click()
-    user.find(marker="menu-support").click()
+    user.find(marker="support-button").click()
 
     assert opened == [SUPPORT_URL]
 

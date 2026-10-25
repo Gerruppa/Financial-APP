@@ -62,7 +62,7 @@ from financial_app.ui.theme import ThemeChoice, apply_theme
 from financial_app.ui.transaction_dialog import open_transaction_dialog
 from financial_app.ui.transactions import TransactionsPage
 from financial_app.ui.unpriced import UnpricedSection
-from financial_app.ui.user_menu import build_user_menu
+from financial_app.ui.user_menu import build_support_button, build_user_menu
 from financial_app.ui.user_section import UserSection
 from financial_app.ui.view_scope import ScopeSwitcher, ViewScope, breadcrumbs
 from financial_app.ui.visibility import Layout
@@ -331,6 +331,7 @@ def build_shell(
         refresh_button.tooltip("Odśwież wyceny").mark("refresh-prices")
         switcher = ScopeSwitcher(scope, lambda: shared.days)
         events.subscribe(switcher.refresh, switcher.CHANGES)
+        build_support_button()
         build_user_menu(pseudonym, theme, SETTINGS_PATH, HELP_PATH, on_switch_user)
 
     # The tab on screen, lit in the menu
