@@ -356,3 +356,13 @@ def test_the_cash_hint_is_silent_for_a_form_that_does_not_read_and_ignores_the_e
     withdrawal = Transaction(IKE, date(2026, 3, 2), TransactionType.WITHDRAWAL, Decimal(900), id=2)
     editing = _form([deposit, withdrawal], edited=withdrawal)
     assert editing.cash_hint(_state(TransactionType.WITHDRAWAL, amount="900")) == ""
+
+
+def test_the_cash_hint_for_a_trade_paid_from_foreign_cash_offers_paying_in_pln() -> None:
+    deposit = Transaction(XTB, date(2026, 3, 1), TransactionType.DEPOSIT, Decimal(100), id=1)
+    buy = _state(TransactionType.BUY, XTB, instrument_id=AAPL, quantity="10", price="50")
+
+    assert _form([deposit]).cash_hint(buy) == (
+        "Za mało gotówki: saldo konta XTB spadnie do -500,00\xa0USD. "
+        "Dodaj wpłatę z datą nie późniejszą niż ta transakcja albo wybierz Płatność: PLN z przewalutowaniem."
+    )
