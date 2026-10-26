@@ -145,6 +145,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `account_rules.py`: Which Instruments an Account Type may buy; maps each Instrument to a Product and gives the refusal message for a disallowed Buy.
 - `account_value.py`: Shared definition of an Account's value and result today: cash, Positions, unrealised and FX results for the Portfolio and Dashboard
 - `accounts.py`: Account Types, Tax Regime descriptions, Account field validation, and the refusal naming what still holds an Account from deletion
+- `app_update.py`: Pure update check: parses the latest GitHub Release into its version and installer URL, and tells whether it is newer.
 - `benchmarks.py`: Benchmarks: CPI, Instrument or Account with a pp/year offset, daily growth factors and the Portfolio-vs-benchmark comparison over a period.
 - `bond_calendar.py`: Calendar of coupons, anniversaries and maturities of held Bond Series over the next 12 months, by View Scope
 - `bond_drafts.py`: Drafts for matured Bond Series Lots (redemption, Rollover) and coupons of COI, ROR and DOR Lots, with the Sell or interest Transaction each confirms
@@ -279,6 +280,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 
 - `__init__.py`: Package marker describing the external price sources package
 - `analizy.py`: Fund and PPK Quotes, valuation history, fund search and TFI/group/benchmark profiles through the undocumented analizy.pl API.
+- `app_update.py`: Update source: fetches the latest GitHub Release, downloads its installer and starts it silently.
 - `bankier.py`: Fetches fund and PPK Quotes from bankier.pl pages as the fallback price source
 - `benchmarks.py`: Builds each saved benchmark's growth from the CPI, price and NBP caches and compares it with History.
 - `bond_data.py`: Fetches and parses the MF bond file, GUS CPI and NBP reference rates, refreshing their SQLite copies at most once a day
@@ -311,6 +313,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `__init__.py`: Package marker for the NiceGUI user interface layer, a thin layer over domain and persistence
 - `account_ranking.py`: Total Dashboard's Accounts treemap and sortable Account ranking; clicking a tile switches the View Scope to that Account
 - `accounts.py`: Ustawienia Konta card: lists Accounts, opens the add and edit dialog, and deletes an unused Account
+- `app_update.py`: Version-label update notice: checks GitHub shortly after start and offers a one-click installer download.
 - `benchmarks.py`: Benchmarki tab: comparison table with chart toggles and delete, the add form, and value charts over the period.
 - `bond_data.py`: Header status listing failing bond data sources with their reasons, shown only while one keeps failing
 - `bond_drafts.py`: Dochód stały tab's "Do zatwierdzenia" list of bond maturities, unpaid coupons, and Term Deposit interest and maturities.
@@ -391,6 +394,9 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_analizy_profile.py`: Tests for analizy.pl fund, PPK and GPW ETF profiles (TFI, group, benchmark) on saved search responses, without the network.
 - `test_analizy_search.py`: Tests for analizy.pl fund and PPK search on saved, trimmed responses without network
 - `test_analizy_source.py`: Tests the analizy.pl fund and PPK quote source against saved API responses
+- `test_app_update_domain.py`: Tests for the update check's release parsing and version comparison.
+- `test_app_update_source.py`: Tests for the update source: latest-release fetch, installer download and launch.
+- `test_app_update_ui.py`: UI tests for the update notice: shown only for a newer release, and the install flow.
 - `test_architecture.py`: Architecture test enforcing that the domain core does not import UI or database code
 - `test_backup.py`: Tests database backup copies and the retention of the newest backups
 - `test_bankier_source.py`: Tests the bankier.pl fund and PPK quote source against saved pages
