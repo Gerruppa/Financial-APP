@@ -10,6 +10,7 @@ import openpyxl
 import pytest
 from nicegui import ui
 from nicegui.testing import User, user_simulation
+from pypdf import PdfReader
 from sqlalchemy import Engine
 
 from financial_app.domain.accounts import AccountDraft, AccountType
@@ -130,3 +131,32 @@ async def test_the_passive_income_exports_the_chosen_year_for_the_scope(engine: 
 
     sheet = openpyxl.load_workbook(io.BytesIO(response.content))["Wpływy"]
     assert [cell.value for cell in sheet[2]] == [datetime(2026, 2, 10), "Dywidendy", "PZU", "IKE", 81]
+
+
+async def test_wyniki_offers_the_annual_pdf_for_the_chosen_year_and_scope(engine: Engine) -> None:
+    async with user_simulation(_shell(engine)) as user:
+        await user.open("/wyniki")
+        await user.should_see(marker="results-twr")
+        _choose_year(user, "results-export-year", 2026)
+        user.find(marker="view-scope").click()
+        await user.should_see(marker="scope-menu")
+        user.find(marker="scope-1").click()
+        user.find(marker="results-pdf").click()
+        response = await user.download.next()
+
+    assert response.content.startswith(b"%PDF")
+    text = "\n".join(page.extract_text() for page in PdfReader(io.BytesIO(response.content)).pages)
+    assert "Raport roczny 2026" in text
+    assert "IKE" in text
+    for section in ("Wyniki roku", "Portfolio na koniec roku", "Sprzedaże (FIFO)", "Dochód pasywny"):
+        assert section in text
+
+
+async def test_the_annual_pdf_of_an_empty_year_is_still_a_report(engine: Engine) -> None:
+    async with user_simulation(_shell(engine)) as user:
+        await user.open("/wyniki")
+        await user.should_see(marker="results-twr")
+        user.find(marker="results-pdf").click()  # 2025: nothing happened
+        response = await user.download.next()
+
+    assert len(PdfReader(io.BytesIO(response.content)).pages) >= 2

@@ -8,6 +8,7 @@ from pathlib import Path
 import openpyxl
 import pytest
 from openpyxl.worksheet.worksheet import Worksheet
+from pypdf import PdfReader
 from sqlalchemy import Engine
 
 from financial_app.domain.accounts import AccountDraft, AccountType
@@ -23,6 +24,7 @@ from financial_app.persistence.history import save_quote_history
 from financial_app.persistence.instruments import add_instrument, list_asset_classes
 from financial_app.persistence.transactions import add_transaction
 from financial_app.sources.report_export import (
+    export_annual_pdf,
     export_passive_income,
     export_portfolio,
     export_results,
@@ -179,3 +181,19 @@ def test_the_passive_income_file_lists_the_years_received_items(engine: Engine) 
     row = [cell.value for cell in _sheet(data, "Wpływy")[2]]
     assert row == [datetime(2025, 5, 20), "Dywidendy", "PZU", "mBank IKE", 81]
     assert _sheet(data, "Wpływy")["A2"].number_format == "DD.MM.YYYY"
+
+
+def test_the_annual_pdf_is_named_after_the_year_and_the_account_and_holds_the_xlsx_figures(engine: Engine) -> None:
+    account = _sell_once(engine)
+    rates = _Today()
+
+    name, data = export_annual_pdf(engine, 2025, account, [], rates)
+    total_name, _ = export_annual_pdf(engine, 2025, None, [], rates)
+
+    assert name == "raport-roczny-2025-mBank IKE.pdf"
+    assert total_name == "raport-roczny-2025.pdf"
+    text = "\n".join(page.extract_text() for page in PdfReader(io.BytesIO(data)).pages).replace(" ", " ")
+    # the Sell Summary's result of the XLSX test above: cost 500, revenue 600, result 100
+    assert "PZU" in text
+    assert "600,00" in text
+    assert "20,00 %" in text

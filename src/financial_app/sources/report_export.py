@@ -19,6 +19,7 @@ from sqlalchemy import Engine
 from financial_app.domain.lots import foreign_cash, open_positions
 from financial_app.domain.portfolio_history import DayValue, prices_on, rates_on
 from financial_app.domain.report import (
+    ALL_ACCOUNTS,
     Cell,
     Percent,
     PortfolioSnapshot,
@@ -37,6 +38,7 @@ from financial_app.persistence.transactions import transactions_in_entry_order
 from financial_app.sources.current_prices import LatestRates
 from financial_app.sources.export import FORMULA_START, XLSX_DATE_FORMAT, safe_file_part
 from financial_app.sources.passive_income import income_items
+from financial_app.sources.pdf_report import annual_report_to_pdf
 from financial_app.sources.portfolio_history import history_inputs
 from financial_app.sources.todays_view import todays_view
 
@@ -97,32 +99,78 @@ def _sheet_name(title: str) -> str:
 
 def export_sale_summary(engine: Engine, year: int, account_id: int | None) -> tuple[str, bytes]:
     """The file name and bytes of the Sell Summary of ``year`` for the View Scope (``account_id``, ``None``: Total)."""
-    accounts = {account.id: account.name for account in list_accounts(engine)}
-    instruments = {instrument.id: instrument.name for instrument in list_instruments(engine)}
-    report = sale_summary_report(transactions_in_entry_order(engine), year, account_id, instruments, accounts)
-    return _named(report, year, account_id, accounts), report_to_xlsx(report)
+    report = _sale_summary(engine, year, account_id)
+    return _named(report, year, account_id, _account_names(engine)), report_to_xlsx(report)
 
 
 def export_results(
     engine: Engine, year: int, account_id: int | None, history: Sequence[DayValue], today: date
 ) -> tuple[str, bytes]:
     """The file name and bytes of Wyniki over ``year`` for the View Scope, from ``history``'s days."""
-    accounts = list_accounts(engine)
-    report = results_report(history, accounts, account_id, year, today, load_cpi(engine))
-    return _named(report, year, account_id, {account.id: account.name for account in accounts}), report_to_xlsx(report)
+    report = _results(engine, year, account_id, history, today)
+    return _named(report, year, account_id, _account_names(engine)), report_to_xlsx(report)
 
 
 def export_portfolio(engine: Engine, year: int, account_id: int | None, rates: LatestRates) -> tuple[str, bytes]:
     """The file name and bytes of the Portfolio at the end of ``year`` for the View Scope: as the Portfolio tab shows
     it for the current year (at today's prices), else as History values it on 31 December from the cached prices."""
+    report = _portfolio(engine, year, account_id, rates)
+    return _named(report, year, account_id, _account_names(engine)), report_to_xlsx(report)
+
+
+def export_passive_income(engine: Engine, year: int, account_id: int | None, today: date) -> tuple[str, bytes]:
+    """The file name and bytes of the passive income received in ``year`` for the View Scope."""
+    report = _passive_income(engine, year, account_id, today)
+    return _named(report, year, account_id, _account_names(engine)), report_to_xlsx(report)
+
+
+def export_annual_pdf(
+    engine: Engine, year: int, account_id: int | None, history: Sequence[DayValue], rates: LatestRates
+) -> tuple[str, bytes]:
+    """The file name and bytes of the annual PDF report of ``year`` for the View Scope: the four reports the XLSX files
+    hold (Wyniki, Portfolio, Sell Summary, passive income), built the same way so the figures agree."""
+    today = rates.today()
+    names = _account_names(engine)
+    reports = (
+        _results(engine, year, account_id, history, today),
+        _portfolio(engine, year, account_id, rates),
+        _sale_summary(engine, year, account_id),
+        _passive_income(engine, year, account_id, today),
+    )
+    scope = ALL_ACCOUNTS if account_id is None else names[account_id]
+    name = _file_name("raport-roczny", year, account_id, names, "pdf")
+    return name, annual_report_to_pdf(scope, year, today, reports)
+
+
+def _account_names(engine: Engine) -> dict[int, str]:
+    return {account.id: account.name for account in list_accounts(engine)}
+
+
+def _instrument_names(engine: Engine) -> dict[int, str]:
+    return {instrument.id: instrument.name for instrument in list_instruments(engine)}
+
+
+def _sale_summary(engine: Engine, year: int, account_id: int | None) -> Report:
+    return sale_summary_report(
+        transactions_in_entry_order(engine), year, account_id, _instrument_names(engine), _account_names(engine)
+    )
+
+
+def _results(engine: Engine, year: int, account_id: int | None, history: Sequence[DayValue], today: date) -> Report:
+    return results_report(history, list_accounts(engine), account_id, year, today, load_cpi(engine))
+
+
+def _portfolio(engine: Engine, year: int, account_id: int | None, rates: LatestRates) -> Report:
     today = rates.today()
     day = min(date(year, 12, 31), today)
     snapshot = _todays_snapshot(engine, rates) if day == today else _snapshot_on(engine, day, today)
-    accounts = list_accounts(engine)
-    instruments = {instrument.id: instrument.name for instrument in list_instruments(engine)}
-    names = {account.id: account.name for account in accounts}
-    report = portfolio_report(snapshot, accounts, account_id, instruments)
-    return _named(report, year, account_id, names), report_to_xlsx(report)
+    return portfolio_report(snapshot, list_accounts(engine), account_id, _instrument_names(engine))
+
+
+def _passive_income(engine: Engine, year: int, account_id: int | None, today: date) -> Report:
+    return passive_income_report(
+        income_items(engine, today), year, account_id, _instrument_names(engine), _account_names(engine)
+    )
 
 
 def _todays_snapshot(engine: Engine, rates: LatestRates) -> PortfolioSnapshot:
@@ -167,16 +215,12 @@ def _snapshot_on(engine: Engine, day: date, today: date) -> PortfolioSnapshot:
     )
 
 
-def export_passive_income(engine: Engine, year: int, account_id: int | None, today: date) -> tuple[str, bytes]:
-    """The file name and bytes of the passive income received in ``year`` for the View Scope."""
-    accounts = {account.id: account.name for account in list_accounts(engine)}
-    instruments = {instrument.id: instrument.name for instrument in list_instruments(engine)}
-    report = passive_income_report(income_items(engine, today), year, account_id, instruments, accounts)
-    return _named(report, year, account_id, accounts), report_to_xlsx(report)
-
-
 def _named(report: Report, year: int, account_id: int | None, accounts: Mapping[int, str]) -> str:
-    name = f"{report.name}-{year}"
+    return _file_name(report.name, year, account_id, accounts, "xlsx")
+
+
+def _file_name(stem: str, year: int, account_id: int | None, accounts: Mapping[int, str], extension: str) -> str:
+    name = f"{stem}-{year}"
     if account_id is not None:
         name += f"-{safe_file_part(accounts[account_id])}"
-    return f"{name}.xlsx"
+    return f"{name}.{extension}"

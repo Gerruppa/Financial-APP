@@ -10,6 +10,7 @@ dependencies = [
     "alembic>=1.20",
     "platformdirs>=4.12",
     "openpyxl>=3.1",
+    "reportlab>=4.2",
     "xlrd>=2.0",
 ]
 
@@ -24,6 +25,8 @@ dev = [
     "ruff>=0.16",
     "types-xlrd",
     "types-openpyxl",
+    "types-reportlab",
+    "pypdf>=5",
 ]
 # Builds the Windows installer (scripts/build_installer.ps1) and the icons (scripts/make_icons.py)
 build = [
@@ -49,7 +52,7 @@ where = ["src"]
 version = { attr = "financial_app.__version__" }
 
 [tool.setuptools.package-data]
-financial_app = ["persistence/migrations/*.py", "persistence/migrations/versions/*.py", "ui/*.md", "ui/assets/*"]
+financial_app = ["persistence/migrations/*.py", "persistence/migrations/versions/*.py", "ui/*.md", "ui/assets/*", "ui/assets/fonts/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

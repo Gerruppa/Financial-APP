@@ -294,9 +294,10 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `nbp.py`: Gets NBP exchange rates from the NBP API through the local cache
 - `notifications.py`: Gathers the header bell's reminders from the database and loads or saves the read keys in app_settings
 - `passive_income.py`: Loads the passive-income items: income received from Transactions and the coupons and Term Deposit interest not entered for the next 12 months.
+- `pdf_report.py`: Lays out the annual report as an A4 PDF with reportlab: title page, report tables with repeated headers, disclaimer footer, and DejaVu fonts for Polish letters.
 - `portfolio_history.py`: Fetches History prices and NBP Rates into cache and computes daily values, cached until invalidated
 - `prices.py`: Refreshes held Instruments' Quotes from price sources in fallback order and records failures
-- `report_export.py`: Renders a report model to an XLSX workbook (numbers, percents, real dates) and builds the Sell Summary, Wyniki, Portfolio and passive income files with their names
+- `report_export.py`: Builds the Sell Summary, Wyniki, Portfolio and passive income reports, writes them as XLSX and as the annual PDF, and names the files.
 - `spreadsheet.py`: Previews and imports Transactions and Instruments from the user's Inwestomat spreadsheet
 - `stooq.py`: Stooq history source for GPW stocks and indices; fetches daily closes via CSV with API key and browser proof-of-work check
 - `todays_view.py`: Loads today's portfolio state once (Transactions, Accounts, Positions, prices, NBP Rates) for the tabs and Dashboard to share
@@ -365,6 +366,10 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `view_scope.py`: View Scope header switcher and breadcrumbs, listing Accounts by value with share and daily change
 - `visibility.py`: Window Layout of hidden elements, plus the Ustawienia switches and View Profile presets that change it
 - `xtb_import.py`: Ustawienia card for importing XTB statements and resolving the Reconciliation before applying
+
+## src/financial_app/ui/assets/fonts/
+
+- `LICENSE_DEJAVU`: DejaVu fonts licence, bundled with the DejaVu Sans fonts that set the PDF report's Polish letters.
 
 ## tests/
 
@@ -486,6 +491,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_passive_income_domain.py`: Tests received income kinds, monthly sums by scope, goal progress, the 12-month average and goal parsing.
 - `test_passive_income_ui.py`: UI tests of the Dochód pasywny tab: received and forecast by month, the goal, years and the scope.
 - `test_paths.py`: Tests the default data directory (outside the repository, named KAPITA), the override, and the legacy folder move without overwriting new data.
+- `test_pdf_report.py`: Tests the annual PDF layout: title page, Polish letters, disclaimer on every page, repeated table headers and the empty-year note.
 - `test_periods_domain.py`: Unit tests for period presets, custom ranges and period text persistence
 - `test_physical_metals_ui.py`: Tests physical metal Instruments with weight per unit and Buyback Spread in the dialog and Portfolio.
 - `test_portfolio_grouping_ui.py`: UI tests for the Portfolio Grupuj switch: group header rows with value and share, remembered choice
