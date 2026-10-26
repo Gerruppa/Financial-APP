@@ -1,6 +1,7 @@
 """The Dochód pasywny tab (issue #93, spec 10): the View Scope's Dividends and interest received and the bond coupons
 forecast, month by month in the chosen year, against the Monthly Income Goal kept in ``app_settings``, with the
-coupons due over the next 12 months listed below."""
+coupons due over the next 12 months listed below. "Eksportuj XLSX" saves the income received in a chosen year
+(issue #241)."""
 
 from dataclasses import dataclass, field
 from datetime import date
@@ -23,8 +24,10 @@ from financial_app.persistence.instruments import list_instruments
 from financial_app.persistence.settings import PASSIVE_INCOME_GOAL, load_setting, save_setting
 from financial_app.sources.nbp import NbpRates
 from financial_app.sources.passive_income import income_items
+from financial_app.sources.report_export import export_passive_income
 from financial_app.ui.changes import TODAYS_VALUE
 from financial_app.ui.charts import pln_bars_chart
+from financial_app.ui.report_export import export_controls
 from financial_app.ui.view_scope import ViewScope
 
 MONTH_NAMES = (
@@ -66,8 +69,14 @@ class PassiveIncomePage:
     def build(self) -> None:
         ui.label("Dochód pasywny").classes("text-2xl font-bold")
         ui.label("Dywidendy i odsetki netto: otrzymane oraz prognozowane kupony obligacji.").classes("text-sm k-muted")
+        export_controls("income", self.engine, self.rates.today(), self.export)
         with ui.column().classes("w-full max-w-screen-2xl").mark("passive-income"):
             self.content()
+
+    def export(self, year: int) -> None:
+        """Hands the income received in ``year`` for the View Scope to the browser as an XLSX file."""
+        name, data = export_passive_income(self.engine, year, self.scope.account_id, self.rates.today())
+        ui.download(data, name)
 
     @ui.refreshable_method
     def content(self) -> None:

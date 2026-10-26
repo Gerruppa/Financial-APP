@@ -11,15 +11,24 @@ from openpyxl.worksheet.worksheet import Worksheet
 from sqlalchemy import Engine
 
 from financial_app.domain.accounts import AccountDraft, AccountType
+from financial_app.domain.currencies import MissingNbpRateError, NbpRate
 from financial_app.domain.instruments import InstrumentDraft
 from financial_app.domain.portfolio_history import DayValue
+from financial_app.domain.prices import Quote
 from financial_app.domain.report import NOTHING_TO_REPORT, Percent, Report, Section
-from financial_app.domain.transactions import TransactionDraft, TransactionType, buy_or_sell
+from financial_app.domain.transactions import TransactionDraft, TransactionType, buy_or_sell, dividend
 from financial_app.persistence.accounts import add_account
 from financial_app.persistence.db import init_db
+from financial_app.persistence.history import save_quote_history
 from financial_app.persistence.instruments import add_instrument, list_asset_classes
 from financial_app.persistence.transactions import add_transaction
-from financial_app.sources.report_export import export_results, export_sale_summary, report_to_xlsx
+from financial_app.sources.report_export import (
+    export_passive_income,
+    export_portfolio,
+    export_results,
+    export_sale_summary,
+    report_to_xlsx,
+)
 
 
 @pytest.fixture
@@ -104,3 +113,69 @@ def test_text_starting_with_a_formula_character_stays_text() -> None:
 
     assert sheet["A2"].data_type == "s"
     assert sheet["A2"].value == "=SUM(1)"
+
+
+class _Today:
+    """Today's NBP Rates for a database in PLN only."""
+
+    def today(self) -> date:
+        return date(2026, 10, 26)
+
+    def latest(self, currency: str) -> NbpRate:
+        raise MissingNbpRateError(currency, date(2026, 10, 26))
+
+
+def _held_at_year_end(engine: Engine, priced: bool) -> int:
+    """PZU bought on 5.01.2025, with a Quote on 30.12.2025 if ``priced`` and another on 20.10.2026."""
+    account = _sell_once(engine)
+    add_transaction(
+        engine, buy_or_sell(account, date(2025, 6, 1), TransactionType.BUY, 1, Decimal(5), Decimal(40), Decimal(0))
+    )
+    quotes = [Quote(Decimal(60), "PLN", date(2025, 12, 30), "yahoo")] if priced else []
+    quotes.append(Quote(Decimal(70), "PLN", date(2026, 10, 20), "yahoo"))
+    save_quote_history(engine, 1, quotes, None, datetime(2026, 10, 26, 9))
+    return account
+
+
+def test_the_portfolio_of_a_past_year_is_replayed_to_31_december_at_the_prices_of_that_day(engine: Engine) -> None:
+    _held_at_year_end(engine, priced=True)
+
+    name, data = export_portfolio(engine, 2025, None, _Today())
+
+    assert name == "portfolio-2025.xlsx"
+    row = [cell.value for cell in _sheet(data, "Pozycje")[2]]
+    assert row[:3] == ["mBank IKE", "PZU", 5]  # the 10 bought were sold in March
+    assert row[5:9] == [60, 300, 100, pytest.approx(0.5)]  # price, value, result, result %
+    assert row[9] is None
+
+
+def test_a_position_without_a_price_that_day_gets_the_note_and_no_value(engine: Engine) -> None:
+    _held_at_year_end(engine, priced=False)
+
+    _, data = export_portfolio(engine, 2025, None, _Today())
+
+    row = [cell.value for cell in _sheet(data, "Pozycje")[2]]
+    assert row[5:] == [None, None, None, None, "brak wyceny"]  # a later Quote is not a guess for 31 December
+
+
+def test_the_portfolio_of_the_current_year_is_valued_today(engine: Engine) -> None:
+    _held_at_year_end(engine, priced=True)
+
+    name, data = export_portfolio(engine, 2026, None, _Today())
+
+    assert name == "portfolio-2026.xlsx"
+    assert _sheet(data, "Pozycje")["A1"].value == "Konto"
+    row = [cell.value for cell in _sheet(data, "Pozycje")[2]]
+    assert row[5:7] == [70, 350]  # the Quote of 20.10.2026
+
+
+def test_the_passive_income_file_lists_the_years_received_items(engine: Engine) -> None:
+    account = _sell_once(engine)
+    add_transaction(engine, dividend(account, date(2025, 5, 20), Decimal(100), Decimal(19), instrument_id=1))
+
+    name, data = export_passive_income(engine, 2025, account, date(2026, 10, 26))
+
+    assert name == "dochod-pasywny-2025-mBank IKE.xlsx"
+    row = [cell.value for cell in _sheet(data, "Wpływy")[2]]
+    assert row == [datetime(2025, 5, 20), "Dywidendy", "PZU", "mBank IKE", 81]
+    assert _sheet(data, "Wpływy")["A2"].number_format == "DD.MM.YYYY"

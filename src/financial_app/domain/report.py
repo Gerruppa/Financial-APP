@@ -11,9 +11,12 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 
+from financial_app.domain.account_value import account_value, is_listed
 from financial_app.domain.accounts import Account
 from financial_app.domain.bonds import CpiReading
-from financial_app.domain.formatting import format_month
+from financial_app.domain.formatting import format_date, format_month
+from financial_app.domain.lots import ForeignCash, Position, UnitPrice
+from financial_app.domain.passive_income import IncomeItem, IncomeKind
 from financial_app.domain.portfolio_history import DayValue
 from financial_app.domain.results import PeriodResults, Returns, period_results, results_rows
 from financial_app.domain.sale_summary import SalePair, in_view, sale_pairs, sale_stats
@@ -23,6 +26,7 @@ ALL_ACCOUNTS = "Wszystkie rachunki"
 NOTHING_TO_REPORT = "Brak danych do raportu za ten rok."
 NO_CPI = "brak CPI GUS za ten okres"
 NOT_RECOVERED = "nie odrobione"
+BRAK_WYCENY = "brak wyceny"
 
 
 @dataclass(frozen=True)
@@ -202,3 +206,165 @@ def _percent(fraction: Decimal | None) -> Percent | None:
 
 def _scope_name(account_id: int | None, account_names: Mapping[int, str]) -> str:
     return ALL_ACCOUNTS if account_id is None else account_names[account_id]
+
+
+@dataclass(frozen=True)
+class PortfolioSnapshot:
+    """The Portfolio at the end of ``day``, valued ready-made by the caller: the open ``positions``, ``foreign`` cash
+    and PLN ``cash`` per Account id from the FIFO replay up to ``day``, the PLN ``prices`` per unit by Instrument id
+    (``None`` without a valuation that day), the NBP ``rates`` by currency and the Term Deposits' interest ``accrued``
+    and not paid yet, net, per Account id."""
+
+    day: date
+    positions: Sequence[Position]
+    foreign: Sequence[ForeignCash]
+    cash: Mapping[int, Decimal]
+    prices: Mapping[int, UnitPrice | None]
+    rates: Mapping[str, Decimal]
+    accrued: Mapping[int, Decimal]
+
+
+def portfolio_report(
+    snapshot: PortfolioSnapshot,
+    accounts: Sequence[Account],
+    account_id: int | None,
+    instrument_names: Mapping[int, str],
+) -> Report:
+    """The Portfolio of the View Scope at ``snapshot.day``, as the Portfolio tab values it: each Position at its price
+    and each Account's value and result. A Position without a price is listed with ``BRAK_WYCENY`` and no value of
+    its own; the Account counts it at cost, as the tab does."""
+    names = {account.id: account.name for account in accounts}
+    title = f"Portfolio na {format_date(snapshot.day)} · {_scope_name(account_id, names)}"
+    values = {
+        account.id: account_value(
+            account,
+            snapshot.cash.get(account.id, Decimal(0)),
+            snapshot.positions,
+            snapshot.foreign,
+            snapshot.prices,
+            snapshot.rates,
+            snapshot.accrued.get(account.id, Decimal(0)),
+        )
+        for account in accounts
+    }
+    shown = [a for a in accounts if (a.id == account_id if account_id is not None else is_listed(a, values[a.id]))]
+    shown = [account for account in shown if values[account.id].holds]
+    if not shown:
+        return Report("portfolio", title, notes=(NOTHING_TO_REPORT,))
+    order = {account.id: index for index, account in enumerate(shown)}
+    positions = sorted(
+        (p for p in snapshot.positions if p.account_id in order),
+        key=lambda p: (order[p.account_id], instrument_names.get(p.instrument_id, "").casefold()),
+    )
+    unpriced = any(snapshot.prices.get(p.instrument_id) is None for p in positions)
+    return Report(
+        "portfolio",
+        title,
+        (
+            Section(
+                "Pozycje",
+                _POSITION_HEADERS,
+                tuple(
+                    _position_row(p, names, instrument_names, snapshot.prices.get(p.instrument_id)) for p in positions
+                ),
+                (f"{BRAK_WYCENY}: pozycja bez ceny z tego dnia, nie ma w niej wartości ani wyniku",)
+                if unpriced
+                else (),
+            ),
+            Section(
+                "Konta",
+                ("Konto", "Gotówka", "Narosłe odsetki", "Pozycje i waluty", "Wartość", "Wynik"),
+                tuple(
+                    (
+                        account.name,
+                        values[account.id].cash,
+                        values[account.id].accrued,
+                        values[account.id].open_positions,
+                        values[account.id].value,
+                        values[account.id].result,
+                    )
+                    for account in shown
+                ),
+                ("Pozycje bez wyceny liczone po koszcie.",) if unpriced else (),
+            ),
+        ),
+    )
+
+
+_POSITION_HEADERS = (
+    "Konto",
+    "Instrument",
+    "Liczba",
+    "Śr. cena",
+    "Koszt",
+    "Cena",
+    "Wartość",
+    "Zysk/strata",
+    "Zysk/strata %",
+    "Uwaga",
+)
+
+
+def _position_row(
+    position: Position, accounts: Mapping[int, str], instruments: Mapping[int, str], price: UnitPrice | None
+) -> tuple[Cell, ...]:
+    head = (
+        accounts[position.account_id],
+        instruments.get(position.instrument_id, ""),
+        position.quantity,
+        position.average_price,
+        position.cost,
+    )
+    if price is None:
+        return (*head, None, None, None, None, BRAK_WYCENY)
+    value = position.value(price)
+    result = value - position.cost
+    # A Bond Series' price differs by Lot, so the one shown is the average
+    unit = price if isinstance(price, Decimal) else value / position.quantity
+    return (*head, unit, value, result, None if not position.cost else Percent(result / position.cost), None)
+
+
+def passive_income_report(
+    items: Iterable[IncomeItem],
+    year: int,
+    account_id: int | None,
+    instrument_names: Mapping[int, str],
+    account_names: Mapping[int, str],
+) -> Report:
+    """The income received in ``year`` in the View Scope (the forecast leaves out), by day: Dividends, bond and Term
+    Deposit interest and other interest, net in PLN, with the total of each kind."""
+    name = "dochod-pasywny"
+    title = f"Dochód pasywny {year} · {_scope_name(account_id, account_names)}"
+    received = sorted(
+        (i for i in items if not i.forecast and i.day.year == year and account_id in (None, i.account_id)),
+        key=lambda i: i.day,
+    )
+    if not received:
+        return Report(name, title, notes=(NOTHING_TO_REPORT,))
+    totals = {kind: sum((i.amount for i in received if i.kind is kind), Decimal(0)) for kind in IncomeKind}
+    summary = tuple((kind.label, total) for kind, total in totals.items() if any(i.kind is kind for i in received))
+    return Report(
+        name,
+        title,
+        (
+            Section(
+                "Podsumowanie",
+                ("Rodzaj", "Kwota netto"),
+                (*summary, ("Razem", sum(totals.values(), Decimal(0)))),
+            ),
+            Section(
+                "Wpływy",
+                ("Data", "Rodzaj", "Instrument", "Konto", "Kwota netto"),
+                tuple(
+                    (
+                        i.day,
+                        i.kind.label,
+                        instrument_names.get(i.instrument_id, "") if i.instrument_id is not None else "",
+                        account_names.get(i.account_id, ""),
+                        i.amount,
+                    )
+                    for i in received
+                ),
+            ),
+        ),
+    )
