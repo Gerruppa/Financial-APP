@@ -14,6 +14,7 @@
 - W Ustawieniach jest sekcja Użytkownik: zmiana pseudonimu i hasła oraz usunięcie użytkownika razem z jego folderem i kopiami zapasowymi.
 - W nagłówku jest przycisk „Wesprzyj”, który otwiera stronę buycoffee.to w przeglądarce.
 - Wyszukiwarka w nagłówku znajduje typ obligacji skarbowych po kodzie (np. EDO) lub okresie (np. „10-letnie”); jego karta pokazuje bieżącą ofertę MF, Twoje serie tego typu i przycisk „Kup”, który otwiera zakup obligacji.
+- Ustawienia są podzielone na sekcje (Konta, Klasy aktywów, Instrumenty, Import i inne) z przyciskami u góry; pokazują tylko wybraną sekcję, więc nie trzeba przewijać całej strony.
 
 ### Poprawki
 - Żółty przycisk dodawania transakcji jest zawsze na wierzchu, więc karty (np. w Dochodzie pasywnym) już go nie zasłaniają.

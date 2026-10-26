@@ -415,6 +415,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_dashboard_ui.py`: UI tests for the Dashboard tab: totals, Account table, currency exposure and price status
 - `test_database.py`: Checks that the ORM models and Alembic migrations stay in sync
 - `test_demo_data.py`: Tests the made-up demo Portfolio, the demo database in TEMP and the start options
+- `test_dialogs_ui.py`: Tests that Esc closes the movable dialogs, the topmost first
 - `test_dividends_domain.py`: Domain tests for Dividends, interest, Costs and DRIP calculations
 - `test_dividends_repository.py`: Tests saving Dividends, Costs and DRIPs to SQLite
 - `test_dividends_ui.py`: UI tests for Dividends, Costs and DRIP in the transaction dialog, Transakcje and Portfolio
@@ -492,6 +493,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_save_warnings_domain.py`: Tests the save warnings computed from Transactions before and after a save
 - `test_sayings_domain.py`: Domain tests for the saying of the day: stable within a day, every saying comes up once in as many days as there are sayings
 - `test_sayings_ui.py`: UI tests for the saying of the day: shown in the menu alone (not on Dashboard), signatures, and the Wygląd i widoczność switch hiding it
+- `test_settings_sections_ui.py`: Tests that Ustawienia's section buttons are listed and each shows its section, run without a browser
 - `test_shell.py`: Smoke tests of the app shell's tabs and navigation, run without a browser.
 - `test_splits_and_transfers_domain.py`: Tests Splits, Cash Transfers and Security Transfers in the FIFO engine and Cash Balances.
 - `test_splits_and_transfers_repository.py`: Tests saving Splits, Cash Transfers and Security Transfers in SQLite.
