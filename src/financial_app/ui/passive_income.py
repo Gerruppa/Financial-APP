@@ -27,6 +27,7 @@ from financial_app.sources.passive_income import income_items
 from financial_app.sources.report_export import export_passive_income
 from financial_app.ui.changes import TODAYS_VALUE
 from financial_app.ui.charts import pln_bars_chart
+from financial_app.ui.file_delivery import deliver_file
 from financial_app.ui.report_export import export_controls
 from financial_app.ui.view_scope import ViewScope
 
@@ -76,7 +77,7 @@ class PassiveIncomePage:
     def export(self, year: int) -> None:
         """Hands the income received in ``year`` for the View Scope to the browser as an XLSX file."""
         name, data = export_passive_income(self.engine, year, self.scope.account_id, self.rates.today())
-        ui.download(data, name)
+        deliver_file(data, name)
 
     @ui.refreshable_method
     def content(self) -> None:

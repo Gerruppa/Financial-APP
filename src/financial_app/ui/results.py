@@ -22,6 +22,7 @@ from financial_app.sources.current_prices import LatestRates
 from financial_app.sources.report_export import export_annual_pdf, export_results
 from financial_app.ui.changes import Change
 from financial_app.ui.charts import drawdown_chart
+from financial_app.ui.file_delivery import deliver_file
 from financial_app.ui.info import card_title
 from financial_app.ui.periods import PeriodChoice, period_selector
 from financial_app.ui.report_export import export_controls
@@ -79,7 +80,7 @@ class ResultsPage:
             ui.notify("Historia jest jeszcze wyliczana, spróbuj za chwilę.", type="warning")
             return
         name, data = export_results(self.engine, year, self.scope.account_id, days, self.period.today())
-        ui.download(data, name)
+        deliver_file(data, name)
 
     def export_pdf(self, year: int) -> None:
         """Hands the annual PDF report of ``year`` for the View Scope to the browser; History must be computed."""
@@ -88,7 +89,7 @@ class ResultsPage:
             ui.notify("Historia jest jeszcze wyliczana, spróbuj za chwilę.", type="warning")
             return
         name, data = export_annual_pdf(self.engine, year, self.scope.account_id, days, self.rates)
-        ui.download(data, name)
+        deliver_file(data, name)
 
     @ui.refreshable_method
     def content(self) -> None:

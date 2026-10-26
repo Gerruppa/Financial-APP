@@ -1,5 +1,10 @@
 # Historia zmian
 
+## Nieopublikowane
+
+### Zmiany
+- Po wyeksportowaniu raportu lub pliku KAPITA mówi, gdzie on jest: w oknie aplikacji plik trafia do folderu Pobrane, a okienko pokazuje jego ścieżkę i przycisk „Pokaż w folderze”; w przeglądarce pojawia się potwierdzenie pobrania.
+
 ## 1.1.0 — 2026-10-26
 
 ### Nowe funkcje

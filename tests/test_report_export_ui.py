@@ -160,3 +160,29 @@ async def test_the_annual_pdf_of_an_empty_year_is_still_a_report(engine: Engine)
         response = await user.download.next()
 
     assert len(PdfReader(io.BytesIO(response.content)).pages) >= 2
+
+
+async def test_in_the_native_window_the_pdf_is_saved_to_downloads_and_the_user_is_told_where(
+    engine: Engine, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    folder = tmp_path / "Downloads"
+    monkeypatch.setattr("financial_app.ui.file_delivery.is_native", lambda: True)
+    monkeypatch.setattr("financial_app.ui.file_delivery.downloads_dir", lambda: folder)
+    async with user_simulation(_shell(engine)) as user:
+        await user.open("/wyniki")
+        await user.should_see(marker="results-twr")
+        user.find(marker="results-pdf").click()
+        await user.should_see("Zapisano plik w folderze Pobrane")
+        await user.should_see(marker="file-show")
+
+    [saved] = folder.iterdir()
+    assert saved.suffix == ".pdf"
+    assert saved.read_bytes().startswith(b"%PDF")
+
+
+async def test_in_the_browser_the_user_is_told_the_file_was_downloaded(engine: Engine) -> None:
+    async with user_simulation(_shell(engine)) as user:
+        await user.open("/sprzedaz")
+        user.find(marker="sale-export").click()
+        await user.download.next()
+        await user.should_see("Pobrano plik")

@@ -42,6 +42,7 @@ from financial_app.sources.nbp import NbpRates
 from financial_app.sources.report_export import export_portfolio
 from financial_app.sources.todays_view import TodaysView, todays_view
 from financial_app.ui.changes import TODAYS_VALUE
+from financial_app.ui.file_delivery import deliver_file
 from financial_app.ui.fund_details import fund_details
 from financial_app.ui.report_export import export_controls
 from financial_app.ui.view_scope import ViewScope, breadcrumbs
@@ -98,7 +99,7 @@ class PortfolioPage:
         """Hands the Portfolio at the end of ``year`` (today for the current year) for the View Scope to the browser
         as an XLSX file."""
         name, data = export_portfolio(self.engine, year, self.scope.account_id, self.rates)
-        ui.download(data, name)
+        deliver_file(data, name)
 
     def _group(self, grouping: Grouping) -> None:
         save_setting(self.engine, PORTFOLIO_GROUPING, grouping.value)

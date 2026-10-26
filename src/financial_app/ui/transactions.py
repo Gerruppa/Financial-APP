@@ -45,6 +45,7 @@ from financial_app.persistence.transactions import list_transactions
 from financial_app.sources.export import FileFormat, export_transactions
 from financial_app.sources.nbp import NbpRates
 from financial_app.ui.changes import Change
+from financial_app.ui.file_delivery import deliver_file
 from financial_app.ui.recurring_drafts import prefill_of, recurring_drafts_list
 from financial_app.ui.transaction_dialog import open_transaction_dialog
 from financial_app.ui.view_scope import ViewScope, breadcrumbs
@@ -109,7 +110,7 @@ class TransactionsPage:
         """Hands the listed Transactions (those of the View Scope the filters keep) to the browser as a file, in the
         list's order."""
         name, data = export_transactions(self.engine, file_format, self.scope.account_id, self.filters, self.sort)
-        ui.download(data, name)
+        deliver_file(data, name)
 
     def scoped(self) -> list[Transaction]:
         return [t for t in list_transactions(self.engine) if self.scope.includes(t)]
