@@ -1,5 +1,10 @@
 # Historia zmian
 
+## 1.1.3 — 2026-10-26
+
+### Zmiany
+- Wydanie sprawdzające automatyczną aktualizację z wersji 1.1.2; bez zmian w działaniu aplikacji.
+
 ## 1.1.2 — 2026-10-26
 
 ### Nowe funkcje
