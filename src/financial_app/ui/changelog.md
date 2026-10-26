@@ -16,6 +16,7 @@
 - Wyszukiwarka w nagłówku znajduje typ obligacji skarbowych po kodzie (np. EDO) lub okresie (np. „10-letnie”); jego karta pokazuje bieżącą ofertę MF, Twoje serie tego typu i przycisk „Kup”, który otwiera zakup obligacji.
 
 ### Poprawki
+- Żółty przycisk dodawania transakcji jest zawsze na wierzchu, więc karty (np. w Dochodzie pasywnym) już go nie zasłaniają.
 - Klawisz Esc zamyka okna, które można przeciągać (np. dodawanie transakcji), od najnowszego; otwarta lista rozwijana najpierw zamyka się sama.
 - Górny pasek z wyszukiwarką ma pełne tło, więc przewijana treść nie nachodzi już na napisy w pasku.
 - W motywie Golden pytania w Pomocy mają ciemne tło zamiast białego, więc są czytelne.
