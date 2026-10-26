@@ -59,7 +59,7 @@ async def test_a_matured_lot_is_a_draft_counted_in_the_header_and_confirmed_as_i
 
     async with user_simulation(lambda: _shell(engine)) as user:
         await _open(user)
-        await user.should_see(marker="drafts-count", content="Do zatwierdzenia: 1")
+        await user.should_see("Do zatwierdzenia w Dochodzie stałym: 1")
         with user.scope(marker="bond-draft"):
             await user.should_see("Wykup EDO0626")
             await user.should_see("wykup 15.06.2026")
@@ -68,7 +68,7 @@ async def test_a_matured_lot_is_a_draft_counted_in_the_header_and_confirmed_as_i
         user.find(marker="confirm-redemption").click()
 
         await user.should_not_see(marker="bond-drafts")
-        await user.should_not_see(marker="drafts-count")
+        await user.should_not_see("Do zatwierdzenia w Dochodzie stałym: ")
         await user.should_see(marker="bonds-empty")
     sell = list_transactions(engine)[0]
     assert (sell.transaction_type, sell.date, sell.lot_id) == (TransactionType.SELL, date(2026, 6, 15), 2)
@@ -115,7 +115,7 @@ async def test_the_list_follows_the_view_scope_while_the_header_counts_every_acc
     async with user_simulation(lambda: _shell(engine)) as user:
         await user.open("/obligacje")
 
-        await user.should_see(marker="drafts-count", content="Do zatwierdzenia: 1")
+        await user.should_see("Do zatwierdzenia w Dochodzie stałym: 1")
         await user.should_not_see(marker="bond-drafts")
 
 
@@ -138,7 +138,7 @@ async def test_each_coupon_paid_is_a_draft_confirmed_as_interest(engine: Engine)
 
     async with user_simulation(lambda: _shell(engine)) as user:
         await _open(user)
-        await user.should_see(marker="drafts-count", content="Do zatwierdzenia: 2")
+        await user.should_see("Do zatwierdzenia w Dochodzie stałym: 2")
         await user.should_see("Odsetki COI0528")
         await user.should_see("okres 1 · 20.05.2025")
         await user.should_see(f"Wypłata netto 53,10{NBSP}zł")
@@ -146,7 +146,7 @@ async def test_each_coupon_paid_is_a_draft_confirmed_as_interest(engine: Engine)
 
         user.find(marker="confirm-coupon").click()
 
-        await user.should_see(marker="drafts-count", content="Do zatwierdzenia: 1")
+        await user.should_see("Do zatwierdzenia w Dochodzie stałym: 1")
         await user.should_not_see("okres 1 · 20.05.2025")
         await user.should_see("okres 2 · 20.05.2026")
 
@@ -156,7 +156,7 @@ async def test_each_coupon_paid_is_a_draft_confirmed_as_interest(engine: Engine)
         user.find(marker="transaction-row").click()  # the newest, the interest
         user.find(marker="transaction-withholding-tax").clear().type("12,45")
         user.find("Zapisz zmiany").click()
-        await user.should_see(marker="drafts-count", content="Do zatwierdzenia: 1")
+        await user.should_see("Do zatwierdzenia w Dochodzie stałym: 1")
 
     [interest] = [t for t in list_transactions(engine) if t.transaction_type is TransactionType.DIVIDEND]
     assert (interest.date, interest.withholding_tax, interest.lot_id) == (date(2025, 5, 20), Decimal("12.45"), 2)

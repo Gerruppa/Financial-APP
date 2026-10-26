@@ -77,7 +77,7 @@ class HeaderSearch:
         self.pause: ui.timer | None = None
 
     def build(self) -> None:
-        with ui.element("div").classes("relative w-[28rem] max-w-full") as self.box:
+        with ui.element("div").classes("relative w-[24rem] max-w-full shrink min-w-[10rem]") as self.box:
             self.field = ui.input(placeholder="Szukaj instrumentu: symbol, ISIN, nazwa lub > polecenie")
             self.field.props("dense outlined rounded clearable").classes("w-full k-header-search")
             self.field.mark("header-search")

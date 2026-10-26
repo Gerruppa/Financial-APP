@@ -153,14 +153,3 @@ def _rollover_dialog(engine: Engine, draft: MaturityDraft, on_saved: Callable[[]
             ui.button("Zapisz", on_click=save).mark("save-rollover")
     dialog.on("hide", dialog.delete)
     dialog.open()
-
-
-def drafts_count(engine: Engine, today: date) -> None:
-    """ "Do zatwierdzenia: n" in the header while any bond or Term Deposit Draft is due in any Account; clicking opens
-    the Dochód stały tab."""
-    count = len(pending_drafts(engine, today)) + len(pending_deposit_drafts(engine, today))
-    if not count:
-        return
-    ui.button(f"Do zatwierdzenia: {count}", on_click=lambda: ui.navigate.to("/obligacje")).props(
-        "flat no-caps color=attention"
-    ).mark("drafts-count")

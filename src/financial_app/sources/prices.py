@@ -8,7 +8,7 @@ from typing import Protocol, runtime_checkable
 
 from sqlalchemy import Engine
 
-from financial_app.domain.formatting import format_count, format_datetime
+from financial_app.domain.formatting import format_count, format_datetime, format_day_time
 from financial_app.domain.instruments import InstrumentType
 from financial_app.domain.lots import open_positions
 from financial_app.domain.prices import CurrencyMismatchError, PriceSourceError, Quote, sources_to_try
@@ -71,11 +71,13 @@ class RefreshStatus:
     failures: list[RefreshFailure]
 
 
-def refresh_summary(status: RefreshStatus | None) -> str:
-    """ "Wyceny: <time of the last refresh>" with the number of failing Instruments, or "Wyceny: brak" before any."""
+def refresh_summary(status: RefreshStatus | None, short: bool = False) -> str:
+    """ "Wyceny: <time of the last refresh>" with the number of failing Instruments, or "Wyceny: brak" before any;
+    ``short`` (the header's) gives the time by its day and month."""
     if status is None:
         return "Wyceny: brak"
-    text = f"Wyceny: {format_datetime(status.refreshed_at)}"
+    when = format_day_time(status.refreshed_at) if short else format_datetime(status.refreshed_at)
+    text = f"Wyceny: {when}"
     if status.failures:
         text += f" · {format_count(len(status.failures), 'błąd', 'błędy', 'błędów')}"
     return text

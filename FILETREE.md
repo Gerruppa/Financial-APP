@@ -310,7 +310,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `accounts.py`: Ustawienia Konta card: lists Accounts, opens the add and edit dialog, and deletes an unused Account
 - `benchmarks.py`: Benchmarki tab: comparison table with chart toggles and delete, the add form, and value charts over the period.
 - `bond_data.py`: Header status listing failing bond data sources with their reasons, shown only while one keeps failing
-- `bond_drafts.py`: Dochód stały tab's "Do zatwierdzenia" list of bond maturities, unpaid coupons, and Term Deposit interest and maturities, with its header count.
+- `bond_drafts.py`: Dochód stały tab's "Do zatwierdzenia" list of bond maturities, unpaid coupons, and Term Deposit interest and maturities.
 - `bond_series.py`: Bond Series rate summary and dialog for correcting MF rates by hand in Ustawienia Instrumenty
 - `bond_type_card.py`: Treasury bond type card opened from the header search: current MF offer, the user's Bond Series of the type and a Buy button.
 - `bonds.py`: Dochód stały tab UI: Term Deposits section, expandable Bond Series table with Lots and values, the "Do zatwierdzenia" list, and the 12-month calendar.
@@ -335,13 +335,13 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `investment_goal.py`: Dashboard Investment Goal tile with progress and real forecast, and a dialog to set the goal as amount or FIRE
 - `login.py`: Login screen in the default Theme: pick a User and enter the password, create a User, explain a forgotten password
 - `multi_asset.py`: Multi-asset tab and split editor: edits an Instrument's Multi-asset Split and lists held Multi-asset Instruments by Asset Class
-- `notifications.py`: Header bell button and menu of reminders; shows an unread dot and marks the listed reminders read on click
+- `notifications.py`: Header bell button and menu of reminders; shows the number of unread ones and marks the listed reminders read on click
 - `palette.py`: The palette's commands: a tab jump for each tab, plus add transaction, theme, discreet mode, refresh prices and user switch.
 - `passive_income.py`: Dochód pasywny tab: year navigation, Monthly Income Goal, tiles, monthly chart and table with progress, forecast coupons.
 - `periods.py`: Period selector UI: preset buttons and custom range inputs, remembered per user and redrawing listeners
 - `portfolio.py`: Read-only Portfolio tab: per-Account cards with cash balances, valued Positions, Lots, FX result and dividends
 - `price_sources.py`: Stooq API key storage and its Ustawienia section, kept in code but no longer shown there
-- `recurring_drafts.py`: Due Recurring Rule Drafts in the Transakcje tab and the header count; confirm, edit or skip each
+- `recurring_drafts.py`: Due Recurring Rule Drafts in the Transakcje tab; confirm, edit or skip each
 - `recurring_rules.py`: Ustawienia section listing Recurring Rules, with the rule dialog and its skipped occurrences
 - `reset.py`: Ustawienia Wyczyść dane card that clears the whole portfolio after a warning and typed confirmation
 - `results.py`: Wyniki tab page: result tiles, drawdown chart and per-Account results table under the period selector

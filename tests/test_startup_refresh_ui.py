@@ -93,7 +93,7 @@ async def test_a_start_after_the_close_refreshes_and_the_portfolio_shows_the_quo
 
         with user.scope(marker="portfolio"):
             await user.should_see(f"451,20{NBSP}zł")
-        await user.should_see("Wyceny: 09.10.2026 19:00")
+        await user.should_see("Wyceny: 09.10, 19:00")
 
 
 async def test_a_second_start_the_same_evening_does_not_refresh(engine: Engine) -> None:
@@ -105,7 +105,7 @@ async def test_a_second_start_the_same_evening_does_not_refresh(engine: Engine) 
 
         with user.scope(marker="portfolio"):
             await user.should_see(f"440,00{NBSP}zł")
-        await user.should_see("Wyceny: 09.10.2026 18:00")
+        await user.should_see("Wyceny: 09.10, 18:00")
     assert yahoo.asked == []
 
 
@@ -115,7 +115,7 @@ async def test_a_weekend_start_after_a_friday_evening_refresh_does_not_refresh(e
 
     async with user_simulation(_shell(engine, yahoo, datetime(2026, 10, 11, 10, 0))) as user:
         await user.open("/")
-        await user.should_see("Wyceny: 09.10.2026 18:00")
+        await user.should_see("Wyceny: 09.10, 18:00")
     assert yahoo.asked == []
 
 
@@ -130,7 +130,7 @@ async def test_the_window_is_usable_while_the_start_up_refresh_runs(engine: Engi
             await user.should_see(marker="transactions")
 
             gate.set()
-            await user.should_see("Wyceny: 09.10.2026 19:00")
+            await user.should_see("Wyceny: 09.10, 19:00")
     finally:
         gate.set()
 
@@ -157,7 +157,7 @@ async def test_reloading_the_window_during_the_start_up_refresh_joins_it_instead
             await user.open("/")
             await user.should_see("Wyceny: odświeżanie…")
             gate.set()
-            await user.should_see("Wyceny: 09.10.2026 19:00")
+            await user.should_see("Wyceny: 09.10, 19:00")
     finally:
         gate.set()
     assert yahoo.asked == ["PZU.WA"]
@@ -179,7 +179,7 @@ async def test_after_the_refresh_the_history_is_fetched_and_its_failures_listed(
     async with user_simulation(_shell(engine, FakeYahoo({"PZU.WA": "45.12"}), FRIDAY_EVENING)) as user:
         await user.open("/")
 
-        await user.should_see("Wyceny: 09.10.2026 19:00")
+        await user.should_see("Wyceny: 09.10, 19:00")
         await _wait_for_history_fetch(engine)
         await user.should_see("Historia: 1 błąd")
         user.find(marker="history-status").click()

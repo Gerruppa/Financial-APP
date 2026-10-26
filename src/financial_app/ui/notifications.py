@@ -1,7 +1,7 @@
-"""The header bell (issue #176): a list of what the app reminds the user of, a dot on the bell while any is unread.
+"""The header bell (issue #176): a list of what the app reminds the user of, the number of unread ones on the bell.
 
-Opening the list marks what it shows as read; the dot comes back when a reminder changes (a new Draft falls due, a
-refresh fails again), because a reminder's key says its state. The header's counters stay beside it."""
+Opening the list marks what it shows as read; the number comes back when a reminder changes (a new Draft falls due, a
+refresh fails again), because a reminder's key says its state. It replaced the header's "do zatwierdzenia" counters."""
 
 from nicegui import ui
 from sqlalchemy import Engine
@@ -18,7 +18,7 @@ class NotificationBell:
         self.engine = engine
         self.rates = rates
         self.notifications: list[Notification] = []
-        self.dot: ui.badge | None = None
+        self.badge: ui.badge | None = None
 
     def build(self) -> None:
         self.content()
@@ -31,12 +31,14 @@ class NotificationBell:
         button = ui.button(icon="notifications").props('flat round color=ink aria-label="Powiadomienia"')
         button.mark("notifications-bell")
         button.tooltip("Powiadomienia")
-        self.dot = None
+        self.badge = None
         if fresh:
             with button:
-                self.dot = ui.badge().props("rounded floating color=negative").mark("notifications-dot")
+                self.badge = (
+                    ui.badge(str(len(fresh))).props("rounded floating color=negative").mark("notifications-count")
+                )
         button.on_click(self.mark_read)
-        with button, ui.menu().props("auto-close").mark("notifications-menu"):
+        with button, ui.menu().props("auto-close").classes("min-w-[24rem]").mark("notifications-menu"):
             if not self.notifications:
                 ui.menu_item("Nic do przypomnienia.").props("disable").mark("notifications-empty")
             for notification in self.notifications:
@@ -46,8 +48,8 @@ class NotificationBell:
                     item.classes("font-bold")
 
     def mark_read(self) -> None:
-        """Remember everything listed as read; the dot goes, the list keeps its bold items until the next redraw."""
+        """Remember everything listed as read; the number goes, the list keeps its bold items until the next redraw."""
         save_read(self.engine, frozenset(n.key for n in self.notifications))
-        if self.dot is not None:
-            self.dot.delete()
-            self.dot = None
+        if self.badge is not None:
+            self.badge.delete()
+            self.badge = None

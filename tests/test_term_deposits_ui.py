@@ -121,14 +121,14 @@ async def test_an_ended_period_is_a_draft_counted_in_the_header_and_confirmed_as
 
     async with user_simulation(lambda: _shell(engine)) as user:
         await user.open("/obligacje")
-        await user.should_see(marker="drafts-count", content="Do zatwierdzenia: 1")
+        await user.should_see("Do zatwierdzenia w Dochodzie stałym: 1")
         with user.scope(marker="deposit-draft"):
             await user.should_see("Odsetki Lokata 3M")
             await user.should_see(f"Wypłata netto 41,28{NBSP}zł")
         user.find(marker="confirm-deposit-interest").click()
 
         await user.should_not_see(marker="bond-drafts")
-        await user.should_not_see(marker="drafts-count")
+        await user.should_not_see("Do zatwierdzenia w Dochodzie stałym: ")
     (_, interest) = sorted(list_transactions(engine), key=lambda t: t.date)
     assert (interest.date, interest.gross, interest.withholding_tax, interest.term_deposit_period) == (
         date(2026, 2, 15),

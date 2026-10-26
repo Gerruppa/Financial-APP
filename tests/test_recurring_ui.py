@@ -172,12 +172,12 @@ async def test_deposit_drafts_are_listed_counted_and_confirmed(engine: Engine, a
     async with user_simulation(lambda: _shell(engine)) as user:
         await user.open("/transakcje")
         await user.should_see(marker="recurring-drafts")
-        await user.should_see(marker="recurring-drafts-count", content="Cykliczne do zatwierdzenia: 2")
+        await user.should_see("Transakcje cykliczne do zatwierdzenia: 2")
         await user.should_see("12.10.2026")
 
         _click_in_row(user, "confirm-recurring", "12.10.2026")
 
-        await user.should_see(marker="recurring-drafts-count", content="Cykliczne do zatwierdzenia: 1")
+        await user.should_see("Transakcje cykliczne do zatwierdzenia: 1")
         await user.should_see(marker="transaction-row")
     [saved] = list_transactions(engine)
     assert (saved.date, saved.actual_amount, saved.recurring_occurrence) == (
@@ -193,7 +193,7 @@ async def test_a_draft_is_skipped(engine: Engine, account: int) -> None:
         await user.open("/transakcje")
         user.find(marker="skip-recurring").click()
         await user.should_not_see(marker="recurring-drafts")
-        await user.should_not_see(marker="recurring-drafts-count")
+        await user.should_not_see("Transakcje cykliczne do zatwierdzenia: ")
     assert skipped_occurrences(engine, rule.id) == [date(2026, 10, 12)]
 
 
@@ -293,11 +293,11 @@ async def test_the_header_count_forgets_the_drafts_of_a_deleted_account(engine: 
     add_rule(engine, _deposits(account))
     async with user_simulation(lambda: _shell(engine)) as user:
         await user.open("/ustawienia")
-        await user.should_see(marker="recurring-drafts-count")
+        await user.should_see("Transakcje cykliczne do zatwierdzenia: ")
         user.find(marker="edit-account").click()
         user.find(marker="delete-account").click()
         user.find(marker="confirm-delete-account").click()
-        await user.should_not_see(marker="recurring-drafts-count")
+        await user.should_not_see("Transakcje cykliczne do zatwierdzenia: ")
     assert list_rules(engine) == []
 
 
@@ -305,7 +305,7 @@ async def test_the_header_count_forgets_the_drafts_of_cleared_data(engine: Engin
     add_rule(engine, _deposits(account))
     async with user_simulation(lambda: _shell(engine)) as user:
         await user.open("/ustawienia")
-        await user.should_see(marker="recurring-drafts-count")
+        await user.should_see("Transakcje cykliczne do zatwierdzenia: ")
         user.find(marker="clear-data").click()
         user.find(marker="clear-data-next").click()
         for dialog in user.find(ui.dialog).elements:
@@ -313,7 +313,7 @@ async def test_the_header_count_forgets_the_drafts_of_cleared_data(engine: Engin
                 dialog.delete()  # the browser deletes the hidden warning; the simulation does not
         user.find(marker="clear-data-phrase").type("USUŃ WSZYSTKO")
         user.find(marker="clear-data-confirm").click()
-        await user.should_not_see(marker="recurring-drafts-count")
+        await user.should_not_see("Transakcje cykliczne do zatwierdzenia: ")
 
 
 @pytest.fixture
@@ -353,7 +353,7 @@ async def test_cost_and_cash_transfer_drafts_are_confirmed(engine: Engine, accou
     add_rule(engine, _deposits(account, name="Na maklerskie", start_date=october, **move))
     async with user_simulation(lambda: _shell(engine)) as user:
         await user.open("/transakcje")
-        await user.should_see(marker="recurring-drafts-count", content="Cykliczne do zatwierdzenia: 2")
+        await user.should_see("Transakcje cykliczne do zatwierdzenia: 2")
         _click_in_row(user, "confirm-recurring", "05.10.2026")
         _click_in_row(user, "confirm-recurring", "12.10.2026")
         await user.should_not_see(marker="recurring-drafts")

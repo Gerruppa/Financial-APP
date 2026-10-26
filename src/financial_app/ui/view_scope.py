@@ -63,7 +63,7 @@ class ScopeSwitcher:
         self.scope = scope
         self.days = days
         self.show_inactive = False
-        self.button = ui.button(on_click=self.open).props("flat no-caps color=ink icon-right=expand_more")
+        self.button = ui.button(on_click=self.open).props("flat no-caps no-wrap color=ink icon-right=expand_more")
         self.button.mark("view-scope")
         with self.button:
             self.menu = ui.menu()

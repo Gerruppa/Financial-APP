@@ -3,7 +3,7 @@
 ## Nieopublikowane
 
 ### Nowe funkcje
-- Dzwonek w nagłówku przypomina o tym, co czeka: szkice do zatwierdzenia (obligacje, lokaty, transakcje cykliczne), instrumenty bez wyceny po odświeżeniu, obligacje i lokaty zapadające w ciągu 30 dni oraz przekroczone limity wpłat; kropka znika po otwarciu listy i wraca, gdy przypomnienie się zmieni.
+- Dzwonek w nagłówku przypomina o tym, co czeka: szkice do zatwierdzenia (obligacje, lokaty, transakcje cykliczne), instrumenty bez wyceny po odświeżeniu, obligacje i lokaty zapadające w ciągu 30 dni oraz przekroczone limity wpłat; na dzwonku jest liczba nieprzeczytanych, znika po otwarciu listy i wraca, gdy przypomnienie się zmieni; dzwonek zastąpił liczniki „Do zatwierdzenia” w nagłówku.
 - Wyszukiwarka w nagłówku (Ctrl+K) jest też paletą poleceń: wpisanie słowa (np. „portf”, „motyw”, „dyskr”) pokazuje pasujące polecenia, a samo „>” wszystkie: przejście do dowolnej zakładki, dodanie transakcji, przełączenie motywu lub trybu dyskrecji, odświeżenie wycen.
 - Usunięcie transakcji nie pyta już o potwierdzenie: transakcja znika od razu, a przez kilka sekund na dole okna jest przycisk „Cofnij”, który przywraca ją na to samo miejsce.
 - Przycisk oka w nagłówku włącza tryb dyskrecji: kwoty i wykresy się rozmywają (najechanie myszą je odsłania), a wybór jest zapamiętany.
@@ -27,6 +27,7 @@
 - W motywie Golden pytania w Pomocy mają ciemne tło zamiast białego, więc są czytelne.
 
 ### Zmiany
+- „Wyceny” w nagłówku pokazują dzień i miesiąc ostatniego odświeżenia (np. „09.10, 18:05”), żeby nagłówek mieścił się w jednym rzędzie.
 - Przycisk „Wesprzyj” w nagłówku pokazuje w węższym oknie (poniżej 1440 px) samą ikonę, żeby nagłówek mieścił się w jednej linii.
 - Ustawienia nie pokazują już sekcji „Źródła wycen” z kluczem API Stooq, bo klucz nie jest potrzebny (historia działa na Yahoo); zniknęło też pytanie o klucz z Pomocy.
 
