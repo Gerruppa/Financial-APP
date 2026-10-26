@@ -1,6 +1,6 @@
 """Dialogs the user can drag by their card, with no dimmed backdrop, so the screen behind them stays readable."""
 
-from nicegui import ui
+from nicegui import context, ui
 
 # A delegated listener, so it also covers dialogs opened after the page was built. Dragging starts on the card
 # itself, not on a field or button, and the card keeps its offset when the dialog is shown again.
@@ -32,14 +32,29 @@ _DRAG_SCRIPT = """
     drag.card.dataset.dragY = dy;
   });
   document.addEventListener('mouseup', () => { drag = null; });
+  // Quasar ignores Esc on a seamless dialog; an open select menu or date popup takes the Esc first
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || e.defaultPrevented || document.querySelector('.q-menu, .q-popup-edit')) return;
+    emitEvent('movable_dialog_escape');
+  });
 })();
 </script>
 """
 
 
+def close_topmost_dialog() -> None:
+    """Close the newest open movable dialog; none when a regular dialog is open, which closes itself on Esc."""
+    dialogs = [
+        element for element in context.client.elements.values() if isinstance(element, ui.dialog) and element.value
+    ]
+    if dialogs and "seamless" in dialogs[-1]._props:  # noqa: SLF001
+        dialogs[-1].close()
+
+
 def install_movable_dialogs() -> None:
-    """Add the drag behaviour to the page; call once when building the shell."""
+    """Add the drag and Esc behaviour to the page; call once when building the shell."""
     ui.add_head_html(_DRAG_SCRIPT)
+    ui.on("movable_dialog_escape", close_topmost_dialog)
 
 
 def movable_dialog() -> ui.dialog:
