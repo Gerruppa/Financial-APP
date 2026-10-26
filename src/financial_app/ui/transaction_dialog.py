@@ -41,11 +41,12 @@ from financial_app.persistence.bond_series import list_bond_series, load_bond_da
 from financial_app.persistence.instruments import list_instruments
 from financial_app.persistence.transactions import transactions_in_entry_order
 from financial_app.sources.nbp import NbpRates
-from financial_app.sources.transaction_saving import delete_saved, save_transaction
+from financial_app.sources.transaction_saving import delete_saved, restore_saved, save_transaction
 from financial_app.ui.dialogs import movable_dialog
 from financial_app.ui.multi_asset import open_split_dialog
 from financial_app.ui.recurring_rules import open_rule_dialog
 from financial_app.ui.save_warnings import show_warnings
+from financial_app.ui.undo import offer_undo
 
 
 def open_transaction_dialog(
@@ -418,21 +419,32 @@ def open_transaction_dialog(
             for unsplit in saved.warnings.unsplit:
                 open_split_dialog(engine, unsplit, on_saved)
 
-        def delete(confirmation: ui.dialog) -> None:
-            assert transaction is not None
-            confirmation.close()
+        def restore(deleted: Transaction) -> None:
             try:
-                deleted = delete_saved(engine, transaction.id)
+                restored = restore_saved(engine, deleted)
+            except TransactionError as exc:
+                ui.notify(f"Nie można cofnąć usunięcia. {exc}", type="negative", multi_line=True)
+                return
+            show_warnings(restored.warnings, "Przywrócono")
+            on_saved()
+
+        def delete() -> None:
+            assert transaction is not None
+            gone = transaction
+            try:
+                deleted = delete_saved(engine, gone.id)
             except TransactionError as exc:
                 error.text = f"Nie można usunąć tej transakcji. {exc}"
                 return
             dialog.close()
             show_warnings(deleted.warnings, "Usunięto")
             on_saved()
+            # No "are you sure?": the bar offers to put the Transaction back for a few seconds
+            offer_undo("Usunięto transakcję.", lambda: restore(gone))
 
         with ui.row().classes("w-full items-center"):
             if transaction is not None:
-                delete_button = ui.button("Usuń", on_click=lambda: _confirm_delete(delete))
+                delete_button = ui.button("Usuń", on_click=delete)
                 delete_button.props("flat color=negative").mark("delete-transaction")
             if (
                 transaction is not None
@@ -457,16 +469,3 @@ def open_transaction_dialog(
 
 def _unlinked(draft: TransactionDraft) -> TransactionDraft:
     return draft
-
-
-def _confirm_delete(delete: Callable[[ui.dialog], None]) -> None:
-    """Ask before deleting; ``delete`` gets the confirmation dialog so that it can close it."""
-    confirmation = ui.dialog()
-    confirmation.on("hide", confirmation.delete)
-    with confirmation, ui.card():
-        ui.label("Usunąć tę transakcję?").classes("text-lg font-bold")
-        ui.label("Partie i salda zostaną przeliczone bez niej.").classes("k-muted")
-        with ui.row().classes("w-full justify-end"):
-            ui.button("Anuluj", on_click=confirmation.close).props("flat").mark("cancel-delete")
-            ui.button("Usuń", on_click=lambda: delete(confirmation)).props("color=negative").mark("confirm-delete")
-    confirmation.open()

@@ -107,6 +107,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `transactions.md`: Architecture entry for domain/transactions.py: main functions, UI markers and decisions.
 - `treemap-ranking-waterfall.md`: Architecture entry for Treemap, Account ranking, waterfall and after-tax toggle (#89, spec 6.1): main functions, UI markers and decisions.
 - `ui-visibility.md`: Architecture entry for Wygląd i widoczność (#155): main functions, UI markers and decisions.
+- `undo.md`: Architecture entry for the undo bar: deleting a Transaction without confirmation and restoring it via Cofnij.
 - `unpriced-instruments.md`: Architecture entry for Unpriced Instruments: main functions, UI markers and decisions.
 - `users.md`: Architecture entry for Users: password rules and scrypt hash, the user list and folders, login screen markers, switching users
 - `valuation-snapshots.md`: Architecture entry for Valuation Snapshots (#115, ADR-0008): main functions, UI markers and decisions.
@@ -348,6 +349,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `theme.py`: Applies the window's Theme (CSS, Quasar colours, dark mode), remembers it, and wraps ECharts in the Theme
 - `transaction_dialog.py`: Transaction dialog for adding, editing and deleting every supported transaction type, bound to the form model
 - `transactions.py`: Transakcje tab: the Transaction list with column sorting and filters
+- `undo.py`: Undo bar shown after a delete; offers a timed Cofnij button that runs the given undo action once.
 - `unpriced.py`: Ustawienia Instrumenty bez wyceny card listing held Instruments lacking an automatic price, with reasons
 - `user_menu.py`: Header avatar menu with initials and pseudonym (Settings, Theme, Help, switch user) and the Wesprzyj button to buycoffee.to
 - `user_section.py`: Ustawienia Użytkownik card: change the User's pseudonym and password, and delete the User with their folder after password and pseudonym confirmation.

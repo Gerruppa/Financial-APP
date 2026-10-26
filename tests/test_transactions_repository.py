@@ -25,6 +25,7 @@ from financial_app.persistence.transactions import (
     add_transaction,
     delete_transaction,
     list_transactions,
+    restore_transaction,
     transactions_in_entry_order,
     update_transaction,
 )
@@ -321,3 +322,41 @@ def test_nbp_rate_must_come_from_before_the_transaction_date(engine: Engine, acc
 
     with pytest.raises(TransactionError, match="przed datą transakcji"):
         add_transaction(engine, _foreign_buy(account_id, apple, nbp_rate=same_day))
+
+
+def test_a_deleted_transaction_is_restored_under_its_own_id(
+    engine: Engine, account_id: int, instrument_id: int
+) -> None:
+    first = add_transaction(engine, _trade(account_id, instrument_id, TransactionType.BUY, "10", day=1))
+    second = add_transaction(engine, _trade(account_id, instrument_id, TransactionType.BUY, "5", day=1))
+    before = transactions_in_entry_order(engine)
+    delete_transaction(engine, first.id)
+    add_transaction(engine, _deposit(account_id, 3))
+
+    restored = restore_transaction(engine, first)
+
+    assert restored == first
+    # It is back in front of the Transactions saved after it, so same-day ties settle as they did
+    assert [t.id for t in transactions_in_entry_order(engine)][:2] == [first.id, second.id]
+    assert transactions_in_entry_order(engine)[:2] == before
+
+
+def test_restoring_over_a_taken_id_is_refused(engine: Engine, account_id: int) -> None:
+    deleted = add_transaction(engine, _deposit(account_id, 1))
+    delete_transaction(engine, deleted.id)
+    add_transaction(engine, _deposit(account_id, 2))  # SQLite hands the freed id to the next row
+
+    with pytest.raises(TransactionError, match="zajęła już inna"):
+        restore_transaction(engine, deleted)
+    assert len(list_transactions(engine)) == 1
+
+
+def test_restoring_a_sell_whose_buy_is_gone_is_blocked(engine: Engine, account_id: int, instrument_id: int) -> None:
+    buy = add_transaction(engine, _trade(account_id, instrument_id, TransactionType.BUY, "10", day=1))
+    sell = add_transaction(engine, _trade(account_id, instrument_id, TransactionType.SELL, "8", day=2))
+    delete_transaction(engine, sell.id)
+    delete_transaction(engine, buy.id)
+
+    with pytest.raises(InsufficientQuantityError, match="bez pokrycia"):
+        restore_transaction(engine, sell)
+    assert list_transactions(engine) == []

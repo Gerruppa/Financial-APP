@@ -1,5 +1,6 @@
 """Editing and deleting a Transaction from the Transakcje list (issue #14)."""
 
+import asyncio
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -118,25 +119,41 @@ async def test_edit_that_uncovers_a_later_sell_is_blocked(engine: Engine, ike: i
     assert [t.date.day for t in list_transactions(engine)] == [3, 2]
 
 
-async def test_deleting_asks_for_confirmation_first(engine: Engine, ike: int) -> None:
+async def test_deleting_needs_no_confirmation_and_offers_to_undo(engine: Engine, ike: int) -> None:
     _deposit(engine, ike, "1000")
+    [deleted] = list_transactions(engine)
 
     async with user_simulation(lambda: build_shell(engine)) as user:
         await user.open("/transakcje")
         user.find(marker="transaction-row").click()
         user.find(marker="delete-transaction").click()
 
-        await user.should_see("Usunąć tę transakcję?")
-        assert len(list_transactions(engine)) == 1
-        user.find(marker="cancel-delete").click()
-        await user.should_see("Edytuj transakcję")
-        assert len(list_transactions(engine)) == 1
-
-        user.find(marker="delete-transaction").click()
-        user.find(marker="confirm-delete").click()
-
         with user.scope(marker="transactions"):
             await user.should_see("Brak transakcji")
+        await user.should_see(marker="undo-bar")
+        assert list_transactions(engine) == []
+
+        user.find(marker="undo-button").click()
+
+        await user.should_not_see(marker="undo-bar")
+        with user.scope(marker="transactions"):
+            await user.should_see(f"1{NBSP}000,00{NBSP}zł")
+    assert list_transactions(engine) == [deleted]
+
+
+async def test_the_undo_bar_goes_away_on_its_own(engine: Engine, ike: int, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("financial_app.ui.undo.UNDO_SECONDS", 0.2)
+    _deposit(engine, ike, "1000")
+
+    async with user_simulation(lambda: build_shell(engine)) as user:
+        await user.open("/transakcje")
+        user.find(marker="transaction-row").click()
+        user.find(marker="delete-transaction").click()
+        await user.should_see(marker="undo-bar")
+
+        await asyncio.sleep(0.6)
+
+        await user.should_not_see(marker="undo-bar")
     assert list_transactions(engine) == []
 
 
@@ -148,7 +165,6 @@ async def test_deleting_a_buy_that_covers_a_later_sell_is_blocked(engine: Engine
         await user.open("/transakcje")
         _open_row(user, 1)  # newest first: the Buy
         user.find(marker="delete-transaction").click()
-        user.find(marker="confirm-delete").click()
 
         assert _error_text(user).startswith("Nie można usunąć tej transakcji. Sprzedaż bez pokrycia")
     assert len(list_transactions(engine)) == 2
@@ -162,7 +178,6 @@ async def test_deleting_a_deposit_that_leaves_cash_negative_warns(engine: Engine
         await user.open("/transakcje")
         _open_row(user, 1)  # newest first: the Deposit
         user.find(marker="delete-transaction").click()
-        user.find(marker="confirm-delete").click()
 
         await user.should_see("Usunięto, ale Saldo gotówki konta mBank IKE jest ujemne")
     assert len(list_transactions(engine)) == 1
