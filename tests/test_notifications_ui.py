@@ -1,4 +1,4 @@
-"""UI tests of the header bell (issue #176): what it lists, its dot and the read state."""
+"""UI tests of the header bell (issue #176): what it lists, its unread count and the read state."""
 
 from datetime import date
 from decimal import Decimal
@@ -54,20 +54,20 @@ async def test_the_bell_has_nothing_to_remind_of_in_an_empty_app(engine: Engine)
         await user.open("/")
         await user.should_see(marker="notifications-bell")
         await user.should_see(marker="notifications-empty")
-        await user.should_not_see(marker="notifications-dot")
+        await user.should_not_see(marker="notifications-count")
 
 
-async def test_due_drafts_light_the_dot_until_the_bell_is_opened(engine: Engine) -> None:
+async def test_due_drafts_show_their_count_until_the_bell_is_opened(engine: Engine) -> None:
     _add_rule(engine)
     async with user_simulation(lambda: _shell(engine)) as user:
         await user.open("/")
-        await user.should_see(marker="notifications-dot")
+        await user.should_see(marker="notifications-count", content="1")
         await user.should_see(marker="notification-unread")
         await user.should_see("Transakcje cykliczne do zatwierdzenia: 2")
 
         user.find(marker="notifications-bell").click()
 
-        await user.should_not_see(marker="notifications-dot")
+        await user.should_not_see(marker="notifications-count")
     assert load_setting(engine, UI_NOTIFICATIONS_READ) is not None
 
 
@@ -78,7 +78,7 @@ async def test_a_read_reminder_stays_read_in_a_new_window_until_it_changes(engin
         user.find(marker="notifications-bell").click()
     async with user_simulation(lambda: _shell(engine)) as user:
         await user.open("/")
-        await user.should_not_see(marker="notifications-dot")
+        await user.should_not_see(marker="notifications-count")
         await user.should_see(marker="notification")
         await user.should_see("Transakcje cykliczne do zatwierdzenia: 2")
 

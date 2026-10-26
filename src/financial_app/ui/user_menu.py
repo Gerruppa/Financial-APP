@@ -33,7 +33,12 @@ def build_user_menu(
     opens the menu: the pseudonym, Ustawienia, the other Theme, Pomoc and, with ``on_switch_user``, "Przełącz
     użytkownika" (the demo has no login screen to return to)."""
     other = Theme.LIGHT if theme.theme is Theme.GOLDEN else Theme.GOLDEN
-    with ui.button().props('flat no-caps color=ink aria-label="Menu użytkownika"').classes("k-user").mark("user-menu"):
+    with (
+        ui.button()
+        .props('flat no-caps no-wrap color=ink aria-label="Menu użytkownika"')
+        .classes("k-user")
+        .mark("user-menu")
+    ):
         ui.label(initials(pseudonym)).classes("k-avatar").style(f"background:{avatar_colour(pseudonym)}").mark(
             "user-avatar"
         )

@@ -3,7 +3,6 @@
 but a Buy), through the transaction dialog ("Edytuj…") or skipped ("Pomiń")."""
 
 from collections.abc import Callable
-from datetime import date
 
 from nicegui import ui
 from sqlalchemy import Engine
@@ -100,14 +99,3 @@ def _skip(engine: Engine, draft: RecurringDraft, on_skipped: Callable[[], None])
     skip_occurrence(engine, draft.rule.id, draft.due)
     ui.notify(f"Pominięto {draft.rule.name} z {format_date(draft.due)}.")
     on_skipped()
-
-
-def recurring_drafts_count(engine: Engine, today: date) -> None:
-    """ "Cykliczne do zatwierdzenia: n" in the header while any Draft is due in any Account; clicking opens the
-    Transakcje tab."""
-    count = len(pending_recurring_drafts(engine, today))
-    if not count:
-        return
-    ui.button(f"Cykliczne do zatwierdzenia: {count}", on_click=lambda: ui.navigate.to("/transakcje")).props(
-        "flat no-caps color=attention"
-    ).mark("recurring-drafts-count")

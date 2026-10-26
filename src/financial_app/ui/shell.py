@@ -32,7 +32,6 @@ from financial_app.sources.valuation_snapshots import take_snapshot
 from financial_app.sources.yahoo import YahooSearch, YahooSource
 from financial_app.ui.benchmarks import BenchmarksPage
 from financial_app.ui.bond_data import bond_data_status
-from financial_app.ui.bond_drafts import drafts_count
 from financial_app.ui.bonds import BondsPage
 from financial_app.ui.changelog import announce_new_version, version_label
 from financial_app.ui.changes import Change, ChangeEvents, Redrawing
@@ -56,7 +55,6 @@ from financial_app.ui.palette import palette_commands
 from financial_app.ui.passive_income import PassiveIncomePage
 from financial_app.ui.periods import PeriodChoice
 from financial_app.ui.portfolio import PortfolioPage
-from financial_app.ui.recurring_drafts import recurring_drafts_count
 from financial_app.ui.results import ResultsPage
 from financial_app.ui.sale_summary import SaleSummaryPage
 from financial_app.ui.sayings import menu_saying
@@ -321,19 +319,9 @@ def build_shell(
     )
     header_search = HeaderSearch(engine, search, lambda subject: open_instrument_card(card, subject), commands)
 
-    with ui.header().classes("k-header items-center px-6").props("bordered=false").mark("header") as header:
+    with ui.header(wrap=False).classes("k-header items-center px-6").props("bordered=false").mark("header") as header:
         header_search.build()
         ui.space()
-        # MF's new rates may value a matured Series, so the bond data refresh redraws it too
-        drafts_state = ui.refreshable(lambda: drafts_count(engine, rates.today()))
-        drafts_state()
-        events.subscribe(
-            drafts_state.refresh, {Change.TRANSACTIONS, Change.PRICES, Change.BOND_DATA, Change.TERM_DEPOSITS}
-        )
-        # The Recurring Rules' Drafts are counted apart from the bonds' (issue #97)
-        recurring_state = ui.refreshable(lambda: recurring_drafts_count(engine, rates.today()))
-        recurring_state()
-        events.subscribe(recurring_state.refresh, {Change.TRANSACTIONS, Change.RECURRING_RULES})
         history_state = ui.refreshable(lambda: history_status(engine, shared))
         history_state()
         bond_state = ui.refreshable(lambda: bond_data_status(engine))
@@ -468,8 +456,8 @@ def _price_status(engine: Engine, refreshing: bool) -> None:
     While a refresh runs it says so."""
     status = last_refresh(engine)
     failures = status.failures if status and not refreshing else []
-    text = "Wyceny: odświeżanie…" if refreshing else refresh_summary(status)
-    button = ui.button(text, on_click=lambda: _price_errors_dialog(engine)).props("flat no-caps")
+    text = "Wyceny: odświeżanie…" if refreshing else refresh_summary(status, short=True)
+    button = ui.button(text, on_click=lambda: _price_errors_dialog(engine)).props("flat no-caps no-wrap")
     button.props(f"color={'negative' if failures else 'ink'}").mark("price-status")
 
 
