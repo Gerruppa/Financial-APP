@@ -308,7 +308,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `bond_series.py`: Bond Series rate summary and dialog for correcting MF rates by hand in Ustawienia Instrumenty
 - `bond_type_card.py`: Treasury bond type card opened from the header search: current MF offer, the user's Bond Series of the type and a Buy button.
 - `bonds.py`: Dochód stały tab UI: Term Deposits section, expandable Bond Series table with Lots and values, the "Do zatwierdzenia" list, and the 12-month calendar.
-- `changelog.md`: Polish history of user-visible changes per app version, shipped with the app
+- `changelog.md`: User-visible history of changes per app version, shipped with the app
 - `changelog.py`: Version label under the logo opening the changelog dialog, and the one-time Co nowego dialog after an update
 - `changes.py`: Window change events: the Change enum, the TODAYS_VALUE set, and ChangeEvents, which redraws each tab or header element that declared the published changes.
 - `charts.py`: Dashboard's nine ECharts charts, the profit waterfall, and shared PLN line and bar chart helpers for other tabs.
@@ -316,7 +316,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `dashboard.py`: Dashboard tab UI: totals, price status, Account table, exposure, charts, Account treemap and ranking, Investment Goal tile, and the after-tax toggle
 - `deposit_drafts.py`: Dochód stały rows for Term Deposit interest and maturity Drafts: confirm, edit amounts, end or renew a matured deposit
 - `dialogs.py`: Draggable dialog support with no backdrop, so the screen behind stays readable; Esc closes the newest
-- `faq.md`: Polish FAQ text shown on the Pomoc tab; sections, questions with slugs, and links to tabs
+- `faq.md`: FAQ text shown on the Pomoc tab; sections, questions with slugs, and links to tabs
 - `fund_details.py`: Builds the short fund detail texts (TER, Distribution Policy, domicile) shared by Instrument list and Portfolio
 - `header_search.py`: Header search field and results list of own Instruments and Search Results; opens the Instrument Card on a chosen row.
 - `help.py`: Help tab (Pomoc); shows the FAQ as collapsible questions with a search and Przejdź do buttons to tabs
@@ -331,7 +331,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `passive_income.py`: Dochód pasywny tab: year navigation, Monthly Income Goal, tiles, monthly chart and table with progress, forecast coupons.
 - `periods.py`: Period selector UI: preset buttons and custom range inputs, remembered per user and redrawing listeners
 - `portfolio.py`: Read-only Portfolio tab: per-Account cards with cash balances, valued Positions, Lots, FX result and dividends
-- `price_sources.py`: Ustawienia Źródła wycen card where the user stores the personal Stooq API key
+- `price_sources.py`: Stooq API key storage and its Ustawienia section, kept in code but no longer shown there
 - `recurring_drafts.py`: Due Recurring Rule Drafts in the Transakcje tab and the header count; confirm, edit or skip each
 - `recurring_rules.py`: Ustawienia section listing Recurring Rules, with the rule dialog and its skipped occurrences
 - `reset.py`: Ustawienia Wyczyść dane card that clears the whole portfolio after a warning and typed confirmation
@@ -339,7 +339,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `sale_summary.py`: Podsumowanie sprzedaży tab: Sale Pairs of the scope and period with the closed-position statistics tiles.
 - `save_warnings.py`: Shows save warnings as notifications, the same way wherever Transactions were saved
 - `sayings.py`: Saying of the day UI: the line at the foot of the menu, signed with its work and author
-- `settings.py`: Builds the Ustawienia page by assembling its sections: Accounts, Asset Classes, Instruments, sources, import, reset
+- `settings.py`: Builds the Ustawienia page by assembling its sections: Accounts, Asset Classes, Instruments, import, reset
 - `shell.py`: Main app window shell: left menu, header with refresh status and View Scope, and the transaction button
 - `strategy.py`: Strategie inwestycyjne tab, Dashboard strategy section and post-refresh notice for classes outside their tolerance band
 - `term_deposits.py`: Lokaty section of Dochód stały: running Term Deposits with accrued interest, and the dialog to add, edit, break or delete one
@@ -476,7 +476,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_portfolio_history_service.py`: Tests the Portfolio history service: fetching prices into the cache, then computing history from it, on saved responses.
 - `test_portfolio_parity.py`: Tests that the app's Portfolio matches the user's spreadsheet Portfolio tab within 0.01 PLN, skipped without the workbook.
 - `test_price_history.py`: Tests an Instrument's Quotes in a date range, fetching missing days from Stooq once and caching them.
-- `test_price_history_ui.py`: Tests the Stooq Source Symbol in the Instrument dialog and the Stooq API key in Ustawienia.
+- `test_price_history_ui.py`: Tests the Stooq Source Symbol in the Instrument dialog and the Stooq API key section, which is kept out of Ustawienia
 - `test_price_refresh.py`: Tests refreshing held Instruments' Quotes from Price Sources in order, using fake sources.
 - `test_prices_domain.py`: Tests the order of Price Sources per Instrument and when start-up price refresh is due.
 - `test_prices_repository.py`: Tests saving Source Symbols and Quotes in SQLite.

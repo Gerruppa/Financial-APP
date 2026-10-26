@@ -22,6 +22,9 @@
 - Górny pasek z wyszukiwarką ma pełne tło, więc przewijana treść nie nachodzi już na napisy w pasku.
 - W motywie Golden pytania w Pomocy mają ciemne tło zamiast białego, więc są czytelne.
 
+### Zmiany
+- Ustawienia nie pokazują już sekcji „Źródła wycen” z kluczem API Stooq, bo klucz nie jest potrzebny (historia działa na Yahoo); zniknęło też pytanie o klucz z Pomocy.
+
 ## 1.0.1 — 2026-10-20
 
 ### Nowe funkcje

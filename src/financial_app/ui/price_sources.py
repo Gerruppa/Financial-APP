@@ -1,4 +1,5 @@
-"""Ustawienia > Źródła wycen: the user's Stooq API key, needed for price history (issue #33)."""
+"""The user's Stooq API key, needed for Stooq price history (issue #33). Not shown in Ustawienia: the user cannot get a
+key and History runs on Yahoo; ``ui/settings.py`` can add the section back as a tab if Stooq is ever used."""
 
 from dataclasses import dataclass
 
