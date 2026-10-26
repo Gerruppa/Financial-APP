@@ -5,6 +5,7 @@ from dataclasses import replace
 from decimal import Decimal
 
 from sqlalchemy import Engine, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from financial_app.domain.currencies import NbpRate
@@ -101,6 +102,28 @@ def delete_transaction(engine: Engine, transaction_id: int) -> None:
             raise TransactionError("Od tej partii zapisano odsetki; usuń je najpierw.")
         _check_coverage(session, None, replacing=row)
         session.delete(row)
+
+
+def restore_transaction(engine: Engine, transaction: Transaction) -> Transaction:
+    """Put a deleted ``transaction`` back under its own id, so it keeps its place in the entry order (same-day ties
+    settle as before) and the Sells and coupons naming its Lot find it again.
+
+    Refused when another Transaction took the id meanwhile (SQLite hands a freed last id to the next row), and, like
+    any save, blocked with InsufficientQuantityError if it would leave a Sell uncovered.
+    """
+    with Session(engine) as session, session.begin():
+        if session.get(TransactionRow, transaction.id) is not None:
+            raise TransactionError("Miejsce tej transakcji zajęła już inna, więc nie można jej przywrócić.")
+        check_references(session, transaction)
+        row = TransactionRow(id=transaction.id)
+        fill_row(row, transaction)
+        session.add(row)
+        try:
+            session.flush()
+        except IntegrityError as exc:
+            raise TransactionError("Tej transakcji nie można przywrócić: koliduje z zapisaną.") from exc
+        _check_coverage(session, transaction, replacing=row)
+        return to_transaction(row)
 
 
 def get_row(session: Session, transaction_id: int) -> TransactionRow:

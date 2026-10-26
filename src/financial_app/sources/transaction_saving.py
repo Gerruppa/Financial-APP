@@ -17,6 +17,7 @@ from financial_app.persistence.term_deposits import list_deposits
 from financial_app.persistence.transactions import (
     add_transactions,
     delete_transaction,
+    restore_transaction,
     transactions_in_entry_order,
     update_transaction,
 )
@@ -87,3 +88,9 @@ def save_transaction(
 def delete_saved(engine: Engine, transaction_id: int) -> Saved[None]:
     """Delete the Transaction; raises TransactionError when that would leave a Sell uncovered."""
     return checked_save(engine, lambda: delete_transaction(engine, transaction_id))
+
+
+def restore_saved(engine: Engine, transaction: Transaction) -> Saved[Transaction]:
+    """Undo ``delete_saved``: put the deleted Transaction back under its id; raises TransactionError when that id was
+    taken meanwhile or the Transaction would now leave a Sell uncovered."""
+    return checked_save(engine, lambda: restore_transaction(engine, transaction))
