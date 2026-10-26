@@ -84,6 +84,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `metrics.md`: Architecture entry for domain/metrics.py (#69, spec 6.1): main functions, UI markers and decisions.
 - `multi-asset.md`: Architecture entry for Multi-asset (#75, spec 6.1): main functions, UI markers and decisions.
 - `nbp-rates.md`: Architecture entry for sources/nbp.py: main functions, UI markers and decisions.
+- `notifications.md`: Header bell reminders (#176): NotificationBell menu, derived reminders, and read keys kept in app_settings
 - `obligacje-tab.md`: Architecture entry for Obligacje tab and Net Value (L-4, spec 3.4.1): main functions, UI markers and decisions.
 - `passive-income.md`: Architecture entry for Passive-income calendar (#93, spec 6.2): main functions, UI markers and decisions.
 - `portfolio-history.md`: Architecture entry for domain/portfolio_history.py (#68, spec 6.1, ADR-0006): main functions, UI markers and decisions.
@@ -172,6 +173,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `lots.py`: The single FIFO engine that opens and consumes Lots for Positions and foreign cash, raising uncovered-sale errors.
 - `metrics.py`: Pure History metrics: XIRR, TWR, drawdowns, max drawdown, volatility and daily change per Total or Account
 - `multi_asset.py`: Multi-asset Instruments held in the View Scope, with their PLN value and split value per Asset Class, largest first
+- `notifications.py`: Builds header bell reminders with state-based keys and parses or dumps the remembered read keys
 - `passive_income.py`: Passive income: Dividends and interest received, coupons forecast, monthly sums, 12-month average and the Monthly Income Goal.
 - `periods.py`: Period presets and custom ranges for charts and results, with date calculation and text persistence
 - `portfolio_groups.py`: Groups an Account's Positions by Instrument Type or Asset Class with each group's value and share
@@ -289,6 +291,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `history.py`: Returns an Instrument's Quotes in a date range, fetching missing days from Yahoo, analizy.pl or Stooq into cache
 - `instrument_card.py`: Instrument Card price history fetched live from Yahoo, else analizy.pl; nothing is saved.
 - `nbp.py`: Gets NBP exchange rates from the NBP API through the local cache
+- `notifications.py`: Gathers the header bell's reminders from the database and loads or saves the read keys in app_settings
 - `passive_income.py`: Loads the passive-income items: income received from Transactions and the coupons and Term Deposit interest not entered for the next 12 months.
 - `portfolio_history.py`: Fetches History prices and NBP Rates into cache and computes daily values, cached until invalidated
 - `prices.py`: Refreshes held Instruments' Quotes from price sources in fallback order and records failures
@@ -332,6 +335,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `investment_goal.py`: Dashboard Investment Goal tile with progress and real forecast, and a dialog to set the goal as amount or FIRE
 - `login.py`: Login screen in the default Theme: pick a User and enter the password, create a User, explain a forgotten password
 - `multi_asset.py`: Multi-asset tab and split editor: edits an Instrument's Multi-asset Split and lists held Multi-asset Instruments by Asset Class
+- `notifications.py`: Header bell button and menu of reminders; shows an unread dot and marks the listed reminders read on click
 - `palette.py`: The palette's commands: a tab jump for each tab, plus add transaction, theme, discreet mode, refresh prices and user switch.
 - `passive_income.py`: Dochód pasywny tab: year navigation, Monthly Income Goal, tiles, monthly chart and table with progress, forecast coupons.
 - `periods.py`: Period selector UI: preset buttons and custom range inputs, remembered per user and redrawing listeners
@@ -474,6 +478,8 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_multi_asset_repository.py`: Tests saving Multi-asset Splits with their Instruments, Asset Class rules, and their removal on reset
 - `test_multi_asset_ui.py`: UI tests for the Multi-asset split in the Instrument dialog, the split dialog after a buy, and the Multi-asset tab
 - `test_nbp_rates.py`: Tests fetching and caching NBP D-1 rates from saved API responses, without the network.
+- `test_notifications_domain.py`: Tests of bell reminder keys, unread filtering and the remembered read keys format
+- `test_notifications_ui.py`: UI tests of the header bell: its listed reminders, unread dot and read state
 - `test_passive_income_domain.py`: Tests received income kinds, monthly sums by scope, goal progress, the 12-month average and goal parsing.
 - `test_passive_income_ui.py`: UI tests of the Dochód pasywny tab: received and forecast by month, the goal, years and the scope.
 - `test_paths.py`: Tests the default data directory (outside the repository, named KAPITA), the override, and the legacy folder move without overwriting new data.
