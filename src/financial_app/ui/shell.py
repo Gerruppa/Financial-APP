@@ -56,6 +56,8 @@ from financial_app.ui.palette import palette_commands
 from financial_app.ui.passive_income import PassiveIncomePage
 from financial_app.ui.periods import PeriodChoice
 from financial_app.ui.portfolio import PortfolioPage
+from financial_app.ui.prototype_header import compact_counts, current_variant
+from financial_app.ui.prototype_header import switcher as variant_bar
 from financial_app.ui.recurring_drafts import recurring_drafts_count
 from financial_app.ui.results import ResultsPage
 from financial_app.ui.sale_summary import SaleSummaryPage
@@ -325,13 +327,19 @@ def build_shell(
         header_search.build()
         ui.space()
         # MF's new rates may value a matured Series, so the bond data refresh redraws it too
-        drafts_state = ui.refreshable(lambda: drafts_count(engine, rates.today()))
+        variant = current_variant()
+        drafts_state = ui.refreshable(lambda: drafts_count(engine, rates.today()) if variant == "A-off" else None)
+        compact = ui.refreshable(lambda: compact_counts(engine, rates.today()) if variant == "B" else None)
+        compact()
+        events.subscribe(compact.refresh, {Change.TRANSACTIONS, Change.RECURRING_RULES, Change.BOND_DATA})
         drafts_state()
         events.subscribe(
             drafts_state.refresh, {Change.TRANSACTIONS, Change.PRICES, Change.BOND_DATA, Change.TERM_DEPOSITS}
         )
         # The Recurring Rules' Drafts are counted apart from the bonds' (issue #97)
-        recurring_state = ui.refreshable(lambda: recurring_drafts_count(engine, rates.today()))
+        recurring_state = ui.refreshable(
+            lambda: recurring_drafts_count(engine, rates.today()) if variant == "A-off" else None
+        )
         recurring_state()
         events.subscribe(recurring_state.refresh, {Change.TRANSACTIONS, Change.RECURRING_RULES})
         history_state = ui.refreshable(lambda: history_status(engine, shared))
@@ -348,7 +356,7 @@ def build_shell(
         switcher = ScopeSwitcher(scope, lambda: shared.days)
         events.subscribe(switcher.refresh, switcher.CHANGES)
         build_discreet_button(discreet)
-        bell = NotificationBell(engine, rates)
+        bell = NotificationBell(engine, rates, count_badge=variant == "C")
         bell.build()
         events.subscribe(
             bell.content.refresh,
@@ -357,6 +365,7 @@ def build_shell(
         build_support_button()
         build_user_menu(pseudonym, theme, SETTINGS_PATH, HELP_PATH, on_switch_user)
 
+    variant_bar()
     # The tab on screen, lit in the menu
     shown_path = {"path": "/"}
 

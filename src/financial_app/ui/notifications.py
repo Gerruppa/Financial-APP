@@ -14,7 +14,8 @@ from financial_app.sources.notifications import collect_notifications, load_read
 class NotificationBell:
     """The bell button with its menu, redrawn by ``refresh`` when the state it reminds of may have changed."""
 
-    def __init__(self, engine: Engine, rates: LatestRates) -> None:
+    def __init__(self, engine: Engine, rates: LatestRates, count_badge: bool = False) -> None:
+        self.count_badge = count_badge
         self.engine = engine
         self.rates = rates
         self.notifications: list[Notification] = []
@@ -34,7 +35,11 @@ class NotificationBell:
         self.dot = None
         if fresh:
             with button:
-                self.dot = ui.badge().props("rounded floating color=negative").mark("notifications-dot")
+                self.dot = (
+                    ui.badge(str(len(fresh)) if self.count_badge else "")
+                    .props("rounded floating color=negative")
+                    .mark("notifications-dot")
+                )
         button.on_click(self.mark_read)
         with button, ui.menu().props("auto-close").mark("notifications-menu"):
             if not self.notifications:
