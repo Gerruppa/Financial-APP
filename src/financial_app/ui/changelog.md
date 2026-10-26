@@ -1,6 +1,6 @@
 # Historia zmian
 
-## Nieopublikowane
+## 1.1.0 — 2026-10-26
 
 ### Nowe funkcje
 - Wyniki mają przycisk „Raport roczny PDF” z wyborem roku (domyślnie ostatni zakończony): jeden plik A4 ze stroną tytułową oraz sekcjami Wyniki roku, Portfolio na koniec roku, Sprzedaże (FIFO) i Dochód pasywny, z liczbami takimi jak w plikach XLSX, dla wybranego konta lub wszystkich; to zestawienie pomocnicze, nie zeznanie podatkowe.
