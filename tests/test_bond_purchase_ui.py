@@ -166,7 +166,7 @@ async def test_the_bond_mode_on_a_regular_account_hints_at_a_bonds_account(engin
         user.find(marker="transaction-bond-mode").click()
 
         await user.should_see(marker="transaction-bond-hint")
-        await user.should_see("załóż konto typu Obligacje")
+        await user.should_see("nie przyjmuje obligacji skarbowych detalicznych")
 
 
 async def test_a_bonds_account_shows_no_hint(engine: Engine, bonds: int) -> None:

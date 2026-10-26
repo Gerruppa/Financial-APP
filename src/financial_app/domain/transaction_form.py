@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from decimal import ROUND_DOWN, Decimal
 
+from financial_app.domain.account_rules import Product, allowed_products, can_hold, refusal
 from financial_app.domain.accounts import Account, AccountType, tax_regime_for
 from financial_app.domain.bond_redemption import EarlyRedemption, early_redemption
 from financial_app.domain.bond_valuation import BondData
@@ -262,6 +263,7 @@ class FormLayout:
     bond_hint: str
     rollover: bool
     instrument: bool
+    instruments: Choice[int]
     lot: Choice[int]
     price: Shown
     commission: Shown
@@ -649,13 +651,41 @@ class TransactionForm:
         return " · ".join(parts)
 
     def _bond_hint(self, state: FormState) -> str:
-        """Why a Regular Account is a poor home for bonds; the same advice the save warns with (BondsOnRegular)."""
-        if self._accounts[state.account_id].account_type is not AccountType.REGULAR:
+        """Why the Account cannot take bonds, when its type may not hold a Bond Series: the Buy is refused at the save
+        with the same words (``account_rules.refusal``)."""
+        account = self._accounts[state.account_id]
+        if Product.RETAIL_BOND in allowed_products(account.account_type):
             return ""
         return (
-            f"Konto typu {AccountType.REGULAR.label} ma zwykłe zasady podatku. Do obligacji skarbowych detalicznych "
-            f"załóż konto typu {AccountType.BONDS.label}."
+            f"Konto typu {account.account_type.label} nie przyjmuje obligacji skarbowych detalicznych. Załóż do nich "
+            f"konto typu {AccountType.BONDS.label} lub kup je na koncie IKE albo IKZE."
         )
+
+    def _instruments_for(self, state: FormState) -> Choice[int]:
+        """The Instruments the select offers: for a Buy or DRIP only those the Account may hold (plus the edited
+        Transaction's own), else all of them; the chosen one drops out when the Account does not offer it."""
+        edited = self.edited
+        own = edited.instrument_id if edited is not None and edited.account_id == state.account_id else None
+        holds = state.kind in (TransactionType.BUY, TransactionType.DRIP)
+        account_type = self._accounts[state.account_id].account_type
+        options = {
+            i.id: i.name for i in self.context.instruments if not holds or i.id == own or can_hold(account_type, i)
+        }
+        return Choice(True, options, state.instrument_id if state.instrument_id in options else None, "Instrument")
+
+    def _check_holds(self, holder: int, instrument_id: int | None) -> None:
+        """Refuse a Buy, DRIP or Security Transfer putting the Instrument on an Account that may not hold it; an edit
+        keeps what the Transaction already had."""
+        instrument = self._instruments.get(instrument_id) if instrument_id is not None else None
+        edited = self.edited
+        if instrument is None or (
+            edited is not None
+            and edited.instrument_id == instrument_id
+            and holder in (edited.account_id, edited.target_account_id)
+        ):
+            return
+        if (why := refusal(self._accounts[holder], instrument)) is not None:
+            raise FormError("instrument", why)
 
     def bond_price(self, state: FormState) -> str | None:
         """The price of one bond the bond mode buys: 100 zł, or the Rollover price of the Series; ``None`` outside
@@ -790,6 +820,7 @@ class TransactionForm:
             bond_hint=self._bond_hint(state) if bonds else "",
             rollover=rollover,
             instrument=not bonds,
+            instruments=self._instruments_for(state),
             lot=self._lot(state),
             price=Shown(trade, f"Cena ({unit})"),
             commission=Shown(trade, f"Prowizja ({currency_unit(self.commission_currency(state))})"),
@@ -939,6 +970,8 @@ class TransactionForm:
         bought = state.instrument_id if series_id is None else series_id
         if bought is None:
             raise FormError("instrument", INSTRUMENT_MESSAGE)
+        if kind is TransactionType.BUY:
+            self._check_holds(account, bought)
         if self.settlement_currency(state) == PLN:
             self._check_pln_held(state, self.trade_currency(state))
         currency = self.trade_currency(state)
@@ -978,6 +1011,7 @@ class TransactionForm:
             return split(state.account_id, day, instrument, SplitRatio(new, old), texts.comment)
         units = _read(parse_number, texts.quantity, "quantity", QUANTITY_MESSAGE)
         target = self._target_id(state)
+        self._check_holds(target, instrument)
         return security_transfer(state.account_id, day, target, instrument, units, texts.comment)
 
     def _dividend(self, state: FormState, day: date) -> TransactionDraft:
@@ -1017,6 +1051,7 @@ class TransactionForm:
         if instrument is None:
             raise FormError("instrument", INSTRUMENT_MESSAGE)
         units = _read(parse_number, texts.quantity, "quantity", QUANTITY_MESSAGE)
+        self._check_holds(state.account_id, instrument)
         return drip(state.account_id, day, instrument, units, gross, tax, texts.comment, nbp_rate=nbp_rate)
 
 

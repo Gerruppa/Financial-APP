@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 
+from financial_app.domain.account_rules import refusal
 from financial_app.domain.accounts import Account, AccountType
 from financial_app.domain.contribution_limits import LimitBar, over_limit, over_limit_warning
 from financial_app.domain.formatting import format_amount, format_date, format_pln
@@ -57,18 +58,15 @@ class LockedCash:
 
 
 @dataclass(frozen=True)
-class BondsOnRegular:
-    """Bond Series bought on a Regular Account, which has the ordinary tax regime instead of the Bonds Account's."""
+class NotAllowed:
+    """Instruments bought on, or moved into, an Account of a type that may not hold them (``account_rules``). The
+    transaction dialog refuses such a Buy; an import or a confirmed Draft only warns, as it enters history."""
 
     account_name: str
-    series: tuple[str, ...]
+    refusals: tuple[str, ...]
 
     def message(self) -> str:
-        return (
-            f"Obligacje {', '.join(self.series)} kupiono na koncie {self.account_name} typu "
-            f"{AccountType.REGULAR.label}, które ma zwykłe zasady podatku. Do obligacji skarbowych detalicznych "
-            f"załóż konto typu {AccountType.BONDS.label}."
-        )
+        return " ".join(self.refusals)
 
 
 @dataclass(frozen=True)
@@ -76,7 +74,7 @@ class SaveWarnings:
     """What the UI tells the user after a save: the Contribution Limit bars the save has just taken over their limit,
     the negative Cash Balances from the earliest day it touched, the Multi-asset Instruments it bought that have no
     split yet, the Bond Series Instruments it created or removed, the Accounts whose cash it took below the
-    capital of their running Term Deposits, and the Bond Series it bought on a Regular Account."""
+    capital of their running Term Deposits, and the Instruments it put on an Account that may not hold them."""
 
     over_limit: tuple[LimitBar, ...] = ()
     negative_cash: tuple[CashShortfall, ...] = ()
@@ -84,18 +82,18 @@ class SaveWarnings:
     series_created: tuple[str, ...] = ()
     series_dropped: tuple[str, ...] = ()
     locked_cash: tuple[LockedCash, ...] = ()
-    bonds_on_regular: tuple[BondsOnRegular, ...] = ()
+    not_allowed: tuple[NotAllowed, ...] = ()
 
     @property
     def any(self) -> bool:
-        return bool(self.over_limit or self.negative_cash or self.unsplit or self.locked_cash or self.bonds_on_regular)
+        return bool(self.over_limit or self.negative_cash or self.unsplit or self.locked_cash or self.not_allowed)
 
     def messages(self, done: str, *, unsplit: bool = True) -> list[str]:
         """The Polish warnings; ``done`` opens a cash one ("Zapisano", "Usunięto"). Without ``unsplit`` the caller
         asks for the split itself (the transaction dialog opens the split dialog)."""
         texts = [shortfall.message(done) for shortfall in self.negative_cash]
         texts += [locked.message(done) for locked in self.locked_cash]
-        texts += [bonds.message() for bonds in self.bonds_on_regular]
+        texts += [refused.message() for refused in self.not_allowed]
         texts += [over_limit_warning(bar) for bar in self.over_limit]
         if unsplit and self.unsplit:
             names = ", ".join(instrument.name for instrument in self.unsplit)
@@ -147,28 +145,31 @@ def save_warnings(
         tuple(sorted(series_after - series_before)),
         tuple(sorted(series_before - series_after)),
         tuple(_locked_cash(before, after, accounts, changed, deposits)),
-        tuple(_bonds_on_regular(after, accounts, changed, instruments)),
+        tuple(_not_allowed(after, accounts, changed, instruments)),
     )
 
 
-def _bonds_on_regular(
+def _not_allowed(
     after: Sequence[Transaction],
     accounts: Sequence[Account],
     changed: Iterable[Transaction],
     instruments: Mapping[int, Instrument],
-) -> list[BondsOnRegular]:
-    """The Bond Series each Regular Account was just bought in; an edit's old form or a deletion asks for nothing."""
+) -> list[NotAllowed]:
+    """Why each Account was just bought, or sent, an Instrument it may not hold (``account_rules``); an edit's old
+    form or a deletion asks for nothing."""
     saved = set(after)
-    series: dict[int, dict[str, None]] = {}
+    by_id = {account.id: account for account in accounts}
+    refusals: dict[int, dict[str, None]] = {}
     for t in changed:
         instrument = instruments.get(t.instrument_id) if t.instrument_id is not None else None
-        if t in saved and t.transaction_type is TransactionType.BUY and instrument and instrument.is_bond_series:
-            series.setdefault(t.account_id, {})[instrument.name] = None
-    return [
-        BondsOnRegular(account.name, tuple(sorted(series[account.id])))
-        for account in accounts
-        if account.id in series and account.account_type is AccountType.REGULAR
-    ]
+        # A Buy or DRIP puts the Instrument on its Account, a Security Transfer on its target
+        holder = t.target_account_id if t.transaction_type is TransactionType.SECURITY_TRANSFER else t.account_id
+        putting = t.transaction_type in (*_BUYING, TransactionType.SECURITY_TRANSFER)
+        if not putting or t not in saved or instrument is None or holder not in by_id:
+            continue
+        if (why := refusal(by_id[holder], instrument)) is not None:
+            refusals.setdefault(holder, {})[why] = None
+    return [NotAllowed(by_id[holder].name, tuple(why)) for holder, why in refusals.items()]
 
 
 def _locked_cash(

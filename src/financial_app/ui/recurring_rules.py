@@ -8,6 +8,7 @@ from datetime import date
 from nicegui import ui
 from sqlalchemy import Engine
 
+from financial_app.domain.account_rules import refusal
 from financial_app.domain.bonds import bond_type_of
 from financial_app.domain.formatting import (
     format_amount,
@@ -204,7 +205,8 @@ def open_rule_dialog(
         kind = ui.select(TYPE_OPTIONS, label="Typ", value=start.transaction_type.value).classes("w-full")
         kind.mark("rule-type")
         target = ui.select({}, label="Konto docelowe", value=None).classes("w-full").mark("rule-target")
-        instruments = {i.id: i.name for i in list_instruments(engine)}
+        saved_instruments = {i.id: i for i in list_instruments(engine)}
+        instruments = {i.id: i.name for i in saved_instruments.values()}
         instrument = ui.select(instruments, label="Instrument", value=start.instrument_id, with_input=True)
         instrument.classes("w-full").mark("rule-instrument")
         amount = ui.input(value="" if start.amount is None else format_exact(start.amount)).classes("w-full")
@@ -276,6 +278,11 @@ def open_rule_dialog(
             except ValueError:
                 raise RecurringRuleError("Datę podaj jako dd.mm.rrrr, np. 10.11.2026.") from None
             buying = kind.value == TransactionType.BUY.value
+            if buying and instrument.value in saved_instruments:
+                # The Buy this rule proposes would be refused in the transaction dialog, so refuse the rule
+                why = refusal(accounts[account.value], saved_instruments[instrument.value])
+                if why is not None:
+                    raise RecurringRuleError(why)
             return RecurringRuleDraft(
                 name=name.value or "",
                 account_id=account.value,

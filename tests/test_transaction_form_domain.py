@@ -132,6 +132,46 @@ def test_paid_in_pln_on_an_account_with_a_conversion_fee_offers_the_broker_conve
     assert error.value.field == "charged"
 
 
+def test_a_buy_is_offered_and_accepted_only_for_instruments_the_account_may_hold() -> None:
+    form = _form()
+    on_bonds = _state(TransactionType.BUY, BONDS, instrument_id=CDR, quantity="1", price="100", bond_mode=False)
+
+    assert list(form.layout(_state(TransactionType.BUY, XTB)).instruments.options) == [CDR, AAPL, BTC, VWCE]
+    assert list(form.layout(_state(TransactionType.BUY, IKE)).instruments.options) == [CDR, AAPL, EDO, VWCE]
+    assert list(form.layout(on_bonds).instruments.options) == [EDO]
+    # Nothing but a Buy or DRIP is narrowed: a Sell or a Dividend names what the Account already holds
+    assert list(form.layout(replace(on_bonds, kind=TransactionType.SELL)).instruments.options) == [
+        CDR, AAPL, EDO, BTC, VWCE,
+    ]  # fmt: skip
+    # The chosen Instrument drops out when the new Account does not offer it
+    assert form.layout(_state(TransactionType.BUY, XTB, instrument_id=EDO)).instruments.value is None
+
+    with pytest.raises(FormError, match="Konto Obligacje typu Obligacje nie przyjmuje instrumentów typu Inne") as error:
+        form.draft(on_bonds)
+    assert error.value.field == "instrument"
+    with pytest.raises(FormError, match="Konto XTB typu Regular nie przyjmuje obligacji skarbowych detalicznych"):
+        form.draft(_state(TransactionType.BUY, XTB, instrument_id=EDO, quantity="1", price="100"))
+    assert form.draft(_state(TransactionType.BUY, IKE, instrument_id=EDO, quantity="1", price="100")).account_id == IKE
+    # The bond mode buys the Series through its own id
+    assert form.draft(replace(on_bonds, instrument_id=None), series_id=EDO).instrument_id == EDO
+
+
+def test_an_edit_keeps_the_instrument_the_account_already_held_and_a_transfer_checks_its_target() -> None:
+    old = Transaction(
+        XTB, date(2026, 1, 5), TransactionType.BUY, Decimal(100), instrument_id=EDO, quantity=Decimal(1),
+        price=Decimal(100), id=1,
+    )  # fmt: skip
+    edited = _form([old], edited=old)
+    state = edited.initial_state(TODAY)
+
+    assert EDO in edited.layout(state).instruments.options
+    assert edited.draft(replace(state, texts=replace(state.texts, comment="note"))).comment == "note"
+
+    transfer = _state(TransactionType.SECURITY_TRANSFER, XTB, instrument_id=CDR, quantity="1", target_id=BONDS)
+    with pytest.raises(FormError, match="Konto Obligacje typu Obligacje nie przyjmuje instrumentów typu Inne"):
+        _form().draft(transfer)
+
+
 def test_a_foreign_buy_reads_with_the_nbp_rate_and_the_users_rate() -> None:
     state = _state(TransactionType.BUY, XTB, instrument_id=AAPL, quantity="2", price="100", fx_rate="3,9")
 
