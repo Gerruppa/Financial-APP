@@ -3,6 +3,7 @@
 ## Nieopublikowane
 
 ### Nowe funkcje
+- Przycisk oka w nagłówku włącza tryb dyskrecji: kwoty i wykresy się rozmywają (najechanie myszą je odsłania), a wybór jest zapamiętany.
 - Okno transakcji jeszcze przed zapisem podpowiada, gdy na koncie zabraknie gotówki na zakup lub wypłatę, i ile saldo spadnie poniżej zera; przy zakupie za gotówkę w walucie obcej proponuje zapłatę w złotych z przewalutowaniem.
 - Konto przyjmuje tylko instrumenty swojego rodzaju: okno transakcji przy zakupie pokazuje tylko dozwolone instrumenty i odmawia reszty (np. obligacji skarbowych na koncie Regular, złota fizycznego na koncie Obligacje), a import i potwierdzane szkice ostrzegają zamiast odmawiać.
 - Aplikacja ma użytkowników: ekran logowania (pseudonim i hasło) przy każdym starcie, osobne dane dla każdego i przełączanie użytkownika w menu awatara; dotychczasowe dane trafiają do pierwszego utworzonego użytkownika.
@@ -23,6 +24,7 @@
 - W motywie Golden pytania w Pomocy mają ciemne tło zamiast białego, więc są czytelne.
 
 ### Zmiany
+- Przycisk „Wesprzyj” w nagłówku pokazuje w węższym oknie (poniżej 1440 px) samą ikonę, żeby nagłówek mieścił się w jednej linii.
 - Ustawienia nie pokazują już sekcji „Źródła wycen” z kluczem API Stooq, bo klucz nie jest potrzebny (historia działa na Yahoo); zniknęło też pytanie o klucz z Pomocy.
 
 ## 1.0.1 — 2026-10-20
