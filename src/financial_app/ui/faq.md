@@ -25,9 +25,33 @@ Typ konta decyduje o podatku:
 - **OIPE**, **PPK**, **OKI**: konta emerytalne i inwestycyjne o własnych zasadach podatkowych.
 - **Obligacje**: konto na obligacje skarbowe detaliczne (np. w PKO BP); zakup od razu proponuje tryb obligacji.
 - **Lokata / oszczędności**: rachunek w banku; od odsetek bank pobiera 19% podatku Belki. Na takim koncie założysz lokatę terminową (pytanie **Jak dodać lokatę terminową?**).
-- **Inne**: wszystko pozostałe.
+- **Inne**: metale fizyczne (monety, sztabki), kryptowaluty i rzeczy spoza giełdy.
+
+Typ konta decyduje też o tym, co można na nim kupić (pytanie **Co mogę kupić na jakim koncie?**).
 
 Pole **Opłata za przewalutowanie %** wypełnij, jeśli broker pobiera prowizję za wymianę waluty przy zakupie zagranicznych papierów. Konto, którego już nie używasz, oznacz jako nieaktywne przełącznikiem **Aktywne**.
+
+## Co mogę kupić na jakim koncie? {#co-na-koncie}
+Przejdź do: /ustawienia
+
+Każdy typ konta przyjmuje tylko swoje instrumenty. Okno zakupu pokazuje na liście tylko te dozwolone, a zakup innego odrzuca komunikatem, co na tym koncie można kupić.
+
+- **Regular**: akcje, ETF, ETC, fundusze, obligacje giełdowe (np. z Catalyst), kryptowaluty i instrumenty typu Inne.
+- **IKE, IKZE, OIPE**: to samo co Regular oprócz kryptowalut, a do tego obligacje skarbowe detaliczne (EDO, COI…).
+- **OKI**: jak IKE, ale bez obligacji skarbowych detalicznych i kryptowalut.
+- **PPK**: tylko fundusze.
+- **Obligacje**: tylko obligacje skarbowe detaliczne.
+- **Lokata / oszczędności**: żadnych instrumentów; lokaty dodajesz w zakładce **Dochód stały**.
+- **Inne**: metale fizyczne, kryptowaluty i instrumenty typu Inne.
+
+Reguła patrzy na **Typ** instrumentu (**Ustawienia** → **Instrumenty**): Akcja, ETF, ETC, Fundusz, Obligacja skarbowa, Metal fizyczny, Kryptowaluta. Gdy instrumentu nie ma na liście zakupu, sprawdź jego Typ; instrument z typem **Inne** wchodzi na większość kont, więc warto go uzupełnić. Obligacje skarbowe detaliczne to serie nazwane jak EDO1036. Wcześniej zapisane transakcje nie są zmieniane, a import i zatwierdzane szkice tylko ostrzegają.
+
+## Jak działają użytkownicy, logowanie i menu awatara? {#uzytkownicy}
+Przejdź do: /ustawienia
+
+Przy każdym starcie aplikacja pokazuje ekran logowania (pseudonim i hasło). Każdy użytkownik ma osobne dane: konta, instrumenty, transakcje i kopie zapasowe w osobnym folderze. Dotychczasowe dane trafiły do pierwszego utworzonego użytkownika.
+
+Awatar z inicjałami w prawym górnym rogu otwiera menu: **Ustawienia**, motyw, **Pomoc** i przełączenie użytkownika. W **Ustawieniach**, w sekcji **Użytkownik**, zmienisz pseudonim i hasło albo usuniesz użytkownika razem z jego danymi i kopiami zapasowymi; tego nie da się cofnąć.
 
 ## Czym jest Widok i jak przełączać się między kontami a całym portfelem? {#widok}
 
@@ -56,7 +80,9 @@ Przejdź do: /transakcje
 
 1. Najpierw dodaj instrument: **Ustawienia** → **Instrumenty** → **Dodaj instrument**. Wyszukaj go po ISIN, nazwie albo symbolu i wybierz wynik; aplikacja uzupełni pola **Klasa aktywów**, **Waluta notowania** i symbole źródeł wycen.
 2. Kliknij **„+”**, wybierz **Konto** i **Typ** „Zakup”.
-3. Wybierz instrument, wpisz **Liczbę**, **Cenę** i **Prowizję**, potem **Zapisz**.
+3. Wybierz instrument, wpisz **Liczbę**, **Cenę** i **Prowizję**, potem **Zapisz**. Lista pokazuje tylko instrumenty, które to konto przyjmuje (pytanie **Co mogę kupić na jakim koncie?**).
+
+Jeśli na koncie zabraknie gotówki, okno jeszcze przed zapisem pokazuje, do ilu saldo spadnie poniżej zera. Przy zakupie za gotówkę w walucie obcej proponuje też zapłatę w złotych z przewalutowaniem. Zapis i tak jest możliwy, bo historię możesz wpisywać w dowolnej kolejności; aplikacja tylko ostrzega.
 
 Przy instrumencie w walucie obcej podajesz cenę w tej walucie. Jeśli konto trzyma tę walutę, wybierzesz, z czego płacisz (**Płatność**); jeśli broker przewalutowuje za Ciebie, zaznacz prowizję za przewalutowanie albo wypełnij pole **Kwota pobrana przez brokera (zł)**.
 
@@ -67,14 +93,16 @@ Przejdź do: /transakcje
 2. W polu **Miejsca po przecinku w liczbie** ustaw, ile miejsc po przecinku ma ilość (do 8), np. 8 dla 0,00125 BTC.
 3. Kliknij **„+”**, wybierz **Typ** „Zakup”, ten instrument, ułamkową **Liczbę** i **Cenę**, potem **Zapisz**.
 
-Ceny kryptowalut pobiera Yahoo i przelicza je na złote.
+Ceny kryptowalut pobiera Yahoo i przelicza je na złote. Kryptowaluty przyjmują konta typu Regular i Inne, ale nie IKE, IKZE ani Obligacje.
 
 ## Jak kupić obligacje skarbowe (EDO, COI, ROR…) i skąd biorą się ich wartości? {#obligacje}
 Przejdź do: /obligacje
 
-1. Załóż konto z **Typem konta** „Obligacje” (np. „PKO obligacje”).
+1. Załóż konto z **Typem konta** „Obligacje” (np. „PKO obligacje”). Obligacje skarbowe detaliczne przyjmują tylko konta typu Obligacje, IKE i IKZE; na koncie Regular zakup zostanie odrzucony.
 2. Kliknij **„+”**, wybierz to konto i **Typ** „Zakup”. Pole **Obligacje skarbowe detaliczne** jest zaznaczone, więc zamiast instrumentu wybierasz typ obligacji (EDO, COI, ROR…) i serię; zakup z zamiany zaznacz polem **z rolowania**.
 3. Wpisz **Liczbę** obligacji i **Zapisz**. Seria (np. EDO1036) powstaje sama.
+
+Szybciej: wpisz w wyszukiwarce w nagłówku kod typu (np. EDO) albo okres (np. „10-letnie”). Karta typu pokazuje bieżącą ofertę Ministerstwa Finansów, Twoje serie tego typu i przycisk **Kup**, który otwiera zakup obligacji.
 
 Wartość obligacji aplikacja liczy sama z listów emisyjnych Ministerstwa Finansów, inflacji GUS i stopy referencyjnej NBP, pobieranych razem z wycenami najwyżej raz dziennie. Zakładka **Dochód stały**, w sekcji **Obligacje**, pokazuje **Wartość netto** (po opłacie za wcześniejszy wykup i podatku), a na górze **Do zatwierdzenia**: odsetki i wykupy, które przyszły, z przyciskami **Zatwierdź odsetki**, **Zatwierdź wykup** i **Roluj do…**.
 
@@ -149,6 +177,12 @@ Ceny pobierane są z kilku **Źródeł wycen**: Yahoo (akcje i ETF-y zagraniczne
 
 Po starcie aplikacja sama odświeża wyceny, jeśli od ostatniego odświeżenia skończyła się sesja (po 17:30 w dzień roboczy). Ręcznie odświeżysz je ikoną **Odśwież wyceny** w nagłówku. Napis **Wyceny: …** obok pokazuje czas ostatniego odświeżenia; na czerwono, gdy dla części instrumentów się nie udało, a kliknięcie pokazuje powody.
 
+## Co pokazuje Karta instrumentu i jak ją otworzyć? {#karta-instrumentu}
+
+Wyszukiwarka w nagłówku znajduje instrumenty po nazwie, ISIN lub symbolu i otwiera Kartę instrumentu z wykresem notowań. Wykres, ceny i stopy zwrotu możesz przełączyć na PLN, EUR lub USD; ceny są przeliczane kursami NBP z dnia notowania.
+
+Dla funduszy i ETF-ów karta pokazuje TER, wielkość funduszu i emitenta (według Yahoo) oraz dziesięć największych składników z udziałami. Dla polskich funduszy, PPK i ETF-ów z GPW dodaje TFI, grupę i benchmark według analizy.pl. Karta pokazuje tylko to, co źródło podaje. **Dodaj jako instrument** dodaje znaleziony papier do Ustawień i uzupełnia pusty TER.
+
 ## Instrument nie ma ceny. Co zrobić? {#brak-ceny}
 Przejdź do: /ustawienia
 
@@ -205,11 +239,15 @@ W **Ustawieniach**, w sekcji **Limity wpłat**, wpisz roczne limity i kliknij **
 
 ## Gdzie zapisane są moje dane i jak zrobić kopię zapasową? {#dane}
 
-Wszystkie dane są tylko na Twoim komputerze, w pliku `financial_app.sqlite3` w folderze `%LOCALAPPDATA%\KAPITA` (wklej tę ścieżkę w pasek adresu Eksploratora plików). Aplikacja nie wysyła ich nigdzie; z internetu tylko pobiera ceny, kursy i dane obligacji.
+Wszystkie dane są tylko na Twoim komputerze. Każdy użytkownik ma w folderze `%LOCALAPPDATA%\KAPITA` własny podfolder (jego nazwa to ciąg liter i cyfr), a w nim plik `financial_app.sqlite3` (wklej `%LOCALAPPDATA%\KAPITA` w pasek adresu Eksploratora plików). Aplikacja nie wysyła danych nigdzie; z internetu tylko pobiera ceny, kursy i dane obligacji.
 
-Przy każdym uruchomieniu aplikacja kopiuje bazę do podfolderu `backups` obok niej. Własną kopię zrobisz, kopiując plik bazy przy zamkniętej aplikacji, np. na dysk zewnętrzny. Transakcje możesz też wyeksportować w zakładce **Transakcje** przyciskami **Eksportuj CSV** i **Eksportuj XLSX**.
+Przy każdym uruchomieniu aplikacja kopiuje bazę do podfolderu `backups` obok niej. Usunięcie użytkownika kasuje też jego kopie. Własną kopię zrobisz, kopiując plik bazy przy zamkniętej aplikacji, np. na dysk zewnętrzny. Transakcje możesz też wyeksportować w zakładce **Transakcje** przyciskami **Eksportuj CSV** i **Eksportuj XLSX**.
 
 ## Jak wyczyścić dane i zacząć od nowa? {#wyczysc}
 Przejdź do: /ustawienia
 
 Na dole **Ustawień**, w sekcji **Wyczyść dane**, kliknij **Wyczyść dane**. Aplikacja pokaże, ile kont, instrumentów i transakcji usunie; po **Dalej** wpisz `USUŃ WSZYSTKO` i kliknij **Wyczyść wszystkie dane**. Przed usunięciem kopia bazy trafia do folderu `backups`, więc w razie pomyłki możesz ją przywrócić. Ustawienia, limity wpłat i pobrane dane obligacji zostają.
+
+## Jak wesprzeć projekt? {#wsparcie}
+
+Przycisk **Wesprzyj** w nagłówku otwiera w przeglądarce stronę buycoffee.to, na której możesz wesprzeć autora aplikacji.

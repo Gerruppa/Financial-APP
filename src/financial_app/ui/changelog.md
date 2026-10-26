@@ -3,7 +3,7 @@
 ## Nieopublikowane
 
 ### Nowe funkcje
-- Okno transakcji jeszcze przed zapisem podpowiada, gdy na koncie zabraknie gotówki na zakup lub wypłatę, i ile saldo spadnie poniżej zera.
+- Okno transakcji jeszcze przed zapisem podpowiada, gdy na koncie zabraknie gotówki na zakup lub wypłatę, i ile saldo spadnie poniżej zera; przy zakupie za gotówkę w walucie obcej proponuje zapłatę w złotych z przewalutowaniem.
 - Konto przyjmuje tylko instrumenty swojego rodzaju: okno transakcji przy zakupie pokazuje tylko dozwolone instrumenty i odmawia reszty (np. obligacji skarbowych na koncie Regular, złota fizycznego na koncie Obligacje), a import i potwierdzane szkice ostrzegają zamiast odmawiać.
 - Aplikacja ma użytkowników: ekran logowania (pseudonim i hasło) przy każdym starcie, osobne dane dla każdego i przełączanie użytkownika w menu awatara; dotychczasowe dane trafiają do pierwszego utworzonego użytkownika.
 - Karta instrumentu pokazuje dla funduszy i ETF-ów TER, wielkość funduszu i emitenta według Yahoo (tylko to, co Yahoo podaje), a "Dodaj jako instrument" uzupełnia pusty TER.
