@@ -22,6 +22,7 @@ from financial_app.persistence.instruments import list_instruments
 from financial_app.persistence.transactions import transactions_in_entry_order
 from financial_app.sources.report_export import export_sale_summary
 from financial_app.ui.changes import Change
+from financial_app.ui.file_delivery import deliver_file
 from financial_app.ui.periods import PeriodChoice, period_selector
 from financial_app.ui.report_export import export_controls
 from financial_app.ui.view_scope import ViewScope
@@ -74,7 +75,7 @@ class SaleSummaryPage:
     def export(self, year: int) -> None:
         """Hands the Sell Summary of ``year`` for the View Scope to the browser as an XLSX file."""
         name, data = export_sale_summary(self.engine, year, self.scope.account_id)
-        ui.download(data, name)
+        deliver_file(data, name)
 
     @ui.refreshable_method
     def content(self) -> None:
