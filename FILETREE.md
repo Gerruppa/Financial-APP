@@ -50,6 +50,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 
 ## docs/architecture/
 
+- `account-rules.md`: Architecture entry for Account rules: which Instruments each Account Type may buy, and the shared refusal message.
 - `accounts.md`: Architecture entry for domain/accounts.py: main functions, UI markers and decisions.
 - `analizy.md`: Architecture entry for sources/analizy.py: main functions, UI markers and decisions.
 - `app.md`: Architecture entry for app.py: main functions, UI markers and decisions.
@@ -138,6 +139,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 
 - `__init__.py`: Docstring marking the domain package as pure-Python calculations with no UI or database imports.
 - `account_ranking.py`: Account ranking and treemap figures for the Total Dashboard: XIRR, TWR, P&L, Net Deposits and costs per Account, sorted with best and worst marked
+- `account_rules.py`: Which Instruments an Account Type may buy; maps each Instrument to a Product and gives the refusal message for a disallowed Buy.
 - `account_value.py`: Shared definition of an Account's value and result today: cash, Positions, unrealised and FX results for the Portfolio and Dashboard
 - `accounts.py`: Account Types, Tax Regime descriptions, Account field validation, and the refusal naming what still holds an Account from deletion
 - `benchmarks.py`: Benchmarks: CPI, Instrument or Account with a pp/year offset, daily growth factors and the Portfolio-vs-benchmark comparison over a period.
@@ -177,7 +179,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `recurring.py`: Recurring Rules: validated rule fields, occurrence schedule, and Drafts left after matching Transactions and skips
 - `results.py`: Wyniki tab figures: period XIRR, TWR, drawdown, volatility and fixed-period returns per Total and Account, from History
 - `sale_summary.py`: Sell Summary: Sale Pairs from the FIFO replay with attributed Dividends, and closed-position statistics (win rate, days, best, worst).
-- `save_warnings.py`: Warnings a Transactions save shows (cash shortfalls, over-limit contributions, unsplit Multi-asset, bonds on a Regular Account); never blocks the save
+- `save_warnings.py`: Warnings a Transactions save shows (cash shortfalls, over-limit contributions, unsplit Multi-asset, Instruments an Account may not hold); never blocks the save
 - `sayings.py`: Saying of the day: fixed list of lines from Walaszek's cartoons (Kapitan Bomba, Egzorcysta, Chłopaki z baraków) and the day-based pick shown at the foot of the menu
 - `spreadsheet_import.py`: Pure conversion of the user's Inwestomat Transakcje sheet rows into Transaction drafts, with fingerprints for re-import skipping.
 - `strategy.py`: Investment Strategy rules: Allocation Targets with tolerance bands, Instrument Targets, and the water-filling split of the Planned Deposit
@@ -357,6 +359,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_account_deletion.py`: Tests deleting an Account that nothing names and the refusals naming what still holds an Account
 - `test_account_ranking_domain.py`: Tests Account ranking figures, sorting, best and worst marks and treemap tiles
 - `test_account_ranking_ui.py`: Tests the Dashboard's Account treemap and ranking, profit waterfall and after-tax toggle
+- `test_account_rules_domain.py`: Tests which Instruments each Account Type may hold and the refusal messages, without widgets.
 - `test_account_value_domain.py`: Tests the domain definition of an Account's value and result today
 - `test_accounts_domain.py`: Tests Account Types, Tax Regime registry and AccountDraft validation rules
 - `test_accounts_repository.py`: Tests saving, listing and editing Accounts in SQLite, including unique names
