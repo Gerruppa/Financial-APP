@@ -134,7 +134,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 
 ## src/financial_app/
 
-- `__init__.py`: Package marker for financial_app; holds the one version number, __version__ = 1.0.0
+- `__init__.py`: Package marker for financial_app; holds the one version number, __version__
 - `__main__.py`: Module entry point so the package can be run with python -m financial_app, starting the app.
 - `app.py`: Application start-up: shows the login screen, opens the signed-in User's backed-up and migrated database, runs the native window or browser UI; --demo skips login on a made-up database in TEMP.
 
@@ -327,6 +327,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `dialogs.py`: Draggable dialog support with no backdrop, so the screen behind stays readable; Esc closes the newest
 - `discreet.py`: Discreet mode UI: page script and CSS that blur amounts and charts, plus the header eye toggle remembered in settings.
 - `faq.md`: FAQ text shown on the Pomoc tab; sections, questions with slugs, and links to tabs
+- `file_delivery.py`: Hands an exported file to the user: a browser download, or a save to Downloads in the native window with a dialog showing its path.
 - `fund_details.py`: Builds the short fund detail texts (TER, Distribution Policy, domicile) shared by Instrument list and Portfolio
 - `header_search.py`: Header search field, its results list and the command palette; opens Instrument Cards or runs commands on a chosen row.
 - `help.py`: Help tab (Pomoc); shows the FAQ as collapsible questions with a search and Przejdź do buttons to tabs
