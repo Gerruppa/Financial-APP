@@ -315,7 +315,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `contribution_limits.py`: Contribution Limits UI: yearly limits in Ustawienia and this year's Dashboard bars
 - `dashboard.py`: Dashboard tab UI: totals, price status, Account table, exposure, charts, Account treemap and ranking, Investment Goal tile, and the after-tax toggle
 - `deposit_drafts.py`: Dochód stały rows for Term Deposit interest and maturity Drafts: confirm, edit amounts, end or renew a matured deposit
-- `dialogs.py`: Draggable dialog support with no backdrop, so the screen behind stays readable
+- `dialogs.py`: Draggable dialog support with no backdrop, so the screen behind stays readable; Esc closes the newest
 - `faq.md`: Polish FAQ text shown on the Pomoc tab; sections, questions with slugs, and links to tabs
 - `fund_details.py`: Builds the short fund detail texts (TER, Distribution Policy, domicile) shared by Instrument list and Portfolio
 - `header_search.py`: Header search field and results list of own Instruments and Search Results; opens the Instrument Card on a chosen row.
