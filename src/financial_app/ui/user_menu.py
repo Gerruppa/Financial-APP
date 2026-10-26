@@ -15,9 +15,11 @@ SUPPORT_URL = "https://buycoffee.to/gerruppa"
 
 def build_support_button() -> None:
     """The "Wesprzyj" button in the header: opens the buycoffee.to page in the system browser."""
-    button = ui.button("Wesprzyj", icon="coffee", on_click=lambda: webbrowser.open(SUPPORT_URL))
+    # The name is dropped below 1440 px (Quasar's gt-md), so the header with the eye button still fits in one line
+    with ui.button(icon="coffee", on_click=lambda: webbrowser.open(SUPPORT_URL)) as button:
+        ui.label("Wesprzyj").classes("gt-md q-ml-sm")
+        button.tooltip("Wesprzyj projekt na buycoffee.to")
     button.props('flat no-caps color=ink aria-label="Wesprzyj projekt"').classes("gt-xs").mark("support-button")
-    button.tooltip("Wesprzyj projekt na buycoffee.to")
 
 
 def build_user_menu(

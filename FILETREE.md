@@ -67,6 +67,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `dashboard-charts.md`: Architecture entry for Dashboard charts (#73, spec 6.1): main functions, UI markers and decisions.
 - `dashboard.md`: Architecture entry for Dashboard (#72, spec 5 and 6.1): main functions, UI markers and decisions.
 - `demo-mode.md`: Architecture entry for browser and demo mode (--browser, --demo), the demo data seed and the screenshot script
+- `discreet.md`: Architecture entry for discreet mode: the header eye button that blurs amounts and charts, and its remembered setting.
 - `early-redemption.md`: Architecture entry for Early Redemption (L-5, spec 3.4.1, ADR-0007): main functions, UI markers and decisions.
 - `edo-valuation.md`: Architecture entry for EDO valuation (L-3, spec 3.4.1): main functions, UI markers and decisions.
 - `export.md`: Architecture entry for Export: main functions, UI markers and decisions.
@@ -316,6 +317,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `dashboard.py`: Dashboard tab UI: totals, price status, Account table, exposure, charts, Account treemap and ranking, Investment Goal tile, and the after-tax toggle
 - `deposit_drafts.py`: Dochód stały rows for Term Deposit interest and maturity Drafts: confirm, edit amounts, end or renew a matured deposit
 - `dialogs.py`: Draggable dialog support with no backdrop, so the screen behind stays readable; Esc closes the newest
+- `discreet.py`: Discreet mode UI: page script and CSS that blur amounts and charts, plus the header eye toggle remembered in settings.
 - `faq.md`: FAQ text shown on the Pomoc tab; sections, questions with slugs, and links to tabs
 - `fund_details.py`: Builds the short fund detail texts (TER, Distribution Policy, domicile) shared by Instrument list and Portfolio
 - `header_search.py`: Header search field and results list of own Instruments and Search Results; opens the Instrument Card on a chosen row.
@@ -416,6 +418,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_database.py`: Checks that the ORM models and Alembic migrations stay in sync
 - `test_demo_data.py`: Tests the made-up demo Portfolio, the demo database in TEMP and the start options
 - `test_dialogs_ui.py`: Tests that Esc closes the movable dialogs, the topmost first
+- `test_discreet.py`: Tests of discreet mode: amount pattern matches formatted amounts, the remembered choice and the header eye button.
 - `test_dividends_domain.py`: Domain tests for Dividends, interest, Costs and DRIP calculations
 - `test_dividends_repository.py`: Tests saving Dividends, Costs and DRIPs to SQLite
 - `test_dividends_ui.py`: UI tests for Dividends, Costs and DRIP in the transaction dialog, Transakcje and Portfolio

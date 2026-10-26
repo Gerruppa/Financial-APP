@@ -37,6 +37,7 @@ from financial_app.ui.changelog import announce_new_version, version_label
 from financial_app.ui.changes import Change, ChangeEvents, Redrawing
 from financial_app.ui.dashboard import DashboardPage
 from financial_app.ui.dialogs import install_movable_dialogs
+from financial_app.ui.discreet import DiscreetChoice, apply_discreet, build_discreet_button
 from financial_app.ui.header_search import HeaderSearch
 from financial_app.ui.help import HELP_PATH, build_help_page
 from financial_app.ui.history import forget_history, history_status, shared_history
@@ -158,6 +159,7 @@ def build_shell(
     layout = Layout(engine)
     layout.on_change(lambda: events.publish(Change.LAYOUT))
     theme = ThemeChoice(engine)
+    discreet = DiscreetChoice(engine)
     dashboard_page = DashboardPage(engine, rates, scope, period, lambda: shared.days, layout, planned)
     strategy_page = StrategyPage(engine, rates, scope, planned)
     results_page = ResultsPage(engine, scope, period, lambda: shared.days)
@@ -289,6 +291,7 @@ def build_shell(
             await fetch_history()
 
     apply_theme(theme.theme)
+    apply_discreet(discreet)
     # A new Theme restyles the whole window, its charts drawn on canvas too, so the window is built again in it
     theme.on_change(ui.navigate.reload)
 
@@ -331,6 +334,7 @@ def build_shell(
         refresh_button.tooltip("Odśwież wyceny").mark("refresh-prices")
         switcher = ScopeSwitcher(scope, lambda: shared.days)
         events.subscribe(switcher.refresh, switcher.CHANGES)
+        build_discreet_button(discreet)
         build_support_button()
         build_user_menu(pseudonym, theme, SETTINGS_PATH, HELP_PATH, on_switch_user)
 

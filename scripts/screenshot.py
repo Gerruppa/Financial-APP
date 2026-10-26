@@ -45,16 +45,18 @@ def wait_until_up(url: str, app: subprocess.Popen[bytes], seconds: float = 60) -
     sys.exit(f"{url} did not answer within {seconds:.0f} s")
 
 
-def choose_theme(theme: str) -> None:
-    """Remember ``theme`` in the demo database, as Ustawienia would; each page then builds in it."""
+def choose_theme(theme: str, discreet: bool = False) -> None:
+    """Remember ``theme`` (and the discreet mode) in the demo database, as the window would; each page then builds in
+    it."""
     from financial_app.app import demo_dir
     from financial_app.persistence.db import open_engine
     from financial_app.persistence.paths import DATA_DIR_ENV, database_path
-    from financial_app.persistence.settings import UI_THEME, save_setting
+    from financial_app.persistence.settings import UI_DISCREET, UI_THEME, save_setting
 
     os.environ[DATA_DIR_ENV] = str(demo_dir())
     engine = open_engine(database_path())
     save_setting(engine, UI_THEME, theme)
+    save_setting(engine, UI_DISCREET, "1" if discreet else "0")
     engine.dispose()
 
 
@@ -65,6 +67,7 @@ def main() -> None:
     parser.add_argument("--width", type=int, default=1400)
     parser.add_argument("--height", type=int, default=900)
     parser.add_argument("--theme", choices=[theme.value for theme in Theme], default=Theme.LIGHT.value)
+    parser.add_argument("--discreet", action="store_true", help="shoot with the discreet mode on (amounts blurred)")
     args = parser.parse_args()
     browser = next((path for path in BROWSERS if path.exists()), None)
     if browser is None:
@@ -74,7 +77,7 @@ def main() -> None:
     app = subprocess.Popen([sys.executable, str(ROOT / "main.py"), "--demo", "--port", str(port)], cwd=ROOT)
     try:
         wait_until_up(f"http://127.0.0.1:{port}/", app)
-        choose_theme(args.theme)
+        choose_theme(args.theme, args.discreet)
         for tab in args.tabs:
             name = tab.strip("/") or "dashboard"
             route = "/" if name == "dashboard" else f"/{name}"
