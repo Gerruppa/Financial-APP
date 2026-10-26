@@ -51,6 +51,29 @@ class HistoryFetch:
     currencies: dict[str, str] = field(default_factory=dict)
 
 
+def history_inputs(engine: Engine, today: date) -> HistoryInputs | None:
+    """What History is computed from up to ``today``, read from the cache alone; ``None`` without any Transaction."""
+    transactions = transactions_in_entry_order(engine)
+    if not transactions:
+        return None
+    instruments = {instrument.id: instrument for instrument in list_instruments(engine)}
+    first = min(t.date for t in transactions)
+    currencies = {t.cash_currency for t in transactions} | {i.quote_currency for i in instruments.values()}
+    return HistoryInputs(
+        transactions,
+        instruments,
+        {instrument_id: history_prices(engine, instrument_id) for instrument_id in instruments},
+        {
+            currency: nbp_rates_between(engine, currency, first - _RATE_LOOKBACK, today)
+            for currency in currencies - {PLN}
+        },
+        first,
+        today,
+        load_bond_data(engine),
+        Accruals(list_deposits(engine), tax_rates_of(list_accounts(engine)), transactions),
+    )
+
+
 class PortfolioHistory:
     """``today`` is injectable for tests, and so is ``compute``, which runs ``daily_history`` (by default in
     NiceGUI's process pool, ``run.cpu_bound``)."""
@@ -117,25 +140,7 @@ class PortfolioHistory:
 
     def inputs(self) -> HistoryInputs | None:
         """What History is computed from, read from the cache alone; ``None`` without any Transaction."""
-        transactions = transactions_in_entry_order(self.engine)
-        if not transactions:
-            return None
-        instruments = {instrument.id: instrument for instrument in list_instruments(self.engine)}
-        first, last = min(t.date for t in transactions), self.today()
-        currencies = {t.cash_currency for t in transactions} | {i.quote_currency for i in instruments.values()}
-        return HistoryInputs(
-            transactions,
-            instruments,
-            {instrument_id: history_prices(self.engine, instrument_id) for instrument_id in instruments},
-            {
-                currency: nbp_rates_between(self.engine, currency, first - _RATE_LOOKBACK, last)
-                for currency in currencies - {PLN}
-            },
-            first,
-            last,
-            load_bond_data(self.engine),
-            Accruals(list_deposits(self.engine), tax_rates_of(list_accounts(self.engine)), transactions),
-        )
+        return history_inputs(self.engine, self.today())
 
     async def values(self) -> list[DayValue]:
         """Each day's value from the first Transaction to today, computed once and then kept until ``invalidate``."""

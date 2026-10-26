@@ -10,6 +10,7 @@ NBP Rate; its FX result (realised and unrealised) counts in the Account's result
 3.1, 3.5). Each card also sums the Account's net Dividends and interest and its commissions and costs. In an Account's
 View Scope only its card shows, under the breadcrumbs back to Total. "Grupuj" heads the Positions of each Instrument
 Type or Asset Class with their value and share of the Account (issue #198), the choice kept in the settings.
+"Eksportuj XLSX" saves the Portfolio at the end of a chosen year (issue #241).
 """
 
 from dataclasses import dataclass
@@ -38,9 +39,11 @@ from financial_app.domain.transactions import costs_by_account, dividends_by_acc
 from financial_app.domain.valuation import Badge, InstrumentPrice, PriceStatus
 from financial_app.persistence.settings import PORTFOLIO_GROUPING, load_setting, save_setting
 from financial_app.sources.nbp import NbpRates
+from financial_app.sources.report_export import export_portfolio
 from financial_app.sources.todays_view import TodaysView, todays_view
 from financial_app.ui.changes import TODAYS_VALUE
 from financial_app.ui.fund_details import fund_details
+from financial_app.ui.report_export import export_controls
 from financial_app.ui.view_scope import ViewScope, breadcrumbs
 
 COLUMNS = "grid-template-columns: minmax(8rem, 2fr) repeat(7, minmax(6rem, 1fr))"
@@ -79,6 +82,7 @@ class PortfolioPage:
         with ui.row().classes("w-full max-w-screen-2xl items-center"):
             ui.label("Portfolio").classes("text-2xl font-bold")
             ui.space()
+            export_controls("portfolio", self.engine, self.rates.today(), self.export)
             grouping = ui.select(
                 {choice: choice.label for choice in Grouping},
                 label="Grupuj",
@@ -89,6 +93,12 @@ class PortfolioPage:
         # The marker sits outside the refreshable cards so it survives a refresh
         with ui.column().classes("w-full max-w-screen-2xl").mark("portfolio"):
             self.cards()
+
+    def export(self, year: int) -> None:
+        """Hands the Portfolio at the end of ``year`` (today for the current year) for the View Scope to the browser
+        as an XLSX file."""
+        name, data = export_portfolio(self.engine, year, self.scope.account_id, self.rates)
+        ui.download(data, name)
 
     def _group(self, grouping: Grouping) -> None:
         save_setting(self.engine, PORTFOLIO_GROUPING, grouping.value)

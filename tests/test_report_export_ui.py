@@ -14,7 +14,7 @@ from sqlalchemy import Engine
 
 from financial_app.domain.accounts import AccountDraft, AccountType
 from financial_app.domain.instruments import InstrumentDraft
-from financial_app.domain.transactions import TransactionDraft, TransactionType, buy_or_sell
+from financial_app.domain.transactions import TransactionDraft, TransactionType, buy_or_sell, dividend
 from financial_app.persistence.accounts import add_account
 from financial_app.persistence.db import init_db
 from financial_app.persistence.instruments import add_instrument, list_asset_classes
@@ -99,3 +99,34 @@ async def test_wyniki_exports_the_chosen_year(engine: Engine) -> None:
 
     sheet = openpyxl.load_workbook(io.BytesIO(response.content))["Wyniki roku"]
     assert sheet["A3"].value == "TWR"
+
+
+async def test_the_portfolio_exports_the_end_of_the_chosen_year_for_the_scope(engine: Engine) -> None:
+    async with user_simulation(_shell(engine)) as user:
+        await user.open("/portfolio")
+        user.find(marker="portfolio-export").click()
+        default = await user.download.next()
+        _choose_year(user, "portfolio-export-year", 2026)
+        user.find(marker="view-scope").click()
+        await user.should_see(marker="scope-menu")
+        user.find(marker="scope-2").click()
+        user.find(marker="portfolio-export").click()
+        chosen = await user.download.next()
+
+    first = openpyxl.load_workbook(io.BytesIO(default.content)).active
+    assert first is not None
+    assert "Brak danych" in first["A1"].value  # nothing was held on 31.12.2025
+    accounts = openpyxl.load_workbook(io.BytesIO(chosen.content))["Konta"]
+    assert [cell.value for cell in accounts[2]][:2] == ["XTB", 1000]
+
+
+async def test_the_passive_income_exports_the_chosen_year_for_the_scope(engine: Engine) -> None:
+    add_transactions(engine, [dividend(1, date(2026, 2, 10), Decimal(100), Decimal(19), instrument_id=1)])
+    async with user_simulation(_shell(engine)) as user:
+        await user.open("/dochod-pasywny")
+        _choose_year(user, "income-export-year", 2026)
+        user.find(marker="income-export").click()
+        response = await user.download.next()
+
+    sheet = openpyxl.load_workbook(io.BytesIO(response.content))["Wpływy"]
+    assert [cell.value for cell in sheet[2]] == [datetime(2026, 2, 10), "Dywidendy", "PZU", "IKE", 81]

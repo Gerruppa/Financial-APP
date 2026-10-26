@@ -130,6 +130,28 @@ def pln_prices(
     return found
 
 
+def prices_on(
+    transactions: Sequence[TransactionDraft],
+    instruments: Mapping[int, Instrument],
+    prices: Mapping[int, Sequence[HistoryPrice]],
+    rates: Mapping[str, Sequence[NbpRate]],
+    bonds: BondData,
+    day: date,
+    instrument_ids: Iterable[int],
+) -> dict[int, UnitPrice | None]:
+    """Each of ``instrument_ids``' PLN price per unit at the end of ``day`` as History values it, ``None`` without a
+    price or NBP Rate (a Bond Series not valued yet too)."""
+    pricing = _Pricing(instruments, prices, rates, _splits(transactions), bonds)
+    return {instrument_id: pricing.unit_pln(instrument_id, day) for instrument_id in instrument_ids}
+
+
+def rates_on(rates: Mapping[str, Sequence[NbpRate]], currencies: Iterable[str], day: date) -> dict[str, Decimal]:
+    """The NBP Rate of each of ``currencies`` published on or before ``day``, as History converts them; a currency
+    without one is left out."""
+    pricing = _Pricing({}, {}, rates, {}, BondData())
+    return {currency: rate for currency in currencies if (rate := pricing.rate(currency, day)) is not None}
+
+
 @dataclass(frozen=True)
 class _State:
     """The open Positions and Cash Balances at the end of a day."""

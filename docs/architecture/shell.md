@@ -5,3 +5,5 @@ The NiceGUI window in the window's Theme (`ui/theme.py`, #174): the left menu (`
 The header's eye button `discreet-toggle` blurs the amounts (see `discreet.md`). The header's "Wesprzyj" button (`support-button`, `build_support_button`, left of the avatar, hidden in the narrowest window, icon only below 1440 px) opens `SUPPORT_URL` (buycoffee.to, in `ui/user_menu.py`) with `webbrowser.open`, in the system browser, because in the native window a link would replace the app.
 
 Sign-out (#195, `users.md`): `build_shell(on_switch_user=...)` passes the callback to the avatar's menu, `build_shell(user_section=...)` the Użytkownik card to Ustawienia (#196), and `stop_background_work(engine)` cancels that engine's shared refresh and History (`ui/history.py` `forget_history`).
+
+The Portfolio tab (`ui/portfolio.py`) has an "Eksportuj XLSX" control (`portfolio-export`, `portfolio-export-year`, #241) saving the Portfolio at the end of a chosen year; see `export.md`.

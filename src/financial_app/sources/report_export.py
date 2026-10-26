@@ -16,13 +16,29 @@ from openpyxl.cell import Cell as SheetCell
 from openpyxl.worksheet.worksheet import Worksheet
 from sqlalchemy import Engine
 
-from financial_app.domain.portfolio_history import DayValue
-from financial_app.domain.report import Cell, Percent, Report, Section, results_report, sale_summary_report
+from financial_app.domain.lots import foreign_cash, open_positions
+from financial_app.domain.portfolio_history import DayValue, prices_on, rates_on
+from financial_app.domain.report import (
+    Cell,
+    Percent,
+    PortfolioSnapshot,
+    Report,
+    Section,
+    passive_income_report,
+    portfolio_report,
+    results_report,
+    sale_summary_report,
+)
+from financial_app.domain.transactions import cash_balances
 from financial_app.persistence.accounts import list_accounts
 from financial_app.persistence.bond_data import load_cpi
 from financial_app.persistence.instruments import list_instruments
 from financial_app.persistence.transactions import transactions_in_entry_order
+from financial_app.sources.current_prices import LatestRates
 from financial_app.sources.export import FORMULA_START, XLSX_DATE_FORMAT, safe_file_part
+from financial_app.sources.passive_income import income_items
+from financial_app.sources.portfolio_history import history_inputs
+from financial_app.sources.todays_view import todays_view
 
 XLSX_NUMBER_FORMAT = "#,##0.00##"
 XLSX_PERCENT_FORMAT = "0.00%"
@@ -94,6 +110,69 @@ def export_results(
     accounts = list_accounts(engine)
     report = results_report(history, accounts, account_id, year, today, load_cpi(engine))
     return _named(report, year, account_id, {account.id: account.name for account in accounts}), report_to_xlsx(report)
+
+
+def export_portfolio(engine: Engine, year: int, account_id: int | None, rates: LatestRates) -> tuple[str, bytes]:
+    """The file name and bytes of the Portfolio at the end of ``year`` for the View Scope: as the Portfolio tab shows
+    it for the current year (at today's prices), else as History values it on 31 December from the cached prices."""
+    today = rates.today()
+    day = min(date(year, 12, 31), today)
+    snapshot = _todays_snapshot(engine, rates) if day == today else _snapshot_on(engine, day, today)
+    accounts = list_accounts(engine)
+    instruments = {instrument.id: instrument.name for instrument in list_instruments(engine)}
+    names = {account.id: account.name for account in accounts}
+    report = portfolio_report(snapshot, accounts, account_id, instruments)
+    return _named(report, year, account_id, names), report_to_xlsx(report)
+
+
+def _todays_snapshot(engine: Engine, rates: LatestRates) -> PortfolioSnapshot:
+    view = todays_view(engine, rates)
+    return PortfolioSnapshot(
+        view.today,
+        view.positions,
+        view.foreign,
+        view.cash,
+        view.pln_prices,
+        view.rates,
+        {account_id: accrued.net for account_id, accrued in view.accrued.items()},
+    )
+
+
+def _snapshot_on(engine: Engine, day: date, today: date) -> PortfolioSnapshot:
+    """The state on ``day``, replayed through the FIFO engine from the Transactions up to it and valued from the cached
+    History prices; with no Transaction, an empty one."""
+    inputs = history_inputs(engine, today)
+    if inputs is None:
+        return PortfolioSnapshot(day, [], [], {}, {}, {}, {})
+    until = [t for t in inputs.transactions if t.date <= day]
+    positions = open_positions(until)
+    foreign = foreign_cash(until)
+    accruals = inputs.accruals.on(day) if inputs.accruals is not None else {}
+    return PortfolioSnapshot(
+        day,
+        positions,
+        foreign,
+        cash_balances(until),
+        prices_on(
+            inputs.transactions,
+            inputs.instruments,
+            inputs.prices,
+            inputs.rates,
+            inputs.bonds,
+            day,
+            {p.instrument_id for p in positions},
+        ),
+        rates_on(inputs.rates, {c.currency for c in foreign}, day),
+        {account_id: accrued.net for account_id, accrued in accruals.items()},
+    )
+
+
+def export_passive_income(engine: Engine, year: int, account_id: int | None, today: date) -> tuple[str, bytes]:
+    """The file name and bytes of the passive income received in ``year`` for the View Scope."""
+    accounts = {account.id: account.name for account in list_accounts(engine)}
+    instruments = {instrument.id: instrument.name for instrument in list_instruments(engine)}
+    report = passive_income_report(income_items(engine, today), year, account_id, instruments, accounts)
+    return _named(report, year, account_id, accounts), report_to_xlsx(report)
 
 
 def _named(report: Report, year: int, account_id: int | None, accounts: Mapping[int, str]) -> str:

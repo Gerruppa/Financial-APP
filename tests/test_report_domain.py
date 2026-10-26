@@ -5,18 +5,24 @@ from datetime import date
 from decimal import Decimal
 
 from financial_app.domain.accounts import Account, AccountType
+from financial_app.domain.lots import open_positions
+from financial_app.domain.passive_income import IncomeItem, IncomeKind
 from financial_app.domain.portfolio_history import DayValue
 from financial_app.domain.report import (
+    BRAK_WYCENY,
     NOTHING_TO_REPORT,
     Cell,
     Percent,
+    PortfolioSnapshot,
     Report,
     last_finished_year,
+    passive_income_report,
+    portfolio_report,
     results_report,
     sale_summary_report,
 )
 from financial_app.domain.sale_summary import in_view, sale_pairs
-from financial_app.domain.transactions import TransactionDraft, TransactionType, buy_or_sell
+from financial_app.domain.transactions import TransactionDraft, TransactionType, buy_or_sell, cash_balances
 
 IKE, XTB = 1, 2
 PZU = 10
@@ -141,3 +147,85 @@ def test_wyniki_of_one_account_follows_the_scope() -> None:
 def test_wyniki_of_a_year_outside_history_or_without_history_has_nothing_to_report() -> None:
     assert results_report(_history(), ACCOUNTS, None, 2023, date(2026, 10, 26), []).notes == (NOTHING_TO_REPORT,)
     assert results_report([], ACCOUNTS, None, 2025, date(2026, 10, 26), []).notes == (NOTHING_TO_REPORT,)
+
+
+def _snapshot(prices: dict[int, Decimal | None], day: date = date(2025, 12, 31)) -> PortfolioSnapshot:
+    transactions = [
+        TransactionDraft(IKE, date(2025, 1, 2), TransactionType.DEPOSIT, Decimal(1000)),
+        _trade(TransactionType.BUY, "10", "50", date(2025, 1, 5)),
+        _trade(TransactionType.BUY, "5", "20", date(2025, 2, 5), XTB),
+    ]
+    return PortfolioSnapshot(
+        day, open_positions(transactions), [], cash_balances(transactions), prices, {}, {IKE: Decimal(3)}
+    )
+
+
+def test_the_portfolio_lists_the_positions_at_their_price_and_each_accounts_value() -> None:
+    report = portfolio_report(_snapshot({PZU: Decimal(60)}), ACCOUNTS, None, INSTRUMENT_NAMES)
+
+    assert report.title == "Portfolio na 31.12.2025 · Wszystkie rachunki"
+    positions = next(section for section in report.sections if section.title == "Pozycje")
+    assert positions.rows[0] == (
+        "IKE", "PZU", Decimal(10), Decimal(50), Decimal(500), Decimal(60), Decimal(600), Decimal(100),
+        Percent(Decimal("0.2")), None,
+    )  # fmt: skip
+    accounts = next(section for section in report.sections if section.title == "Konta")
+    assert accounts.rows[0] == ("IKE", Decimal(500), Decimal(3), Decimal(600), Decimal(1103), Decimal(100))
+
+
+def test_a_position_without_a_valuation_is_noted_and_carries_no_estimate() -> None:
+    report = portfolio_report(_snapshot({PZU: None}), ACCOUNTS, None, INSTRUMENT_NAMES)
+
+    positions = next(section for section in report.sections if section.title == "Pozycje")
+    assert positions.rows[0][5:] == (None, None, None, None, BRAK_WYCENY)
+    assert BRAK_WYCENY in positions.notes[0]
+
+
+def test_the_portfolio_follows_the_view_scope() -> None:
+    report = portfolio_report(_snapshot({PZU: Decimal(60)}), ACCOUNTS, XTB, INSTRUMENT_NAMES)
+
+    assert report.title.endswith("XTB")
+    positions = next(section for section in report.sections if section.title == "Pozycje")
+    assert [row[0] for row in positions.rows] == ["XTB"]
+
+
+def test_a_portfolio_holding_nothing_has_nothing_to_report() -> None:
+    empty = PortfolioSnapshot(date(2024, 12, 31), [], [], {}, {}, {}, {})
+
+    report = portfolio_report(empty, ACCOUNTS, None, INSTRUMENT_NAMES)
+
+    assert report.sections == ()
+    assert report.notes == (NOTHING_TO_REPORT,)
+
+
+def _income() -> list[IncomeItem]:
+    return [
+        IncomeItem(date(2025, 6, 1), IncomeKind.DIVIDENDS, IKE, Decimal(81), instrument_id=PZU),
+        IncomeItem(date(2025, 2, 1), IncomeKind.BOND_INTEREST, XTB, Decimal(40), instrument_id=PZU),
+        IncomeItem(date(2026, 2, 1), IncomeKind.DIVIDENDS, IKE, Decimal(10), instrument_id=PZU),
+        IncomeItem(date(2025, 8, 1), IncomeKind.BOND_INTEREST, IKE, Decimal(5), instrument_id=PZU, forecast=True),
+    ]
+
+
+def test_the_passive_income_lists_the_years_received_items_by_day_without_forecasts() -> None:
+    report = passive_income_report(_income(), 2025, None, INSTRUMENT_NAMES, ACCOUNT_NAMES)
+
+    income = next(section for section in report.sections if section.title == "Wpływy")
+    assert income.rows == (
+        (date(2025, 2, 1), "Odsetki z obligacji", "PZU", "XTB", Decimal(40)),
+        (date(2025, 6, 1), "Dywidendy", "PZU", "IKE", Decimal(81)),
+    )
+    assert _measures(report, "Podsumowanie") == {
+        "Dywidendy": Decimal(81),
+        "Odsetki z obligacji": Decimal(40),
+        "Razem": Decimal(121),
+    }
+
+
+def test_the_passive_income_follows_the_view_scope_and_an_empty_year_says_so() -> None:
+    scoped = passive_income_report(_income(), 2025, IKE, INSTRUMENT_NAMES, ACCOUNT_NAMES)
+    empty = passive_income_report(_income(), 2024, None, INSTRUMENT_NAMES, ACCOUNT_NAMES)
+
+    assert scoped.title.endswith("IKE")
+    assert [row[3] for row in scoped.sections[1].rows] == ["IKE"]
+    assert empty.sections == () and empty.notes == (NOTHING_TO_REPORT,)
