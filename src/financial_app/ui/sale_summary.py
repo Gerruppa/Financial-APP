@@ -20,8 +20,10 @@ from financial_app.domain.sale_summary import SalePair, SaleStats, in_view, sale
 from financial_app.persistence.accounts import list_accounts
 from financial_app.persistence.instruments import list_instruments
 from financial_app.persistence.transactions import transactions_in_entry_order
+from financial_app.sources.report_export import export_sale_summary
 from financial_app.ui.changes import Change
 from financial_app.ui.periods import PeriodChoice, period_selector
+from financial_app.ui.report_export import export_controls
 from financial_app.ui.view_scope import ViewScope
 
 DASH = "—"
@@ -65,8 +67,14 @@ class SaleSummaryPage:
     def build(self) -> None:
         ui.label("Podsumowanie sprzedaży").classes("text-2xl font-bold")
         period_selector(self.period)
+        export_controls("sale", self.engine, self.period.today(), self.export)
         with ui.column().classes("w-full").mark("sale-summary"):
             self.content()
+
+    def export(self, year: int) -> None:
+        """Hands the Sell Summary of ``year`` for the View Scope to the browser as an XLSX file."""
+        name, data = export_sale_summary(self.engine, year, self.scope.account_id)
+        ui.download(data, name)
 
     @ui.refreshable_method
     def content(self) -> None:
