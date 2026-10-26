@@ -1,12 +1,14 @@
 """The header search (issue #175): the user's own Instruments and treasury bond types (#185) listed while typing,
 Search Results from the search services after a pause or on Enter, each opening its card."""
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 
 from nicegui import run, ui
 from sqlalchemy import Engine
 
 from financial_app.domain.bonds import BondType
+from financial_app.domain.commands import Command, in_command_mode, matching_commands
 from financial_app.domain.formatting import format_count
 from financial_app.domain.header_search import (
     BOND_TYPE_TERMS,
@@ -24,6 +26,8 @@ MIN_QUERY = 3
 PAUSE = 0.5
 # How many Search Results the list shows
 FOUND_LIMIT = 8
+# The list below the field: it scrolls, as ">" lists every command
+_PANEL_CLASSES = "absolute top-full left-0 mt-1 w-[36rem] max-w-[90vw] max-h-[75vh] overflow-y-auto z-50 p-2"
 # Ctrl+K anywhere, or "/" outside a field, puts the cursor in the search; in the browser, so that the key is not typed
 _SHORTCUT_SCRIPT = """
 <script>
@@ -38,20 +42,33 @@ document.addEventListener('keydown', (e) => {
 """
 
 
+@dataclass(frozen=True)
+class PaletteCommand:
+    """A command of the palette: what finds it (``domain/commands.py``), its icon and what ``run`` does."""
+
+    command: Command
+    icon: str
+    run: Callable[[], object]
+
+
 class HeaderSearch:
-    """The search field with its list of results below it; ``open_card`` opens the Instrument Card on a row."""
+    """The search field with its list of results below it; ``open_card`` opens the Instrument Card on a row. It is
+    also the command palette: ``commands`` the user may run, found by their words or all of them after ">"."""
 
     def __init__(
         self,
         engine: Engine,
         search: InstrumentSearch,
         open_card: Callable[[SearchResult | Instrument | BondType], None],
+        commands: Sequence[PaletteCommand] = (),
     ) -> None:
         self.engine = engine
         self.search = search
         self.open_card = open_card
+        self.commands = commands
         self.own: list[Instrument] = []
         self.bonds: list[BondType] = []
+        self.matched: list[PaletteCommand] = []
         self.found: list[SearchResult] = []
         self.message = ""
         self.searched = ""  # the query the Search Results are of
@@ -61,7 +78,7 @@ class HeaderSearch:
 
     def build(self) -> None:
         with ui.element("div").classes("relative w-[28rem] max-w-full") as self.box:
-            self.field = ui.input(placeholder="Szukaj instrumentu: symbol, ISIN, nazwa")
+            self.field = ui.input(placeholder="Szukaj instrumentu: symbol, ISIN, nazwa lub > polecenie")
             self.field.props("dense outlined rounded clearable").classes("w-full k-header-search")
             self.field.mark("header-search")
             with self.field.add_slot("prepend"):
@@ -71,7 +88,7 @@ class HeaderSearch:
             self.field.on("keydown.down", lambda: self._move(1))
             self.field.on("keydown.up", lambda: self._move(-1))
             self.field.on("keydown.esc", self._clear)
-            with ui.card().classes("absolute top-full left-0 mt-1 w-[36rem] max-w-[90vw] z-50 p-2") as self.panel:
+            with ui.card().classes(_PANEL_CLASSES) as self.panel:
                 self.panel.mark("header-search-results")
                 self.results()
             self.panel.visible = False
@@ -83,23 +100,32 @@ class HeaderSearch:
     def _typed(self) -> None:
         """Lists the own Instruments matching at once and asks the search services after a pause."""
         query = self._query()
-        self.own = matching_instruments(list_instruments(self.engine), query)
-        self.bonds = matching_bond_types(query)
+        commands = {entry.command.key: entry for entry in self.commands}
+        self.matched = [commands[c.key] for c in matching_commands([e.command for e in self.commands], query)]
+        # After ">" only commands are listed, and the search services are not asked
+        command_mode = in_command_mode(query)
+        self.own = [] if command_mode else matching_instruments(list_instruments(self.engine), query)
+        self.bonds = [] if command_mode else matching_bond_types(query)
         if query != self.searched:
             self.found, self.message = [], ""
         self.highlighted = 0
         if self.pause is not None:
             self.pause.cancel()
             self.pause = None
-        if len(query) >= MIN_QUERY and query != self.searched:
+        if len(query) >= MIN_QUERY and query != self.searched and not command_mode:
             self.pause = ui.timer(PAUSE, self._find, once=True)
         self._show()
 
     async def _entered(self) -> None:
-        """Enter opens the highlighted row: an own Instrument or a bond type at once, a Search Result once the search
-        services answered this query; otherwise it asks them now."""
+        """Enter opens the highlighted row: an own Instrument, a bond type or a command at once, a Search Result once
+        the search services answered this query; otherwise it asks them now (never after ">")."""
         rows = self._rows()
-        if self.highlighted < len(self.own) + len(self.bonds) or (self._query() == self.searched and rows):
+        if in_command_mode(self._query()):
+            if rows:
+                self._open(rows[self.highlighted])
+        elif self.highlighted < len(self.own) + len(self.bonds) + len(self.matched) or (
+            self._query() == self.searched and rows
+        ):
             self._open(rows[self.highlighted])
         else:
             await self._find()
@@ -139,22 +165,34 @@ class HeaderSearch:
         self.found, self.message, self.searched = group_results(results)[:FOUND_LIMIT], message, query
         self._show()
 
-    def _rows(self) -> list[SearchResult | Instrument | BondType]:
-        return [*self.own, *self.bonds, *self.found]
+    def _rows(self) -> list[SearchResult | Instrument | BondType | PaletteCommand]:
+        return [*self.own, *self.bonds, *self.matched, *self.found]
 
     def _show(self) -> None:
         self.panel.visible = bool(self._query())
         self.results.refresh()
 
-    def _open(self, subject: SearchResult | Instrument | BondType) -> None:
+    def _open(self, subject: SearchResult | Instrument | BondType | PaletteCommand) -> None:
         self.panel.visible = False
         # A dialog is deleted with the element it was opened in, so not in a row the next results redraw away
         with self.box:
-            self.open_card(subject)
+            if isinstance(subject, PaletteCommand):
+                self.field.value = ""
+                subject.run()
+            else:
+                self.open_card(subject)
 
     @ui.refreshable_method
     def results(self) -> None:
         index = 0
+        if in_command_mode(self._query()):
+            ui.label("Polecenia").classes("text-xs font-bold k-muted px-2 pt-1")
+            if not self.matched:
+                ui.label("Brak pasujących poleceń.").classes("text-sm k-muted px-2")
+            for entry in self.matched:
+                self._command_row(entry, index == self.highlighted)
+                index += 1
+            return
         if self.own:
             ui.label("Twoje instrumenty").classes("text-xs font-bold k-muted px-2 pt-1")
             for instrument in self.own:
@@ -164,6 +202,11 @@ class HeaderSearch:
             ui.label("Obligacje skarbowe").classes("text-xs font-bold k-muted px-2 pt-2")
             for bond_type in self.bonds:
                 self._bond_row(bond_type, index == self.highlighted)
+                index += 1
+        if self.matched:
+            ui.label("Polecenia").classes("text-xs font-bold k-muted px-2 pt-2")
+            for entry in self.matched:
+                self._command_row(entry, index == self.highlighted)
                 index += 1
         ui.label("Znalezione").classes("text-xs font-bold k-muted px-2 pt-2")
         if self.searching:
@@ -195,6 +238,14 @@ class HeaderSearch:
             ui.item_label(f"obligacje {BOND_TYPE_TERMS[bond_type][0]}").props("caption")
         with item, ui.item_section().props("side"):
             ui.badge("Obligacja skarbowa").props("outline")
+
+    def _command_row(self, entry: PaletteCommand, highlighted: bool) -> None:
+        item = ui.item(on_click=lambda: self._open(entry)).props("dense").classes(_row_classes(highlighted))
+        item.mark("command-result")
+        with item, ui.item_section().props("avatar"):
+            ui.icon(entry.icon)
+        with item, ui.item_section():
+            ui.item_label(entry.command.label)
 
     def _found_row(self, found: SearchResult, highlighted: bool) -> None:
         item = ui.item(on_click=lambda: self._open(found)).classes(_row_classes(highlighted)).mark("found-result")

@@ -7,6 +7,8 @@ redraws keep working; a ``MutationObserver`` marks what a redraw brings. Switchi
 the body's class.
 """
 
+from collections.abc import Callable
+
 from nicegui import ui
 from sqlalchemy import Engine
 
@@ -50,10 +52,23 @@ class DiscreetChoice:
     def __init__(self, engine: Engine) -> None:
         self.engine = engine
         self.on = load_setting(engine, UI_DISCREET) == "1"
+        self.listeners: list[Callable[[], None]] = []
+
+    def on_change(self, listener: Callable[[], None]) -> None:
+        self.listeners.append(listener)
 
     def toggle(self) -> None:
         self.on = not self.on
         save_setting(self.engine, UI_DISCREET, "1" if self.on else "0")
+
+
+def switch_discreet(choice: DiscreetChoice) -> None:
+    """Turn the mode on or off in the window on screen: remember it, toggle the body's class and tell the listeners
+    (the header button's icon). Both the eye button and the palette's command come here."""
+    choice.toggle()
+    ui.run_javascript(f"document.body.classList.toggle('k-discreet', {str(choice.on).lower()})")
+    for listener in choice.listeners:
+        listener()
 
 
 def apply_discreet(choice: DiscreetChoice) -> None:
@@ -69,9 +84,8 @@ def build_discreet_button(choice: DiscreetChoice) -> None:
     button.props('flat round color=ink aria-label="Tryb dyskrecji"').mark("discreet-toggle")
     button.tooltip("Tryb dyskrecji: ukryj kwoty")
 
-    def toggle() -> None:
-        choice.toggle()
-        ui.run_javascript(f"document.body.classList.toggle('k-discreet', {str(choice.on).lower()})")
+    def show_state() -> None:
         button.props(f"icon={'visibility_off' if choice.on else 'visibility'}")
 
-    button.on_click(toggle)
+    choice.on_change(show_state)
+    button.on_click(lambda: switch_discreet(choice))
