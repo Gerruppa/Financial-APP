@@ -28,6 +28,7 @@ from financial_app.persistence.paths import (
     startup_log_path,
 )
 from financial_app.persistence.users import User, UserError, UserStore
+from financial_app.sources.app_update import UpdateSource
 from financial_app.sources.demo_data import seed_demo_data
 from financial_app.ui.login import build_login
 from financial_app.ui.shell import APP_ICON, APP_TITLE, build_shell, stop_background_work
@@ -197,6 +198,7 @@ def main(argv: Sequence[str] | None = None) -> None:
                 refresh_at_start=refresh_at_start,
                 on_switch_user=None if args.demo else switch_user,
                 pseudonym=session.current.pseudonym,
+                updates=None if args.demo else UpdateSource.real(),
                 user_section=None if signed is None else UserSection(store, signed, changed, partial(deleted, signed)),
             )
 

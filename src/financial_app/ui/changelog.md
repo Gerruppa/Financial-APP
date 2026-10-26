@@ -1,5 +1,10 @@
 # Historia zmian
 
+## Nieopublikowane
+
+### Nowe funkcje
+- KAPITA sprawdza w tle, czy na GitHubie jest nowsza wersja, i pod numerem wersji pokazuje „Dostępna wersja X”; kliknięcie pozwala zainstalować ją jednym przyciskiem: aplikacja pobiera instalator, zamyka się, aktualizuje i uruchamia ponownie, a dane zostają.
+
 ## 1.1.1 — 2026-10-26
 
 ### Zmiany

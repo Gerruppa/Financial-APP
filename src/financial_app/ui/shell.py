@@ -19,6 +19,7 @@ from financial_app.domain.ui_visibility import tab_key
 from financial_app.persistence.bond_data import bond_data_statuses
 from financial_app.persistence.quotes import last_successful_refresh
 from financial_app.sources.analizy import AnalizyFundProfiles, AnalizySearch, AnalizySource
+from financial_app.sources.app_update import UpdateSource
 from financial_app.sources.bankier import BankierSource
 from financial_app.sources.bond_data import BondDataSources, bond_data_due, refresh_bond_data
 from financial_app.sources.bossa import BossaSource
@@ -30,6 +31,7 @@ from financial_app.sources.portfolio_history import PortfolioHistory
 from financial_app.sources.prices import PriceSource, RefreshResult, last_refresh, refresh_prices, refresh_summary
 from financial_app.sources.valuation_snapshots import take_snapshot
 from financial_app.sources.yahoo import YahooSearch, YahooSource
+from financial_app.ui.app_update import update_notice
 from financial_app.ui.benchmarks import BenchmarksPage
 from financial_app.ui.bond_data import bond_data_status
 from financial_app.ui.bonds import BondsPage
@@ -128,6 +130,7 @@ def build_shell(
     on_switch_user: Callable[[], None] | None = None,
     pseudonym: str = "Demo",
     user_section: UserSection | None = None,
+    updates: UpdateSource | None = None,
 ) -> None:
     """Build the whole window; tabs are client-side sub-pages backed by the database at ``engine``.
 
@@ -142,7 +145,8 @@ def build_shell(
     ``fund_profiles`` its funds' TER, size and issuer (by default from Yahoo) and ``polish_profiles`` the TFI, group
     and benchmark of its Polish funds and GPW ETFs (by default from analizy.pl). ``on_switch_user`` returns to the login
     screen (the avatar's menu offers it only when given), ``pseudonym`` is the signed-in User's and
-    ``user_section`` the Użytkownik card of Ustawienia (none in the demo).
+    ``user_section`` the Użytkownik card of Ustawienia (none in the demo). ``updates`` checks GitHub for a newer
+    version after the start (none: no check).
     """
     rates = rates or NbpRates(engine)
     if sources is None:
@@ -372,6 +376,7 @@ def build_shell(
                 version_label(__version__)
                 # Opened here, in the menu that is never redrawn, as a dialog dies with the element it was opened in
                 announce_new_version(engine, __version__)
+                update_notice(updates, __version__)
         menu()
     events.subscribe(menu.refresh, {Change.LAYOUT})
 
