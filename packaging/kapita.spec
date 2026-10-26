@@ -21,9 +21,9 @@ a = Analysis(
     [str(ROOT / "main.py")],
     pathex=[str(ROOT / "src")],
     datas=datas,
-    # reportlab reads its settings module by name
+    # reportlab reads its settings module by name, and imports PIL (pillow) at start-up, so PIL stays in
     hiddenimports=["reportlab.rl_settings"],
-    excludes=["pytest", "mypy", "ruff", "PIL"],
+    excludes=["pytest", "mypy", "ruff"],
 )
 pyz = PYZ(a.pure)
 exe = EXE(
