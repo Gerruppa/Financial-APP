@@ -4,9 +4,9 @@ from datetime import date
 from decimal import Decimal
 
 from financial_app.domain.accounts import Account, AccountType
-from financial_app.domain.instruments import Instrument
+from financial_app.domain.instruments import Instrument, InstrumentType
 from financial_app.domain.save_warnings import CashShortfall, save_warnings, touched
-from financial_app.domain.transactions import Transaction, TransactionType
+from financial_app.domain.transactions import Transaction, TransactionType, security_transfer
 
 IKE, REGULAR = 1, 2
 ACCOUNTS = [
@@ -103,7 +103,7 @@ def _bond_buy(transaction_id: int, account_id: int) -> Transaction:
     )  # fmt: skip
 
 
-def test_a_bond_series_bought_on_a_regular_account_warns_to_use_a_bonds_account() -> None:
+def test_a_bond_series_bought_on_a_regular_account_warns_with_what_the_account_may_buy() -> None:
     series = _instrument(3, "EDO0336", bond_class=True)
 
     deposit = _saved(9, REGULAR, TransactionType.DEPOSIT, 1000, day=1)
@@ -112,18 +112,33 @@ def test_a_bond_series_bought_on_a_regular_account_warns_to_use_a_bonds_account(
 
     assert warnings.any
     assert warnings.messages("Zapisano") == [
-        "Obligacje EDO0336 kupiono na koncie XTB typu Regular, które ma zwykłe zasady podatku. "
-        "Do obligacji skarbowych detalicznych załóż konto typu Obligacje."
+        "Konto XTB typu Regular nie przyjmuje obligacji skarbowych detalicznych (EDO0336). "
+        "Załóż do nich konto typu Obligacje lub kup je na koncie IKE albo IKZE. "
+        "Na tym koncie można kupić: akcje, ETF, ETC i obligacje giełdowe, fundusze, kryptowaluty, "
+        "instrumenty typu Inne."
     ]
 
 
-def test_a_bond_series_bought_on_a_bonds_or_ike_account_or_deleted_warns_of_nothing() -> None:
+def test_a_buy_the_account_may_make_or_a_deleted_one_warns_of_nothing() -> None:
     series = _instrument(3, "EDO0336", bond_class=True)
     accounts = [*ACCOUNTS, Account("PKO obligacje", "PKO", AccountType.BONDS, ("PLN",), id=3)]
     bought = [_bond_buy(1, 3), _bond_buy(2, IKE)]
 
-    assert save_warnings([], bought, accounts, [series], [series], LIMITS).bonds_on_regular == ()
-    assert save_warnings([_bond_buy(4, REGULAR)], [], accounts, [series], [series], LIMITS).bonds_on_regular == ()
+    assert save_warnings([], bought, accounts, [series], [series], LIMITS).not_allowed == ()
+    assert save_warnings([_bond_buy(4, REGULAR)], [], accounts, [series], [series], LIMITS).not_allowed == ()
+
+
+def test_a_security_transferred_to_an_account_that_may_not_hold_it_warns_of_the_target() -> None:
+    etf = Instrument(
+        "VWCE", 1, "PLN", instrument_type=InstrumentType.ETF, id=5, asset_class_name="Akcje zagraniczne",
+        fallback_order=(),
+    )  # fmt: skip
+    bonds = Account("PKO obligacje", "PKO", AccountType.BONDS, ("PLN",), id=3)
+    transfer = security_transfer(REGULAR, date(2026, 3, 2), 3, 5, Decimal(1)).with_id(1)
+
+    warnings = save_warnings([], [transfer], [*ACCOUNTS, bonds], [etf], [etf], LIMITS)
+
+    assert [w.account_name for w in warnings.not_allowed] == ["PKO obligacje"]
 
 
 def test_bond_series_created_or_removed_by_the_save_are_named() -> None:

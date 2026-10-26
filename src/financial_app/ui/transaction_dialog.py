@@ -241,6 +241,7 @@ def open_transaction_dialog(
             bond_mode.visible = layout.bond_mode
             for bond_field in (bond_type, series_choice, series_text):
                 bond_field.visible = layout.bond_fields
+            instrument.set_options(dict(layout.instruments.options), value=layout.instruments.value)
             instrument.visible = layout.instrument
             price.visible = layout.price.visible
             price.props(f'label="{layout.price.label}"')

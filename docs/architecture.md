@@ -9,6 +9,7 @@ Layout (`src/financial_app/`, see ADR-0001):
 ## Entries
 
 - [`domain/accounts.py`](architecture/accounts.md)
+- [`domain/account_rules.py`](architecture/account-rules.md)
 - [`domain/spreadsheet_import.py`](architecture/spreadsheet-import.md)
 - [`sources/spreadsheet.py`](architecture/spreadsheet-workbook.md)
 - [XTB import and Reconciliation (L-17, spec 7)](architecture/xtb-import-reconciliation.md)

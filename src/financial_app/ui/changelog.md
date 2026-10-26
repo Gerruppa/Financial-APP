@@ -4,7 +4,7 @@
 
 ### Nowe funkcje
 - Okno transakcji jeszcze przed zapisem podpowiada, gdy na koncie zabraknie gotówki na zakup lub wypłatę, i ile saldo spadnie poniżej zera.
-- Zakup obligacji skarbowych na koncie typu Regular pokazuje ostrzeżenie (a w oknie transakcji podpowiedź), że do nich lepiej założyć konto typu Obligacje.
+- Konto przyjmuje tylko instrumenty swojego rodzaju: okno transakcji przy zakupie pokazuje tylko dozwolone instrumenty i odmawia reszty (np. obligacji skarbowych na koncie Regular, złota fizycznego na koncie Obligacje), a import i potwierdzane szkice ostrzegają zamiast odmawiać.
 - Aplikacja ma użytkowników: ekran logowania (pseudonim i hasło) przy każdym starcie, osobne dane dla każdego i przełączanie użytkownika w menu awatara; dotychczasowe dane trafiają do pierwszego utworzonego użytkownika.
 - Karta instrumentu pokazuje dla funduszy i ETF-ów TER, wielkość funduszu i emitenta według Yahoo (tylko to, co Yahoo podaje), a "Dodaj jako instrument" uzupełnia pusty TER.
 - Karta polskiego funduszu, PPK lub ETF-u z GPW pokazuje TFI, grupę i benchmark według analizy.pl (tylko to, co analizy.pl podaje).
