@@ -48,3 +48,5 @@ Name: "{autodesktop}\KAPITA"; Filename: "{app}\KAPITA.exe"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\KAPITA.exe"; Description: "{cm:LaunchProgram,KAPITA}"; Flags: nowait postinstall skipifsilent
+; The in-app update runs the installer silently (/SILENT), which skips the entry above: start the new version here
+Filename: "{app}\KAPITA.exe"; Flags: nowait; Check: WizardSilent
