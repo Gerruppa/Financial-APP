@@ -67,6 +67,7 @@ Layout (`src/financial_app/`, see ADR-0001):
 - [Theme: Jasny and Golden (#174)](architecture/theme.md)
 - [Discreet mode: blurred amounts](architecture/discreet.md)
 - [Undo bar: deleting a Transaction](architecture/undo.md)
+- [Notifications: the header bell (#176)](architecture/notifications.md)
 - [Saying of the day (#178)](architecture/sayings.md)
 - [Pomoc / FAQ (#156)](architecture/help-faq.md)
 - [`app.py`](architecture/app.md)
