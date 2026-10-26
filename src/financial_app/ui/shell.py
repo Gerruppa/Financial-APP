@@ -364,7 +364,8 @@ def build_shell(
         menu()
     events.subscribe(menu.refresh, {Change.LAYOUT})
 
-    with ui.page_sticky(position="bottom-right", x_offset=24, y_offset=24):
+    # z-index: cards holding a positioned zoom button would paint over the "+" when scrolled
+    with ui.page_sticky(position="bottom-right", x_offset=24, y_offset=24).style("z-index: 1000"):
         add_button = ui.button(
             icon="add", on_click=lambda: open_transaction_dialog(engine, rates, transactions_changed)
         )
