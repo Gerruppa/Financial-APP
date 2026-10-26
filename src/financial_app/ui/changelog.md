@@ -3,6 +3,7 @@
 ## Nieopublikowane
 
 ### Nowe funkcje
+- Podsumowanie sprzedaży i Wyniki mają przycisk „Eksportuj XLSX” z wyborem roku (domyślnie ostatni zakończony): plik ma kwoty jako liczby i prawdziwe daty, dotyczy wybranego konta lub wszystkich i w nazwie ma raport, rok i konto; rok bez danych daje plik z informacją, że nie ma czego raportować.
 - Dzwonek w nagłówku przypomina o tym, co czeka: szkice do zatwierdzenia (obligacje, lokaty, transakcje cykliczne), instrumenty bez wyceny po odświeżeniu, obligacje i lokaty zapadające w ciągu 30 dni oraz przekroczone limity wpłat; na dzwonku jest liczba nieprzeczytanych, znika po otwarciu listy i wraca, gdy przypomnienie się zmieni; dzwonek zastąpił liczniki „Do zatwierdzenia” w nagłówku.
 - Wyszukiwarka w nagłówku (Ctrl+K) jest też paletą poleceń: wpisanie słowa (np. „portf”, „motyw”, „dyskr”) pokazuje pasujące polecenia, a samo „>” wszystkie: przejście do dowolnej zakładki, dodanie transakcji, przełączenie motywu lub trybu dyskrecji, odświeżenie wycen.
 - Usunięcie transakcji nie pyta już o potwierdzenie: transakcja znika od razu, a przez kilka sekund na dole okna jest przycisk „Cofnij”, który przywraca ją na to samo miejsce.

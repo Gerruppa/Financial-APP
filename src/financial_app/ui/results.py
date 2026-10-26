@@ -18,10 +18,12 @@ from financial_app.domain.portfolio_history import DayValue
 from financial_app.domain.results import TABLE_PRESETS, PeriodResults, ResultsRow, period_results, results_rows
 from financial_app.persistence.accounts import list_accounts
 from financial_app.persistence.bond_data import load_cpi
+from financial_app.sources.report_export import export_results
 from financial_app.ui.changes import Change
 from financial_app.ui.charts import drawdown_chart
 from financial_app.ui.info import card_title
 from financial_app.ui.periods import PeriodChoice, period_selector
+from financial_app.ui.report_export import export_controls
 from financial_app.ui.view_scope import ViewScope
 
 DASH = "—"
@@ -64,8 +66,18 @@ class ResultsPage:
     def build(self) -> None:
         ui.label("Wyniki").classes("text-2xl font-bold")
         period_selector(self.period)
+        export_controls("results", self.engine, self.period.today(), self.export)
         with ui.column().classes("w-full max-w-screen-2xl").mark("results"):
             self.content()
+
+    def export(self, year: int) -> None:
+        """Hands the results of ``year`` for the View Scope to the browser as an XLSX file; History must be computed."""
+        days = self.history()
+        if days is None:
+            ui.notify("Historia jest jeszcze wyliczana, spróbuj za chwilę.", type="warning")
+            return
+        name, data = export_results(self.engine, year, self.scope.account_id, days, self.period.today())
+        ui.download(data, name)
 
     @ui.refreshable_method
     def content(self) -> None:

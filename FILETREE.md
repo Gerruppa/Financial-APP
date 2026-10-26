@@ -182,6 +182,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `profit_sources.py`: Splits the View Scope's result into price, FX, Dividends, interest, costs and taxes for the Dashboard waterfall
 - `reconciliation.py`: Pairs broker Transactions with entered ones and classifies matches, broker-only and entered-only; resolves choices
 - `recurring.py`: Recurring Rules: validated rule fields, occurrence schedule, and Drafts left after matching Transactions and skips
+- `report.py`: Report model: titled sections of typed rows and notes for a year and View Scope, built for Sell Summary and Wyniki; no file format
 - `results.py`: Wyniki tab figures: period XIRR, TWR, drawdown, volatility and fixed-period returns per Total and Account, from History
 - `sale_summary.py`: Sell Summary: Sale Pairs from the FIFO replay with attributed Dividends, and closed-position statistics (win rate, days, best, worst).
 - `save_warnings.py`: Warnings a Transactions save shows (cash shortfalls, over-limit contributions, unsplit Multi-asset, Instruments an Account may not hold); never blocks the save
@@ -295,6 +296,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `passive_income.py`: Loads the passive-income items: income received from Transactions and the coupons and Term Deposit interest not entered for the next 12 months.
 - `portfolio_history.py`: Fetches History prices and NBP Rates into cache and computes daily values, cached until invalidated
 - `prices.py`: Refreshes held Instruments' Quotes from price sources in fallback order and records failures
+- `report_export.py`: Renders a report model to an XLSX workbook (numbers, percents, real dates) and builds the Sell Summary and Wyniki files with their names
 - `spreadsheet.py`: Previews and imports Transactions and Instruments from the user's Inwestomat spreadsheet
 - `stooq.py`: Stooq history source for GPW stocks and indices; fetches daily closes via CSV with API key and browser proof-of-work check
 - `todays_view.py`: Loads today's portfolio state once (Transactions, Accounts, Positions, prices, NBP Rates) for the tabs and Dashboard to share
@@ -343,6 +345,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `price_sources.py`: Stooq API key storage and its Ustawienia section, kept in code but no longer shown there
 - `recurring_drafts.py`: Due Recurring Rule Drafts in the Transakcje tab; confirm, edit or skip each
 - `recurring_rules.py`: Ustawienia section listing Recurring Rules, with the rule dialog and its skipped occurrences
+- `report_export.py`: Year select and Eksportuj XLSX button shared by report tabs, handing the file to the browser
 - `reset.py`: Ustawienia Wyczyść dane card that clears the whole portfolio after a warning and typed confirmation
 - `results.py`: Wyniki tab page: result tiles, drawdown chart and per-Account results table under the period selector
 - `sale_summary.py`: Podsumowanie sprzedaży tab: Sale Pairs of the scope and period with the closed-position statistics tiles.
@@ -501,6 +504,9 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_recurring_domain.py`: Tests Recurring Rule schedules, Draft matching with Transactions, and rule validation messages
 - `test_recurring_repository.py`: Tests saving Recurring Rules and skips, confirming Drafts, and cascading deletes against the database
 - `test_recurring_ui.py`: UI tests for Recurring Rules in Ustawienia and their Drafts in Transakcje and the header
+- `test_report_domain.py`: Tests the report model: the year's Sale Pairs, Wyniki figures, one Account against all, an empty year
+- `test_report_export_files.py`: Tests the report XLSX files read back with openpyxl: numbers, dates, file names, empty year, formula-like text
+- `test_report_export_ui.py`: UI tests for the Eksportuj XLSX buttons of Sell Summary and Wyniki: default year, chosen year and View Scope
 - `test_results_domain.py`: Tests for the Wyniki tab's period results and fixed-period rows per Total and Account
 - `test_results_ui.py`: UI tests for the Wyniki tab: tiles, drawdown chart, results table and pending state
 - `test_sale_summary_domain.py`: Tests Sale Pairs across Lots, Splits and DRIPs, Dividend and coupon attribution, statistics and the view filter.

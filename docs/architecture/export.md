@@ -1,3 +1,7 @@
 # Export
 
 `domain/export.py` builds the Transakcje rows for export (every type, the commission with its "Waluta prowizji" (#124), the Actual and Tax Amounts, origin, comment); `sources/export.py` writes them to CSV (UTF-8 with BOM, `;`, decimal comma, day-first dates) or XLSX. The Transakcje tab's "Eksportuj CSV" and "Eksportuj XLSX" buttons hand the file to the browser.
+
+## Reports (#240, parent #239)
+
+`domain/report.py` is the report model: `Report` (name, title, `Section`s of typed rows, notes), `Percent` (a fraction shown as percent), `sale_summary_report` (the year's Sale Pairs from `sale_pairs` and `in_view`, with `sale_stats`) and `results_report` (`period_results` over the year and `results_rows` for the Total and each Account, from History's days passed in), `last_finished_year`; an empty year gives no sections and the note `NOTHING_TO_REPORT`. `sources/report_export.py` `report_to_xlsx` writes a sheet per section (numbers, `Percent` as `0.00%`, real dates `DD.MM.YYYY`, formula-like text kept as text) and `export_sale_summary` / `export_results` return the file name (`<report>-<year>[-<Account>].xlsx`, `safe_file_part` from `sources/export.py`) and bytes. `ui/report_export.py` `export_controls` is the year select (`<key>-export-year`, default the last finished year) and button (`<key>-export`) on the Sell Summary (`sale`) and Wyniki (`results`) tabs; Wyniki asks to wait while History is still computing. The domain imports no openpyxl; later report tickets add reports to the same model and renderer.

@@ -86,7 +86,7 @@ def export_transactions(
     names = {instrument_id: instrument.name for instrument_id, instrument in instruments.items()}
     transactions = view(scoped, filters, sort, accounts, names)
     rows = export_rows(transactions, accounts, instruments)
-    name = "transakcje" if account_id is None else f"transakcje-{_UNSAFE.sub('_', accounts[account_id])}"
+    name = "transakcje" if account_id is None else f"transakcje-{safe_file_part(accounts[account_id])}"
     if file_format == "csv":
         return f"{name}.csv", to_csv(COLUMNS, rows)
     return f"{name}.xlsx", to_xlsx(COLUMNS, rows)
@@ -94,3 +94,8 @@ def export_transactions(
 
 # Characters a Windows file name cannot hold
 _UNSAFE = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
+
+
+def safe_file_part(text: str) -> str:
+    """``text`` with the characters a Windows file name cannot hold replaced, for a file name."""
+    return _UNSAFE.sub("_", text)
