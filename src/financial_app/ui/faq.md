@@ -193,15 +193,6 @@ W **Ustawieniach** sekcja **Instrumenty bez wyceny** wymienia posiadane instrume
 
 Potem odśwież wyceny ikoną w nagłówku.
 
-## Jak ustawić klucz API Stooq? {#stooq}
-Przejdź do: /ustawienia
-
-Stooq dostarcza historię notowań i indeksów (np. WIG) do wykresów i benchmarków; bieżących cen nie daje. Pobieranie wymaga osobistego klucza:
-
-1. Wejdź na stooq.com/q/d/?s=wig&get_apikey i przepisz kod z obrazka.
-2. Skopiuj otrzymany klucz.
-3. W **Ustawieniach**, w sekcji **Źródła wycen**, wklej go w pole **Klucz API Stooq** i kliknij **Ustaw klucz**.
-
 # Wyniki i raporty
 
 ## Co oznaczają kafelki Dashboardu i przełącznik „Po podatku”? {#dashboard}

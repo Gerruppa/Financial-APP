@@ -41,7 +41,7 @@ def test_the_shipped_faq_covers_the_agreed_topics_and_links_only_to_tabs() -> No
     assert all(question.title and question.answer for question in questions)
     paths = {tab.path for tab in TABS}
     assert {question.goto for question in questions} - {None} <= paths
-    assert {"kryptowaluty", "obligacje", "import-xtb", "import-arkusza", "stooq"} <= {q.slug for q in questions}
+    assert {"kryptowaluty", "obligacje", "import-xtb", "import-arkusza"} <= {q.slug for q in questions}
 
 
 async def test_pomoc_is_the_last_tab_and_has_no_plus_button(user: User) -> None:
@@ -68,9 +68,9 @@ async def test_searching_bitcoin_leaves_the_crypto_question(user: User) -> None:
 
 
 async def test_przejdz_do_opens_the_tab_the_answer_is_about(user: User) -> None:
-    user.find(marker="faq-stooq-go").click()
+    user.find(marker="faq-konto-go").click()
 
-    await user.should_see(marker="stooq-api-key")
+    await user.should_see(marker="accounts")
     await user.should_not_see(marker="help")
 
 

@@ -14,7 +14,6 @@ from financial_app.ui.accounts import AccountsSection
 from financial_app.ui.contribution_limits import ContributionLimitsSection
 from financial_app.ui.import_sheet import SheetImportSection
 from financial_app.ui.instruments import AssetClassesSection, InstrumentsSection
-from financial_app.ui.price_sources import PriceSourcesSection
 from financial_app.ui.recurring_rules import RecurringRulesSection
 from financial_app.ui.reset import ClearDataSection
 from financial_app.ui.theme import ThemeChoice
@@ -87,7 +86,6 @@ def build_settings_page(
         ("limits", "Limity i reguły", lambda: _all(limits.build, rules.build)),
         ("asset-classes", "Klasy aktywów", asset_classes.build),
         ("instruments", "Instrumenty", build_instruments),
-        ("sources", "Źródła wycen", PriceSourcesSection(engine).build),
         ("import", "Import", build_imports),
         (
             "appearance",
