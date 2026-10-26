@@ -163,7 +163,7 @@ def build_shell(
     discreet = DiscreetChoice(engine)
     dashboard_page = DashboardPage(engine, rates, scope, period, lambda: shared.days, layout, planned)
     strategy_page = StrategyPage(engine, rates, scope, planned)
-    results_page = ResultsPage(engine, scope, period, lambda: shared.days)
+    results_page = ResultsPage(engine, rates, scope, period, lambda: shared.days)
     transactions_page = TransactionsPage(engine, rates, scope, events.publish)
     portfolio_page = PortfolioPage(engine, rates, scope)
     bonds_page = BondsPage(

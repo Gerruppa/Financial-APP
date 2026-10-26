@@ -18,7 +18,8 @@ from financial_app.domain.portfolio_history import DayValue
 from financial_app.domain.results import TABLE_PRESETS, PeriodResults, ResultsRow, period_results, results_rows
 from financial_app.persistence.accounts import list_accounts
 from financial_app.persistence.bond_data import load_cpi
-from financial_app.sources.report_export import export_results
+from financial_app.sources.current_prices import LatestRates
+from financial_app.sources.report_export import export_annual_pdf, export_results
 from financial_app.ui.changes import Change
 from financial_app.ui.charts import drawdown_chart
 from financial_app.ui.info import card_title
@@ -52,6 +53,7 @@ class ResultsPage:
     CHANGES = frozenset({Change.BOND_DATA, Change.SCOPE, Change.HISTORY})
 
     engine: Engine
+    rates: LatestRates
     scope: ViewScope
     period: PeriodChoice
     history: Callable[[], list[DayValue] | None]
@@ -66,7 +68,7 @@ class ResultsPage:
     def build(self) -> None:
         ui.label("Wyniki").classes("text-2xl font-bold")
         period_selector(self.period)
-        export_controls("results", self.engine, self.period.today(), self.export)
+        export_controls("results", self.engine, self.period.today(), self.export, self.export_pdf)
         with ui.column().classes("w-full max-w-screen-2xl").mark("results"):
             self.content()
 
@@ -77,6 +79,15 @@ class ResultsPage:
             ui.notify("Historia jest jeszcze wyliczana, spróbuj za chwilę.", type="warning")
             return
         name, data = export_results(self.engine, year, self.scope.account_id, days, self.period.today())
+        ui.download(data, name)
+
+    def export_pdf(self, year: int) -> None:
+        """Hands the annual PDF report of ``year`` for the View Scope to the browser; History must be computed."""
+        days = self.history()
+        if days is None:
+            ui.notify("Historia jest jeszcze wyliczana, spróbuj za chwilę.", type="warning")
+            return
+        name, data = export_annual_pdf(self.engine, year, self.scope.account_id, days, self.rates)
         ui.download(data, name)
 
     @ui.refreshable_method

@@ -3,6 +3,7 @@
 ## Nieopublikowane
 
 ### Nowe funkcje
+- Wyniki mają przycisk „Raport roczny PDF” z wyborem roku (domyślnie ostatni zakończony): jeden plik A4 ze stroną tytułową oraz sekcjami Wyniki roku, Portfolio na koniec roku, Sprzedaże (FIFO) i Dochód pasywny, z liczbami takimi jak w plikach XLSX, dla wybranego konta lub wszystkich; to zestawienie pomocnicze, nie zeznanie podatkowe.
 - Portfolio i Dochód pasywny mają przycisk „Eksportuj XLSX” z wyborem roku: Portfolio pokazuje pozycje i konta na koniec wybranego roku (dla bieżącego roku na dziś), a pozycja bez wyceny z tego dnia ma adnotację „brak wyceny” zamiast zgadniętej wartości; Dochód pasywny wypisuje otrzymane w roku dywidendy i odsetki; oba dotyczą wybranego konta lub wszystkich.
 - Podsumowanie sprzedaży i Wyniki mają przycisk „Eksportuj XLSX” z wyborem roku (domyślnie ostatni zakończony): plik ma kwoty jako liczby i prawdziwe daty, dotyczy wybranego konta lub wszystkich i w nazwie ma raport, rok i konto; rok bez danych daje plik z informacją, że nie ma czego raportować.
 - Dzwonek w nagłówku przypomina o tym, co czeka: szkice do zatwierdzenia (obligacje, lokaty, transakcje cykliczne), instrumenty bez wyceny po odświeżeniu, obligacje i lokaty zapadające w ciągu 30 dni oraz przekroczone limity wpłat; na dzwonku jest liczba nieprzeczytanych, znika po otwarciu listy i wraca, gdy przypomnienie się zmieni; dzwonek zastąpił liczniki „Do zatwierdzenia” w nagłówku.
