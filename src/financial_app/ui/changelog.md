@@ -3,6 +3,7 @@
 ## Nieopublikowane
 
 ### Nowe funkcje
+- Dzwonek w nagłówku przypomina o tym, co czeka: szkice do zatwierdzenia (obligacje, lokaty, transakcje cykliczne), instrumenty bez wyceny po odświeżeniu, obligacje i lokaty zapadające w ciągu 30 dni oraz przekroczone limity wpłat; kropka znika po otwarciu listy i wraca, gdy przypomnienie się zmieni.
 - Wyszukiwarka w nagłówku (Ctrl+K) jest też paletą poleceń: wpisanie słowa (np. „portf”, „motyw”, „dyskr”) pokazuje pasujące polecenia, a samo „>” wszystkie: przejście do dowolnej zakładki, dodanie transakcji, przełączenie motywu lub trybu dyskrecji, odświeżenie wycen.
 - Usunięcie transakcji nie pyta już o potwierdzenie: transakcja znika od razu, a przez kilka sekund na dole okna jest przycisk „Cofnij”, który przywraca ją na to samo miejsce.
 - Przycisk oka w nagłówku włącza tryb dyskrecji: kwoty i wykresy się rozmywają (najechanie myszą je odsłania), a wybór jest zapamiętany.

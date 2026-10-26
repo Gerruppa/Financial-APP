@@ -21,6 +21,9 @@ UI_HIDDEN = "ui.hidden"
 UI_THEME = "ui.theme"
 # Whether the discreet mode blurs the amounts, ``1`` or ``0`` (kept on clearing the data like ``UI_THEME``)
 UI_DISCREET = "ui.discreet"
+# The keys of the header bell's notifications the user has read (issue #176), a JSON list; kept on clearing the data,
+# as a key names a state (a count of Drafts, a refresh) that a stale one never matches again
+UI_NOTIFICATIONS_READ = "ui.notifications_read"
 # The Portfolio's "Grupuj" choice, a ``domain.portfolio_groups.Grouping`` (issue #198); kept on clearing the data
 PORTFOLIO_GROUPING = "ui.portfolio_grouping"
 # The last app version whose start was seen, so its first start opens "Co nowego" once (issue #200); kept on clearing

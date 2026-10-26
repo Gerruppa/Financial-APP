@@ -51,6 +51,7 @@ from financial_app.ui.instrument_card import (
 )
 from financial_app.ui.instruments import InstrumentsSection
 from financial_app.ui.multi_asset import MultiAssetPage
+from financial_app.ui.notifications import NotificationBell
 from financial_app.ui.palette import palette_commands
 from financial_app.ui.passive_income import PassiveIncomePage
 from financial_app.ui.periods import PeriodChoice
@@ -347,6 +348,12 @@ def build_shell(
         switcher = ScopeSwitcher(scope, lambda: shared.days)
         events.subscribe(switcher.refresh, switcher.CHANGES)
         build_discreet_button(discreet)
+        bell = NotificationBell(engine, rates)
+        bell.build()
+        events.subscribe(
+            bell.content.refresh,
+            {Change.TRANSACTIONS, Change.PRICES, Change.BOND_DATA, Change.TERM_DEPOSITS, Change.RECURRING_RULES},
+        )
         build_support_button()
         build_user_menu(pseudonym, theme, SETTINGS_PATH, HELP_PATH, on_switch_user)
 
