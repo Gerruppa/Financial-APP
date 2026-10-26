@@ -154,6 +154,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `catalyst.py`: Price per Catalyst bond from its percent of nominal plus accrued interest, and the indexed nominal of IZ bonds
 - `changelog.py`: Parses the changelog Markdown into Releases and decides when a new version's first start announces it
 - `charts.py`: Dashboard chart data from History and Transactions: value, profit, XIRR, class shares and dividends by year, per scope and period
+- `commands.py`: Command palette matching: finds commands by the start of a label or keyword word, and the ">" command-only mode.
 - `contribution_limits.py`: Contribution Limits rules: which transactions count towards each IKE, IKZE or OIPE yearly limit, bars and over-limit warnings
 - `currencies.py`: Currency code check and the NBP Rate value type, plus the error raised when a rate is missing.
 - `dashboard.py`: Dashboard totals, Account table, currency exposure and allocation from Transactions, prices, NBP Rates and History, plus estimated tax and profit by source
@@ -321,7 +322,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `discreet.py`: Discreet mode UI: page script and CSS that blur amounts and charts, plus the header eye toggle remembered in settings.
 - `faq.md`: FAQ text shown on the Pomoc tab; sections, questions with slugs, and links to tabs
 - `fund_details.py`: Builds the short fund detail texts (TER, Distribution Policy, domicile) shared by Instrument list and Portfolio
-- `header_search.py`: Header search field and results list of own Instruments and Search Results; opens the Instrument Card on a chosen row.
+- `header_search.py`: Header search field, its results list and the command palette; opens Instrument Cards or runs commands on a chosen row.
 - `help.py`: Help tab (Pomoc); shows the FAQ as collapsible questions with a search and Przejdź do buttons to tabs
 - `history.py`: Shared per-database History window state: background fetch, progress and failure status, cached days
 - `import_sheet.py`: Ustawienia import section that previews the Transakcje spreadsheet and saves it only after user decisions
@@ -331,6 +332,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `investment_goal.py`: Dashboard Investment Goal tile with progress and real forecast, and a dialog to set the goal as amount or FIRE
 - `login.py`: Login screen in the default Theme: pick a User and enter the password, create a User, explain a forgotten password
 - `multi_asset.py`: Multi-asset tab and split editor: edits an Instrument's Multi-asset Split and lists held Multi-asset Instruments by Asset Class
+- `palette.py`: The palette's commands: a tab jump for each tab, plus add transaction, theme, discreet mode, refresh prices and user switch.
 - `passive_income.py`: Dochód pasywny tab: year navigation, Monthly Income Goal, tiles, monthly chart and table with progress, forecast coupons.
 - `periods.py`: Period selector UI: preset buttons and custom range inputs, remembered per user and redrawing listeners
 - `portfolio.py`: Read-only Portfolio tab: per-Account cards with cash balances, valued Positions, Lots, FX result and dividends
@@ -409,6 +411,8 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_charts_domain.py`: Unit tests for the Dashboard chart data: value, profit, XIRR, class shares and dividends by year
 - `test_clear_data_repository.py`: Tests that clearing the portfolio removes user data and restores default Asset Classes
 - `test_clear_data_ui.py`: UI tests for the Wyczyść dane confirmation flow in Ustawienia
+- `test_command_palette_ui.py`: UI tests for the header search command palette: typed words, the ">" command mode and Enter running commands.
+- `test_commands_domain.py`: Unit tests for command palette matching: word starts, Polish letters, command mode and the list limit.
 - `test_contribution_limits_domain.py`: Tests which transactions count towards Contribution Limits, the bars and the over-limit warning
 - `test_contribution_limits_repository.py`: Tests saving, seeding and removing yearly Contribution Limits in the database
 - `test_contribution_limits_ui.py`: UI tests for Contribution Limits on the Dashboard, in Ustawienia and the warning after a save

@@ -14,6 +14,7 @@ from financial_app import __version__
 from financial_app.domain.formatting import format_datetime
 from financial_app.domain.instrument_search import CombinedSearch, InstrumentSearch
 from financial_app.domain.prices import ANALIZY, BANKIER, BOSSA, SOURCE_NAMES, YAHOO, refresh_due, source_reason
+from financial_app.domain.themes import Theme
 from financial_app.domain.ui_visibility import tab_key
 from financial_app.persistence.bond_data import bond_data_statuses
 from financial_app.persistence.quotes import last_successful_refresh
@@ -37,7 +38,7 @@ from financial_app.ui.changelog import announce_new_version, version_label
 from financial_app.ui.changes import Change, ChangeEvents, Redrawing
 from financial_app.ui.dashboard import DashboardPage
 from financial_app.ui.dialogs import install_movable_dialogs
-from financial_app.ui.discreet import DiscreetChoice, apply_discreet, build_discreet_button
+from financial_app.ui.discreet import DiscreetChoice, apply_discreet, build_discreet_button, switch_discreet
 from financial_app.ui.header_search import HeaderSearch
 from financial_app.ui.help import HELP_PATH, build_help_page
 from financial_app.ui.history import forget_history, history_status, shared_history
@@ -50,6 +51,7 @@ from financial_app.ui.instrument_card import (
 )
 from financial_app.ui.instruments import InstrumentsSection
 from financial_app.ui.multi_asset import MultiAssetPage
+from financial_app.ui.palette import palette_commands
 from financial_app.ui.passive_income import PassiveIncomePage
 from financial_app.ui.periods import PeriodChoice
 from financial_app.ui.portfolio import PortfolioPage
@@ -306,7 +308,17 @@ def build_shell(
         card_instruments,
         transactions_changed,
     )
-    header_search = HeaderSearch(engine, search, lambda subject: open_instrument_card(card, subject))
+    # The same search is the command palette (Ctrl+K, then a word or ">")
+    commands = palette_commands(
+        [(tab.label, tab.path, tab.icon) for tab in TABS],
+        go_to=ui.navigate.to,
+        add_transaction=lambda: open_transaction_dialog(engine, rates, transactions_changed),
+        switch_theme=lambda: theme.choose(Theme.LIGHT if theme.theme is Theme.GOLDEN else Theme.GOLDEN),
+        switch_discreet=lambda: switch_discreet(discreet),
+        refresh_prices=lambda: ui.timer(0, refresh_now, once=True),
+        switch_user=on_switch_user,
+    )
+    header_search = HeaderSearch(engine, search, lambda subject: open_instrument_card(card, subject), commands)
 
     with ui.header().classes("k-header items-center px-6").props("bordered=false").mark("header") as header:
         header_search.build()

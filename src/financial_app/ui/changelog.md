@@ -3,6 +3,7 @@
 ## Nieopublikowane
 
 ### Nowe funkcje
+- Wyszukiwarka w nagłówku (Ctrl+K) jest też paletą poleceń: wpisanie słowa (np. „portf”, „motyw”, „dyskr”) pokazuje pasujące polecenia, a samo „>” wszystkie: przejście do dowolnej zakładki, dodanie transakcji, przełączenie motywu lub trybu dyskrecji, odświeżenie wycen.
 - Usunięcie transakcji nie pyta już o potwierdzenie: transakcja znika od razu, a przez kilka sekund na dole okna jest przycisk „Cofnij”, który przywraca ją na to samo miejsce.
 - Przycisk oka w nagłówku włącza tryb dyskrecji: kwoty i wykresy się rozmywają (najechanie myszą je odsłania), a wybór jest zapamiętany.
 - Okno transakcji jeszcze przed zapisem podpowiada, gdy na koncie zabraknie gotówki na zakup lub wypłatę, i ile saldo spadnie poniżej zera; przy zakupie za gotówkę w walucie obcej proponuje zapłatę w złotych z przewalutowaniem.
