@@ -1,5 +1,6 @@
 import json
 import shutil
+import threading
 from pathlib import Path
 
 import pytest
@@ -213,3 +214,18 @@ def test_delete_tries_again_while_a_file_is_still_held(store: UserStore, monkeyp
 
     assert len(calls) == 2
     assert store.users() == []
+
+
+def test_delete_waits_for_a_file_that_a_slow_machine_releases_late(store: UserStore) -> None:
+    anna = store.create("Anna", "sekret")
+    held = (store.folder(anna) / "held.log").open("w")
+    # Windows refuses to delete a folder with an open file; on a busy machine the release can take a few seconds
+    release = threading.Timer(2.0, held.close)
+    release.start()
+    try:
+        store.delete(anna, "sekret")
+    finally:
+        release.join()
+
+    assert store.users() == []
+    assert not store.folder(anna).exists()
