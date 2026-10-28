@@ -9,14 +9,19 @@ Pure: ``sources/crypto.py`` reads the files and hands over their text.
 - OKX's "Order History" has one row per order with its average price in the quote coin (USDC, valued as USD). A
   Buy's fee is in the coin bought, so the quantity is net of it and the price per unit received is higher; a Sell's
   fee is in the quote coin, a commission. Only completed Spot orders count.
+- OKX's "Funding History" (Wallet Bill History) holds what the orders lack: a "Buy" outside Spot (valued by its
+  Amount-USD) and the coins deposited from or withdrawn to the user's own wallet, which become transfers; cash in
+  stablecoins and the moves to and from the trading account are ignored. Its times are in the zone named on its
+  first line (UTC+8), the Order History's are taken as UTC (a deposit then comes just before the sale it funds).
 """
 
 import csv
 import io
+import re
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field, replace
-from datetime import date, datetime
-from decimal import Decimal
+from datetime import date, datetime, timedelta
+from decimal import ROUND_DOWN, Decimal
 from enum import StrEnum
 from types import MappingProxyType
 
@@ -45,6 +50,9 @@ UNIT = Decimal("0.00000001")
 BINANCE_COLUMNS = ("User ID", "Time", "Account", "Operation", "Coin", "Change", "Remark")
 OKX_COLUMNS = ("Order ID", "Order Time", "Instrument", "Symbol", "Side", "Avg. Filled Price", "Fee Unit", "Status")
 OKX_FILL_COLUMNS = ("Order ID", "Trade ID", "Filled Price", "Trading Volume")
+OKX_FUNDING_COLUMNS = ("id", "Time", "Type", "Amount", "Symbol", "Amount-USD")
+# The funding ledger's moves between the funding and trading accounts change nothing in the portfolio
+OKX_FUNDING_IGNORED = ("To unified trading account", "From unified trading account")
 TRADE_OPERATIONS = ("Buy Crypto With Fiat", "Binance Convert")
 IGNORED_OPERATIONS = ("Transfer Between Spot and Funding", "Transfer Funds to Spot", "Transfer Funds to Funding Wallet")
 
@@ -78,13 +86,15 @@ class CryptoTrade:
 
 @dataclass(frozen=True)
 class CryptoTransfer:
-    """``quantity`` units of coin ``symbol`` withdrawn from the exchange to the user's own wallet on ``day``."""
+    """``quantity`` units of coin ``symbol`` withdrawn from the exchange to the user's own wallet on ``day``, or, when
+    ``incoming``, deposited from the wallet to the exchange."""
 
     exchange: str
     external_id: str
     day: date
     symbol: str
     quantity: Decimal
+    incoming: bool = False
 
 
 @dataclass(frozen=True)
@@ -106,6 +116,7 @@ def detect_exchange(text: str) -> str | None:
         (BINANCE, BINANCE_COLUMNS, 0),
         (OKX, OKX_COLUMNS, 1),
         (OKX, OKX_FILL_COLUMNS, 1),
+        (OKX, OKX_FUNDING_COLUMNS, 1),
     ):
         if _has_columns(text, columns, skip):
             return exchange
@@ -180,6 +191,40 @@ def parse_binance(text: str) -> CryptoRead:
         moved, *fees = sorted(amounts, reverse=True)
         transfers.append(CryptoTransfer(BINANCE, identify(f"{moment}-withdraw-{coin}"), _day(moment), coin, moved))
         unsupported.extend(Unsupported(_day(moment), f"Opłata sieciowa wypłaty: {fee} {coin}") for fee in fees)
+    return CryptoRead(sorted(trades, key=lambda t: t.day), unsupported, sorted(transfers, key=lambda t: t.day))
+
+
+def _funding_utc(text: str, moment: str) -> date:
+    """The UTC day of a Funding History time, in the zone its first line names (``Time Zone:UTC+8``)."""
+    zone = re.search(r"Time Zone:UTC([+-]\d+)", text.lstrip("﻿").partition("\n")[0])
+    offset = timedelta(hours=int(zone.group(1))) if zone else timedelta(0)
+    try:
+        return (datetime.strptime(moment.strip(), "%Y-%m-%d %H:%M:%S") - offset).date()
+    except ValueError:
+        raise CryptoError(f"Nieprawidłowa data „{moment}” w pliku giełdy.") from None
+
+
+def parse_okx_funding(text: str) -> CryptoRead:
+    """The trades and transfers of an OKX "Funding History" CSV and the rows it cannot import. Quantities are rounded
+    down to 8 places, so a transfer never exceeds what was bought; the price of a Buy is its USD value per unit."""
+    trades: list[CryptoTrade] = []
+    transfers: list[CryptoTransfer] = []
+    unsupported: list[Unsupported] = []
+    for row in _rows(text, 1):
+        kind, symbol = row["Type"].strip(), row["Symbol"].strip()
+        if kind in OKX_FUNDING_IGNORED or (symbol in USD_COINS and kind in ("Deposit", "Withdrawal")):
+            continue
+        day = _funding_utc(text, row["Time"])
+        amount = _number(row["Amount"], "Amount")
+        key = f"okx-funding-{row['id'].strip()}"
+        quantity = abs(amount).quantize(UNIT, rounding=ROUND_DOWN)
+        if kind == "Buy" and amount > 0:
+            price = (_number(row["Amount-USD"], "Amount-USD") / amount).quantize(UNIT)
+            trades.append(CryptoTrade(OKX, key, day, Side.BUY, symbol, quantity, price, USD))
+        elif kind in ("Deposit", "Withdrawal"):
+            transfers.append(CryptoTransfer(OKX, key, day, symbol, quantity, incoming=kind == "Deposit"))
+        else:
+            unsupported.append(Unsupported(day, f"{kind}: {amount} {symbol}"))
     return CryptoRead(sorted(trades, key=lambda t: t.day), unsupported, sorted(transfers, key=lambda t: t.day))
 
 
@@ -301,9 +346,11 @@ def crypto_draft(trade: CryptoTrade, context: CryptoContext) -> TransactionDraft
 def transfer_draft(
     transfer: CryptoTransfer, account_id: int, target_account_id: int, instrument: Instrument
 ) -> TransactionDraft:
-    """The Security Transfer of a withdrawal to the wallet's Account, with Origin "import od brokera" and its id."""
+    """The Security Transfer of a withdrawal to the wallet's Account (a deposit: from it), with Origin "import od
+    brokera" and its id. ``account_id`` is the exchange's Account, ``target_account_id`` the wallet's."""
+    source, target = (target_account_id, account_id) if transfer.incoming else (account_id, target_account_id)
     draft = security_transfer(
-        account_id, transfer.day, target_account_id, instrument.id, transfer.quantity, EXCHANGE_NAMES[transfer.exchange]
+        source, transfer.day, target, instrument.id, transfer.quantity, EXCHANGE_NAMES[transfer.exchange]
     )
     return replace(draft, origin=Origin.BROKER, external_id=transfer.external_id)
 
@@ -316,8 +363,10 @@ def parse_exchange(exchange: str, texts: Iterable[str]) -> CryptoRead:
         # OKX's "Trade Details" only give the exact quantities of the orders in its "Order History"
         files = list(texts)
         details = [text for text in files if _has_columns(text, OKX_FILL_COLUMNS, 1)]
+        funding = [text for text in files if _has_columns(text, OKX_FUNDING_COLUMNS, 1)]
         fills = {order: quantity for text in details for order, quantity in parse_okx_fills(text).items()}
-        reads = [parse_okx_orders(text, fills) for text in files if text not in details]
+        orders = [text for text in files if text not in details and text not in funding]
+        reads = [parse_okx_orders(text, fills) for text in orders] + [parse_okx_funding(text) for text in funding]
     return CryptoRead(
         [t for r in reads for t in r.trades],
         [u for r in reads for u in r.unsupported],

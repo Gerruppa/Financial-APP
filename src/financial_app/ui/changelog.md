@@ -2,6 +2,9 @@
 
 ## Nieopublikowane
 
+### Nowe funkcje
+- Import z OKX czyta też plik Funding History: zakupy spoza zleceń Spot stają się transakcjami kupna, a wpłaty i wypłaty monet przenoszą papiery między kontem OKX a kontem portfela razem z datami i kosztami zakupu; gotówka w stablecoinach i przelewy wewnętrzne OKX są pomijane.
+
 ### Poprawki
 - Import z OKX bierze dokładne ilości z pliku Trade Details (do 8 miejsc po przecinku) zamiast zaokrąglonych do 4 miejsc z Historii zleceń, więc sprzedaż nie przekracza już posiadanej ilości; zlecenie bez Trade Details trafia na listę z ostrzeżeniem.
 
