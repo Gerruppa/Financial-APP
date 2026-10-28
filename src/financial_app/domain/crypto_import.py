@@ -21,7 +21,7 @@ import re
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timedelta
-from decimal import ROUND_DOWN, Decimal
+from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal
 from enum import StrEnum
 from types import MappingProxyType
 
@@ -71,7 +71,8 @@ class CryptoTrade:
     """One buy or sell of ``quantity`` units of coin ``symbol`` (net of a fee taken from it) on ``day``.
 
     ``price`` is per unit in the ``quote`` coin, None when the export gives none (Binance); ``fee`` is a commission in
-    the quote coin."""
+    the quote coin. ``fee_is_value``: the whole value of the units (a network fee paid in the coin) is the commission,
+    so the sale moves no cash."""
 
     exchange: str
     external_id: str
@@ -82,6 +83,7 @@ class CryptoTrade:
     price: Decimal | None = None
     quote: str = ""
     fee: Decimal = Decimal(0)
+    fee_is_value: bool = False
 
 
 @dataclass(frozen=True)
@@ -190,7 +192,9 @@ def parse_binance(text: str) -> CryptoRead:
     for (moment, coin), amounts in withdrawals.items():
         moved, *fees = sorted(amounts, reverse=True)
         transfers.append(CryptoTransfer(BINANCE, identify(f"{moment}-withdraw-{coin}"), _day(moment), coin, moved))
-        unsupported.extend(Unsupported(_day(moment), f"Opłata sieciowa wypłaty: {fee} {coin}") for fee in fees)
+        for fee in fees:
+            key = identify(f"{moment}-fee-{coin}")
+            trades.append(CryptoTrade(BINANCE, key, _day(moment), Side.SELL, coin, fee, fee_is_value=True))
     return CryptoRead(sorted(trades, key=lambda t: t.day), unsupported, sorted(transfers, key=lambda t: t.day))
 
 
@@ -327,7 +331,11 @@ def crypto_draft(trade: CryptoTrade, context: CryptoContext) -> TransactionDraft
         if context.nbp_rate is None:
             raise CryptoError(f"Brak kursu NBP {currency} dla {format_date(trade.day)}.")
         rate = context.nbp_rate.rate
-    commission = (trade.fee * rate).quantize(GROSZ)
+    if trade.fee_is_value:
+        # A Sell must bring something, so the commission is the value less a grosz
+        commission = (trade.quantity * price * rate).quantize(GROSZ, rounding=ROUND_HALF_UP) - GROSZ
+    else:
+        commission = (trade.fee * rate).quantize(GROSZ)
     side = TransactionType.BUY if trade.side is Side.BUY else TransactionType.SELL
     draft = buy_or_sell(
         context.account_id,

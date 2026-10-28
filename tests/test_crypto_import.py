@@ -176,9 +176,17 @@ def test_a_withdrawal_moves_the_lots_to_the_wallet_account(
     apply_crypto(engine, file, FixedNbp(), prices, decisions, TODAY)
     kinds = [(t.transaction_type, t.account_id, t.target_account_id) for t in list_transactions(engine)]
     assert (TransactionType.SECURITY_TRANSFER, account, wallet) in kinds
-    # The wallet is remembered, and the withdrawal is not offered again
+    # The network fee (0.0001 BTC x 50000 USD x 4.0 = 20 PLN) is a sale of the coins that is all commission
+    (fee,) = [t for t in list_transactions(engine) if t.external_id and "-fee-" in t.external_id]
+    assert (fee.transaction_type, fee.account_id, fee.quantity, fee.commission) == (
+        TransactionType.SELL,
+        account,
+        Decimal("0.0001"),
+        Decimal("19.99"),
+    )
+    # The wallet is remembered, and the withdrawal and its fee are not offered again
     again = preview_crypto(engine, file, FixedNbp(), prices, CryptoDecisions(account))
-    assert (again.drafts, again.handled, again.wallet_id) == ([], 3, None)
+    assert (again.drafts, again.handled, again.wallet_id) == ([], 4, None)
     assert load_setting(engine, CRYPTO_WALLET + "binance") == str(wallet)
 
 

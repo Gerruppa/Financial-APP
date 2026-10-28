@@ -8,6 +8,9 @@
 ### Poprawki
 - Import z OKX bierze dokładne ilości z pliku Trade Details (do 8 miejsc po przecinku) zamiast zaokrąglonych do 4 miejsc z Historii zleceń, więc sprzedaż nie przekracza już posiadanej ilości; zlecenie bez Trade Details trafia na listę z ostrzeżeniem.
 
+### Zmiany
+- Opłata sieciowa wypłaty z Binance jest importowana jako sprzedaż tych monet w całości jako prowizja (zamiast trafiać na listę do wpisania ręcznie), więc konto giełdy nie zostaje z monetami, które zapłaciły opłatę.
+
 ## 1.2.0 — 2026-10-28
 
 ### Nowe funkcje
