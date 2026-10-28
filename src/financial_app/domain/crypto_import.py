@@ -14,7 +14,7 @@ Pure: ``sources/crypto.py`` reads the files and hands over their text.
 import csv
 import io
 from collections.abc import Iterable
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 from decimal import Decimal
 from enum import StrEnum
@@ -30,6 +30,7 @@ from financial_app.domain.transactions import (
     TransactionError,
     TransactionType,
     buy_or_sell,
+    security_transfer,
 )
 
 BINANCE = "binance"
@@ -74,6 +75,17 @@ class CryptoTrade:
 
 
 @dataclass(frozen=True)
+class CryptoTransfer:
+    """``quantity`` units of coin ``symbol`` withdrawn from the exchange to the user's own wallet on ``day``."""
+
+    exchange: str
+    external_id: str
+    day: date
+    symbol: str
+    quantity: Decimal
+
+
+@dataclass(frozen=True)
 class Unsupported:
     day: date
     note: str
@@ -83,6 +95,7 @@ class Unsupported:
 class CryptoRead:
     trades: list[CryptoTrade]
     unsupported: list[Unsupported]
+    transfers: list[CryptoTransfer] = field(default_factory=list)
 
 
 def detect_exchange(text: str) -> str | None:
@@ -122,6 +135,8 @@ def parse_binance(text: str) -> CryptoRead:
     unsupported: list[Unsupported] = []
     # A spot trade is a "Transaction Buy" and a "Transaction Fee" at the same second, in either order
     spot: dict[tuple[str, str], dict[str, Decimal]] = {}
+    # A withdrawal is one row, or two at the same second: the transfer and the network fee, the smaller one
+    withdrawals: dict[tuple[str, str], list[Decimal]] = {}
     seen: dict[str, int] = {}
 
     def identify(base: str) -> str:
@@ -133,7 +148,9 @@ def parse_binance(text: str) -> CryptoRead:
         change = _number(row["Change"], "Change")
         if operation in IGNORED_OPERATIONS:
             continue
-        if operation in ("Transaction Buy", "Transaction Fee"):
+        if operation == "Withdraw":
+            withdrawals.setdefault((moment, coin), []).append(abs(change))
+        elif operation in ("Transaction Buy", "Transaction Fee"):
             spot.setdefault((moment, coin), {})[operation] = change
         elif operation in TRADE_OPERATIONS and change != 0:
             side = Side.BUY if change > 0 else Side.SELL
@@ -148,7 +165,12 @@ def parse_binance(text: str) -> CryptoRead:
             continue
         net = bought + parts.get("Transaction Fee", Decimal(0))
         trades.append(CryptoTrade(BINANCE, identify(f"{moment}-spot-{coin}"), _day(moment), Side.BUY, coin, net))
-    return CryptoRead(sorted(trades, key=lambda t: t.day), unsupported)
+    transfers: list[CryptoTransfer] = []
+    for (moment, coin), amounts in withdrawals.items():
+        moved, *fees = sorted(amounts, reverse=True)
+        transfers.append(CryptoTransfer(BINANCE, identify(f"{moment}-withdraw-{coin}"), _day(moment), coin, moved))
+        unsupported.extend(Unsupported(_day(moment), f"Opłata sieciowa wypłaty: {fee} {coin}") for fee in fees)
+    return CryptoRead(sorted(trades, key=lambda t: t.day), unsupported, sorted(transfers, key=lambda t: t.day))
 
 
 def parse_okx_orders(text: str) -> CryptoRead:
@@ -243,8 +265,22 @@ def crypto_draft(trade: CryptoTrade, context: CryptoContext) -> TransactionDraft
     return replace(draft, origin=Origin.BROKER, external_id=trade.external_id)
 
 
+def transfer_draft(
+    transfer: CryptoTransfer, account_id: int, target_account_id: int, instrument: Instrument
+) -> TransactionDraft:
+    """The Security Transfer of a withdrawal to the wallet's Account, with Origin "import od brokera" and its id."""
+    draft = security_transfer(
+        account_id, transfer.day, target_account_id, instrument.id, transfer.quantity, EXCHANGE_NAMES[transfer.exchange]
+    )
+    return replace(draft, origin=Origin.BROKER, external_id=transfer.external_id)
+
+
 def parse_exchange(exchange: str, texts: Iterable[str]) -> CryptoRead:
     """Merge the reads of several files of one exchange."""
     parse = parse_binance if exchange == BINANCE else parse_okx_orders
     reads = [parse(text) for text in texts]
-    return CryptoRead([t for r in reads for t in r.trades], [u for r in reads for u in r.unsupported])
+    return CryptoRead(
+        [t for r in reads for t in r.trades],
+        [u for r in reads for u in r.unsupported],
+        [t for r in reads for t in r.transfers],
+    )

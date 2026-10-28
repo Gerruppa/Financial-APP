@@ -6,4 +6,6 @@
 
 `ui/crypto_import.py` `CryptoImportSection` is the card beside the XTB one in Ustawienia > Import (`crypto-path`, `crypto-load`, `crypto-account`, `crypto-instrument-<SYMBOL>`, `crypto-summary`, `crypto-item`, `crypto-unsupported`, `crypto-apply`).
 
-Decisions: Binance prices are an approximation (the day's Yahoo close, in the Instrument's currency), not what was paid; a withdrawal to an own wallet is not imported (no Security Withdrawal type), enter a Security Transfer by hand.
+A Binance "Withdraw" is a `CryptoTransfer` (`CryptoRead.transfers`): of the rows at the same second the largest is the amount moved, the smaller the network fee, listed as `Unsupported` (a loss to enter by hand). `transfer_draft` makes a broker-origin Security Transfer from the exchange's Account to the wallet Account, which keeps the Lots' dates and costs. The wallet Account is chosen in the card (`crypto-wallet`, shown only when the file has withdrawals not imported before), remembered per exchange under `CRYPTO_WALLET`; without it `CryptoPreview.needs_wallet` blocks applying. A transfer larger than what the Account holds fails the whole apply (nothing saved).
+
+Decisions: Binance prices are an approximation (the day's Yahoo close, in the Instrument's currency), not what was paid; the network fee of a withdrawal is not imported.

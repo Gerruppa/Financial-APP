@@ -15,6 +15,7 @@ from financial_app.domain.crypto_import import (
     detect_exchange,
     parse_binance,
     parse_okx_orders,
+    transfer_draft,
 )
 from financial_app.domain.currencies import NbpRate
 from financial_app.domain.instruments import Instrument
@@ -85,17 +86,40 @@ def test_binance_fee_before_buy_in_the_file_is_merged_too() -> None:
     assert [t.quantity for t in result.trades] == [Decimal("0.00408611")]
 
 
-def test_binance_transfers_between_wallets_are_ignored_and_withdrawals_unsupported() -> None:
+def test_binance_wallet_moves_are_ignored() -> None:
     result = parse_binance(
         binance(
             "2026-06-13 13:01:09,Spot,Transfer Between Spot and Funding,BTC,-0.00000037,",
             "2026-06-13 13:01:09,Funding,Transfer Between Spot and Funding,BTC,0.00000037,",
             "2026-06-13 13:13:33,Spot,Transfer Funds to Spot,BTC,0.00000037,",
-            "2026-06-13 13:20:47,Spot,Withdraw,BTC,-0.0465,Withdraw fee is included",
         )
     )
-    assert result.trades == []
-    assert [u.note for u in result.unsupported] == ["Withdraw: -0.0465 BTC"]
+    assert (result.trades, result.transfers, result.unsupported) == ([], [], [])
+
+
+def test_binance_withdrawal_is_a_transfer_and_its_network_fee_is_left_out() -> None:
+    result = parse_binance(
+        binance(
+            "2026-06-13 13:20:47,Spot,Withdraw,BTC,-0.0465,Withdraw fee is included",
+            "2026-06-13 13:20:47,Spot,Withdraw,BTC,-0.00012,Withdraw fee is included",
+            "2026-07-01 08:00:00,Spot,Withdraw,BTC,-0.01,Withdraw fee is included",
+        )
+    )
+    assert [(t.day, t.symbol, t.quantity) for t in result.transfers] == [
+        (date(2026, 6, 13), "BTC", Decimal("0.0465")),
+        (date(2026, 7, 1), "BTC", Decimal("0.01")),
+    ]
+    assert len({t.external_id for t in result.transfers}) == 2
+    assert all(t.external_id.startswith("binance-") for t in result.transfers)
+    assert [u.note for u in result.unsupported] == ["Opłata sieciowa wypłaty: 0.00012 BTC"]
+
+
+def test_a_transfer_becomes_a_security_transfer_to_the_wallet() -> None:
+    (transfer,) = parse_binance(binance("2026-06-13 13:20:47,Spot,Withdraw,BTC,-0.0465,")).transfers
+    draft = transfer_draft(transfer, 3, 4, instrument())
+    assert draft.transaction_type is TransactionType.SECURITY_TRANSFER
+    assert (draft.account_id, draft.target_account_id, draft.quantity) == (3, 4, Decimal("0.0465"))
+    assert (draft.instrument_id, draft.origin, draft.external_id) == (7, Origin.BROKER, transfer.external_id)
 
 
 def test_binance_ids_are_stable_and_distinct() -> None:
