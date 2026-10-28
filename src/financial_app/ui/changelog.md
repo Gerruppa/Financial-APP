@@ -1,5 +1,10 @@
 # Historia zmian
 
+## Nieopublikowane
+
+### Nowe funkcje
+- W Ustawieniach, w zakładce Import, można wczytać eksport CSV z Binance albo OKX: po wyborze konta i instrumentu aplikacja pokazuje transakcje kupna i sprzedaży kryptowalut i zapisuje je po zatwierdzeniu. Ceny z Binance, który ich nie podaje, są pobierane z Yahoo z dnia transakcji, a USDC z OKX liczone jak USD po kursie NBP.
+
 ## 1.1.3 — 2026-10-26
 
 ### Zmiany

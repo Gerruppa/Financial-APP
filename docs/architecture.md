@@ -13,6 +13,7 @@ Layout (`src/financial_app/`, see ADR-0001):
 - [`domain/spreadsheet_import.py`](architecture/spreadsheet-import.md)
 - [`sources/spreadsheet.py`](architecture/spreadsheet-workbook.md)
 - [XTB import and Reconciliation (L-17, spec 7)](architecture/xtb-import-reconciliation.md)
+- [Crypto exchange import (Binance, OKX)](architecture/crypto-import.md)
 - [`domain/transactions.py`](architecture/transactions.md)
 - [Saving Transactions (#110)](architecture/transaction-saving.md)
 - [Transaction form (#111)](architecture/transaction-form.md)

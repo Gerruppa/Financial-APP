@@ -104,7 +104,7 @@ class XtbImportSection:
             if preview.unmatched_accounts or preview.unmatched_tickers:
                 ui.label("Dopasuj rachunki i tickery, aby zobaczyć porównanie.").classes("k-muted")
                 return
-            describe = _Describer(names, instruments)
+            describe = Describer(names, instruments)
             for problem in preview.problems:
                 ui.label(f"{format_date(problem.entry.day)}: {problem.message}").classes("text-negative").mark(
                     "xtb-problem"
@@ -161,7 +161,7 @@ class XtbImportSection:
                 "xtb-all-mine"
             )
 
-    def _lists(self, preview: XtbPreview, describe: _Describer) -> None:
+    def _lists(self, preview: XtbPreview, describe: Describer) -> None:
         result = preview.reconciliation
         if result.different:
             ui.label("Różnią się (u góry wpisana, pod nią XTB):").classes("font-bold")
@@ -278,7 +278,7 @@ class XtbImportSection:
 
 
 @dataclass(frozen=True)
-class _Describer:
+class Describer:
     accounts: dict[int, str]
     instruments: dict[int, str]
 

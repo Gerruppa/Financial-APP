@@ -33,6 +33,9 @@ LAST_SEEN_VERSION = "ui.last_seen_version"
 XTB_PREFIX = "xtb_"
 XTB_ACCOUNT = XTB_PREFIX + "account:"
 XTB_TICKER = XTB_PREFIX + "ticker:"
+# The crypto import's remembered matches: an exchange's Account id, a coin's Instrument id (cleared with the XTB ones)
+CRYPTO_ACCOUNT = XTB_PREFIX + "crypto-account:"
+CRYPTO_COIN = XTB_PREFIX + "crypto-coin:"
 
 
 def load_setting(engine: Engine, key: str) -> str | None:
