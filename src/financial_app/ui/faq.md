@@ -93,7 +93,7 @@ Przejdź do: /transakcje
 2. W polu **Miejsca po przecinku w liczbie** ustaw, ile miejsc po przecinku ma ilość (do 8), np. 8 dla 0,00125 BTC.
 3. Kliknij **„+”**, wybierz **Typ** „Zakup”, ten instrument, ułamkową **Liczbę** i **Cenę**, potem **Zapisz**.
 
-Ceny kryptowalut pobiera Yahoo i przelicza je na złote. Kryptowaluty przyjmują konta typu Regular i Inne, ale nie IKE, IKZE ani Obligacje.
+Ceny kryptowalut pobiera Yahoo i przelicza je na złote. Kryptowaluty przyjmują konta typu Regular i Inne, ale nie IKE, IKZE ani Obligacje. Historię z Binance albo OKX możesz zaimportować z pliku CSV (**Ustawienia** → **Import**, pytanie „Jak zaimportować transakcje z Binance albo OKX?”).
 
 ## Jak kupić obligacje skarbowe (EDO, COI, ROR…) i skąd biorą się ich wartości? {#obligacje}
 Przejdź do: /obligacje
@@ -158,6 +158,25 @@ Przejdź do: /ustawienia
 3. Dopasuj rachunki XTB do kont w aplikacji i tickery do instrumentów (brakujący instrument utworzysz od razu).
 
 **Uzgadnianie** porównuje transakcje z XTB z tymi, które już wpisałeś: pokazuje te, które się różnią, te tylko w XTB i te tylko w aplikacji. Domyślnie obowiązuje wersja XTB (**Wszędzie wersja XTB**), a przy każdej pozycji możesz wybrać inaczej. Nic nie jest zapisywane przed kliknięciem **Zastosuj**. Ponowny import tego samego zestawienia nie dubluje transakcji.
+
+## Jak zaimportować transakcje z Binance albo OKX? {#import-krypto}
+Przejdź do: /ustawienia
+
+1. **Binance:** w Binance wyeksportuj **Historię transakcji** (Transaction History) do pliku .csv. **OKX:** wyeksportuj **Historię zleceń** (Order History); możesz wskazać cały folder eksportu, plik **Trade Details** zostanie pominięty.
+2. Przed importem dodaj w **Ustawieniach** → **Instrumenty** instrument kryptowaluty w **USD** z **Symbolem Yahoo** „BTC-USD” (patrz pytanie o zakup kryptowaluty w sekcji **Transakcje**). Aplikacja rozpozna go po symbolu; inaczej wybierzesz go albo utworzysz w karcie.
+3. W **Ustawieniach**, w zakładce **Import**, w karcie **Import z giełdy kryptowalut**, wpisz ścieżkę pliku albo folderu i kliknij **Wczytaj**.
+4. Wybierz **konto** dla giełdy (np. „Binance”; możesz utworzyć je od razu) i instrument dla każdej monety. Jeśli plik ma wypłaty, wybierz też **konto portfela**.
+5. Sprawdź listę transakcji i kliknij **Zastosuj**. Nic nie jest zapisywane wcześniej, a zapis jest „wszystko albo nic”.
+
+**Co jest importowane.**
+- *Binance:* zakupy za walutę tradycyjną (Buy Crypto With Fiat), Binance Convert (plus to zakup, minus sprzedaż) oraz zlecenia Spot (Transaction Buy). Prowizja pobrana w kupionej monecie zmniejsza ilość. Przelewy między portfelami Spot i Funding są pomijane.
+- *OKX:* zrealizowane zlecenia Spot kupna i sprzedaży (anulowane, niezrealizowane i inne rynki trafiają na listę nieobsługiwanych). Prowizja w kupionej monecie zmniejsza ilość, a prowizja w USDC jest prowizją transakcji, przeliczoną na złote.
+
+**Skąd ceny i kursy.** OKX podaje cenę, więc jest ona brana z pliku; USDC (i USDT) liczone jest jak dolar po kursie NBP z dnia roboczego przed transakcją. Binance **nie podaje cen**, więc aplikacja bierze zamknięcie z Yahoo z dnia transakcji (lub ostatnie z poprzednich siedmiu dni). To przybliżenie, nie cena, którą naprawdę zapłaciłeś, dlatego koszt zakupu i zysk ze sprzedaży z Binance są szacunkowe. Cena i kurs są widoczne w kwocie każdej pozycji na liście przed zapisem.
+
+**Wypłaty z Binance.** Wypłata na własny portfel jest zapisywana jako **przeniesienie papierów** z konta giełdy na wybrane konto portfela, razem z datami i kosztami zakupu (FIFO), więc późniejsza sprzedaż z portfela liczy się poprawnie. Z dwóch wypłat o tej samej sekundzie większa to przenoszona kwota, a mniejsza to **opłata sieciowa**: nie jest importowana, tylko trafia na listę nieobsługiwanych operacji do wpisania ręcznie (np. jako koszt). Konto portfela zapamiętujemy, a wypłata większa niż stan konta giełdy blokuje cały import.
+
+**Ponowny import** tego samego albo nakładającego się pliku pomija transakcje zapisane wcześniej. Import tylko dodaje: nie porównuje się z transakcjami wpisanymi ręcznie, więc wpisane ręcznie zakupy z giełdy usuń przed importem, żeby się nie zdublowały. Daty w plikach są brane tak, jak podaje giełda (bez przesunięcia strefy czasowej).
 
 ## Jak przenieść dane z arkusza „Portfolio tracker” inwestomat.eu? {#import-arkusza}
 Przejdź do: /ustawienia
