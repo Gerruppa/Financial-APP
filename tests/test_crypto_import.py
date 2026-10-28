@@ -119,18 +119,21 @@ def test_a_price_that_cannot_be_fetched_blocks_without_saving(
     assert list_transactions(engine) == []
 
 
-def test_a_folder_reads_order_history_and_skips_trade_details(
+def test_a_folder_takes_the_exact_quantity_from_trade_details(
     engine: Engine, account: int, bitcoin: int, tmp_path: Path
 ) -> None:
     folder = tmp_path / "okx"
     folder.mkdir()
     write(folder, "Order History.csv", OKX)
-    write(folder, "Trade Details.csv", "UID:1,Account Type:Main\n" + TRADES)
+    # The order says 0.003 BTC (rounded); the fill is worth 0.0034 BTC
+    fill = "9,1,2026-10-15 14:54:57,Spot,BTC-USDC,0.003,BTC,100000,USDC,340,USDC,taker,0,BTC\n"
+    write(folder, "Trade Details.csv", "UID:1,Account Type:Main\n" + TRADES + fill)
     file = read_crypto(folder)
-    assert (file.exchange, len(file.trades)) == ("okx", 1)
+    assert (file.exchange, len(file.trades), file.unsupported) == ("okx", 1, [])
     apply_crypto(engine, file, FixedNbp(), prices, CryptoDecisions(account), TODAY)
     (saved,) = list_transactions(engine)
-    assert saved.actual_amount == Decimal("1200.00")  # 0.003 x 100000 USD x 4.0
+    assert saved.quantity == Decimal("0.0034")
+    assert saved.actual_amount == Decimal("1360.00")  # 0.0034 x 100000 USD x 4.0
 
 
 def test_a_file_of_neither_exchange_is_refused(tmp_path: Path) -> None:

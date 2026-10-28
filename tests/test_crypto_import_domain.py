@@ -14,6 +14,7 @@ from financial_app.domain.crypto_import import (
     crypto_draft,
     detect_exchange,
     parse_binance,
+    parse_exchange,
     parse_okx_orders,
     transfer_draft,
 )
@@ -162,6 +163,59 @@ def test_okx_sell_fee_in_quote_is_a_commission() -> None:
         Decimal("79685.13"),
         Decimal("6.65"),
     )
+
+
+OKX_FILLS_HEADER = (
+    "UID:1,Account Type:Main\n"
+    "Order ID,Trade ID,Trade Time,Instrument,Symbol,Filled Amount,Filled Amount Unit,Filled Price,Fill Price Unit,"
+    "Trading Volume,Trading Volume Unit,taker/maker,Fee,Fee Unit\n"
+)
+
+
+def okx_fills(*rows: str) -> str:
+    return OKX_FILLS_HEADER + "\n".join(rows) + "\n"
+
+
+def test_okx_trade_details_are_detected_as_okx() -> None:
+    assert detect_exchange(okx_fills()) == OKX
+
+
+def test_okx_sell_quantity_comes_from_the_fills_not_the_rounded_order() -> None:
+    # The order says 0.0239 BTC, rounded to 4 places; its two fills are worth 0.02125 + 0.0026 BTC
+    orders = okx(
+        "2,2026-08-24 16:37:39,Spot,BTC-USDC,0.0,Sell,MARKET,0.0239,0.0239,USDC,79688.7,79685.13,USDC,0,-6.65,USDC,"
+        "COMPLETE,"
+    )
+    fills = okx_fills(
+        "2,11,2026-08-24 16:37:39,Spot,BTC-USDC,0.0213,BTC,100,USDC,2125,BTC,taker,0,USDC",
+        "2,12,2026-08-24 16:37:39,Spot,BTC-USDC,0.0026,BTC,200,USDC,520,BTC,taker,0,USDC",
+    )
+    result = parse_exchange(OKX, [orders, fills])
+    (trade,) = result.trades
+    assert trade.quantity == Decimal("23.85")
+    assert result.unsupported == []
+
+
+def test_okx_buy_quantity_from_fills_is_rounded_to_eight_places_before_the_fee() -> None:
+    orders = okx(
+        "1,2026-10-15 14:54:57,Spot,BTC-USDC,0.0,Buy,MARKET,300.0,0.0038,USDC,79805.6,79804.6,USDC,0,-0.00000752,BTC,"
+        "COMPLETE,"
+    )
+    fills = okx_fills("1,5,2026-10-15 14:54:57,Spot,BTC-USDC,0.0038,BTC,79804.6,USDC,299.99985623,USDC,taker,-1,BTC")
+    (trade,) = parse_exchange(OKX, [orders, fills]).trades
+    # 299.99985623 / 79804.6 = 0.00375918000002..., less the fee of 0.00000752
+    assert trade.quantity == Decimal("0.00375166")
+
+
+def test_okx_order_without_fills_keeps_the_rounded_quantity_and_says_so() -> None:
+    orders = okx(
+        "2,2026-08-24 16:37:39,Spot,BTC-USDC,0.0,Sell,MARKET,0.0239,0.0239,USDC,79688.7,79685.13,USDC,0,-6.65,USDC,"
+        "COMPLETE,"
+    )
+    result = parse_exchange(OKX, [orders])
+    assert [t.quantity for t in result.trades] == [Decimal("0.0239")]
+    assert len(result.unsupported) == 1
+    assert "Trade Details" in result.unsupported[0].note
 
 
 def test_okx_unfinished_and_non_spot_orders_are_unsupported() -> None:
