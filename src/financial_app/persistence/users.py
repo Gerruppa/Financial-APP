@@ -34,8 +34,9 @@ class User:
     password_hash: str | None = None
 
 
-_DELETE_ATTEMPTS = 5
-_DELETE_PAUSE = 0.3
+# Up to 10 s for a file to be released: on a busy machine 1.5 s was not enough
+_DELETE_ATTEMPTS = 20
+_DELETE_PAUSE = 0.5
 
 # What lay in the app-data folder before Users, with SQLite's journal files beside the database
 _LEGACY_FILES = (DATABASE_FILE, f"{DATABASE_FILE}-wal", f"{DATABASE_FILE}-shm", f"{DATABASE_FILE}-journal", LOG_FILE)
