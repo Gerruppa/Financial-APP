@@ -98,7 +98,7 @@ def test_binance_wallet_moves_are_ignored() -> None:
     assert (result.trades, result.transfers, result.unsupported) == ([], [], [])
 
 
-def test_binance_withdrawal_is_a_transfer_and_its_network_fee_is_left_out() -> None:
+def test_binance_withdrawal_is_a_transfer_and_its_network_fee_a_sale_for_commission() -> None:
     result = parse_binance(
         binance(
             "2026-06-13 13:20:47,Spot,Withdraw,BTC,-0.0465,Withdraw fee is included",
@@ -112,7 +112,31 @@ def test_binance_withdrawal_is_a_transfer_and_its_network_fee_is_left_out() -> N
     ]
     assert len({t.external_id for t in result.transfers}) == 2
     assert all(t.external_id.startswith("binance-") for t in result.transfers)
-    assert [u.note for u in result.unsupported] == ["Opłata sieciowa wypłaty: 0.00012 BTC"]
+    assert result.unsupported == []
+    # The network fee is coins gone from the exchange's Account: a sale whose whole value is the commission
+    (fee,) = result.trades
+    assert (fee.day, fee.side, fee.symbol, fee.quantity, fee.price) == (
+        date(2026, 6, 13),
+        Side.SELL,
+        "BTC",
+        Decimal("0.00012"),
+        None,
+    )
+    assert fee.fee_is_value and fee.external_id.startswith("binance-") and "-fee-" in fee.external_id
+
+
+def test_a_network_fee_draft_sells_the_coins_for_a_commission_of_their_whole_value() -> None:
+    (fee,) = parse_binance(
+        binance(
+            "2026-06-13 13:20:47,Spot,Withdraw,BTC,-0.0465,",
+            "2026-06-13 13:20:47,Spot,Withdraw,BTC,-0.00012,",
+        )
+    ).trades
+    draft = crypto_draft(fee, CryptoContext(3, instrument(), NBP, market_price=Decimal("50000")))
+    assert (draft.transaction_type, draft.quantity) == (TransactionType.SELL, Decimal("0.00012"))
+    # 0.00012 BTC x 50000 USD x 4.0 = 24 PLN, all of it commission but a grosz (a Sell must bring something)
+    assert draft.commission == Decimal("23.99")
+    assert draft.actual_amount == Decimal("0.01")
 
 
 def test_a_transfer_becomes_a_security_transfer_to_the_wallet() -> None:
