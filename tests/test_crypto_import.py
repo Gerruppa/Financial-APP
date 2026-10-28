@@ -17,7 +17,7 @@ from financial_app.persistence.accounts import add_account
 from financial_app.persistence.db import init_db
 from financial_app.persistence.instruments import add_instrument, list_asset_classes
 from financial_app.persistence.reset import clear_portfolio
-from financial_app.persistence.settings import CRYPTO_ACCOUNT, load_setting
+from financial_app.persistence.settings import CRYPTO_ACCOUNT, CRYPTO_WALLET, load_setting
 from financial_app.persistence.transactions import list_transactions
 from financial_app.sources.crypto import CryptoDecisions, apply_crypto, preview_crypto, read_crypto
 
@@ -149,3 +149,31 @@ def test_clearing_the_data_forgets_the_remembered_matches(
     apply_crypto(engine, file, FixedNbp(), prices, CryptoDecisions(account), TODAY)
     clear_portfolio(engine)
     assert load_setting(engine, CRYPTO_ACCOUNT + "binance") is None
+
+
+WITHDRAWAL = (
+    BINANCE
+    + "1,2026-03-01 10:00:00,Spot,Withdraw,BTC,-0.005,Withdraw fee is included\n"
+    + "1,2026-03-01 10:00:00,Spot,Withdraw,BTC,-0.0001,Withdraw fee is included\n"
+)
+
+
+def test_a_withdrawal_moves_the_lots_to_the_wallet_account(
+    engine: Engine, account: int, bitcoin: int, tmp_path: Path
+) -> None:
+    wallet = add_account(engine, AccountDraft("Portfel BTC", "Zimny", AccountType.REGULAR, ("PLN",))).id
+    file = read_crypto(write(tmp_path, "binance.csv", WITHDRAWAL))
+    blocked = preview_crypto(engine, file, FixedNbp(), prices, CryptoDecisions(account))
+    assert blocked.needs_wallet and blocked.blocked
+    with pytest.raises(CryptoError, match="portfela"):
+        apply_crypto(engine, file, FixedNbp(), prices, CryptoDecisions(account), TODAY)
+    assert list_transactions(engine) == []
+
+    decisions = CryptoDecisions(account, wallet)
+    apply_crypto(engine, file, FixedNbp(), prices, decisions, TODAY)
+    kinds = [(t.transaction_type, t.account_id, t.target_account_id) for t in list_transactions(engine)]
+    assert (TransactionType.SECURITY_TRANSFER, account, wallet) in kinds
+    # The wallet is remembered, and the withdrawal is not offered again
+    again = preview_crypto(engine, file, FixedNbp(), prices, CryptoDecisions(account))
+    assert (again.drafts, again.handled, again.wallet_id) == ([], 3, None)
+    assert load_setting(engine, CRYPTO_WALLET + "binance") == str(wallet)

@@ -18,10 +18,12 @@ from financial_app.domain.crypto_import import (
     CryptoError,
     CryptoRead,
     CryptoTrade,
+    CryptoTransfer,
     Unsupported,
     crypto_draft,
     detect_exchange,
     parse_exchange,
+    transfer_draft,
 )
 from financial_app.domain.currencies import MissingNbpRateError, NbpRate
 from financial_app.domain.formatting import format_date
@@ -30,7 +32,7 @@ from financial_app.domain.prices import YAHOO, PriceSourceError
 from financial_app.domain.transactions import PLN, TransactionDraft, TransactionError
 from financial_app.persistence.instruments import list_instruments
 from financial_app.persistence.reconciliation import AddBroker, apply_reconciliation, handled_broker_ids
-from financial_app.persistence.settings import CRYPTO_ACCOUNT, CRYPTO_COIN, load_setting, save_setting
+from financial_app.persistence.settings import CRYPTO_ACCOUNT, CRYPTO_COIN, CRYPTO_WALLET, load_setting, save_setting
 from financial_app.sources.spreadsheet import NbpLookup
 from financial_app.sources.yahoo import YahooSource
 
@@ -48,13 +50,16 @@ class CryptoFile:
     exchange: str
     trades: list[CryptoTrade]
     unsupported: list[Unsupported]
+    transfers: list[CryptoTransfer] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
 class CryptoDecisions:
-    """The user's choices: the Account the trades go into (None: not chosen) and an Instrument per coin symbol."""
+    """The user's choices: the Account the trades go into (None: not chosen), the wallet Account withdrawals are
+    transferred to and an Instrument per coin symbol."""
 
     account_id: int | None = None
+    wallet_id: int | None = None
     instruments: Mapping[str, int] = field(default_factory=dict)
 
 
@@ -68,16 +73,25 @@ class Problem:
 class CryptoPreview:
     file: CryptoFile
     account_id: int | None
+    # The Account withdrawals go to; None when the file has none or it is not chosen yet
+    wallet_id: int | None
     # Coins with no Instrument yet
     unmatched_coins: list[str]
     drafts: list[TransactionDraft]
     problems: list[Problem]
     # Trades imported before
     handled: int
+    # The withdrawals not imported before
+    transfers: list[CryptoTransfer]
 
     @property
     def blocked(self) -> bool:
-        return self.account_id is None or bool(self.unmatched_coins or self.problems)
+        return self.account_id is None or self.needs_wallet or bool(self.unmatched_coins or self.problems)
+
+    @property
+    def needs_wallet(self) -> bool:
+        """The file has withdrawals not imported before, and the Account they go to is not chosen."""
+        return bool(self.transfers) and self.wallet_id is None
 
 
 def read_crypto(path: Path) -> CryptoFile:
@@ -103,7 +117,7 @@ def read_crypto(path: Path) -> CryptoFile:
         raise CryptoError("Wskaż pliki jednej giełdy naraz.")
     ((exchange, texts),) = found.items()
     read: CryptoRead = parse_exchange(exchange, texts)
-    return CryptoFile(exchange, read.trades, read.unsupported)
+    return CryptoFile(exchange, read.trades, read.unsupported, read.transfers)
 
 
 def yahoo_prices(source: YahooSource) -> PriceLookup:
@@ -143,6 +157,13 @@ def _account(engine: Engine, exchange: str, decisions: CryptoDecisions) -> int |
     return int(saved) if saved is not None else None
 
 
+def _wallet(engine: Engine, exchange: str, decisions: CryptoDecisions) -> int | None:
+    if decisions.wallet_id is not None:
+        return decisions.wallet_id
+    saved = load_setting(engine, CRYPTO_WALLET + exchange)
+    return int(saved) if saved is not None else None
+
+
 def _instrument(
     engine: Engine, symbol: str, instruments: Mapping[int, Instrument], decisions: CryptoDecisions
 ) -> Instrument | None:
@@ -162,9 +183,12 @@ def preview_crypto(
     account_id = _account(engine, file.exchange, decisions)
     handled = handled_broker_ids(engine)
     trades = [trade for trade in file.trades if trade.external_id not in handled]
-    resolved = {trade.symbol: _instrument(engine, trade.symbol, instruments, decisions) for trade in trades}
+    transfers = [transfer for transfer in file.transfers if transfer.external_id not in handled]
+    symbols = [*(trade.symbol for trade in trades), *(transfer.symbol for transfer in transfers)]
+    resolved = {symbol: _instrument(engine, symbol, instruments, decisions) for symbol in symbols}
     unmatched = [symbol for symbol, found in resolved.items() if found is None]
 
+    wallet_id = _wallet(engine, file.exchange, decisions) if transfers else None
     drafts: list[TransactionDraft] = []
     problems: list[Problem] = []
     if account_id is not None:
@@ -176,7 +200,13 @@ def preview_crypto(
                 drafts.append(crypto_draft(trade, _context(trade, account_id, instrument, rates, prices)))
             except (TransactionError, PriceSourceError, MissingNbpRateError) as error:
                 problems.append(Problem(trade, str(error)))
-    return CryptoPreview(file, account_id, unmatched, drafts, problems, len(file.trades) - len(trades))
+        if wallet_id is not None:
+            for transfer in transfers:
+                found = resolved[transfer.symbol]
+                if found is not None:
+                    drafts.append(transfer_draft(transfer, account_id, wallet_id, found))
+    done = len(file.trades) + len(file.transfers) - len(trades) - len(transfers)
+    return CryptoPreview(file, account_id, wallet_id, unmatched, drafts, problems, done, transfers)
 
 
 def _context(
@@ -207,13 +237,15 @@ def apply_crypto(
     then.
     """
     preview = preview_crypto(engine, file, rates, prices, decisions)
-    if preview.account_id is None or preview.unmatched_coins:
-        raise CryptoError("Wybierz konto i instrument dla każdej monety.")
+    if preview.account_id is None or preview.needs_wallet or preview.unmatched_coins:
+        raise CryptoError("Wybierz konto, konto portfela dla wypłat i instrument dla każdej monety.")
     if preview.problems:
         first = preview.problems[0]
         raise CryptoError(f"Transakcja z {format_date(first.trade.day)}: {first.message}")
     apply_reconciliation(engine, [AddBroker(draft) for draft in preview.drafts], today)
     save_setting(engine, CRYPTO_ACCOUNT + file.exchange, str(preview.account_id))
+    if preview.wallet_id is not None:
+        save_setting(engine, CRYPTO_WALLET + file.exchange, str(preview.wallet_id))
     for symbol, instrument_id in decisions.instruments.items():
         save_setting(engine, CRYPTO_COIN + symbol, str(instrument_id))
     return preview

@@ -36,6 +36,7 @@ XTB_TICKER = XTB_PREFIX + "ticker:"
 # The crypto import's remembered matches: an exchange's Account id, a coin's Instrument id (cleared with the XTB ones)
 CRYPTO_ACCOUNT = XTB_PREFIX + "crypto-account:"
 CRYPTO_COIN = XTB_PREFIX + "crypto-coin:"
+CRYPTO_WALLET = XTB_PREFIX + "crypto-wallet:"
 
 
 def load_setting(engine: Engine, key: str) -> str | None:

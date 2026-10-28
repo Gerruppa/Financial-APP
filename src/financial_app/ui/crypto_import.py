@@ -57,6 +57,7 @@ class CryptoImportSection:
     prices: PriceLookup = field(default_factory=lambda: yahoo_prices(YahooSource()))
     file: CryptoFile | None = None
     account_id: int | None = None
+    wallet_id: int | None = None
     instruments: dict[str, int] = field(default_factory=dict)
 
     def build(self) -> None:
@@ -82,6 +83,7 @@ class CryptoImportSection:
             ui.notify(str(error), type="negative")
             return
         self.account_id = None
+        self.wallet_id = None
         self.instruments = {}
         self.render()
 
@@ -89,11 +91,12 @@ class CryptoImportSection:
         """Forget the file and choices, e.g. after the data was cleared: they name removed ids."""
         self.file = None
         self.account_id = None
+        self.wallet_id = None
         self.instruments = {}
         self.result.clear()
 
     def _decisions(self) -> CryptoDecisions:
-        return CryptoDecisions(self.account_id, dict(self.instruments))
+        return CryptoDecisions(self.account_id, self.wallet_id, dict(self.instruments))
 
     def render(self) -> None:
         assert self.file is not None
@@ -103,9 +106,10 @@ class CryptoImportSection:
         self.result.clear()
         with self.result:
             self._account(preview, names)
+            self._wallet(preview, names)
             self._coins(preview, instruments)
-            if preview.account_id is None or preview.unmatched_coins:
-                ui.label("Wybierz konto i instrumenty, aby zobaczyć transakcje.").classes("k-muted")
+            if preview.account_id is None or preview.needs_wallet or preview.unmatched_coins:
+                ui.label("Wybierz konta i instrumenty, aby zobaczyć transakcje.").classes("k-muted")
                 return
             for problem in preview.problems:
                 ui.label(f"{format_date(problem.trade.day)}: {problem.message}").classes("text-negative").mark(
@@ -140,6 +144,21 @@ class CryptoImportSection:
             label=f"Konto dla importu z {EXCHANGE_NAMES[preview.file.exchange]}",
             on_change=lambda e: self._choose_account(e.value),
         ).classes("w-full").mark("crypto-account")
+
+    def _wallet(self, preview: CryptoPreview, names: dict[int, str]) -> None:
+        if not preview.transfers:
+            return
+        ui.select(
+            names,
+            value=preview.wallet_id,
+            label="Konto portfela, na które trafiają wypłaty (przeniesienie papierów)",
+            on_change=lambda e: self._choose_wallet(e.value),
+        ).classes("w-full").mark("crypto-wallet")
+
+    def _choose_wallet(self, choice: int | None) -> None:
+        if choice is not None:
+            self.wallet_id = int(choice)
+            self.render()
 
     def _coins(self, preview: CryptoPreview, instruments: list[Instrument]) -> None:
         if not preview.unmatched_coins:
