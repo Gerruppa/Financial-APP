@@ -218,6 +218,68 @@ def test_okx_order_without_fills_keeps_the_rounded_quantity_and_says_so() -> Non
     assert "Trade Details" in result.unsupported[0].note
 
 
+OKX_FUNDING_HEADER = (
+    "UID:1,Account Type:Main,Time Zone:UTC+8\nid,Time,Type,Amount,Before Balance,After Balance,Symbol,Amount-USD\n"
+)
+
+
+def okx_funding(*rows: str) -> str:
+    return OKX_FUNDING_HEADER + "\n".join(rows) + "\n"
+
+
+FUNDING = okx_funding(
+    "10,2026-10-25 02:57:27,Buy,0.001555455453100900,0E-18,0.0015554554531,BTC,125.03166145",
+    "11,2026-10-25 02:57:27,To unified trading account,-0.00155545,0.0015554554531,5.4E-9,BTC,-125.03",
+    "12,2026-08-24 23:36:20,Deposit,0.023851040000000000,0E-18,0.02385104,BTC,1885.24641288",
+    "13,2026-08-24 23:36:20,To unified trading account,-0.02385104,0.02385104,0E-18,BTC,-1885.24",
+    "14,2026-07-06 01:33:31,Deposit,1994.721006,0E-18,1994.721006,USDC,1994.12113555",
+    "15,2026-07-05 13:54:36,From unified trading account,0.00916493,2.2E-10,0.0091649302,BNB,5.23558029",
+    "16,2026-07-05 13:54:45,Withdrawal,-0.009164930000000000,0.0091649302,2.2E-10,BNB,-5.23558029",
+)
+
+
+def test_okx_funding_history_is_detected_as_okx() -> None:
+    assert detect_exchange(FUNDING) == OKX
+
+
+def test_okx_funding_buy_is_a_trade_priced_from_its_usd_value_in_utc() -> None:
+    (trade,) = parse_exchange(OKX, [FUNDING]).trades
+    # 02:57 on 25 October in UTC+8 is the evening of 24 October in UTC
+    assert (trade.day, trade.side, trade.symbol, trade.quote, trade.external_id) == (
+        date(2026, 10, 24),
+        Side.BUY,
+        "BTC",
+        "USD",
+        "okx-funding-10",
+    )
+    # Rounded down, so it never exceeds what the exchange moved on
+    assert trade.quantity == Decimal("0.00155545")
+    assert trade.price is not None
+    assert (trade.quantity * trade.price).quantize(Decimal("0.01")) == Decimal("125.03")
+
+
+def test_okx_funding_deposit_and_withdrawal_are_transfers_and_stablecoins_and_moves_are_left_out() -> None:
+    result = parse_exchange(OKX, [FUNDING])
+    assert [(t.external_id, t.day, t.symbol, t.quantity, t.incoming) for t in result.transfers] == [
+        ("okx-funding-16", date(2026, 7, 5), "BNB", Decimal("0.00916493"), False),
+        ("okx-funding-12", date(2026, 8, 24), "BTC", Decimal("0.02385104"), True),
+    ]
+    assert result.unsupported == []
+
+
+def test_an_incoming_transfer_goes_from_the_wallet_to_the_exchange_account() -> None:
+    (transfer, *_) = [t for t in parse_exchange(OKX, [FUNDING]).transfers if t.incoming]
+    draft = transfer_draft(transfer, 3, 4, instrument())
+    assert (draft.account_id, draft.target_account_id, draft.quantity) == (4, 3, Decimal("0.02385104"))
+    assert draft.external_id == "okx-funding-12"
+
+
+def test_okx_funding_row_of_an_unknown_type_is_unsupported() -> None:
+    result = parse_exchange(OKX, [okx_funding("20,2026-07-05 13:54:36,Rebate,0.5,0,0.5,BTC,40")])
+    assert len(result.unsupported) == 1
+    assert "Rebate" in result.unsupported[0].note
+
+
 def test_okx_unfinished_and_non_spot_orders_are_unsupported() -> None:
     text = okx(
         "3,2026-08-24 16:37:39,Spot,BTC-USDC,0.0,Buy,LIMIT,0.1,0.0,USDC,79688.7,0,USDC,0,0,BTC,CANCELED,",

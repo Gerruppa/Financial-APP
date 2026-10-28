@@ -151,7 +151,7 @@ class CryptoImportSection:
         ui.select(
             names,
             value=preview.wallet_id,
-            label="Konto portfela, na które trafiają wypłaty (przeniesienie papierów)",
+            label="Konto portfela, na które trafiają wypłaty i z którego idą wpłaty (przeniesienie papierów)",
             on_change=lambda e: self._choose_wallet(e.value),
         ).classes("w-full").mark("crypto-wallet")
 

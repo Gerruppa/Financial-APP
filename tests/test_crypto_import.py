@@ -180,3 +180,38 @@ def test_a_withdrawal_moves_the_lots_to_the_wallet_account(
     again = preview_crypto(engine, file, FixedNbp(), prices, CryptoDecisions(account))
     assert (again.drafts, again.handled, again.wallet_id) == ([], 3, None)
     assert load_setting(engine, CRYPTO_WALLET + "binance") == str(wallet)
+
+
+def test_okx_deposits_from_the_wallet_fund_a_later_sale(
+    engine: Engine, account: int, bitcoin: int, tmp_path: Path
+) -> None:
+    wallet = add_account(engine, AccountDraft("Portfel BTC", "Zimny", AccountType.REGULAR, ("PLN",))).id
+    okx = add_account(engine, AccountDraft("OKX", "Krypto", AccountType.REGULAR, ("PLN",))).id
+    apply_crypto(
+        engine, read_crypto(write(tmp_path, "binance.csv", WITHDRAWAL)), FixedNbp(), prices,
+        CryptoDecisions(account, wallet), TODAY,
+    )  # fmt: skip
+    folder = tmp_path / "okx"
+    folder.mkdir()
+    sale = (
+        "10,2026-10-16 10:00:00,Spot,BTC-USDC,0,Sell,MARKET,0.0044,0.0044,USDC,100000,100000,USDC,0,0,USDC,COMPLETE,\n"
+    )
+    write(folder, "Order History.csv", OKX.replace("8,2026-10-14", "8,2026-10-14").rstrip("\n") + "\n" + sale)
+    fills = (
+        "9,1,2026-10-15 14:54:57,Spot,BTC-USDC,0.003,BTC,100000,USDC,340,USDC,taker,0,BTC\n"
+        "10,2,2026-10-16 10:00:00,Spot,BTC-USDC,0.0044,BTC,100000,USDC,440,USDC,taker,0,USDC\n"
+    )
+    write(folder, "Trade Details.csv", "UID:1,Account Type:Main\n" + TRADES + fills)
+    funding = (
+        "UID:1,Account Type:Main,Time Zone:UTC+8\n"
+        "id,Time,Type,Amount,Before Balance,After Balance,Symbol,Amount-USD\n"
+        "5,2026-10-14 20:00:00,Deposit,0.001,0,0.001,BTC,100\n"
+        "6,2026-10-14 20:00:00,To unified trading account,-0.001,0.001,0,BTC,-100\n"
+    )
+    write(folder, "OKX Funding History.csv", funding)
+
+    file = read_crypto(folder)
+    assert [(t.symbol, t.quantity, t.incoming) for t in file.transfers] == [("BTC", Decimal("0.001"), True)]
+    apply_crypto(engine, file, FixedNbp(), prices, CryptoDecisions(okx, wallet), TODAY)
+    deposit = next(t for t in list_transactions(engine) if t.external_id == "okx-funding-5")
+    assert (deposit.account_id, deposit.target_account_id, deposit.date) == (wallet, okx, date(2026, 10, 14))
