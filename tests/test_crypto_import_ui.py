@@ -65,7 +65,7 @@ async def test_choosing_the_account_then_applying_adds_the_order(engine: Engine,
     await user.should_not_see(marker="crypto-apply")
 
     user.find(marker="crypto-account", kind=ui.select).elements.pop().set_value(account.id)
-    await user.should_see("Do dodania: 1, już zaimportowane: 0, nieobsługiwane: 1.")
+    await user.should_see("Do dodania: 1, już zaimportowane: 0, nieobsługiwane: 2.")
     user.find(marker="crypto-apply").click()
 
     (saved,) = list_transactions(engine)

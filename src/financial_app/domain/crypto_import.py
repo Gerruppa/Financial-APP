@@ -13,11 +13,12 @@ Pure: ``sources/crypto.py`` reads the files and hands over their text.
 
 import csv
 import io
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 from decimal import Decimal
 from enum import StrEnum
+from types import MappingProxyType
 
 from financial_app.domain.currencies import NbpRate
 from financial_app.domain.formatting import format_date
@@ -43,6 +44,7 @@ UNIT = Decimal("0.00000001")
 
 BINANCE_COLUMNS = ("User ID", "Time", "Account", "Operation", "Coin", "Change", "Remark")
 OKX_COLUMNS = ("Order ID", "Order Time", "Instrument", "Symbol", "Side", "Avg. Filled Price", "Fee Unit", "Status")
+OKX_FILL_COLUMNS = ("Order ID", "Trade ID", "Filled Price", "Trading Volume")
 TRADE_OPERATIONS = ("Buy Crypto With Fiat", "Binance Convert")
 IGNORED_OPERATIONS = ("Transfer Between Spot and Funding", "Transfer Funds to Spot", "Transfer Funds to Funding Wallet")
 
@@ -100,14 +102,22 @@ class CryptoRead:
 
 def detect_exchange(text: str) -> str | None:
     """Which exchange's export the text is, by its header; None for anything else."""
-    lines = text.lstrip("﻿").splitlines()
-    for exchange, columns, skip in ((BINANCE, BINANCE_COLUMNS, 0), (OKX, OKX_COLUMNS, 1)):
-        if len(lines) <= skip:
-            continue
-        header = next(csv.reader([lines[skip]]), [])
-        if all(column in header for column in columns):
+    for exchange, columns, skip in (
+        (BINANCE, BINANCE_COLUMNS, 0),
+        (OKX, OKX_COLUMNS, 1),
+        (OKX, OKX_FILL_COLUMNS, 1),
+    ):
+        if _has_columns(text, columns, skip):
             return exchange
     return None
+
+
+def _has_columns(text: str, columns: tuple[str, ...], skip: int) -> bool:
+    lines = text.lstrip("﻿").splitlines()
+    if len(lines) <= skip:
+        return False
+    header = next(csv.reader([lines[skip]]), [])
+    return all(column in header for column in columns)
 
 
 def _rows(text: str, skip: int) -> list[dict[str, str]]:
@@ -173,8 +183,24 @@ def parse_binance(text: str) -> CryptoRead:
     return CryptoRead(sorted(trades, key=lambda t: t.day), unsupported, sorted(transfers, key=lambda t: t.day))
 
 
-def parse_okx_orders(text: str) -> CryptoRead:
-    """The trades of an OKX "Order History" CSV (its first line names the account) and the orders it cannot import."""
+def parse_okx_fills(text: str) -> dict[str, Decimal]:
+    """The exact quantity of each order in an OKX "Trade Details" CSV: the Order History rounds its Filled Amount to 4
+    places, so the quantity is each fill's Trading Volume over its Filled Price, summed over the fills and rounded to 8
+    places (the finest unit a coin is held in)."""
+    quantities: dict[str, Decimal] = {}
+    for row in _rows(text, 1):
+        price = _number(row["Filled Price"], "Filled Price")
+        if price == 0:
+            continue
+        order = row["Order ID"].strip()
+        quantities[order] = quantities.get(order, Decimal(0)) + _number(row["Trading Volume"], "Trading Volume") / price
+    return {order: quantity.quantize(UNIT) for order, quantity in quantities.items()}
+
+
+def parse_okx_orders(text: str, fills: Mapping[str, Decimal] = MappingProxyType({})) -> CryptoRead:
+    """The trades of an OKX "Order History" CSV (its first line names the account) and the orders it cannot import.
+    ``fills`` are the exact quantities by order id (``parse_okx_fills``); an order without one keeps the rounded Filled
+    Amount, which is listed as a warning."""
     trades: list[CryptoTrade] = []
     unsupported: list[Unsupported] = []
     for row in _rows(text, 1):
@@ -191,6 +217,13 @@ def parse_okx_orders(text: str) -> CryptoRead:
                 Unsupported(day, f"Zlecenie {label} ({row['Status'].strip()}) nie zostało zrealizowane.")
             )
             continue
+        order_id = row["Order ID"].strip()
+        if order_id in fills:
+            filled = fills[order_id]
+        else:
+            unsupported.append(
+                Unsupported(day, f"Zlecenie {label}: brak w Trade Details, ilość jest zaokrąglona do 4 miejsc.")
+            )
         price = _number(row["Avg. Filled Price"], "Avg. Filled Price")
         fee = abs(_number(row["Fee"] or "0", "Fee"))
         fee_unit = row["Fee Unit"].strip()
@@ -215,7 +248,7 @@ def _buy(
     of the quantity (the price paid stays), a fee in another coin is a commission."""
     if fee_unit != base:
         return filled, price, None if fee else Decimal(0)
-    net = filled - fee
+    net = (filled - fee).quantize(UNIT)
     return net, (filled * price / net).quantize(UNIT), Decimal(0)
 
 
@@ -277,8 +310,14 @@ def transfer_draft(
 
 def parse_exchange(exchange: str, texts: Iterable[str]) -> CryptoRead:
     """Merge the reads of several files of one exchange."""
-    parse = parse_binance if exchange == BINANCE else parse_okx_orders
-    reads = [parse(text) for text in texts]
+    if exchange == BINANCE:
+        reads = [parse_binance(text) for text in texts]
+    else:
+        # OKX's "Trade Details" only give the exact quantities of the orders in its "Order History"
+        files = list(texts)
+        details = [text for text in files if _has_columns(text, OKX_FILL_COLUMNS, 1)]
+        fills = {order: quantity for text in details for order, quantity in parse_okx_fills(text).items()}
+        reads = [parse_okx_orders(text, fills) for text in files if text not in details]
     return CryptoRead(
         [t for r in reads for t in r.trades],
         [u for r in reads for u in r.unsupported],

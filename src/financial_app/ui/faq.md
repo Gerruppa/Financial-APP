@@ -162,7 +162,7 @@ Przejdź do: /ustawienia
 ## Jak zaimportować transakcje z Binance albo OKX? {#import-krypto}
 Przejdź do: /ustawienia
 
-1. **Binance:** w Binance wyeksportuj **Historię transakcji** (Transaction History) do pliku .csv. **OKX:** wyeksportuj **Historię zleceń** (Order History); możesz wskazać cały folder eksportu, plik **Trade Details** zostanie pominięty.
+1. **Binance:** w Binance wyeksportuj **Historię transakcji** (Transaction History) do pliku .csv. **OKX:** wyeksportuj **Historię zleceń** (Order History); wskaż cały folder eksportu razem z plikiem **Trade Details**: Historia zleceń zaokrągla ilości do 4 miejsc po przecinku, a dokładne ilości (do 8 miejsc) aplikacja bierze z Trade Details. Bez tego pliku sprzedaż może wyjść większa niż to, co masz na koncie.
 2. Przed importem dodaj w **Ustawieniach** → **Instrumenty** instrument kryptowaluty w **USD** z **Symbolem Yahoo** „BTC-USD” (patrz pytanie o zakup kryptowaluty w sekcji **Transakcje**). Aplikacja rozpozna go po symbolu; inaczej wybierzesz go albo utworzysz w karcie.
 3. W **Ustawieniach**, w zakładce **Import**, w karcie **Import z giełdy kryptowalut**, wpisz ścieżkę pliku albo folderu i kliknij **Wczytaj**.
 4. Wybierz **konto** dla giełdy (np. „Binance”; możesz utworzyć je od razu) i instrument dla każdej monety. Jeśli plik ma wypłaty, wybierz też **konto portfela**.
