@@ -12,6 +12,7 @@ from financial_app.sources.nbp import NbpRates
 from financial_app.sources.prices import PriceSource
 from financial_app.ui.accounts import AccountsSection
 from financial_app.ui.contribution_limits import ContributionLimitsSection
+from financial_app.ui.crypto_import import CryptoImportSection
 from financial_app.ui.import_sheet import SheetImportSection
 from financial_app.ui.instruments import AssetClassesSection, InstrumentsSection
 from financial_app.ui.recurring_rules import RecurringRulesSection
@@ -62,12 +63,21 @@ def build_settings_page(
         on_account_added=accounts.account_list.refresh,
     )
 
+    crypto_import = CryptoImportSection(
+        engine,
+        rates,
+        instruments.open_dialog,
+        on_saved=lambda: _all(limits.refresh, on_transactions_changed),
+        on_account_added=accounts.account_list.refresh,
+    )
+
     def redraw() -> None:
         accounts.account_list.refresh()
         asset_classes.class_list.refresh()
         instruments.refresh()  # also redraws the Instruments without a price
         sheet_import.reset()
         xtb_import.reset()
+        crypto_import.reset()
         limits.refresh()
         rules.refresh()
         _all(on_rules_changed)  # the cleared rules' Drafts are no longer counted
@@ -79,6 +89,7 @@ def build_settings_page(
     def build_imports() -> None:
         sheet_import.build()
         xtb_import.build()
+        crypto_import.build()
 
     # One button per section: only the chosen section is on screen, so the page stays short.
     sections: list[tuple[str, str, Callable[[], None]]] = [
