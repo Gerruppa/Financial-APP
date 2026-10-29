@@ -4,7 +4,7 @@ It binds its widgets to the form model in ``domain/transaction_form.py`` (#111),
 Transaction Type shows and how its fields read, and saves through ``sources/transaction_saving.py`` (#110).
 """
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from datetime import date
 
 from nicegui import ui
@@ -45,6 +45,7 @@ from financial_app.sources.transaction_saving import delete_saved, restore_saved
 from financial_app.ui.dialogs import movable_dialog
 from financial_app.ui.multi_asset import open_split_dialog
 from financial_app.ui.recurring_rules import open_rule_dialog
+from financial_app.ui.restore_dialog import undo_delete
 from financial_app.ui.save_warnings import show_warnings
 from financial_app.ui.undo import offer_undo
 
@@ -414,18 +415,18 @@ def open_transaction_dialog(
                 return
             dialog.close()
             # The dialog asks for a Multi-asset Split itself, so it is no warning here
-            show_warnings(saved.warnings, unsplit=False)
+            show_warnings(saved.warnings, engine=engine, on_saved=on_saved, unsplit=False)
             on_saved()
             for unsplit in saved.warnings.unsplit:
                 open_split_dialog(engine, unsplit, on_saved)
 
-        def restore(deleted: Transaction) -> None:
+        def restore(deleted: Transaction, dropping: Sequence[int]) -> None:
             try:
-                restored = restore_saved(engine, deleted)
+                restored = restore_saved(engine, deleted, dropping)
             except TransactionError as exc:
                 ui.notify(f"Nie można cofnąć usunięcia. {exc}", type="negative", multi_line=True)
                 return
-            show_warnings(restored.warnings, "Przywrócono")
+            show_warnings(restored.warnings, "Przywrócono", engine=engine, on_saved=on_saved)
             on_saved()
 
         def delete() -> None:
@@ -437,10 +438,14 @@ def open_transaction_dialog(
                 error.text = f"Nie można usunąć tej transakcji. {exc}"
                 return
             dialog.close()
-            show_warnings(deleted.warnings, "Usunięto")
+            show_warnings(deleted.warnings, "Usunięto", engine=engine, on_saved=on_saved)
             on_saved()
-            # No "are you sure?": the bar offers to put the Transaction back for a few seconds
-            offer_undo("Usunięto transakcję.", lambda: restore(gone))
+            # No "are you sure?": the bar offers to put the Transaction back for a few seconds, first explaining what
+            # changed on its Accounts since, e.g. the covering Deposits saved from the warning above
+            offer_undo(
+                "Usunięto transakcję.",
+                lambda: undo_delete(engine, gone, deleted.value, lambda dropping: restore(gone, dropping)),
+            )
 
         with ui.row().classes("w-full items-center"):
             if transaction is not None:

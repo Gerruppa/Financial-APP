@@ -5,8 +5,14 @@ from decimal import Decimal
 
 from financial_app.domain.accounts import Account, AccountType
 from financial_app.domain.instruments import Instrument, InstrumentType
-from financial_app.domain.save_warnings import CashShortfall, save_warnings, touched
-from financial_app.domain.transactions import Transaction, TransactionType, security_transfer
+from financial_app.domain.save_warnings import CashShortfall, save_warnings, since_delete, touched
+from financial_app.domain.transactions import (
+    COVERING_COMMENT,
+    Transaction,
+    TransactionDraft,
+    TransactionType,
+    security_transfer,
+)
 
 IKE, REGULAR = 1, 2
 ACCOUNTS = [
@@ -66,8 +72,10 @@ def test_a_withdrawal_leaving_cash_negative_warns_per_account_and_currency_from_
 
     warnings = save_warnings(before, after, ACCOUNTS, [], [], LIMITS)
 
-    assert warnings.negative_cash == (CashShortfall("XTB", "PLN", Decimal(-50)),)
+    assert warnings.negative_cash == (CashShortfall("XTB", "PLN", Decimal(-50), REGULAR),)
     assert warnings.messages("Zapisano") == ["Zapisano, ale Saldo gotówki konta XTB jest ujemne: -50,00\xa0zł."]
+    # The fix the warning offers: the Account's covering Deposits (#267)
+    assert warnings.short_of_pln == (REGULAR,)
 
 
 def test_deleting_the_deposit_a_withdrawal_spends_warns_too() -> None:
@@ -150,3 +158,40 @@ def test_bond_series_created_or_removed_by_the_save_are_named() -> None:
 
     assert (warnings.series_created, warnings.series_dropped) == (("EDO0336",), ("EDO0236",))
     assert warnings.messages("Zapisano") == []
+
+
+def test_since_a_delete_names_what_changed_on_its_accounts_and_the_covering_deposits_apart() -> None:
+    """Undoing a delete explains each difference first (#267): the covering Deposits added meanwhile, what else was
+    added, changed or removed on the deleted Transaction's Accounts, and which Transaction took its id."""
+    deleted = _saved(3, IKE, TransactionType.DEPOSIT, 1000)
+    edited = _saved(1, IKE, TransactionType.WITHDRAWAL, 100)
+    gone = _saved(2, IKE, TransactionType.WITHDRAWAL, 50)
+    elsewhere = _saved(4, REGULAR, TransactionType.DEPOSIT, 10)
+    left = [edited, gone, elsewhere]
+    covering = TransactionDraft(IKE, date(2026, 3, 1), TransactionType.DEPOSIT, Decimal(150), COVERING_COMMENT)
+    added = _saved(5, IKE, TransactionType.DEPOSIT, 20)
+    now = [
+        _saved(1, IKE, TransactionType.WITHDRAWAL, 200),
+        covering.with_id(3),
+        added,
+        _saved(4, REGULAR, TransactionType.DEPOSIT, 99),
+    ]
+
+    since = since_delete(deleted, left, now)
+
+    assert since.covering == (covering.with_id(3),)
+    assert since.added == (added,)
+    assert since.changed == ((edited, now[0]),)
+    assert since.removed == (gone,)
+    assert since.taken_by == covering.with_id(3)
+    assert since.any
+
+
+def test_nothing_since_a_delete_needs_no_explanation() -> None:
+    deleted = _saved(2, IKE, TransactionType.DEPOSIT, 1000)
+    left = [_saved(1, IKE, TransactionType.WITHDRAWAL, 100)]
+
+    since = since_delete(deleted, left, [*left, _saved(3, REGULAR, TransactionType.DEPOSIT, 5)])
+
+    assert not since.any
+    assert since.taken_by is None

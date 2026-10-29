@@ -112,7 +112,9 @@ def test_deleting_a_usd_transfer_whose_dollars_the_target_spent_warns_of_its_usd
 
     warnings = save_warnings([exchange, transfer, spent], [exchange, spent], accounts, [], [], {})
 
-    assert CashShortfall("IKZE", "USD", Decimal(-100)) in warnings.negative_cash
+    assert CashShortfall("IKZE", "USD", Decimal(-100), IKZE) in warnings.negative_cash
+    # A foreign shortfall only warns: covering Deposits are PLN only (#267)
+    assert IKZE not in warnings.short_of_pln
 
 
 def test_a_usd_transfer_moves_its_nbp_value_in_net_deposits_and_its_dollars_in_history() -> None:

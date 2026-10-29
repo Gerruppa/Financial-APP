@@ -63,8 +63,6 @@ from financial_app.sources.yahoo import YahooSource
 
 # How far back a market price is looked for when the day itself has no close
 PRICE_WINDOW_DAYS = 7
-# The comment of a proposed Deposit, so the user can find and correct it
-DEPOSIT_COMMENT = "Uzupełnienie importu kryptowalut: wpłata pokrywająca zakupy"
 
 # A coin's market price in an Instrument's currency on a day: (Yahoo symbol, currency, day) -> price
 PriceLookup = Callable[[str, str, date], Decimal]
@@ -390,7 +388,7 @@ def proposed_deposits(engine: Engine, previews: Sequence[CryptoPreview]) -> dict
     paid by card, OKX's stablecoin deposits are left out), so its purchases would take the cash below zero."""
     known = [*list_transactions(engine), *(draft for preview in previews for draft in preview.drafts)]
     accounts = dict.fromkeys(preview.account_id for preview in previews if preview.account_id is not None)
-    proposed = {account_id: covering_deposits(known, account_id, DEPOSIT_COMMENT) for account_id in accounts}
+    proposed = {account_id: covering_deposits(known, account_id) for account_id in accounts}
     return {account_id: deposits for account_id, deposits in proposed.items() if deposits}
 
 

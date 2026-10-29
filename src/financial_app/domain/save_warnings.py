@@ -14,6 +14,7 @@ from financial_app.domain.formatting import format_amount, format_date, format_p
 from financial_app.domain.instruments import Instrument
 from financial_app.domain.term_deposits import TermDeposit, locked_capital
 from financial_app.domain.transactions import (
+    COVERING_COMMENT,
     PLN,
     Transaction,
     TransactionDraft,
@@ -33,6 +34,7 @@ class CashShortfall:
     account_name: str
     currency: str
     lowest: Decimal
+    account_id: int
 
     def message(self, done: str) -> str:
         cash = "Saldo gotówki" if self.currency == PLN else f"Saldo gotówki {self.currency}"
@@ -88,6 +90,12 @@ class SaveWarnings:
     def any(self) -> bool:
         return bool(self.over_limit or self.negative_cash or self.unsplit or self.locked_cash or self.not_allowed)
 
+    @property
+    def short_of_pln(self) -> tuple[int, ...]:
+        """The ids of the Accounts whose PLN cash went below zero: the warning offers their covering Deposits
+        (``domain/transactions.py`` ``covering_deposits``, PLN only, #267); a foreign shortfall only warns."""
+        return tuple(shortfall.account_id for shortfall in self.negative_cash if shortfall.currency == PLN)
+
     def messages(self, done: str, *, unsplit: bool = True) -> list[str]:
         """The Polish warnings; ``done`` opens a cash one ("Zapisano", "Usunięto"). Without ``unsplit`` the caller
         asks for the split itself (the transaction dialog opens the split dialog)."""
@@ -99,6 +107,50 @@ class SaveWarnings:
             names = ", ".join(instrument.name for instrument in self.unsplit)
             texts.append(f"Instrumenty Multi-asset bez podziału na klasy: {names}. Podaj go w zakładce Multi-asset.")
         return texts
+
+
+@dataclass(frozen=True)
+class SinceDelete:
+    """What changed on a deleted Transaction's Accounts between its delete and its undo, so the undo explains each
+    difference before restoring (#267): the covering Deposits added meanwhile (``COVERING_COMMENT``), which made up
+    for the cash it took and would count it twice; what else was added, changed (then, now) or removed; and the
+    Transaction that took its id (SQLite hands a freed last id to the next row), which blocks the restore unless it
+    is a covering Deposit the undo drops."""
+
+    covering: tuple[Transaction, ...] = ()
+    added: tuple[Transaction, ...] = ()
+    changed: tuple[tuple[Transaction, Transaction], ...] = ()
+    removed: tuple[Transaction, ...] = ()
+    taken_by: Transaction | None = None
+
+    @property
+    def any(self) -> bool:
+        return bool(self.covering or self.added or self.changed or self.removed or self.taken_by)
+
+
+def since_delete(deleted: Transaction, left: Sequence[Transaction], now: Sequence[Transaction]) -> SinceDelete:
+    """Compare ``left``, all the Transactions just after ``deleted`` was deleted, with those saved ``now``, on the
+    Accounts ``deleted`` moved cash or securities on."""
+    accounts = {deleted.account_id, deleted.target_account_id} - {None}
+
+    def on_accounts(t: Transaction) -> bool:
+        return t.account_id in accounts or t.target_account_id in accounts
+
+    then = {t.id: t for t in left}
+    current = {t.id: t for t in now}
+    added = [t for i, t in current.items() if i not in then and on_accounts(t)]
+    covering = [t for t in added if t.transaction_type is TransactionType.DEPOSIT and t.comment == COVERING_COMMENT]
+    return SinceDelete(
+        tuple(covering),
+        tuple(t for t in added if t not in covering),
+        tuple(
+            (t, current[i])
+            for i, t in then.items()
+            if i in current and current[i] != t and (on_accounts(t) or on_accounts(current[i]))
+        ),
+        tuple(t for i, t in then.items() if i not in current and on_accounts(t)),
+        current.get(deleted.id),
+    )
 
 
 def touched(before: Iterable[Transaction], after: Iterable[Transaction]) -> list[Transaction]:
@@ -218,5 +270,5 @@ def _negative_cash(
     for (account_id, currency), start in starts.items():
         lowest = lowest_cash_balance(after, account_id, start=start, currency=currency)
         if lowest < 0:
-            shortfalls.append(CashShortfall(names[account_id], currency, lowest))
+            shortfalls.append(CashShortfall(names[account_id], currency, lowest, account_id))
     return shortfalls

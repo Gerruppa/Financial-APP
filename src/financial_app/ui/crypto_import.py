@@ -10,7 +10,6 @@ for later unless the user chooses its other Account or "Pomiń". Nothing is save
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date
-from decimal import Decimal
 from pathlib import Path as FilePath
 
 from nicegui import ui
@@ -18,13 +17,12 @@ from sqlalchemy import Engine
 
 from financial_app.domain.accounts import Account
 from financial_app.domain.crypto_import import EXCHANGE_NAMES
-from financial_app.domain.formatting import format_count, format_date, format_pln, format_quantity
+from financial_app.domain.formatting import format_count, format_date, format_quantity
 from financial_app.domain.instruments import Instrument
-from financial_app.domain.transactions import TransactionDraft, TransactionError
+from financial_app.domain.transactions import COVERING_COMMENT, TransactionError
 from financial_app.persistence.accounts import list_accounts
 from financial_app.persistence.instruments import list_instruments
 from financial_app.sources.crypto import (
-    DEPOSIT_COMMENT,
     CryptoDecisions,
     CryptoFile,
     CryptoPreview,
@@ -40,7 +38,7 @@ from financial_app.sources.spreadsheet import NbpLookup
 from financial_app.sources.transaction_saving import checked_save
 from financial_app.sources.yahoo import YahooSource
 from financial_app.ui.accounts import open_account_dialog
-from financial_app.ui.save_warnings import show_warnings
+from financial_app.ui.save_warnings import deposit_choices, deposits_total, show_warnings
 from financial_app.ui.xtb_import import NEW, Describer
 
 OpenInstrument = Callable[..., None]
@@ -82,7 +80,7 @@ INSTRUCTIONS = (
 )
 # Step 5: what the import cannot know, for correcting it by hand afterwards
 HINTS = (
-    f"Wpłaty uzupełniające mają komentarz „{DEPOSIT_COMMENT}”: znajdziesz je w Transakcjach i poprawisz ich datę "
+    f"Wpłaty uzupełniające mają komentarz „{COVERING_COMMENT}”: znajdziesz je w Transakcjach i poprawisz ich datę "
     "albo kwotę, jeśli wiesz, kiedy i ile naprawdę wpłacałeś.",
     "Ceny zakupów z Binance to kurs zamknięcia z Yahoo z dnia transakcji, a nie cena, którą zapłaciłeś. Jeśli ją znasz "
     "(np. z wyciągu karty), popraw ją w Transakcjach.",
@@ -94,12 +92,6 @@ HINTS = (
     "Na koniec porównaj w Portfelu liczbę monet na każdym koncie z saldem na giełdzie i w Trezor Suite; różnicę "
     "zwykle tłumaczy brakujący albo starszy eksport.",
 )
-
-
-def _deposits_total(deposits: list[TransactionDraft]) -> str:
-    """E.g. "2 wpłaty, razem 3 200,00 zł"."""
-    total = sum((deposit.actual_amount for deposit in deposits), Decimal(0))
-    return f"{format_count(len(deposits), 'wpłatę', 'wpłaty', 'wpłat')}, razem {format_pln(total)}"
 
 
 @dataclass
@@ -269,15 +261,7 @@ class CryptoImportSection:
             ui.label("Gotówka na kontach importu nie spada poniżej zera: nic do uzupełnienia.").mark(
                 "crypto-no-deposits"
             )
-        for account_id, deposits in proposed.items():
-            ui.checkbox(
-                f"{names.get(account_id, '')}: dodaj {_deposits_total(deposits)}",
-                value=account_id not in self.no_deposits,
-                on_change=lambda e, a=account_id: self._keep_deposits(a, bool(e.value)),
-            ).mark(f"crypto-deposits-{account_id}")
-            with ui.column().classes("gap-0 pl-8"):
-                for deposit in deposits:
-                    ui.label(f"{format_date(deposit.date)}: {format_pln(deposit.actual_amount)}").classes("text-sm")
+        deposit_choices(proposed, names, lambda a: a not in self.no_deposits, self._keep_deposits, "crypto-deposits")
         later = sum(len(preview.later) for preview in previews)
         if later:
             transfers = format_count(later, "przeniesienie", "przeniesienia", "przeniesień")
@@ -305,7 +289,7 @@ class CryptoImportSection:
             self._summary(preview, describe)
         deposits = kept_deposits(self.engine, previews, self._decisions())
         if deposits:
-            ui.label(f"Uzupełnienia: {_deposits_total(deposits)}.").mark("crypto-deposits-summary")
+            ui.label(f"Uzupełnienia: {deposits_total(deposits)}.").mark("crypto-deposits-summary")
         actions = sum(len(preview.actions) for preview in previews) + len(deposits)
         apply = ui.button(f"Zastosuj ({actions})", icon="save", on_click=self.apply).props("no-caps")
         apply.mark("crypto-apply")
@@ -475,7 +459,7 @@ class CryptoImportSection:
         added = sum(len(preview.drafts) for preview in applied.value)
         count = format_count(added, "transakcję", "transakcje", "transakcji")
         ui.notify(f"Zaimportowano {count} kryptowalut.", type="positive")
-        show_warnings(applied.warnings)
+        show_warnings(applied.warnings, engine=self.engine, on_saved=self.on_saved)
         if self.on_saved is not None:
             self.on_saved()
         self.done = True
