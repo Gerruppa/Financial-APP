@@ -1,4 +1,4 @@
-"""Reading a crypto exchange's CSV export (Binance, OKX) into Transactions (spec 7).
+"""Reading a crypto exchange's CSV export (Binance, OKX) or a Trezor wallet's into Transactions (spec 7).
 
 Pure: ``sources/crypto.py`` reads the files and hands over their text.
 
@@ -13,14 +13,16 @@ Pure: ``sources/crypto.py`` reads the files and hands over their text.
   Amount-USD) and the coins deposited from or withdrawn to the user's own wallet, which become transfers; cash in
   stablecoins and the moves to and from the trading account are ignored. Its times are in the zone named on its
   first line (UTC+8), the Order History's are taken as UTC (a deposit then comes just before the sale it funds).
+- A Trezor Suite export lists the wallet's receipts and sends, mostly the other side of an exchange's withdrawal or
+  deposit already saved: ``pair_transfers`` finds that Security Transfer, so the wallet's transfer adds nothing.
 """
 
 import csv
 import io
 import re
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal
 from enum import StrEnum
 from types import MappingProxyType
@@ -41,7 +43,9 @@ from financial_app.domain.transactions import (
 
 BINANCE = "binance"
 OKX = "okx"
-EXCHANGE_NAMES = {BINANCE: "Binance", OKX: "OKX"}
+# A hardware wallet, not an exchange: its Account is the wallet, its transfers come from or go to other Accounts
+TREZOR = "trezor"
+EXCHANGE_NAMES = {BINANCE: "Binance", OKX: "OKX", TREZOR: "Trezor"}
 # Stablecoins that count as the US dollar
 USD_COINS = ("USD", "USDC", "USDT")
 USD = "USD"
@@ -51,6 +55,11 @@ BINANCE_COLUMNS = ("User ID", "Time", "Account", "Operation", "Coin", "Change", 
 OKX_COLUMNS = ("Order ID", "Order Time", "Instrument", "Symbol", "Side", "Avg. Filled Price", "Fee Unit", "Status")
 OKX_FILL_COLUMNS = ("Order ID", "Trade ID", "Filled Price", "Trading Volume")
 OKX_FUNDING_COLUMNS = ("id", "Time", "Type", "Amount", "Symbol", "Amount-USD")
+TREZOR_COLUMNS = ("Timestamp", "Type", "Transaction ID", "Fee", "Fee unit", "Amount", "Amount unit")
+# How far a wallet transfer may be from the saved transfer it is the other side of: a deposit reaches an exchange
+# days after it left the wallet, and the exchange's amount may include its network fee
+PAIR_DAYS = 7
+PAIR_TOLERANCE = Decimal("0.01")
 # The funding ledger's moves between the funding and trading accounts change nothing in the portfolio
 OKX_FUNDING_IGNORED = ("To unified trading account", "From unified trading account")
 TRADE_OPERATIONS = ("Buy Crypto With Fiat", "Binance Convert")
@@ -119,6 +128,7 @@ def detect_exchange(text: str) -> str | None:
         (OKX, OKX_COLUMNS, 1),
         (OKX, OKX_FILL_COLUMNS, 1),
         (OKX, OKX_FUNDING_COLUMNS, 1),
+        (TREZOR, TREZOR_COLUMNS, 0),
     ):
         if _has_columns(text, columns, skip):
             return exchange
@@ -229,6 +239,37 @@ def parse_okx_funding(text: str) -> CryptoRead:
             transfers.append(CryptoTransfer(OKX, key, day, symbol, quantity, incoming=kind == "Deposit"))
         else:
             unsupported.append(Unsupported(day, f"{kind}: {amount} {symbol}"))
+    return CryptoRead(sorted(trades, key=lambda t: t.day), unsupported, sorted(transfers, key=lambda t: t.day))
+
+
+def parse_trezor(text: str) -> CryptoRead:
+    """The transfers of a Trezor Suite CSV: a RECV comes into the wallet, a SENT leaves it and its network fee, paid
+    by the wallet, is a sale for commission (as a Binance withdrawal's); a SELF (to the wallet's own address) only
+    pays its fee. The day is the UTC one of its Timestamp; a transaction's second row in the file gets "-2"."""
+    trades: list[CryptoTrade] = []
+    transfers: list[CryptoTransfer] = []
+    unsupported: list[Unsupported] = []
+    seen: dict[str, int] = {}
+    for row in _rows(text, 0):
+        try:
+            day = datetime.fromtimestamp(int(row["Timestamp"].strip()), UTC).date()
+        except ValueError:
+            raise CryptoError(f"Nieprawidłowa data „{row['Timestamp']}” w pliku portfela.") from None
+        kind, symbol = row["Type"].strip(), row["Amount unit"].strip()
+        amount = _number(row["Amount"], "Amount")
+        if kind not in ("RECV", "SENT", "SELF"):
+            unsupported.append(Unsupported(day, f"{kind}: {amount} {symbol}"))
+            continue
+        transaction = row["Transaction ID"].strip()
+        seen[transaction] = seen.get(transaction, 0) + 1
+        key = f"trezor-{transaction}" + (f"-{seen[transaction]}" if seen[transaction] > 1 else "")
+        if kind != "SELF":
+            transfers.append(CryptoTransfer(TREZOR, key, day, symbol, abs(amount), incoming=kind == "RECV"))
+        if kind != "RECV" and row["Fee"].strip():
+            fee = _number(row["Fee"], "Fee")
+            trades.append(
+                CryptoTrade(TREZOR, f"{key}-fee", day, Side.SELL, row["Fee unit"].strip(), fee, fee_is_value=True)
+            )
     return CryptoRead(sorted(trades, key=lambda t: t.day), unsupported, sorted(transfers, key=lambda t: t.day))
 
 
@@ -363,10 +404,59 @@ def transfer_draft(
     return replace(draft, origin=Origin.BROKER, external_id=transfer.external_id)
 
 
+def pair_transfers(
+    transfers: Sequence[CryptoTransfer],
+    known: Sequence[TransactionDraft],
+    account_id: int,
+    other_id: int | None,
+    instrument_ids: Mapping[str, int],
+) -> dict[str, TransactionDraft]:
+    """The known Security Transfer (saved, or added by another export of the same import) each transfer of
+    ``account_id`` is the other side of, by the transfer's external id: one into the Account for a receipt, out of it
+    for a send, from or to ``other_id`` (an exchange's wallet; None: any other Account, for the wallet's own export),
+    of the coin's Instrument, within ``PAIR_DAYS`` days and ``PAIR_TOLERANCE`` of the quantity (an exchange counts its
+    network fee in or out). The closest date pairs first, then the closest quantity; each known one pairs once. A
+    transfer the same export's earlier import added is its own record, never the other side of another one."""
+    unpaired = [t for t in known if t.transaction_type is TransactionType.SECURITY_TRANSFER]
+    pairs: dict[str, TransactionDraft] = {}
+    for transfer in sorted(transfers, key=lambda t: t.day):
+        instrument_id = instrument_ids.get(transfer.symbol)
+        candidates = [t for t in unpaired if _pairs_with(transfer, t, account_id, other_id, instrument_id)]
+        if candidates:
+            best = min(
+                candidates,
+                key=lambda t: (abs((t.date - transfer.day).days), abs((t.quantity or 0) - transfer.quantity)),
+            )
+            unpaired.remove(best)
+            pairs[transfer.external_id] = best
+    return pairs
+
+
+def _pairs_with(
+    transfer: CryptoTransfer, known: TransactionDraft, account_id: int, other_id: int | None, instrument_id: int | None
+) -> bool:
+    if known.instrument_id != instrument_id or known.quantity is None:
+        return False
+    if (known.external_id or "").startswith(f"{transfer.exchange}-"):
+        return False
+    # The Account's side of the known transfer and the other side
+    ours: int | None
+    theirs: int | None
+    if transfer.incoming:
+        ours, theirs = known.target_account_id, known.account_id
+    else:
+        ours, theirs = known.account_id, known.target_account_id
+    direction = ours == account_id and theirs != account_id and other_id in (None, theirs)
+    close = abs(known.quantity - transfer.quantity) <= transfer.quantity * PAIR_TOLERANCE
+    return direction and close and abs((known.date - transfer.day).days) <= PAIR_DAYS
+
+
 def parse_exchange(exchange: str, texts: Iterable[str]) -> CryptoRead:
     """Merge the reads of several files of one exchange."""
     if exchange == BINANCE:
         reads = [parse_binance(text) for text in texts]
+    elif exchange == TREZOR:
+        reads = [parse_trezor(text) for text in texts]
     else:
         # OKX's "Trade Details" only give the exact quantities of the orders in its "Order History"
         files = list(texts)

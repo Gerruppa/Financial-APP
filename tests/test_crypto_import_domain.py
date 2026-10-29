@@ -1,5 +1,6 @@
 """Reading Binance and OKX CSV exports into crypto trades and Transaction drafts (pure, no files)."""
 
+from dataclasses import replace
 from datetime import date
 from decimal import Decimal
 
@@ -8,19 +9,28 @@ import pytest
 from financial_app.domain.crypto_import import (
     BINANCE,
     OKX,
+    TREZOR,
     CryptoContext,
     CryptoError,
     Side,
     crypto_draft,
     detect_exchange,
+    pair_transfers,
     parse_binance,
     parse_exchange,
     parse_okx_orders,
+    parse_trezor,
     transfer_draft,
 )
 from financial_app.domain.currencies import NbpRate
 from financial_app.domain.instruments import Instrument
-from financial_app.domain.transactions import Origin, TransactionType
+from financial_app.domain.transactions import (
+    Origin,
+    Transaction,
+    TransactionDraft,
+    TransactionType,
+    security_transfer,
+)
 
 BINANCE_HEADER = "User ID,Time,Account,Operation,Coin,Change,Remark\n"
 OKX_HEADER = (
@@ -346,3 +356,117 @@ def test_a_usdc_trade_needs_a_usd_instrument() -> None:
     ).trades
     with pytest.raises(CryptoError, match="USD"):
         crypto_draft(trade, CryptoContext(3, instrument("PLN"), None))
+
+
+TREZOR_HEADER = (
+    "Timestamp,Date,Time,Type,Transaction ID,Fee,Fee unit,Address,Label,Amount,Amount unit,Fiat (USD),Other\n"
+)
+
+
+def trezor(*rows: str) -> str:
+    return TREZOR_HEADER + "\n".join(rows) + "\n"
+
+
+# 1780009200 is 23:00 UTC on 28 May 2026, past midnight in Poland; 1782000000 is midnight UTC on 21 June
+TREZOR_EXPORT = trezor(
+    '1780009200,29.05.2026,01:00:00 GMT+2,RECV,aa11,,,bc1qexample,,0.02,BTC,"1,500.00",',
+    "1782000000,21.06.2026,02:00:00 GMT+2,SENT,bb22,0.00001,BTC,3Example,,0.005,BTC,400.5,",
+)
+
+
+def test_trezor_export_is_detected_by_header() -> None:
+    assert detect_exchange(TREZOR_EXPORT) == TREZOR
+
+
+def test_trezor_receipts_and_sends_are_transfers_and_a_send_fee_a_sale_for_commission() -> None:
+    result = parse_exchange(TREZOR, [TREZOR_EXPORT])
+    # The day is the UTC one of the Timestamp, as for the exchanges
+    assert [(t.external_id, t.day, t.symbol, t.quantity, t.incoming) for t in result.transfers] == [
+        ("trezor-aa11", date(2026, 5, 28), "BTC", Decimal("0.02"), True),
+        ("trezor-bb22", date(2026, 6, 21), "BTC", Decimal("0.005"), False),
+    ]
+    (fee,) = result.trades
+    assert (fee.external_id, fee.day, fee.side, fee.symbol, fee.quantity, fee.price, fee.fee_is_value) == (
+        "trezor-bb22-fee",
+        date(2026, 6, 21),
+        Side.SELL,
+        "BTC",
+        Decimal("0.00001"),
+        None,
+        True,
+    )
+    assert result.unsupported == []
+
+
+def test_trezor_ids_are_distinct_for_two_receipts_of_one_transaction() -> None:
+    text = trezor(
+        "1780009200,29.05.2026,01:00:00 GMT+2,RECV,aa11,,,bc1qfirst,,0.02,BTC,1500,",
+        "1780009200,29.05.2026,01:00:00 GMT+2,RECV,aa11,,,bc1qsecond,,0.0001,BTC,7.5,",
+    )
+    first, again = parse_trezor(text).transfers, parse_trezor(text).transfers
+    assert [t.external_id for t in first] == [t.external_id for t in again] == ["trezor-aa11", "trezor-aa11-2"]
+
+
+def test_trezor_send_to_oneself_only_pays_its_fee_and_other_types_are_unsupported() -> None:
+    result = parse_trezor(
+        trezor(
+            "1782000000,21.06.2026,02:00:00 GMT+2,SELF,cc33,0.00002,BTC,bc1qmine,,0.01,BTC,800,",
+            "1782003600,21.06.2026,03:00:00 GMT+2,FAILED,dd44,,,bc1qmine,,0.01,BTC,800,",
+        )
+    )
+    assert result.transfers == []
+    assert [(t.external_id, t.quantity, t.fee_is_value) for t in result.trades] == [
+        ("trezor-cc33-fee", Decimal("0.00002"), True)
+    ]
+    assert [u.note for u in result.unsupported] == ["FAILED: 0.01 BTC"]
+
+
+def saved(draft: TransactionDraft, transaction_id: int) -> Transaction:
+    return Transaction(**{**vars(draft), "id": transaction_id})
+
+
+def test_trezor_transfers_pair_with_saved_transfers_of_the_wallet_close_in_quantity_and_date() -> None:
+    wallet, exchange, okx_account, bitcoin = 4, 3, 5, 7
+    transfers = parse_trezor(
+        trezor(
+            "1781344800,13.06.2026,12:00:00 GMT+2,RECV,r1,,,bc1q,,0.04655,BTC,3000,",
+            "1781344800,13.06.2026,12:00:00 GMT+2,RECV,r2,,,bc1q,,0.0001,BTC,6,",
+            "1787306400,21.08.2026,12:00:00 GMT+2,SENT,s1,0.00001,BTC,3x,,0.023,BTC,1800,",
+            "1790848800,01.10.2026,12:00:00 GMT+2,RECV,r3,,,bc1q,,0.01,BTC,700,",
+        )
+    ).transfers
+    known = [
+        # The exchange's withdrawal says a little more than arrived (its network fee)
+        saved(security_transfer(exchange, date(2026, 6, 13), wallet, bitcoin, Decimal("0.0466")), 10),
+        # The deposit reached the exchange three days after it left the wallet
+        saved(security_transfer(wallet, date(2026, 8, 24), okx_account, bitcoin, Decimal("0.023")), 11),
+        # Another coin, and a transfer a month away, pair with nothing
+        saved(security_transfer(exchange, date(2026, 10, 1), wallet, 8, Decimal("0.01")), 12),
+        saved(security_transfer(exchange, date(2026, 8, 30), wallet, bitcoin, Decimal("0.01")), 13),
+    ]
+    # The wallet's transfers pair with one from or to any other Account
+    pairs = pair_transfers(transfers, known, wallet, None, {"BTC": bitcoin})
+    assert pairs == {"trezor-r1": known[0], "trezor-s1": known[1]}
+
+
+def test_a_transfer_the_wallet_import_added_itself_is_no_other_side() -> None:
+    (later,) = parse_trezor(trezor("1781344800,13.06.2026,12:00:00 GMT+2,RECV,r9,,,bc1q,,0.01,BTC,600,")).transfers
+    # Added from an earlier export's receipt, whose other Account the user chose
+    earlier = replace(security_transfer(3, date(2026, 6, 12), 4, 7, Decimal("0.01")), external_id="trezor-r8")
+    assert pair_transfers([later], [saved(earlier, 10)], 4, None, {"BTC": 7}) == {}
+
+
+def test_an_exchange_withdrawal_pairs_only_with_a_transfer_between_its_account_and_the_wallet() -> None:
+    exchange, wallet, other = 3, 4, 5
+    (withdrawal,) = parse_binance(binance("2026-06-13 13:20:47,Spot,Withdraw,BTC,-0.0466,")).transfers
+    # What the wallet's import added from its receipt, before the exchange's export was read; not saved yet
+    receipt = replace(
+        security_transfer(exchange, date(2026, 6, 13), wallet, 7, Decimal("0.0466")), external_id="trezor-r1"
+    )
+    known = [
+        security_transfer(other, date(2026, 6, 13), wallet, 7, Decimal("0.0466")),
+        # The exchange's own earlier record of another withdrawal is never the other side of this one
+        replace(security_transfer(exchange, date(2026, 6, 12), wallet, 7, Decimal("0.0466")), external_id="binance-x"),
+        receipt,
+    ]
+    assert pair_transfers([withdrawal], known, exchange, wallet, {"BTC": 7}) == {withdrawal.external_id: receipt}
