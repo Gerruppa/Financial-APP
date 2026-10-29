@@ -193,6 +193,18 @@ def test_a_security_transfer_without_a_price_moves_its_cost() -> None:
     assert history[1].account_net_deposits == {IKE: Decimal(-200), XTB: Decimal(200)}
 
 
+def test_a_security_transfer_without_a_price_moves_its_cost_when_the_target_sells_the_units_that_day() -> None:
+    transactions = [
+        _buy("10", "50"),
+        _buy("6", "40", account=XTB),
+        security_transfer(IKE, _day(2), XTB, PZU, Decimal(4)),
+        buy_or_sell(XTB, _day(2), TransactionType.SELL, PZU, Decimal(10), Decimal(60)),
+    ]
+    history = daily_history(transactions, INSTRUMENTS, {}, {}, _day(1), _day(2))
+
+    assert history[1].account_net_deposits == {IKE: Decimal(-200), XTB: Decimal(200)}
+
+
 def test_foreign_cash_without_an_nbp_rate_yet_is_valued_at_cost_and_flagged() -> None:
     exchange = currency_exchange(IKE, _day(1), "USD", Decimal(100), Decimal(400))
     history = daily_history([exchange], INSTRUMENTS, {}, {"USD": [_rate(2, "4.5")]}, _day(1), _day(1))

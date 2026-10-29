@@ -261,7 +261,21 @@ def _moved_value(transactions: Sequence[TransactionDraft], transfer: Transaction
     unit = pricing.unit_pln(transfer.instrument_id, transfer.date)
     if isinstance(unit, Decimal):
         return transfer.quantity * unit
-    until = [t for t in transactions if t.date <= transfer.date]
+    # Up to the transfer in the replay's same-day order (Splits, Buys, transfers in entry order, then Sells and DRIPs):
+    # a Sell on the target Account that day may need the moved units, so it would be uncovered without them
+    position = next(i for i, t in enumerate(transactions) if t is transfer)
+    until = [
+        t
+        for i, t in enumerate(transactions)
+        if t.date < transfer.date
+        or (
+            t.date == transfer.date
+            and (
+                t.transaction_type in (TransactionType.SPLIT, TransactionType.BUY)
+                or (t.transaction_type is TransactionType.SECURITY_TRANSFER and i <= position)
+            )
+        )
+    ]
     without = [t for t in until if t is not transfer]
     key = (transfer.target_account_id, transfer.instrument_id)
 
