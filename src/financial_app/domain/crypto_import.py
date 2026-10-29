@@ -34,7 +34,6 @@ from financial_app.domain.transactions import (
     GROSZ,
     PLN,
     Origin,
-    Transaction,
     TransactionDraft,
     TransactionError,
     TransactionType,
@@ -406,41 +405,50 @@ def transfer_draft(
 
 
 def pair_transfers(
-    transfers: Sequence[CryptoTransfer], saved: Sequence[Transaction], wallet_id: int, instrument_ids: Mapping[str, int]
-) -> dict[str, int]:
-    """The saved Security Transfer each wallet transfer is the other side of (external id -> Transaction id): one
-    into the wallet's Account for a receipt, out of it for a send, of the coin's Instrument, within ``PAIR_DAYS`` days
-    and ``PAIR_TOLERANCE`` of the quantity (an exchange counts its network fee in or out). The closest date pairs
-    first, then the closest quantity; each saved one pairs once. A transfer added by a wallet's earlier import is that
-    import's own record, never the other side of another one."""
-    unpaired = [
-        t
-        for t in saved
-        if t.transaction_type is TransactionType.SECURITY_TRANSFER
-        and not (t.external_id or "").startswith(f"{TREZOR}-")
-    ]
-    pairs: dict[str, int] = {}
+    transfers: Sequence[CryptoTransfer],
+    known: Sequence[TransactionDraft],
+    account_id: int,
+    other_id: int | None,
+    instrument_ids: Mapping[str, int],
+) -> dict[str, TransactionDraft]:
+    """The known Security Transfer (saved, or added by another export of the same import) each transfer of
+    ``account_id`` is the other side of, by the transfer's external id: one into the Account for a receipt, out of it
+    for a send, from or to ``other_id`` (an exchange's wallet; None: any other Account, for the wallet's own export),
+    of the coin's Instrument, within ``PAIR_DAYS`` days and ``PAIR_TOLERANCE`` of the quantity (an exchange counts its
+    network fee in or out). The closest date pairs first, then the closest quantity; each known one pairs once. A
+    transfer the same export's earlier import added is its own record, never the other side of another one."""
+    unpaired = [t for t in known if t.transaction_type is TransactionType.SECURITY_TRANSFER]
+    pairs: dict[str, TransactionDraft] = {}
     for transfer in sorted(transfers, key=lambda t: t.day):
-        candidates = [t for t in unpaired if _pairs_with(transfer, t, wallet_id, instrument_ids.get(transfer.symbol))]
+        instrument_id = instrument_ids.get(transfer.symbol)
+        candidates = [t for t in unpaired if _pairs_with(transfer, t, account_id, other_id, instrument_id)]
         if candidates:
             best = min(
                 candidates,
-                key=lambda t: (abs((t.date - transfer.day).days), abs((t.quantity or 0) - transfer.quantity), t.id),
+                key=lambda t: (abs((t.date - transfer.day).days), abs((t.quantity or 0) - transfer.quantity)),
             )
             unpaired.remove(best)
-            pairs[transfer.external_id] = best.id
+            pairs[transfer.external_id] = best
     return pairs
 
 
-def _pairs_with(transfer: CryptoTransfer, saved: Transaction, wallet_id: int, instrument_id: int | None) -> bool:
-    if saved.instrument_id != instrument_id or saved.quantity is None:
+def _pairs_with(
+    transfer: CryptoTransfer, known: TransactionDraft, account_id: int, other_id: int | None, instrument_id: int | None
+) -> bool:
+    if known.instrument_id != instrument_id or known.quantity is None:
         return False
+    if (known.external_id or "").startswith(f"{transfer.exchange}-"):
+        return False
+    # The Account's side of the known transfer and the other side
+    ours: int | None
+    theirs: int | None
     if transfer.incoming:
-        direction = saved.target_account_id == wallet_id and saved.account_id != wallet_id
+        ours, theirs = known.target_account_id, known.account_id
     else:
-        direction = saved.account_id == wallet_id
-    close = abs(saved.quantity - transfer.quantity) <= transfer.quantity * PAIR_TOLERANCE
-    return direction and close and abs((saved.date - transfer.day).days) <= PAIR_DAYS
+        ours, theirs = known.account_id, known.target_account_id
+    direction = ours == account_id and theirs != account_id and other_id in (None, theirs)
+    close = abs(known.quantity - transfer.quantity) <= transfer.quantity * PAIR_TOLERANCE
+    return direction and close and abs((known.date - transfer.day).days) <= PAIR_DAYS
 
 
 def parse_exchange(exchange: str, texts: Iterable[str]) -> CryptoRead:

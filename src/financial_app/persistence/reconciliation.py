@@ -36,9 +36,11 @@ RECONCILED_TYPES = tuple(
 
 @dataclass(frozen=True)
 class AddBroker:
-    """A broker-only Transaction, added."""
+    """A broker-only Transaction, added; ``broker_id``: another import's record it is also the other side of (a
+    wallet's transfer paired with it in the same import)."""
 
     draft: TransactionDraft
+    broker_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -168,10 +170,11 @@ def apply_reconciliation(engine: Engine, actions: Sequence[Action], today: date)
         deleted: set[int] = set()
         for action in actions:
             match action:
-                case AddBroker(draft):
+                case AddBroker(draft, broker_id):
                     check_references(session, draft)
                     row = TransactionRow()
                     fill_row(row, draft)
+                    row.broker_id = broker_id
                     row.reconciled_on = today
                     session.add(row)
                     _touch(instruments, draft.instrument_id)

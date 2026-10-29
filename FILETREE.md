@@ -288,7 +288,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `bond_data.py`: Fetches and parses the MF bond file, GUS CPI and NBP reference rates, refreshing their SQLite copies at most once a day
 - `bossa.py`: Fetches GPW, NewConnect, ETF and bond Quotes in PLN from the Bossa JSON API
 - `catalyst.py`: Fetches Catalyst bonds' nominal and accrued interest from gpwcatalyst.pl and IZ indexation coefficients from gov.pl
-- `crypto.py`: Reads Binance, OKX and Trezor CSV files, matches Accounts and coins, pairs wallet transfers, and previews and applies the imported Transactions.
+- `crypto.py`: Reads Binance, OKX and Trezor CSV files or folders, one import per source; matches Accounts and coins, pairs transfers across sources, and applies all together.
 - `current_prices.py`: Today's valuation inputs shared by the Portfolio and the Dashboard: Instrument prices and NBP Rates from the last business day before today, each currency fetched once
 - `dashboard.py`: Computes today's Dashboard of a View Scope from the database, shared by the Dashboard and the Investment Strategy
 - `demo_data.py`: Seeds the made-up demo Portfolio (two Accounts, DEMO Instruments, a year of Transactions, a Total Investment Strategy) for the --demo start
@@ -328,7 +328,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `changes.py`: Window change events: the Change enum, the TODAYS_VALUE set, and ChangeEvents, which redraws each tab or header element that declared the published changes.
 - `charts.py`: Dashboard's nine ECharts charts, the profit waterfall, and shared PLN line and bar chart helpers for other tabs.
 - `contribution_limits.py`: Contribution Limits UI: yearly limits in Ustawienia and this year's Dashboard bars
-- `crypto_import.py`: Ustawienia > Import card for Binance, OKX and Trezor CSV exports: pick the file, match Account, coins and wallet transfers, preview and apply.
+- `crypto_import.py`: Ustawienia > Import card: picks a file or folder of Binance, OKX and Trezor CSV exports, one section per source, previews and applies all together.
 - `dashboard.py`: Dashboard tab UI: totals, price status, Account table, exposure, charts, Account treemap and ranking, Investment Goal tile, and the after-tax toggle
 - `deposit_drafts.py`: Dochód stały rows for Term Deposit interest and maturity Drafts: confirm, edit amounts, end or renew a matured deposit
 - `dialogs.py`: Draggable dialog support with no backdrop, so the screen behind stays readable; Esc closes the newest

@@ -105,7 +105,8 @@ async def test_a_trezor_receipt_without_a_pair_comes_from_the_account_chosen_for
     user.find(marker="crypto-load").click()
     user.find(marker="crypto-account", kind=ui.select).elements.pop().set_value(wallet.id)
     await user.should_see(marker="crypto-counterpart-trezor-r1")
-    await user.should_not_see(marker="crypto-apply")
+    # Left for later until its other Account is chosen
+    await user.should_see("Do dodania: 0")
 
     user.find(marker="crypto-counterpart-trezor-r1", kind=ui.select).elements.pop().set_value(exchange.id)
     await user.should_see("Do dodania: 1, już zaimportowane: 0, nieobsługiwane: 1.")
@@ -118,6 +119,39 @@ async def test_a_trezor_receipt_without_a_pair_comes_from_the_account_chosen_for
         Decimal("0.002"),
     )
     await user.should_see("już zaimportowane: 1")
+
+
+async def test_a_folder_of_two_sources_is_imported_at_once_each_into_its_account(
+    engine: Engine, user: User, tmp_path: Path
+) -> None:
+    okx = add_account(engine, AccountDraft("OKX", "Krypto", AccountType.REGULAR, ("PLN",)))
+    wallet = add_account(engine, AccountDraft("Trezor", "Zimny", AccountType.REGULAR, ("PLN",)))
+    crypto = next(c for c in list_asset_classes(engine) if c.name == "Kryptowaluty")
+    draft = InstrumentDraft("Bitcoin", crypto.id, "USD", source_symbols={YAHOO: "BTC-USD"}, quantity_decimals=8)
+    add_instrument(engine, draft)
+    folder = tmp_path / "Krypto"
+    (folder / "OKX").mkdir(parents=True)
+    (folder / "OKX" / "Order History.csv").write_text(OKX, encoding="utf-8")
+    # 20 October: what was bought on OKX moves to the Trezor
+    receipt = "1792497600,20.10.2026,14:00:00 GMT+2,RECV,r1,,,bc1q,,0.002,BTC,150,\n"
+    (folder / "Bitcoin_Trezor.csv").write_text(TREZOR.splitlines(keepends=True)[0] + receipt, encoding="utf-8")
+
+    user.find("Import").click()
+    user.find(marker="crypto-path").type(str(folder))
+    user.find(marker="crypto-load").click()
+    await user.should_see(marker="crypto-source-okx")
+    await user.should_see(marker="crypto-source-trezor")
+    user.find(marker="crypto-account-okx", kind=ui.select).elements.pop().set_value(okx.id)
+    user.find(marker="crypto-account-trezor", kind=ui.select).elements.pop().set_value(wallet.id)
+    user.find(marker="crypto-counterpart-trezor-r1", kind=ui.select).elements.pop().set_value(okx.id)
+    await user.should_see("OKX: Do dodania: 1")
+    await user.should_see("Trezor: Do dodania: 1")
+    user.find(marker="crypto-apply").click()
+
+    saved = {t.transaction_type: t for t in list_transactions(engine)}
+    assert saved[TransactionType.BUY].account_id == okx.id
+    moved = saved[TransactionType.SECURITY_TRANSFER]
+    assert (moved.account_id, moved.target_account_id, moved.quantity) == (okx.id, wallet.id, Decimal("0.002"))
 
 
 async def test_a_file_that_is_not_an_export_is_refused(user: User, tmp_path: Path) -> None:

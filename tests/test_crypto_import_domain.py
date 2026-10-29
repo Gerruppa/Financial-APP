@@ -444,11 +444,29 @@ def test_trezor_transfers_pair_with_saved_transfers_of_the_wallet_close_in_quant
         saved(security_transfer(exchange, date(2026, 10, 1), wallet, 8, Decimal("0.01")), 12),
         saved(security_transfer(exchange, date(2026, 8, 30), wallet, bitcoin, Decimal("0.01")), 13),
     ]
-    assert pair_transfers(transfers, known, wallet, {"BTC": bitcoin}) == {"trezor-r1": 10, "trezor-s1": 11}
+    # The wallet's transfers pair with one from or to any other Account
+    pairs = pair_transfers(transfers, known, wallet, None, {"BTC": bitcoin})
+    assert pairs == {"trezor-r1": known[0], "trezor-s1": known[1]}
 
 
 def test_a_transfer_the_wallet_import_added_itself_is_no_other_side() -> None:
     (later,) = parse_trezor(trezor("1781344800,13.06.2026,12:00:00 GMT+2,RECV,r9,,,bc1q,,0.01,BTC,600,")).transfers
     # Added from an earlier export's receipt, whose other Account the user chose
     earlier = replace(security_transfer(3, date(2026, 6, 12), 4, 7, Decimal("0.01")), external_id="trezor-r8")
-    assert pair_transfers([later], [saved(earlier, 10)], 4, {"BTC": 7}) == {}
+    assert pair_transfers([later], [saved(earlier, 10)], 4, None, {"BTC": 7}) == {}
+
+
+def test_an_exchange_withdrawal_pairs_only_with_a_transfer_between_its_account_and_the_wallet() -> None:
+    exchange, wallet, other = 3, 4, 5
+    (withdrawal,) = parse_binance(binance("2026-06-13 13:20:47,Spot,Withdraw,BTC,-0.0466,")).transfers
+    # What the wallet's import added from its receipt, before the exchange's export was read; not saved yet
+    receipt = replace(
+        security_transfer(exchange, date(2026, 6, 13), wallet, 7, Decimal("0.0466")), external_id="trezor-r1"
+    )
+    known = [
+        security_transfer(other, date(2026, 6, 13), wallet, 7, Decimal("0.0466")),
+        # The exchange's own earlier record of another withdrawal is never the other side of this one
+        replace(security_transfer(exchange, date(2026, 6, 12), wallet, 7, Decimal("0.0466")), external_id="binance-x"),
+        receipt,
+    ]
+    assert pair_transfers([withdrawal], known, exchange, wallet, {"BTC": 7}) == {withdrawal.external_id: receipt}
