@@ -1,6 +1,7 @@
 """The negative PLN cash warning's fix (#267): "Dodaj wpłaty uzupełniające" opens the proposed Deposits per Account,
 and saves the ticked ones; undoing a delete they covered explains each difference first."""
 
+import asyncio
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -169,3 +170,27 @@ async def test_a_covering_deposit_that_took_the_deleted_place_must_go_with_the_u
         with user.scope(marker="transactions"):
             await user.should_see(f"+50,00{NBSP}zł")
     assert sorted(t.actual_amount for t in list_transactions(engine)) == [Decimal(50), Decimal(100), Decimal(120)]
+
+
+async def test_the_undo_bar_waits_while_the_covering_window_is_open(
+    engine: Engine, xtb: int, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The bar outlasts its time while the window is open, then gets it afresh, to undo once the Deposits are in."""
+    monkeypatch.setattr("financial_app.ui.undo.UNDO_SECONDS", 0.5)
+    monkeypatch.setattr("financial_app.ui.undo.HOLD_CHECK_SECONDS", 0.1)
+    _add(engine, xtb, 3, TransactionType.WITHDRAWAL, 60)
+
+    async with user_simulation(lambda: build_shell(engine)) as user:
+        await user.open("/transakcje")
+        _open_row(user, 1)
+        user.find(marker="delete-transaction").click()
+        user.find(marker="covering-button").click()
+        await asyncio.sleep(1.0)  # twice the bar's time
+        await user.should_see(marker="undo-bar")
+
+        user.find(marker="covering-save").click()
+        await asyncio.sleep(0.2)
+        await user.should_see(marker="undo-bar")
+
+        await asyncio.sleep(1.2)
+        await user.should_not_see(marker="undo-bar")

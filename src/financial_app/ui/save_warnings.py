@@ -13,7 +13,7 @@ from financial_app.domain.transactions import COVERING_COMMENT, TransactionDraft
 from financial_app.persistence.accounts import list_accounts
 from financial_app.sources.transaction_saving import covering_proposals, save_covering
 from financial_app.ui.dialogs import movable_dialog
-from financial_app.ui.undo import action_bar
+from financial_app.ui.undo import HOLDS_BARS, action_bar
 
 # How long the bar offering the covering Deposits stays; a module value so a test can shorten it
 COVERING_SECONDS = 20.0
@@ -85,9 +85,9 @@ def _covering_dialog(engine: Engine, account_ids: tuple[int, ...], on_saved: Cal
         else:
             kept.discard(account_id)
 
-    # In the page's layout: the bar it was opened from is gone
+    # In the page's layout: the bar it was opened from is gone. It keeps the undo bar of the delete it may cover
     with context.client.layout:
-        dialog = movable_dialog()
+        dialog = movable_dialog().classes(HOLDS_BARS)
     dialog.on("hide", dialog.delete)
     with dialog, ui.card().classes("w-[32rem] max-w-full").mark("covering-window"):
         ui.label("Wpłaty uzupełniające").classes("text-lg font-bold")
