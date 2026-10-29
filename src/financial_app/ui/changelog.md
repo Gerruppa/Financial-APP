@@ -9,6 +9,9 @@
 - Gdy zapis (transakcji, importu, wersji roboczej, lokaty) zdejmuje gotówkę w PLN poniżej zera, obok ostrzeżenia pojawia się przycisk „Dodaj wpłaty uzupełniające”: otwiera okno z wpłatami w dniach, w których gotówki brakuje, dokładnie na brakującą kwotę, z polem do odznaczenia przy każdym koncie.
 - „Cofnij” po usunięciu transakcji sprawdza, co zmieniło się od tamtej chwili na jej kontach: jeśli coś się zmieniło, przed przywróceniem pokazuje, co wróci, i wyjaśnia każdą różnicę (np. dodane w międzyczasie wpłaty uzupełniające, które po przywróceniu zawyżyłyby gotówkę), z możliwością przywrócenia razem z ich usunięciem. Pasek „Cofnij” nie znika, dopóki otwarte jest okno wpłat uzupełniających, a po jego zamknięciu ma znów pełny czas.
 
+### Poprawki
+- Historia nie zawodzi już błędem „Sprzedaż bez pokrycia”, gdy papiery (np. kryptowaluta bez ceny z tego dnia) przeniesione na konto zostały na nim sprzedane tego samego dnia.
+
 ## 1.3.1 — 2026-10-29
 
 ### Poprawki
