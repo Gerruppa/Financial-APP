@@ -1,4 +1,4 @@
 """KAPITA: a personal investment tracker."""
 
 # The one version number; pyproject.toml and the installer read it from here
-__version__ = "1.3.0"
+__version__ = "1.3.1"

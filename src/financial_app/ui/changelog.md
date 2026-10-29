@@ -1,5 +1,10 @@
 # Historia zmian
 
+## 1.3.1 — 2026-10-29
+
+### Poprawki
+- Usunięcie użytkownika nie zawodzi już, gdy w chwili wylogowania działało jeszcze odświeżanie wycen albo historii: plik bazy jest zamykany od razu po zakończeniu tej pracy, więc folder użytkownika znika zamiast zostawać na liście.
+
 ## 1.3.0 — 2026-10-29
 
 ### Nowe funkcje
