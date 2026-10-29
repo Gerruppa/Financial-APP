@@ -12,7 +12,7 @@ from financial_app.domain.crypto_import import CryptoError
 from financial_app.domain.currencies import NbpRate
 from financial_app.domain.instruments import InstrumentDraft
 from financial_app.domain.prices import YAHOO
-from financial_app.domain.transactions import Origin, TransactionType
+from financial_app.domain.transactions import Origin, TransactionType, lowest_cash_balance
 from financial_app.persistence.accounts import add_account
 from financial_app.persistence.db import init_db
 from financial_app.persistence.instruments import add_instrument, list_asset_classes
@@ -25,6 +25,7 @@ from financial_app.sources.crypto import (
     CryptoPreview,
     apply_crypto,
     preview_crypto,
+    proposed_deposits,
     read_crypto,
 )
 
@@ -100,12 +101,33 @@ def test_binance_trades_are_priced_from_the_market(engine: Engine, account: int,
     # The Instrument was found by its Yahoo symbol, so nothing was chosen
     assert [d.actual_amount for d in preview.drafts] == [Decimal("2000.00"), Decimal("800.00")]
     apply_crypto(engine, files, FixedNbp(), prices, decisions, TODAY)
-    saved = list_transactions(engine)
+    saved = [t for t in list_transactions(engine) if t.transaction_type is not TransactionType.DEPOSIT]
     assert [(t.transaction_type, t.quantity, t.origin) for t in sorted(saved, key=lambda t: t.date)] == [
         (TransactionType.BUY, Decimal("0.01"), Origin.BROKER),
         (TransactionType.SELL, Decimal("0.004"), Origin.BROKER),
     ]
     assert load_setting(engine, CRYPTO_ACCOUNT + "binance") == str(account)
+
+
+def test_deposits_are_proposed_where_purchases_take_the_cash_below_zero(
+    engine: Engine, account: int, bitcoin: int, tmp_path: Path
+) -> None:
+    files = read_one(write(tmp_path, "binance.csv", BINANCE))
+    # Declined for the Account: the purchase leaves its cash at -2000
+    declined = CryptoDecisions({"binance": account}, no_deposits=frozenset({account}))
+    apply_crypto(engine, files, FixedNbp(), prices, declined, TODAY)
+    assert lowest_cash_balance(list_transactions(engine), account, start=date(2026, 1, 1)) == Decimal("-2000.00")
+
+    # Nothing is left to import, but the history already saved still lacks its deposit
+    decisions = CryptoDecisions({"binance": account})
+    previews = preview_crypto(engine, files, FixedNbp(), prices, decisions)
+    proposed = proposed_deposits(engine, previews)
+    assert [(d.account_id, d.date, d.actual_amount) for d in proposed[account]] == [
+        (account, date(2026, 1, 5), Decimal("2000.00"))
+    ]
+    apply_crypto(engine, files, FixedNbp(), prices, decisions, TODAY)
+    assert lowest_cash_balance(list_transactions(engine), account, start=date(2026, 1, 1)) == 0
+    assert proposed_deposits(engine, preview_crypto(engine, files, FixedNbp(), prices, decisions)) == {}
 
 
 def test_the_same_file_is_not_imported_twice(engine: Engine, account: int, bitcoin: int, tmp_path: Path) -> None:
@@ -151,7 +173,7 @@ def test_a_folder_takes_the_exact_quantity_from_trade_details(
     files = read_one(folder)
     assert (files[0].exchange, len(files[0].trades), files[0].unsupported) == ("okx", 1, [])
     apply_crypto(engine, files, FixedNbp(), prices, CryptoDecisions({"okx": account}), TODAY)
-    (saved,) = list_transactions(engine)
+    (saved,) = [t for t in list_transactions(engine) if t.transaction_type is TransactionType.BUY]
     assert saved.quantity == Decimal("0.0034")
     assert saved.actual_amount == Decimal("1360.00")  # 0.0034 x 100000 USD x 4.0
 

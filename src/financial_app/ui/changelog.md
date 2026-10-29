@@ -5,6 +5,7 @@
 ### Nowe funkcje
 - Import kryptowalut czyta też eksport CSV z Trezor Suite; jego opłata sieciowa wysyłki jest importowana jak opłata wypłaty z Binance, a przeniesienie bez pary w innych eksportach możesz przypisać do konta, pominąć albo zostawić na później.
 - Do importu kryptowalut można wskazać jeden folder z eksportami z Binance, OKX i Trezora naraz (także w podfolderach): każde źródło ma swoje konto, całość zapisuje się jednym „Zastosuj”, wiersz z dwóch kopii pliku liczy się raz, a przeniesienie między giełdą a portfelem, które jest w obu eksportach, zapisuje się tylko raz, niezależnie od kolejności importu.
+- Import kryptowalut otwiera okno, które prowadzi krok po kroku: jak pobrać eksporty, wybór folderu, kont i monet, proponowane wpłaty w dniach, w których zakupy zdjęłyby gotówkę konta poniżej zera (do odznaczenia), podgląd i wskazówki do ręcznych poprawek po imporcie; wpłaty są proponowane także dla historii zaimportowanej wcześniej.
 
 ## 1.3.1 — 2026-10-29
 

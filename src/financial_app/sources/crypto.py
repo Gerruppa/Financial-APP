@@ -39,7 +39,13 @@ from financial_app.domain.currencies import MissingNbpRateError, NbpRate
 from financial_app.domain.formatting import format_date
 from financial_app.domain.instruments import Instrument
 from financial_app.domain.prices import YAHOO, PriceSourceError
-from financial_app.domain.transactions import PLN, Transaction, TransactionDraft, TransactionError
+from financial_app.domain.transactions import (
+    PLN,
+    Transaction,
+    TransactionDraft,
+    TransactionError,
+    covering_deposits,
+)
 from financial_app.persistence.instruments import list_instruments
 from financial_app.persistence.reconciliation import (
     Action,
@@ -51,11 +57,14 @@ from financial_app.persistence.reconciliation import (
     unpaired_security_transfers,
 )
 from financial_app.persistence.settings import CRYPTO_ACCOUNT, CRYPTO_COIN, CRYPTO_WALLET, load_setting, save_setting
+from financial_app.persistence.transactions import list_transactions
 from financial_app.sources.spreadsheet import NbpLookup
 from financial_app.sources.yahoo import YahooSource
 
 # How far back a market price is looked for when the day itself has no close
 PRICE_WINDOW_DAYS = 7
+# The comment of a proposed Deposit, so the user can find and correct it
+DEPOSIT_COMMENT = "Uzupełnienie importu kryptowalut: wpłata pokrywająca zakupy"
 
 # A coin's market price in an Instrument's currency on a day: (Yahoo symbol, currency, day) -> price
 PriceLookup = Callable[[str, str, date], Decimal]
@@ -88,6 +97,8 @@ class CryptoDecisions:
     instruments: Mapping[str, int] = field(default_factory=dict)
     counterparts: Mapping[str, int] = field(default_factory=dict)
     skipped: frozenset[str] = frozenset()
+    # The Accounts whose proposed deposits (``proposed_deposits``) the user declined
+    no_deposits: frozenset[int] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -362,7 +373,8 @@ def apply_crypto(
         if preview.problems:
             first = preview.problems[0]
             raise CryptoError(f"Transakcja z {format_date(first.trade.day)}: {first.message}")
-    apply_reconciliation(engine, _actions(previews), today)
+    deposits = [AddBroker(deposit) for deposit in kept_deposits(engine, previews, decisions)]
+    apply_reconciliation(engine, [*_actions(previews), *deposits], today)
     for preview in previews:
         save_setting(engine, CRYPTO_ACCOUNT + preview.file.exchange, str(preview.account_id))
         if preview.wallet_id is not None:
@@ -370,6 +382,24 @@ def apply_crypto(
     for symbol, instrument_id in decisions.instruments.items():
         save_setting(engine, CRYPTO_COIN + symbol, str(instrument_id))
     return previews
+
+
+def proposed_deposits(engine: Engine, previews: Sequence[CryptoPreview]) -> dict[int, list[TransactionDraft]]:
+    """The Deposits that keep the cash of each Account of the import from going below zero, by Account id, after what
+    is saved and what the import adds: an exchange's export has no PLN deposits (a Binance purchase "With Fiat" was
+    paid by card, OKX's stablecoin deposits are left out), so its purchases would take the cash below zero."""
+    known = [*list_transactions(engine), *(draft for preview in previews for draft in preview.drafts)]
+    accounts = dict.fromkeys(preview.account_id for preview in previews if preview.account_id is not None)
+    proposed = {account_id: covering_deposits(known, account_id, DEPOSIT_COMMENT) for account_id in accounts}
+    return {account_id: deposits for account_id, deposits in proposed.items() if deposits}
+
+
+def kept_deposits(
+    engine: Engine, previews: Sequence[CryptoPreview], decisions: CryptoDecisions
+) -> list[TransactionDraft]:
+    """The proposed Deposits applying saves: those of the Accounts the user did not decline."""
+    proposed = proposed_deposits(engine, previews)
+    return [d for account_id, deposits in proposed.items() if account_id not in decisions.no_deposits for d in deposits]
 
 
 def _actions(previews: Sequence[CryptoPreview]) -> list[Action]:

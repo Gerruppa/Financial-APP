@@ -12,6 +12,7 @@ from financial_app.domain.transactions import (
     TransactionType,
     buy_or_sell,
     cash_balances,
+    covering_deposits,
     lowest_cash_balance,
 )
 
@@ -105,6 +106,48 @@ def test_lowest_cash_balance_ignores_other_accounts() -> None:
     transactions = [_deposit(IKE, "100"), _withdrawal(XTB, "500")]
 
     assert lowest_cash_balance(transactions, IKE, start=date(2026, 1, 1)) == Decimal("100")
+
+
+def test_covering_deposits_bring_each_day_that_lacks_cash_back_to_zero() -> None:
+    transactions = [
+        _deposit(IKE, "100", day=1),
+        _withdrawal(IKE, "1000", day=5),  # 900 lacking
+        _deposit(IKE, "300", day=8),
+        _withdrawal(IKE, "500", day=12),  # 300 there, 200 lacking
+        _withdrawal(IKE, "50", day=12),  # the same day: 250 in all
+        _withdrawal(XTB, "999", day=5),  # another Account
+    ]
+
+    deposits = covering_deposits(transactions, IKE, "Uzupełnienie")
+
+    assert [(d.date, d.transaction_type, d.actual_amount, d.comment) for d in deposits] == [
+        (date(2026, 1, 5), TransactionType.DEPOSIT, Decimal("900"), "Uzupełnienie"),
+        (date(2026, 1, 12), TransactionType.DEPOSIT, Decimal("250"), "Uzupełnienie"),
+    ]
+    assert lowest_cash_balance([*transactions, *deposits], IKE, start=date(2026, 1, 1)) == 0
+
+
+def test_covering_deposits_count_sales_and_cash_transfers_on_the_day() -> None:
+    sale = _trade(TransactionType.SELL, quantity="10", price="50", fee="0")  # brings 500 on 1 January
+    transfer = TransactionDraft(
+        XTB, date(2026, 1, 3), TransactionType.CASH_TRANSFER, Decimal("200"), target_account_id=IKE
+    )
+    transactions = [
+        _withdrawal(IKE, "600", day=1),  # the sale the same day brings 500: 100 lacking
+        transfer,
+        _withdrawal(IKE, "250", day=3),  # the transfer brings 200: 50 lacking
+    ]
+
+    deposits = covering_deposits([sale, *transactions], IKE, "")
+
+    assert [(d.date, d.actual_amount) for d in deposits] == [
+        (date(2026, 1, 1), Decimal("100")),
+        (date(2026, 1, 3), Decimal("50")),
+    ]
+
+
+def test_covering_deposits_are_none_when_cash_never_lacks() -> None:
+    assert covering_deposits([_deposit(IKE, "100"), _withdrawal(IKE, "100", day=2)], IKE, "") == []
 
 
 def _trade(kind: TransactionType, quantity: str = "10", price: str = "25.5", fee: str = "3") -> TransactionDraft:
