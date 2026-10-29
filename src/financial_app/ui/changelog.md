@@ -1,6 +1,6 @@
 # Historia zmian
 
-## Nieopublikowane
+## 1.3.0 — 2026-10-29
 
 ### Nowe funkcje
 - Import z OKX czyta też plik Funding History: zakupy spoza zleceń Spot stają się transakcjami kupna, a wpłaty i wypłaty monet przenoszą papiery między kontem OKX a kontem portfela razem z datami i kosztami zakupu; gotówka w stablecoinach i przelewy wewnętrzne OKX są pomijane.
