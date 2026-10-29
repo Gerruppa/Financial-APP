@@ -131,6 +131,22 @@ def incoming_transfers(engine: Engine, ranges: Mapping[int, tuple[date, date]]) 
         ]
 
 
+def unpaired_security_transfers(engine: Engine, account_id: int) -> list[Transaction]:
+    """The Security Transfers into or out of the Account that no import has paired with its own record yet: what a
+    wallet's export may be the other side of."""
+    with Session(engine) as session:
+        rows = session.scalars(
+            select(TransactionRow)
+            .where(
+                TransactionRow.transaction_type == TransactionType.SECURITY_TRANSFER.value,
+                or_(TransactionRow.account_id == account_id, TransactionRow.target_account_id == account_id),
+                TransactionRow.broker_id.is_(None),
+            )
+            .order_by(TransactionRow.date, TransactionRow.id)
+        )
+        return [to_transaction(row) for row in rows]
+
+
 def _not_a_foreign_cash_transfer() -> ColumnElement[bool]:
     """A Cash Transfer in a foreign currency (#125) is none of the statement's, which moves PLN only (spec 7)."""
     return or_(

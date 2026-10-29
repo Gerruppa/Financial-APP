@@ -1,5 +1,10 @@
 # Historia zmian
 
+## Nieopublikowane
+
+### Nowe funkcje
+- Import kryptowalut czyta też eksport CSV z Trezor Suite: przeniesienia, które są drugą stroną zapisanej już wypłaty z giełdy albo wpłaty na nią, są z nią parowane i niczego nie dublują, dla pozostałych wybierasz konto, z którego monety przyszły albo na które poszły (albo je pomijasz), a opłata sieciowa wysyłki jest importowana jak opłata wypłaty z Binance.
+
 ## 1.3.1 — 2026-10-29
 
 ### Poprawki

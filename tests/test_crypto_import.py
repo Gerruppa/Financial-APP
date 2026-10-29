@@ -137,7 +137,7 @@ def test_a_folder_takes_the_exact_quantity_from_trade_details(
 
 
 def test_a_file_of_neither_exchange_is_refused(tmp_path: Path) -> None:
-    with pytest.raises(CryptoError, match="Binance ani OKX"):
+    with pytest.raises(CryptoError, match="Binance, OKX ani Trezora"):
         read_crypto(write(tmp_path, "other.csv", "a,b\n1,2\n"))
     empty = tmp_path / "empty"
     empty.mkdir()
@@ -223,3 +223,47 @@ def test_okx_deposits_from_the_wallet_fund_a_later_sale(
     apply_crypto(engine, file, FixedNbp(), prices, CryptoDecisions(okx, wallet), TODAY)
     deposit = next(t for t in list_transactions(engine) if t.external_id == "okx-funding-5")
     assert (deposit.account_id, deposit.target_account_id, deposit.date) == (wallet, okx, date(2026, 10, 14))
+
+
+TREZOR = (
+    "Timestamp,Date,Time,Type,Transaction ID,Fee,Fee unit,Address,Label,Amount,Amount unit,Fiat (USD),Other\n"
+    # 1 March 2026, 12:00 UTC: what the Binance withdrawal brought, less what the exchange counted in
+    "1772366400,01.03.2026,13:00:00 GMT+1,RECV,r1,,,bc1q,,0.00499,BTC,250,\n"
+    # 1 and 10 April: a receipt and a send no saved transfer explains
+    "1775044800,01.04.2026,14:00:00 GMT+2,RECV,r2,,,bc1q,,0.0005,BTC,30,\n"
+    "1775822400,10.04.2026,14:00:00 GMT+2,SENT,s1,0.00001,BTC,3x,,0.001,BTC,60,\n"
+)
+
+
+def test_trezor_pairs_its_receipt_with_the_exchange_withdrawal_and_asks_about_the_rest(
+    engine: Engine, account: int, bitcoin: int, tmp_path: Path
+) -> None:
+    wallet = add_account(engine, AccountDraft("Trezor", "Zimny", AccountType.REGULAR, ("PLN",))).id
+    binance = read_crypto(write(tmp_path, "binance.csv", WITHDRAWAL))
+    apply_crypto(engine, binance, FixedNbp(), prices, CryptoDecisions(account, wallet), TODAY)
+    withdrawal = next(t for t in list_transactions(engine) if t.transaction_type is TransactionType.SECURITY_TRANSFER)
+    file = read_crypto(write(tmp_path, "trezor.csv", TREZOR))
+    assert file.exchange == "trezor"
+
+    # The wallet the exchange's withdrawals went to is the Trezor's Account unless another is chosen
+    preview = preview_crypto(engine, file, FixedNbp(), prices, CryptoDecisions())
+    assert preview.account_id == wallet and preview.pairs == {"trezor-r1": withdrawal.id}
+    assert [t.external_id for t in preview.undecided] == ["trezor-r2", "trezor-s1"] and preview.blocked
+    with pytest.raises(CryptoError, match="Wybierz"):
+        apply_crypto(engine, file, FixedNbp(), prices, CryptoDecisions(), TODAY)
+    # The wallet's own Account, chosen as the other one before it became the wallet's, is still to be chosen
+    itself = preview_crypto(engine, file, FixedNbp(), prices, CryptoDecisions(counterparts={"trezor-r2": wallet}))
+    assert [t.external_id for t in itself.undecided] == ["trezor-r2", "trezor-s1"]
+
+    decisions = CryptoDecisions(counterparts={"trezor-r2": account}, skipped=frozenset({"trezor-s1"}))
+    apply_crypto(engine, file, FixedNbp(), prices, decisions, TODAY)
+    added = {t.external_id: t for t in list_transactions(engine) if t.external_id and "trezor" in t.external_id}
+    assert set(added) == {"trezor-r2", "trezor-s1-fee"}
+    receipt, fee = added["trezor-r2"], added["trezor-s1-fee"]
+    assert (receipt.account_id, receipt.target_account_id, receipt.quantity) == (account, wallet, Decimal("0.0005"))
+    # The send was skipped, but its network fee left the wallet: 0.00001 BTC x 50000 USD x 4.0 = 2 PLN
+    assert (fee.transaction_type, fee.account_id, fee.commission) == (TransactionType.SELL, wallet, Decimal("1.99"))
+    # The paired, added and skipped rows are not offered again
+    again = preview_crypto(engine, file, FixedNbp(), prices, CryptoDecisions())
+    assert (again.drafts, again.pairs, again.undecided, again.handled) == ([], {}, [], 4)
+    assert load_setting(engine, CRYPTO_ACCOUNT + "trezor") == str(wallet)

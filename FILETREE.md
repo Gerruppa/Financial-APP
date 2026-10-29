@@ -64,7 +64,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `changelog.md`: Architecture entry for the changelog (#200): parser, shipped file, version click and Co nowego dialog.
 - `changes.md`: Architecture entry for ui/changes.py (#112): main functions, UI markers and decisions.
 - `contribution-limits.md`: Architecture entry for Contribution Limits (#95, spec 8.1): main functions, UI markers and decisions.
-- `crypto-import.md`: Architecture entry for the Binance and OKX crypto CSV import: parsing, coin and Account matching, preview, apply and UI markers.
+- `crypto-import.md`: Architecture entry for the crypto CSV import (Binance, OKX, Trezor wallet): parsing, coin and Account matching, wallet transfer pairing, preview, apply and UI markers.
 - `dashboard-charts.md`: Architecture entry for Dashboard charts (#73, spec 6.1): main functions, UI markers and decisions.
 - `dashboard.md`: Architecture entry for Dashboard (#72, spec 5 and 6.1): main functions, UI markers and decisions.
 - `demo-mode.md`: Architecture entry for browser and demo mode (--browser, --demo), the demo data seed and the screenshot script
@@ -159,7 +159,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `charts.py`: Dashboard chart data from History and Transactions: value, profit, XIRR, class shares and dividends by year, per scope and period
 - `commands.py`: Command palette matching: finds commands by the start of a label or keyword word, and the ">" command-only mode.
 - `contribution_limits.py`: Contribution Limits rules: which transactions count towards each IKE, IKZE or OIPE yearly limit, bars and over-limit warnings
-- `crypto_import.py`: Pure parser of Binance and OKX CSV exports into crypto trades and Transaction drafts; no file or database access.
+- `crypto_import.py`: Pure parser of Binance, OKX and Trezor CSV exports into crypto trades and Transaction drafts, and pairing of wallet transfers; no file or database access.
 - `currencies.py`: Currency code check and the NBP Rate value type, plus the error raised when a rate is missing.
 - `dashboard.py`: Dashboard totals, Account table, currency exposure and allocation from Transactions, prices, NBP Rates and History, plus estimated tax and profit by source
 - `export.py`: Builds the transaction export rows with columns, amounts, origin and comment, independent of file format.
@@ -288,7 +288,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `bond_data.py`: Fetches and parses the MF bond file, GUS CPI and NBP reference rates, refreshing their SQLite copies at most once a day
 - `bossa.py`: Fetches GPW, NewConnect, ETF and bond Quotes in PLN from the Bossa JSON API
 - `catalyst.py`: Fetches Catalyst bonds' nominal and accrued interest from gpwcatalyst.pl and IZ indexation coefficients from gov.pl
-- `crypto.py`: Reads exchange CSV files, matches Accounts and coins, and previews and applies crypto trades as Transactions with Yahoo prices.
+- `crypto.py`: Reads Binance, OKX and Trezor CSV files, matches Accounts and coins, pairs wallet transfers, and previews and applies the imported Transactions.
 - `current_prices.py`: Today's valuation inputs shared by the Portfolio and the Dashboard: Instrument prices and NBP Rates from the last business day before today, each currency fetched once
 - `dashboard.py`: Computes today's Dashboard of a View Scope from the database, shared by the Dashboard and the Investment Strategy
 - `demo_data.py`: Seeds the made-up demo Portfolio (two Accounts, DEMO Instruments, a year of Transactions, a Total Investment Strategy) for the --demo start
@@ -328,7 +328,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `changes.py`: Window change events: the Change enum, the TODAYS_VALUE set, and ChangeEvents, which redraws each tab or header element that declared the published changes.
 - `charts.py`: Dashboard's nine ECharts charts, the profit waterfall, and shared PLN line and bar chart helpers for other tabs.
 - `contribution_limits.py`: Contribution Limits UI: yearly limits in Ustawienia and this year's Dashboard bars
-- `crypto_import.py`: Ustawienia > Import card for Binance and OKX CSV exports: pick the file, match Account and coins, preview and apply.
+- `crypto_import.py`: Ustawienia > Import card for Binance, OKX and Trezor CSV exports: pick the file, match Account, coins and wallet transfers, preview and apply.
 - `dashboard.py`: Dashboard tab UI: totals, price status, Account table, exposure, charts, Account treemap and ranking, Investment Goal tile, and the after-tax toggle
 - `deposit_drafts.py`: Dochód stały rows for Term Deposit interest and maturity Drafts: confirm, edit amounts, end or renew a matured deposit
 - `dialogs.py`: Draggable dialog support with no backdrop, so the screen behind stays readable; Esc closes the newest
@@ -441,9 +441,9 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_contribution_limits_ui.py`: UI tests for Contribution Limits on the Dashboard, in Ustawienia and the warning after a save
 - `test_conversion_fee_domain.py`: Domain tests for the broker FX Conversion Fee on foreign-currency Buys and Sells
 - `test_conversion_fee_ui.py`: UI tests for the FX Conversion Fee and payment source in the transaction dialog
-- `test_crypto_import.py`: Database tests for the Binance and OKX CSV import: Account and coin choice, preview, and all-or-none apply.
-- `test_crypto_import_domain.py`: Pure tests for parsing Binance and OKX CSV exports and building their Transaction drafts.
-- `test_crypto_import_ui.py`: UI test for the Ustawienia crypto import card: choosing an Account and applying an OKX export.
+- `test_crypto_import.py`: Database tests for the Binance, OKX and Trezor CSV import: Account and coin choice, wallet transfer pairing, preview, and all-or-none apply.
+- `test_crypto_import_domain.py`: Pure tests for parsing Binance, OKX and Trezor CSV exports and building their Transaction drafts.
+- `test_crypto_import_ui.py`: UI tests for the Ustawienia crypto import card: choosing Accounts, pairing a Trezor transfer, and applying an OKX export.
 - `test_dashboard_charts_ui.py`: UI tests that the Dashboard's nine charts follow the View Scope and the period
 - `test_dashboard_domain.py`: Tests the Dashboard domain totals, Account table and currency exposure
 - `test_dashboard_ui.py`: UI tests for the Dashboard tab: totals, Account table, currency exposure and price status

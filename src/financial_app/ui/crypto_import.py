@@ -1,7 +1,8 @@
-"""Ustawienia > Import z giełdy kryptowalut: Binance and OKX CSV exports as Transactions (spec 7).
+"""Ustawienia > Import z giełdy kryptowalut: Binance, OKX and Trezor CSV exports as Transactions (spec 7).
 
 The user points at the exported file (or the folder of OKX's files), chooses the Account and an Instrument for each
-coin, sees the Transactions to be added and applies them. Nothing is saved until "Zastosuj".
+coin, sees the Transactions to be added and applies them. For a Trezor, the transfers that pair with no saved one
+each need their other Account, or "Pomiń". Nothing is saved until "Zastosuj".
 """
 
 from collections.abc import Callable
@@ -14,7 +15,7 @@ from sqlalchemy import Engine
 
 from financial_app.domain.accounts import Account
 from financial_app.domain.crypto_import import EXCHANGE_NAMES
-from financial_app.domain.formatting import format_count, format_date
+from financial_app.domain.formatting import format_count, format_date, format_quantity
 from financial_app.domain.instruments import Instrument
 from financial_app.domain.transactions import TransactionError
 from financial_app.persistence.accounts import list_accounts
@@ -37,6 +38,8 @@ from financial_app.ui.save_warnings import show_warnings
 from financial_app.ui.xtb_import import NEW, Describer
 
 OpenInstrument = Callable[..., None]
+# The choice not to add a wallet's transfer
+SKIP = "skip"
 
 
 @dataclass
@@ -59,15 +62,19 @@ class CryptoImportSection:
     account_id: int | None = None
     wallet_id: int | None = None
     instruments: dict[str, int] = field(default_factory=dict)
+    counterparts: dict[str, int] = field(default_factory=dict)
+    skipped: set[str] = field(default_factory=set)
 
     def build(self) -> None:
         self.card = ui.card().classes("w-full max-w-4xl")
         with self.card:
             ui.label("Import z giełdy kryptowalut").classes("text-xl font-bold")
             ui.label(
-                "Wskaż plik CSV z Binance (Historia transakcji) albo z OKX (Order History; może być cały folder "
-                "eksportu). Binance nie podaje cen, więc ceny BTC są pobierane z Yahoo z dnia transakcji; USDC z OKX "
-                "liczymy jak USD po kursie NBP. Nic nie jest zapisywane przed „Zastosuj”."
+                "Wskaż plik CSV z Binance (Historia transakcji), z OKX (Order History; może być cały folder "
+                "eksportu) albo z Trezor Suite. Binance nie podaje cen, więc ceny BTC są pobierane z Yahoo z dnia "
+                "transakcji; USDC z OKX liczymy jak USD po kursie NBP. Przeniesienia z Trezora, które są drugą "
+                "stroną zapisanej wypłaty lub wpłaty na giełdę, są z nią parowane. Nic nie jest zapisywane przed "
+                "„Zastosuj”."
             ).classes("text-sm")
             path = ui.input("Plik albo folder z eksportem giełdy").classes("w-full").mark("crypto-path")
             ui.button("Wczytaj", icon="visibility", on_click=lambda: self.load(path.value)).props("no-caps").mark(
@@ -82,21 +89,26 @@ class CryptoImportSection:
             self.result.clear()
             ui.notify(str(error), type="negative")
             return
-        self.account_id = None
-        self.wallet_id = None
-        self.instruments = {}
+        self._forget_choices()
         self.render()
 
     def reset(self) -> None:
         """Forget the file and choices, e.g. after the data was cleared: they name removed ids."""
         self.file = None
+        self._forget_choices()
+        self.result.clear()
+
+    def _forget_choices(self) -> None:
         self.account_id = None
         self.wallet_id = None
         self.instruments = {}
-        self.result.clear()
+        self.counterparts = {}
+        self.skipped = set()
 
     def _decisions(self) -> CryptoDecisions:
-        return CryptoDecisions(self.account_id, self.wallet_id, dict(self.instruments))
+        return CryptoDecisions(
+            self.account_id, self.wallet_id, dict(self.instruments), dict(self.counterparts), frozenset(self.skipped)
+        )
 
     def render(self) -> None:
         assert self.file is not None
@@ -108,7 +120,12 @@ class CryptoImportSection:
             self._account(preview, names)
             self._wallet(preview, names)
             self._coins(preview, instruments)
-            if preview.account_id is None or preview.needs_wallet or preview.unmatched_coins:
+            if preview.pairs or preview.skipped:
+                ui.label(
+                    f"Sparowane z zapisanymi przeniesieniami: {len(preview.pairs)}, pominięte: {len(preview.skipped)}."
+                ).mark("crypto-paired")
+            self._counterparts(preview, names)
+            if preview.needs_choices:
                 ui.label("Wybierz konta i instrumenty, aby zobaczyć transakcje.").classes("k-muted")
                 return
             for problem in preview.problems:
@@ -130,9 +147,9 @@ class CryptoImportSection:
                 ):
                     for item in preview.file.unsupported:
                         ui.label(f"{format_date(item.day)}: {item.note}").classes("text-sm")
-            apply = ui.button(f"Zastosuj ({len(preview.drafts)})", icon="save", on_click=self.apply).props("no-caps")
+            apply = ui.button(f"Zastosuj ({len(preview.actions)})", icon="save", on_click=self.apply).props("no-caps")
             apply.mark("crypto-apply")
-            if preview.blocked or not preview.drafts:
+            if preview.blocked or not preview.actions:
                 apply.disable()
 
     def _account(self, preview: CryptoPreview, names: dict[int, str]) -> None:
@@ -146,7 +163,7 @@ class CryptoImportSection:
         ).classes("w-full").mark("crypto-account")
 
     def _wallet(self, preview: CryptoPreview, names: dict[int, str]) -> None:
-        if not preview.transfers:
+        if not preview.transfers or preview.file.is_wallet:
             return
         ui.select(
             names,
@@ -159,6 +176,36 @@ class CryptoImportSection:
         if choice is not None:
             self.wallet_id = int(choice)
             self.render()
+
+    def _counterparts(self, preview: CryptoPreview, names: dict[int, str]) -> None:
+        """A wallet's transfers that pair with no saved one: the Account each came from or went to, or "Pomiń"."""
+        if not preview.unpaired:
+            return
+        ui.label("Przeniesienia bez pary wśród zapisanych (wybierz drugie konto albo pomiń):").classes("font-bold")
+        options: dict[int | str, str] = {SKIP: "Pomiń (nie dodawaj)"}
+        options.update((i, name) for i, name in names.items() if i != preview.account_id)
+        for transfer in preview.unpaired:
+            key = transfer.external_id
+            value: int | str | None = SKIP if key in self.skipped else self.counterparts.get(key)
+            moved = f"{format_quantity(transfer.quantity)} {transfer.symbol}"
+            label = f"{format_date(transfer.day)}: {'otrzymano' if transfer.incoming else 'wysłano'} {moved}"
+            ui.select(
+                options,
+                value=value,
+                label=f"{label}, {'z konta' if transfer.incoming else 'na konto'}",
+                on_change=lambda e, k=key: self._choose_counterpart(k, e.value),
+            ).classes("w-full").mark(f"crypto-counterpart-{key}")
+
+    def _choose_counterpart(self, key: str, choice: int | str | None) -> None:
+        if choice is None:
+            return
+        self.skipped.discard(key)
+        self.counterparts.pop(key, None)
+        if choice == SKIP:
+            self.skipped.add(key)
+        else:
+            self.counterparts[key] = int(choice)
+        self.render()
 
     def _coins(self, preview: CryptoPreview, instruments: list[Instrument]) -> None:
         if not preview.unmatched_coins:

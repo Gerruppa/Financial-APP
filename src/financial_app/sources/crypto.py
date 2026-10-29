@@ -1,8 +1,12 @@
-"""Importing Binance and OKX CSV exports as Transactions (spec 7).
+"""Importing Binance, OKX and Trezor CSV exports as Transactions (spec 7).
 
 Nothing is saved until the user has seen the preview and applied it: ``preview_crypto`` only reads, ``apply_crypto``
 saves every new trade or none. The exchange's Account and each coin's Instrument are remembered in the app settings.
 Trades imported before (by their external id) are not offered again, so overlapping exports can be imported again.
+
+A Trezor is a wallet: its Account is the wallet's, and a transfer in its export is mostly the other side of an
+exchange's withdrawal or deposit imported before, so it pairs with that saved Security Transfer and adds nothing. The
+user chooses the other Account of each transfer left, or skips it.
 """
 
 from collections.abc import Callable, Mapping
@@ -14,6 +18,8 @@ from pathlib import Path
 from sqlalchemy import Engine
 
 from financial_app.domain.crypto_import import (
+    EXCHANGE_NAMES,
+    TREZOR,
     CryptoContext,
     CryptoError,
     CryptoRead,
@@ -22,6 +28,7 @@ from financial_app.domain.crypto_import import (
     Unsupported,
     crypto_draft,
     detect_exchange,
+    pair_transfers,
     parse_exchange,
     transfer_draft,
 )
@@ -31,7 +38,15 @@ from financial_app.domain.instruments import Instrument
 from financial_app.domain.prices import YAHOO, PriceSourceError
 from financial_app.domain.transactions import PLN, TransactionDraft, TransactionError
 from financial_app.persistence.instruments import list_instruments
-from financial_app.persistence.reconciliation import AddBroker, apply_reconciliation, handled_broker_ids
+from financial_app.persistence.reconciliation import (
+    Action,
+    AddBroker,
+    KeepMine,
+    SkipBroker,
+    apply_reconciliation,
+    handled_broker_ids,
+    unpaired_security_transfers,
+)
 from financial_app.persistence.settings import CRYPTO_ACCOUNT, CRYPTO_COIN, CRYPTO_WALLET, load_setting, save_setting
 from financial_app.sources.spreadsheet import NbpLookup
 from financial_app.sources.yahoo import YahooSource
@@ -52,15 +67,23 @@ class CryptoFile:
     unsupported: list[Unsupported]
     transfers: list[CryptoTransfer] = field(default_factory=list)
 
+    @property
+    def is_wallet(self) -> bool:
+        """A wallet's export (Trezor): its Account is the wallet, its transfers pair with saved ones."""
+        return self.exchange == TREZOR
+
 
 @dataclass(frozen=True)
 class CryptoDecisions:
     """The user's choices: the Account the trades go into (None: not chosen), the wallet Account withdrawals are
-    transferred to and an Instrument per coin symbol."""
+    transferred to and an Instrument per coin symbol. For a wallet's export (Trezor): the other Account of each
+    transfer that pairs with no saved one, by external id, or the transfers ``skipped``."""
 
     account_id: int | None = None
     wallet_id: int | None = None
     instruments: Mapping[str, int] = field(default_factory=dict)
+    counterparts: Mapping[str, int] = field(default_factory=dict)
+    skipped: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -83,19 +106,45 @@ class CryptoPreview:
     handled: int
     # The withdrawals not imported before
     transfers: list[CryptoTransfer]
+    # A wallet's export: its transfers that are the other side of a saved Security Transfer (external id ->
+    # Transaction id), those with no other Account chosen yet and those skipped
+    pairs: dict[str, int] = field(default_factory=dict)
+    undecided: list[CryptoTransfer] = field(default_factory=list)
+    skipped: list[str] = field(default_factory=list)
 
     @property
     def blocked(self) -> bool:
-        return self.account_id is None or self.needs_wallet or bool(self.unmatched_coins or self.problems)
+        return self.needs_choices or bool(self.problems)
+
+    @property
+    def needs_choices(self) -> bool:
+        """An Account, the wallet, a coin's Instrument or a wallet transfer's other Account is still to be chosen."""
+        return self.account_id is None or self.needs_wallet or bool(self.unmatched_coins or self.undecided)
 
     @property
     def needs_wallet(self) -> bool:
-        """The file has withdrawals not imported before, and the Account they go to is not chosen."""
-        return bool(self.transfers) and self.wallet_id is None
+        """The exchange's file has withdrawals not imported before, and the Account they go to is not chosen."""
+        return not self.file.is_wallet and bool(self.transfers) and self.wallet_id is None
+
+    @property
+    def unpaired(self) -> list[CryptoTransfer]:
+        """A wallet's transfers not imported before that pair with no saved one: each needs its other Account."""
+        if not self.file.is_wallet or self.account_id is None:
+            return []
+        return [transfer for transfer in self.transfers if transfer.external_id not in self.pairs]
+
+    @property
+    def actions(self) -> list[Action]:
+        """What applying saves: the drafts, the pairs and the skipped transfers."""
+        return [
+            *(AddBroker(draft) for draft in self.drafts),
+            *(KeepMine(transaction_id, external_id) for external_id, transaction_id in self.pairs.items()),
+            *(SkipBroker(external_id) for external_id in self.skipped),
+        ]
 
 
 def read_crypto(path: Path) -> CryptoFile:
-    """The trades in a Binance or OKX CSV file, or in the CSV files of a folder (one exchange only); raises
+    """The trades in a Binance, OKX or Trezor CSV file, or in the CSV files of a folder (one exchange only); raises
     CryptoError if nothing can be read."""
     files = sorted(path.glob("*.csv")) if path.is_dir() else [path]
     if not files:
@@ -110,9 +159,9 @@ def read_crypto(path: Path) -> CryptoFile:
         if exchange is not None:
             found.setdefault(exchange, []).append(text)
         elif not path.is_dir():
-            raise CryptoError(f"Plik {file.name} nie wygląda na eksport z Binance ani OKX (CSV).")
+            raise CryptoError(f"Plik {file.name} nie wygląda na eksport z Binance, OKX ani Trezora (CSV).")
     if not found:
-        raise CryptoError(f"W folderze {path.name} nie ma plików z Binance ani OKX.")
+        raise CryptoError(f"W folderze {path.name} nie ma plików z Binance, OKX ani Trezora.")
     if len(found) > 1:
         raise CryptoError("Wskaż pliki jednej giełdy naraz.")
     ((exchange, texts),) = found.items()
@@ -154,6 +203,11 @@ def _account(engine: Engine, exchange: str, decisions: CryptoDecisions) -> int |
     if decisions.account_id is not None:
         return decisions.account_id
     saved = load_setting(engine, CRYPTO_ACCOUNT + exchange)
+    if saved is None and exchange == TREZOR:  # the wallet's own export
+        # The wallet the exchanges' withdrawals went to, if they all chose one
+        wallets = {load_setting(engine, CRYPTO_WALLET + other) for other in EXCHANGE_NAMES if other != TREZOR}
+        wallets.discard(None)
+        saved = wallets.pop() if len(wallets) == 1 else None
     return int(saved) if saved is not None else None
 
 
@@ -188,7 +242,7 @@ def preview_crypto(
     resolved = {symbol: _instrument(engine, symbol, instruments, decisions) for symbol in symbols}
     unmatched = [symbol for symbol, found in resolved.items() if found is None]
 
-    wallet_id = _wallet(engine, file.exchange, decisions) if transfers else None
+    wallet_id = _wallet(engine, file.exchange, decisions) if transfers and not file.is_wallet else None
     drafts: list[TransactionDraft] = []
     problems: list[Problem] = []
     if account_id is not None:
@@ -205,8 +259,39 @@ def preview_crypto(
                 found = resolved[transfer.symbol]
                 if found is not None:
                     drafts.append(transfer_draft(transfer, account_id, wallet_id, found))
+    pairs: dict[str, int] = {}
+    undecided: list[CryptoTransfer] = []
+    skipped: list[str] = []
+    if file.is_wallet and account_id is not None:
+        instrument_ids = {symbol: found.id for symbol, found in resolved.items() if found is not None}
+        saved = unpaired_security_transfers(engine, account_id)
+        pairs = pair_transfers(transfers, saved, account_id, instrument_ids)
+        for transfer in transfers:
+            found = resolved[transfer.symbol]
+            other = decisions.counterparts.get(transfer.external_id)
+            if found is None or transfer.external_id in pairs:
+                continue
+            if transfer.external_id in decisions.skipped:
+                skipped.append(transfer.external_id)
+            # The wallet's own Account, chosen as the other one before it became the wallet's, is no choice
+            elif other is not None and other != account_id:
+                drafts.append(transfer_draft(transfer, account_id, other, found))
+            else:
+                undecided.append(transfer)
     done = len(file.trades) + len(file.transfers) - len(trades) - len(transfers)
-    return CryptoPreview(file, account_id, wallet_id, unmatched, drafts, problems, done, transfers)
+    return CryptoPreview(
+        file,
+        account_id,
+        wallet_id,
+        unmatched,
+        drafts,
+        problems,
+        done,
+        transfers,
+        pairs=pairs,
+        undecided=undecided,
+        skipped=skipped,
+    )
 
 
 def _context(
@@ -237,12 +322,15 @@ def apply_crypto(
     then.
     """
     preview = preview_crypto(engine, file, rates, prices, decisions)
-    if preview.account_id is None or preview.needs_wallet or preview.unmatched_coins:
-        raise CryptoError("Wybierz konto, konto portfela dla wypłat i instrument dla każdej monety.")
+    if preview.needs_choices:
+        raise CryptoError(
+            "Wybierz konto, konto portfela dla wypłat, instrument dla każdej monety "
+            "i drugie konto każdego przeniesienia portfela."
+        )
     if preview.problems:
         first = preview.problems[0]
         raise CryptoError(f"Transakcja z {format_date(first.trade.day)}: {first.message}")
-    apply_reconciliation(engine, [AddBroker(draft) for draft in preview.drafts], today)
+    apply_reconciliation(engine, preview.actions, today)
     save_setting(engine, CRYPTO_ACCOUNT + file.exchange, str(preview.account_id))
     if preview.wallet_id is not None:
         save_setting(engine, CRYPTO_WALLET + file.exchange, str(preview.wallet_id))
