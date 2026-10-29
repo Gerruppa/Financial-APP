@@ -104,14 +104,19 @@ def delete_transaction(engine: Engine, transaction_id: int) -> None:
         session.delete(row)
 
 
-def restore_transaction(engine: Engine, transaction: Transaction) -> Transaction:
+def restore_transaction(engine: Engine, transaction: Transaction, dropping: Sequence[int] = ()) -> Transaction:
     """Put a deleted ``transaction`` back under its own id, so it keeps its place in the entry order (same-day ties
-    settle as before) and the Sells and coupons naming its Lot find it again.
+    settle as before) and the Sells and coupons naming its Lot find it again. The Transactions ``dropping`` names
+    (the covering Deposits saved since the delete, #267) are deleted first, in the same all-or-none save, so one of
+    them may have taken the id.
 
     Refused when another Transaction took the id meanwhile (SQLite hands a freed last id to the next row), and, like
     any save, blocked with InsufficientQuantityError if it would leave a Sell uncovered.
     """
     with Session(engine) as session, session.begin():
+        for dropped in dropping:
+            session.delete(get_row(session, dropped))
+        session.flush()
         if session.get(TransactionRow, transaction.id) is not None:
             raise TransactionError("Miejsce tej transakcji zajęła już inna, więc nie można jej przywrócić.")
         check_references(session, transaction)

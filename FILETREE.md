@@ -188,7 +188,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `report.py`: Report model: titled sections of typed rows and notes for Sell Summary, Wyniki, Portfolio and passive income of a year and View Scope; no file format
 - `results.py`: Wyniki tab figures: period XIRR, TWR, drawdown, volatility and fixed-period returns per Total and Account, from History
 - `sale_summary.py`: Sell Summary: Sale Pairs from the FIFO replay with attributed Dividends, and closed-position statistics (win rate, days, best, worst).
-- `save_warnings.py`: Warnings a Transactions save shows (cash shortfalls, over-limit contributions, unsplit Multi-asset, Instruments an Account may not hold); never blocks the save
+- `save_warnings.py`: Warnings a Transactions save shows (cash shortfalls, over-limit contributions, unsplit Multi-asset, disallowed Instruments), and what changed since a delete before its undo
 - `sayings.py`: Saying of the day: fixed list of lines from Walaszek's cartoons (Kapitan Bomba, Egzorcysta, Chłopaki z baraków) and the day-based pick shown at the foot of the menu
 - `spreadsheet_import.py`: Pure conversion of the user's Inwestomat Transakcje sheet rows into Transaction drafts, with fingerprints for re-import skipping.
 - `strategy.py`: Investment Strategy rules: Allocation Targets with tolerance bands, Instrument Targets, and the water-filling split of the Planned Deposit
@@ -356,6 +356,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `recurring_rules.py`: Ustawienia section listing Recurring Rules, with the rule dialog and its skipped occurrences
 - `report_export.py`: Year select and Eksportuj XLSX button shared by report tabs, handing the file to the browser
 - `reset.py`: Ustawienia Wyczyść dane card that clears the whole portfolio after a warning and typed confirmation
+- `restore_dialog.py`: Undo of a delete after changes: window saying what is restored, explaining each difference since, and restoring with or without the covering Deposits
 - `results.py`: Wyniki tab page: result tiles, drawdown chart and per-Account results table under the period selector
 - `sale_summary.py`: Podsumowanie sprzedaży tab: Sale Pairs of the scope and period with the closed-position statistics tiles.
 - `save_warnings.py`: Shows save warnings as notifications, and for a PLN cash shortfall the bar and window offering covering Deposits; same wherever Transactions were saved.
@@ -441,7 +442,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_contribution_limits_ui.py`: UI tests for Contribution Limits on the Dashboard, in Ustawienia and the warning after a save
 - `test_conversion_fee_domain.py`: Domain tests for the broker FX Conversion Fee on foreign-currency Buys and Sells
 - `test_conversion_fee_ui.py`: UI tests for the FX Conversion Fee and payment source in the transaction dialog
-- `test_covering_deposits_ui.py`: UI tests for the covering Deposits bar and window: the proposed Deposits per Account, saving the ticked ones, and no bar within the cash.
+- `test_covering_deposits_ui.py`: UI tests for the covering Deposits bar and window, and for undoing a delete they covered: explanations, dropping or keeping them, a taken id
 - `test_crypto_import.py`: Database tests for the Binance, OKX and Trezor CSV import: Account and coin choice, wallet transfer pairing, preview, and all-or-none apply.
 - `test_crypto_import_domain.py`: Pure tests for parsing Binance, OKX and Trezor CSV exports and building their Transaction drafts.
 - `test_crypto_import_ui.py`: UI tests for the Ustawienia crypto import card: choosing Accounts, pairing a Trezor transfer, and applying an OKX export.

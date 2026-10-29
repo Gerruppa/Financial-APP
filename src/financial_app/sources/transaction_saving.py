@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 from sqlalchemy import Engine
 
-from financial_app.domain.save_warnings import SaveWarnings, save_warnings
+from financial_app.domain.save_warnings import SaveWarnings, SinceDelete, save_warnings, since_delete
 from financial_app.domain.transactions import Transaction, TransactionDraft, covering_deposits, covering_exchange
 from financial_app.persistence.accounts import list_accounts
 from financial_app.persistence.bond_series import drop_if_unused, series_instrument
@@ -22,10 +22,6 @@ from financial_app.persistence.transactions import (
     transactions_in_entry_order,
     update_transaction,
 )
-
-# The comment of a proposed covering Deposit (the negative cash warning's, the crypto import's), so the user can find
-# and correct it
-COVERING_COMMENT = "Wpłata uzupełniająca: pokrywa brakującą gotówkę"
 
 
 @dataclass(frozen=True)
@@ -94,7 +90,7 @@ def covering_proposals(engine: Engine, account_ids: Iterable[int]) -> dict[int, 
     """The PLN Deposits that keep each Account's cash from going below zero (``covering_deposits``), by Account id,
     for the Accounts that need any: the fix the negative cash warning offers (``SaveWarnings.short_of_pln``, #267)."""
     transactions = list_transactions(engine)
-    proposed = {i: covering_deposits(transactions, i, COVERING_COMMENT) for i in dict.fromkeys(account_ids)}
+    proposed = {i: covering_deposits(transactions, i) for i in dict.fromkeys(account_ids)}
     return {account_id: deposits for account_id, deposits in proposed.items() if deposits}
 
 
@@ -103,12 +99,24 @@ def save_covering(engine: Engine, deposits: Sequence[TransactionDraft]) -> Saved
     return checked_save(engine, lambda: add_transactions(engine, deposits))
 
 
-def delete_saved(engine: Engine, transaction_id: int) -> Saved[None]:
-    """Delete the Transaction; raises TransactionError when that would leave a Sell uncovered."""
-    return checked_save(engine, lambda: delete_transaction(engine, transaction_id))
+def delete_saved(engine: Engine, transaction_id: int) -> Saved[list[Transaction]]:
+    """Delete the Transaction; raises TransactionError when that would leave a Sell uncovered. Its value is all the
+    Transactions left, which the undo compares with what is saved by then (``since_deleted``)."""
+
+    def write() -> list[Transaction]:
+        delete_transaction(engine, transaction_id)
+        return list_transactions(engine)
+
+    return checked_save(engine, write)
 
 
-def restore_saved(engine: Engine, transaction: Transaction) -> Saved[Transaction]:
-    """Undo ``delete_saved``: put the deleted Transaction back under its id; raises TransactionError when that id was
-    taken meanwhile or the Transaction would now leave a Sell uncovered."""
-    return checked_save(engine, lambda: restore_transaction(engine, transaction))
+def since_deleted(engine: Engine, deleted: Transaction, left: Sequence[Transaction]) -> SinceDelete:
+    """What changed on the Accounts of ``deleted`` since ``delete_saved`` left ``left``, for the undo to explain."""
+    return since_delete(deleted, left, list_transactions(engine))
+
+
+def restore_saved(engine: Engine, transaction: Transaction, dropping: Sequence[int] = ()) -> Saved[Transaction]:
+    """Undo ``delete_saved``: put the deleted Transaction back under its id, deleting first, all or none, the covering
+    Deposits ``dropping`` names; raises TransactionError when that id was taken meanwhile or the Transaction would
+    now leave a Sell uncovered."""
+    return checked_save(engine, lambda: restore_transaction(engine, transaction, dropping))

@@ -19,7 +19,7 @@ from financial_app.domain.accounts import Account
 from financial_app.domain.crypto_import import EXCHANGE_NAMES
 from financial_app.domain.formatting import format_count, format_date, format_quantity
 from financial_app.domain.instruments import Instrument
-from financial_app.domain.transactions import TransactionError
+from financial_app.domain.transactions import COVERING_COMMENT, TransactionError
 from financial_app.persistence.accounts import list_accounts
 from financial_app.persistence.instruments import list_instruments
 from financial_app.sources.crypto import (
@@ -35,7 +35,7 @@ from financial_app.sources.crypto import (
     yahoo_prices,
 )
 from financial_app.sources.spreadsheet import NbpLookup
-from financial_app.sources.transaction_saving import COVERING_COMMENT, checked_save
+from financial_app.sources.transaction_saving import checked_save
 from financial_app.sources.yahoo import YahooSource
 from financial_app.ui.accounts import open_account_dialog
 from financial_app.ui.save_warnings import deposit_choices, deposits_total, show_warnings

@@ -12,6 +12,7 @@ from financial_app.domain.accounts import AccountDraft, AccountType
 from financial_app.domain.currencies import NbpRate
 from financial_app.domain.instruments import InstrumentDraft
 from financial_app.domain.transactions import (
+    COVERING_COMMENT,
     TransactionDraft,
     TransactionError,
     TransactionType,
@@ -23,12 +24,13 @@ from financial_app.persistence.db import migrate
 from financial_app.persistence.instruments import add_instrument, list_asset_classes, list_instruments
 from financial_app.persistence.transactions import add_transaction, list_transactions
 from financial_app.sources.transaction_saving import (
-    COVERING_COMMENT,
     checked_save,
     covering_proposals,
     delete_saved,
+    restore_saved,
     save_covering,
     save_transaction,
+    since_deleted,
 )
 
 DAY = date(2026, 3, 2)
@@ -162,3 +164,24 @@ def test_a_save_short_of_pln_cash_proposes_the_deposits_that_bring_it_back_to_ze
     assert covered.warnings.negative_cash == ()
     assert lowest_cash_balance(list_transactions(engine), account, start=DAY) == 0
     assert covering_proposals(engine, [account]) == {}
+
+
+def test_undoing_a_delete_can_drop_the_covering_deposits_that_took_its_place(engine: Engine) -> None:
+    """#267: the covering Deposit saved after a delete takes the freed id; the undo drops it and restores, all or
+    none, so the cash is as before the delete."""
+    account = _account(engine)
+    add_transaction(engine, TransactionDraft(account, DAY, TransactionType.WITHDRAWAL, Decimal(100)))
+    deposit = add_transaction(engine, _deposit(account, 100))
+    deleted = delete_saved(engine, deposit.id)
+    [covering] = save_covering(engine, covering_proposals(engine, [account])[account]).value
+
+    since = since_deleted(engine, deposit, deleted.value)
+
+    assert since.covering == (covering,)
+    assert since.taken_by == covering
+    with pytest.raises(TransactionError, match="zajęła już inna"):
+        restore_saved(engine, deposit)
+    restored = restore_saved(engine, deposit, dropping=[covering.id])
+    assert restored.warnings.negative_cash == ()
+    assert sorted(t.id for t in list_transactions(engine)) == sorted([deposit.id, deposit.id - 1])
+    assert lowest_cash_balance(list_transactions(engine), account, start=DAY) == 0

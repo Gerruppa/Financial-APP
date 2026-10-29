@@ -59,7 +59,6 @@ from financial_app.persistence.reconciliation import (
 from financial_app.persistence.settings import CRYPTO_ACCOUNT, CRYPTO_COIN, CRYPTO_WALLET, load_setting, save_setting
 from financial_app.persistence.transactions import list_transactions
 from financial_app.sources.spreadsheet import NbpLookup
-from financial_app.sources.transaction_saving import COVERING_COMMENT
 from financial_app.sources.yahoo import YahooSource
 
 # How far back a market price is looked for when the day itself has no close
@@ -389,7 +388,7 @@ def proposed_deposits(engine: Engine, previews: Sequence[CryptoPreview]) -> dict
     paid by card, OKX's stablecoin deposits are left out), so its purchases would take the cash below zero."""
     known = [*list_transactions(engine), *(draft for preview in previews for draft in preview.drafts)]
     accounts = dict.fromkeys(preview.account_id for preview in previews if preview.account_id is not None)
-    proposed = {account_id: covering_deposits(known, account_id, COVERING_COMMENT) for account_id in accounts}
+    proposed = {account_id: covering_deposits(known, account_id) for account_id in accounts}
     return {account_id: deposits for account_id, deposits in proposed.items() if deposits}
 
 

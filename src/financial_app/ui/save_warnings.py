@@ -9,9 +9,9 @@ from sqlalchemy import Engine
 
 from financial_app.domain.formatting import format_count, format_date, format_pln
 from financial_app.domain.save_warnings import SaveWarnings
-from financial_app.domain.transactions import TransactionDraft, TransactionError
+from financial_app.domain.transactions import COVERING_COMMENT, TransactionDraft, TransactionError
 from financial_app.persistence.accounts import list_accounts
-from financial_app.sources.transaction_saving import COVERING_COMMENT, covering_proposals, save_covering
+from financial_app.sources.transaction_saving import covering_proposals, save_covering
 from financial_app.ui.dialogs import movable_dialog
 from financial_app.ui.undo import action_bar
 

@@ -18,6 +18,9 @@ from financial_app.domain.currencies import NbpRate, is_currency_code
 
 GROSZ = Decimal("0.01")
 PLN = "PLN"
+# The comment of a proposed covering Deposit (``covering_deposits``: the negative cash warning's, the crypto
+# import's), so the user can find and correct it, and an undone delete can tell them apart (#267)
+COVERING_COMMENT = "Wpłata uzupełniająca: pokrywa brakującą gotówkę"
 
 
 class TransactionError(ValueError):
@@ -1011,11 +1014,11 @@ def lowest_cash_balance(
 
 
 def covering_deposits(
-    transactions: Iterable[TransactionDraft], account_id: int, comment: str
+    transactions: Iterable[TransactionDraft], account_id: int, comment: str = COVERING_COMMENT
 ) -> list[TransactionDraft]:
     """The PLN Deposits that keep the Account's end-of-day Cash Balance from going below zero: on each day it would,
     the amount it lacks. For history whose deposits are missing, e.g. a crypto exchange's export, whose purchases were
-    paid by card."""
+    paid by card, or a save the negative cash warning offers to cover (#267)."""
     by_day: dict[date, list[TransactionDraft]] = {}
     for t in transactions:
         if account_id in (t.account_id, t.target_account_id):

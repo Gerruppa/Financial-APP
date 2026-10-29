@@ -1,5 +1,5 @@
 """The negative PLN cash warning's fix (#267): "Dodaj wpłaty uzupełniające" opens the proposed Deposits per Account,
-and saves the ticked ones."""
+and saves the ticked ones; undoing a delete they covered explains each difference first."""
 
 from datetime import date
 from decimal import Decimal
@@ -8,14 +8,14 @@ from pathlib import Path
 import pytest
 from nicegui import ui
 from nicegui.testing import User, user_simulation
+from nicegui.testing.user_interaction import UserInteraction
 from sqlalchemy import Engine
 
 from financial_app.domain.accounts import AccountDraft, AccountType
-from financial_app.domain.transactions import TransactionDraft, TransactionType, lowest_cash_balance
+from financial_app.domain.transactions import COVERING_COMMENT, TransactionDraft, TransactionType, lowest_cash_balance
 from financial_app.persistence.accounts import add_account
 from financial_app.persistence.db import init_db
 from financial_app.persistence.transactions import add_transaction, list_transactions
-from financial_app.sources.transaction_saving import COVERING_COMMENT
 from financial_app.ui.shell import build_shell
 
 NBSP = "\xa0"
@@ -96,3 +96,76 @@ async def test_a_save_within_the_cash_offers_no_deposits(engine: Engine, xtb: in
         with user.scope(marker="transactions"):
             await user.should_see(f"+10,00{NBSP}zł")
         await user.should_not_see(marker="covering-bar")
+
+
+def _open_row(user: User, index: int) -> None:
+    """Click the ``index``-th row of the Transakcje list (newest first)."""
+    rows = sorted(user.find(marker="transaction-row").elements, key=lambda element: element.id)
+    UserInteraction(user, {rows[index]}, None).click()
+
+
+def _add(engine: Engine, account: int, day: int, kind: TransactionType, amount: int) -> None:
+    add_transaction(engine, TransactionDraft(account, date(2026, 1, day), kind, Decimal(amount)))
+
+
+async def _delete_and_cover(user: User, row: int) -> None:
+    """Delete the ``row``-th Transaction, which takes the cash below zero, then save its covering Deposit."""
+    await user.open("/transakcje")
+    _open_row(user, row)
+    user.find(marker="delete-transaction").click()
+    await user.should_see(marker="undo-bar")
+    user.find(marker="covering-button").click()
+    user.find(marker="covering-save").click()
+    await user.should_see(marker="undo-bar")
+
+
+async def test_undoing_a_delete_after_covering_it_explains_and_can_drop_the_deposits(engine: Engine, xtb: int) -> None:
+    _add(engine, xtb, 3, TransactionType.WITHDRAWAL, 60)
+
+    async with user_simulation(lambda: build_shell(engine)) as user:
+        await _delete_and_cover(user, 1)  # newest first: the Deposit of 02.01
+        user.find(marker="undo-button").click()
+
+        with user.scope(marker="undo-window"):
+            await user.should_see(f"Przywrócę: 02.01.2026 · XTB · Wpłata · 100,00{NBSP}zł")
+            await user.should_see(f"03.01.2026: 60,00{NBSP}zł")
+            await user.should_see(f"o 60,00{NBSP}zł wyższa niż przed usunięciem")
+        user.find(marker="undo-drop-covering").click()
+
+        with user.scope(marker="transactions"):
+            await user.should_see(f"+100,00{NBSP}zł")
+    assert sorted(t.actual_amount for t in list_transactions(engine)) == [Decimal(60), Decimal(100)]
+    assert [t.comment for t in list_transactions(engine)] == ["", ""]
+
+
+async def test_undoing_a_delete_can_keep_the_covering_deposits(engine: Engine, xtb: int) -> None:
+    _add(engine, xtb, 3, TransactionType.WITHDRAWAL, 60)
+
+    async with user_simulation(lambda: build_shell(engine)) as user:
+        await _delete_and_cover(user, 1)
+        user.find(marker="undo-button").click()
+        user.find(marker="undo-restore").click()
+
+        with user.scope(marker="transactions"):
+            await user.should_see(f"+100,00{NBSP}zł")
+    assert sorted(t.actual_amount for t in list_transactions(engine)) == [Decimal(60), Decimal(60), Decimal(100)]
+
+
+async def test_a_covering_deposit_that_took_the_deleted_place_must_go_with_the_undo(engine: Engine, xtb: int) -> None:
+    _add(engine, xtb, 3, TransactionType.WITHDRAWAL, 120)
+    _add(engine, xtb, 1, TransactionType.DEPOSIT, 50)  # the newest id, which SQLite hands on once freed
+
+    async with user_simulation(lambda: build_shell(engine)) as user:
+        await _delete_and_cover(user, 2)  # newest first: the Deposit of 01.01
+        user.find(marker="undo-button").click()
+
+        with user.scope(marker="undo-window"):
+            await user.should_see("zajęła jej numer")
+        [keep] = user.find(marker="undo-restore").elements
+        assert isinstance(keep, ui.button)
+        assert not keep.enabled
+        user.find(marker="undo-drop-covering").click()
+
+        with user.scope(marker="transactions"):
+            await user.should_see(f"+50,00{NBSP}zł")
+    assert sorted(t.actual_amount for t in list_transactions(engine)) == [Decimal(50), Decimal(100), Decimal(120)]

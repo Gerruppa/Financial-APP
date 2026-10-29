@@ -14,6 +14,7 @@ from financial_app.domain.formatting import format_amount, format_date, format_p
 from financial_app.domain.instruments import Instrument
 from financial_app.domain.term_deposits import TermDeposit, locked_capital
 from financial_app.domain.transactions import (
+    COVERING_COMMENT,
     PLN,
     Transaction,
     TransactionDraft,
@@ -106,6 +107,50 @@ class SaveWarnings:
             names = ", ".join(instrument.name for instrument in self.unsplit)
             texts.append(f"Instrumenty Multi-asset bez podziału na klasy: {names}. Podaj go w zakładce Multi-asset.")
         return texts
+
+
+@dataclass(frozen=True)
+class SinceDelete:
+    """What changed on a deleted Transaction's Accounts between its delete and its undo, so the undo explains each
+    difference before restoring (#267): the covering Deposits added meanwhile (``COVERING_COMMENT``), which made up
+    for the cash it took and would count it twice; what else was added, changed (then, now) or removed; and the
+    Transaction that took its id (SQLite hands a freed last id to the next row), which blocks the restore unless it
+    is a covering Deposit the undo drops."""
+
+    covering: tuple[Transaction, ...] = ()
+    added: tuple[Transaction, ...] = ()
+    changed: tuple[tuple[Transaction, Transaction], ...] = ()
+    removed: tuple[Transaction, ...] = ()
+    taken_by: Transaction | None = None
+
+    @property
+    def any(self) -> bool:
+        return bool(self.covering or self.added or self.changed or self.removed or self.taken_by)
+
+
+def since_delete(deleted: Transaction, left: Sequence[Transaction], now: Sequence[Transaction]) -> SinceDelete:
+    """Compare ``left``, all the Transactions just after ``deleted`` was deleted, with those saved ``now``, on the
+    Accounts ``deleted`` moved cash or securities on."""
+    accounts = {deleted.account_id, deleted.target_account_id} - {None}
+
+    def on_accounts(t: Transaction) -> bool:
+        return t.account_id in accounts or t.target_account_id in accounts
+
+    then = {t.id: t for t in left}
+    current = {t.id: t for t in now}
+    added = [t for i, t in current.items() if i not in then and on_accounts(t)]
+    covering = [t for t in added if t.transaction_type is TransactionType.DEPOSIT and t.comment == COVERING_COMMENT]
+    return SinceDelete(
+        tuple(covering),
+        tuple(t for t in added if t not in covering),
+        tuple(
+            (t, current[i])
+            for i, t in then.items()
+            if i in current and current[i] != t and (on_accounts(t) or on_accounts(current[i]))
+        ),
+        tuple(t for i, t in then.items() if i not in current and on_accounts(t)),
+        current.get(deleted.id),
+    )
 
 
 def touched(before: Iterable[Transaction], after: Iterable[Transaction]) -> list[Transaction]:
