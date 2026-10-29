@@ -5,6 +5,7 @@ from pathlib import Path
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import Engine, create_engine
+from sqlalchemy.pool import NullPool
 
 MIGRATIONS_DIR = Path(__file__).parent / "migrations"
 
@@ -12,7 +13,9 @@ MIGRATIONS_DIR = Path(__file__).parent / "migrations"
 def open_engine(path: Path) -> Engine:
     """Engine for the SQLite file at ``path``, creating its folder if needed."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    return create_engine(f"sqlite:///{path}")
+    # No pool: a connection closes when its work ends, so a worker thread that was still running as the User signed
+    # out cannot leave the file open (Windows would refuse to delete the User's folder)
+    return create_engine(f"sqlite:///{path}", poolclass=NullPool)
 
 
 def init_db(path: Path) -> Engine:
