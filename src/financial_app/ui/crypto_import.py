@@ -1,14 +1,16 @@
 """Ustawienia > Import z giełdy kryptowalut: Binance, OKX and Trezor CSV exports as Transactions (spec 7).
 
-The user points at an exported file or a folder of them (any sources, subfolders too), chooses each source's Account
-and an Instrument for each coin, sees the Transactions to be added and applies them all at once. A Trezor's transfer
-that pairs with none is left for later unless the user chooses its other Account or "Pomiń". Nothing is saved until
-"Zastosuj".
+The card opens a window that leads the user through the import step by step (``STEPS``): how to get the exports,
+pointing at a file or a folder of them (any sources, subfolders too), each source's Account and an Instrument for each
+coin, the Deposits proposed where the purchases would take an Account's cash below zero, and the Transactions to be
+added, applied all at once, with hints for correcting them by hand. A Trezor's transfer that pairs with none is left
+for later unless the user chooses its other Account or "Pomiń". Nothing is saved until "Zastosuj".
 """
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date
+from decimal import Decimal
 from pathlib import Path as FilePath
 
 from nicegui import ui
@@ -16,18 +18,21 @@ from sqlalchemy import Engine
 
 from financial_app.domain.accounts import Account
 from financial_app.domain.crypto_import import EXCHANGE_NAMES
-from financial_app.domain.formatting import format_count, format_date, format_quantity
+from financial_app.domain.formatting import format_count, format_date, format_pln, format_quantity
 from financial_app.domain.instruments import Instrument
-from financial_app.domain.transactions import TransactionError
+from financial_app.domain.transactions import TransactionDraft, TransactionError
 from financial_app.persistence.accounts import list_accounts
 from financial_app.persistence.instruments import list_instruments
 from financial_app.sources.crypto import (
+    DEPOSIT_COMMENT,
     CryptoDecisions,
     CryptoFile,
     CryptoPreview,
     PriceLookup,
     apply_crypto,
+    kept_deposits,
     preview_crypto,
+    proposed_deposits,
     read_crypto,
     yahoo_prices,
 )
@@ -43,10 +48,64 @@ OpenInstrument = Callable[..., None]
 LATER = "later"
 SKIP = "skip"
 
+STEPS = ("Pobierz eksporty", "Wskaż pliki", "Konta i monety", "Uzupełnienia", "Podgląd i zapis")
+# Step 1: how to get the exports; general, as the exchanges' menus change
+INSTRUCTIONS = (
+    (
+        "Załóż konta",
+        "Po jednym koncie na każdą giełdę (np. „Binance”, „OKX”) i jedno na portfel sprzętowy („Trezor”). Możesz "
+        "to zrobić też w kroku 3, przez „+ Nowe konto…”.",
+    ),
+    (
+        "Binance",
+        "Pobierz historię transakcji (Transaction History) za cały okres, w formacie CSV. Binance nie podaje w niej "
+        "cen, więc aplikacja weźmie kurs zamknięcia z Yahoo z dnia transakcji.",
+    ),
+    (
+        "OKX",
+        "Pobierz trzy pliki CSV: historię zleceń (Order History), szczegóły transakcji (Trade Details) i historię "
+        "rachunku (Funding History). Jeśli przyjdą w archiwum ZIP, rozpakuj je. Zlecenia w USDC aplikacja liczy jak "
+        "w USD, po kursie NBP.",
+    ),
+    ("Trezor Suite", "Na koncie każdej monety wyeksportuj transakcje do pliku CSV."),
+    (
+        "Jeden folder",
+        "Wrzuć wszystkie pliki do jednego folderu, np. Dokumenty\\Krypto. Podfoldery i kopie plików nie przeszkadzają: "
+        "powtórzony wiersz liczy się raz. Przy kolejnym imporcie dołóż nowsze eksporty i wczytaj folder ponownie; "
+        "to, co już zaimportowane, jest pomijane.",
+    ),
+    (
+        "Instrumenty",
+        "Każda moneta potrzebuje w aplikacji instrumentu z symbolem Yahoo, np. BTC-USD; wtedy dopasuje się sama. "
+        "Brakujący utworzysz w kroku 3.",
+    ),
+)
+# Step 5: what the import cannot know, for correcting it by hand afterwards
+HINTS = (
+    f"Wpłaty uzupełniające mają komentarz „{DEPOSIT_COMMENT}”: znajdziesz je w Transakcjach i poprawisz ich datę "
+    "albo kwotę, jeśli wiesz, kiedy i ile naprawdę wpłacałeś.",
+    "Ceny zakupów z Binance to kurs zamknięcia z Yahoo z dnia transakcji, a nie cena, którą zapłaciłeś. Jeśli ją znasz "
+    "(np. z wyciągu karty), popraw ją w Transakcjach.",
+    "Operacje z listy nieobsługiwanych dodaj ręcznie przyciskiem + w Transakcjach: monety przeniesione między kontami "
+    "to Transfer papierów, opłata pobrana w gotówce to Koszty.",
+    "Przeniesienia z Trezora zostawione na później wrócą przy następnym imporcie; gdy dołożysz nowszy eksport giełdy, "
+    "sparują się same.",
+    "Opłaty sieciowe są zapisane jako sprzedaż monet z prowizją równą ich wartości, więc obniżają wynik: tak ma być.",
+    "Na koniec porównaj w Portfelu liczbę monet na każdym koncie z saldem na giełdzie i w Trezor Suite; różnicę "
+    "zwykle tłumaczy brakujący albo starszy eksport.",
+)
+
+
+def _deposits_total(deposits: list[TransactionDraft]) -> str:
+    """E.g. "2 wpłaty, razem 3 200,00 zł"."""
+    total = sum((deposit.actual_amount for deposit in deposits), Decimal(0))
+    return f"{format_count(len(deposits), 'wpłatę', 'wpłaty', 'wpłat')}, razem {format_pln(total)}"
+
 
 @dataclass
 class CryptoImportSection:
-    """Reads the exports, lets the user match each source's Account and the coins, and applies on approval.
+    """The import window: reads the exports, lets the user match each source's Account and the coins, proposes the
+    missing Deposits and applies on approval.
 
     ``open_instrument`` is the Instrument dialog (``InstrumentsSection.open_dialog``), for a coin without one;
     ``on_saved`` lets the other tabs redraw, ``on_account_added`` the Konta list after an Account is created here.
@@ -67,39 +126,51 @@ class CryptoImportSection:
     instruments: dict[str, int] = field(default_factory=dict)
     counterparts: dict[str, int] = field(default_factory=dict)
     skipped: set[str] = field(default_factory=set)
+    # The Accounts whose proposed Deposits the user declined
+    no_deposits: set[int] = field(default_factory=set)
+    # The window: its step (1 to len(STEPS)), the path typed, and whether this import was applied
+    step: int = 1
+    path: str = ""
+    done: bool = False
 
     def build(self) -> None:
         self.card = ui.card().classes("w-full max-w-4xl")
         with self.card:
             ui.label("Import z giełdy kryptowalut").classes("text-xl font-bold")
             ui.label(
-                "Wskaż plik CSV z Binance (Historia transakcji), z OKX (Order History, Trade Details, Funding "
-                "History) albo z Trezor Suite, albo folder ze wszystkimi naraz (także w podfolderach). Binance nie "
-                "podaje cen, więc ceny BTC są pobierane z Yahoo z dnia transakcji; USDC z OKX liczymy jak USD po "
-                "kursie NBP. Przeniesienie między giełdą a portfelem, które jest w obu eksportach, zapisuje się raz. "
-                "Nic nie jest zapisywane przed „Zastosuj”."
+                "Binance, OKX i Trezor: okno poprowadzi Cię krok po kroku, od pobrania eksportów po uzupełnienie "
+                "brakujących wpłat. Nic nie jest zapisywane przed „Zastosuj”."
             ).classes("text-sm")
-            path = ui.input("Plik albo folder z eksportami").classes("w-full").mark("crypto-path")
-            ui.button("Wczytaj", icon="visibility", on_click=lambda: self.load(path.value)).props("no-caps").mark(
-                "crypto-load"
-            )
-            self.result = ui.column().classes("w-full gap-2").mark("crypto-result")
+            ui.button("Otwórz kreator importu kryptowalut", icon="currency_bitcoin", on_click=self.open).props(
+                "no-caps"
+            ).mark("crypto-open")
+            # Opened from the card, which outlives it
+            self.dialog = ui.dialog()
+            with self.dialog, ui.card().classes("w-[52rem] max-w-full").mark("crypto-wizard"):
+                self.body = ui.column().classes("w-full gap-2")
+
+    def open(self) -> None:
+        self.step = 1
+        self.done = False
+        self.render()
+        self.dialog.open()
 
     def load(self, text: str) -> None:
+        self.path = text
         try:
             self.files = read_crypto(FilePath(text.strip()))
         except TransactionError as error:
-            self.result.clear()
             ui.notify(str(error), type="negative")
             return
         self._forget_choices()
-        self.render()
+        self._go(3)
 
     def reset(self) -> None:
         """Forget the files and choices, e.g. after the data was cleared: they name removed ids."""
         self.files = []
         self._forget_choices()
-        self.result.clear()
+        self.step = 1
+        self.dialog.close()
 
     def _forget_choices(self) -> None:
         self.accounts = {}
@@ -107,6 +178,8 @@ class CryptoImportSection:
         self.instruments = {}
         self.counterparts = {}
         self.skipped = set()
+        self.no_deposits = set()
+        self.done = False
 
     def _decisions(self) -> CryptoDecisions:
         return CryptoDecisions(
@@ -115,29 +188,133 @@ class CryptoImportSection:
             dict(self.instruments),
             dict(self.counterparts),
             frozenset(self.skipped),
+            frozenset(self.no_deposits),
         )
 
+    def _go(self, step: int) -> None:
+        self.step = step
+        self.render()
+
     def render(self) -> None:
-        assert self.files
-        previews = preview_crypto(self.engine, self.files, self.rates, self.prices, self._decisions())
+        """Redraw the window's current step and its buttons; "Dalej" waits for what the step needs."""
+        self.body.clear()
+        previews = (
+            preview_crypto(self.engine, self.files, self.rates, self.prices, self._decisions())
+            if self.step >= 3 and self.files
+            else []
+        )
         names = {account.id: account.name for account in list_accounts(self.engine)}
-        instruments = list_instruments(self.engine)
-        self.result.clear()
-        with self.result:
-            for preview in previews:
-                self._source(preview, names)
-            self._coins(previews, instruments)
-            if any(preview.needs_choices for preview in previews):
-                ui.label("Wybierz konta i instrumenty, aby zobaczyć transakcje.").classes("k-muted")
-                return
-            describe = Describer(names, {instrument.id: instrument.name for instrument in instruments})
-            for preview in previews:
-                self._summary(preview, describe)
-            actions = sum(len(preview.actions) for preview in previews)
-            apply = ui.button(f"Zastosuj ({actions})", icon="save", on_click=self.apply).props("no-caps")
-            apply.mark("crypto-apply")
-            if any(preview.blocked for preview in previews) or not actions:
-                apply.disable()
+        with self.body:
+            ui.label(f"Krok {self.step} z {len(STEPS)}: {STEPS[self.step - 1]}").classes("text-lg font-bold").mark(
+                f"crypto-step-{self.step}"
+            )
+            # Each step in the order of STEPS draws itself and says whether the next one can follow
+            bodies = (self._instructions, self._choose_files, self._choices, self._deposits, self._review)
+            ready = bodies[self.step - 1](previews, names)
+            with ui.row().classes("w-full justify-end gap-2"):
+                if self.step > 1:
+                    ui.button("Wstecz", on_click=lambda: self._go(self.step - 1)).props("flat no-caps").mark(
+                        "crypto-back"
+                    )
+                ui.button("Zamknij", on_click=self.dialog.close).props("flat no-caps").mark("crypto-close")
+                if self.step < len(STEPS):
+                    next_button = ui.button("Dalej", on_click=lambda: self._go(self.step + 1)).props("no-caps")
+                    next_button.mark("crypto-next")
+                    if not ready:
+                        next_button.disable()
+
+    def _instructions(self, previews: list[CryptoPreview], names: dict[int, str]) -> bool:
+        ui.label("Zanim zaczniesz, przygotuj eksporty:").classes("text-sm")
+        for number, (title, text) in enumerate(INSTRUCTIONS, start=1):
+            with ui.row().classes("w-full no-wrap gap-2"):
+                ui.label(f"{number}.").classes("font-bold")
+                with ui.column().classes("gap-0"):
+                    ui.label(title).classes("font-bold")
+                    ui.label(text).classes("text-sm")
+        return True
+
+    def _choose_files(self, previews: list[CryptoPreview], names: dict[int, str]) -> bool:
+        ui.label("Wskaż plik CSV albo folder z eksportami z Binance, OKX i Trezora (także w podfolderach).").classes(
+            "text-sm"
+        )
+        path = ui.input("Plik albo folder z eksportami", value=self.path).classes("w-full").mark("crypto-path")
+        ui.button("Wczytaj", icon="visibility", on_click=lambda: self.load(path.value)).props("no-caps").mark(
+            "crypto-load"
+        )
+        if self.files:
+            found = ", ".join(EXCHANGE_NAMES[file.exchange] for file in self.files)
+            ui.label(f"Wczytane: {found}.").classes("text-sm").mark("crypto-loaded")
+        return bool(self.files)
+
+    def _choices(self, previews: list[CryptoPreview], names: dict[int, str]) -> bool:
+        for preview in previews:
+            self._source(preview, names)
+        self._coins(previews, list_instruments(self.engine))
+        if any(preview.needs_choices for preview in previews):
+            ui.label("Wybierz konta i instrumenty, aby przejść dalej.").classes("k-muted")
+            return False
+        return True
+
+    def _deposits(self, previews: list[CryptoPreview], names: dict[int, str]) -> bool:
+        """The Deposits proposed where the purchases would take an Account's cash below zero, one checkbox per
+        Account; and how many wallet transfers are left for later."""
+        ui.label(
+            "Eksporty giełd nie zawierają wpłat złotówek (zakup „With Fiat” na Binance to płatność kartą, wpłaty USDC "
+            "na OKX są pomijane), więc zakupy zdjęłyby gotówkę z konta poniżej zera. Aplikacja proponuje wpłaty "
+            "w dniach, w których brakuje gotówki, dokładnie na brakującą kwotę. Odznacz konto, jeśli wpłaty "
+            "wpiszesz sam."
+        ).classes("text-sm")
+        proposed = proposed_deposits(self.engine, previews)
+        if not proposed:
+            ui.label("Gotówka na kontach importu nie spada poniżej zera: nic do uzupełnienia.").mark(
+                "crypto-no-deposits"
+            )
+        for account_id, deposits in proposed.items():
+            ui.checkbox(
+                f"{names.get(account_id, '')}: dodaj {_deposits_total(deposits)}",
+                value=account_id not in self.no_deposits,
+                on_change=lambda e, a=account_id: self._keep_deposits(a, bool(e.value)),
+            ).mark(f"crypto-deposits-{account_id}")
+            with ui.column().classes("gap-0 pl-8"):
+                for deposit in deposits:
+                    ui.label(f"{format_date(deposit.date)}: {format_pln(deposit.actual_amount)}").classes("text-sm")
+        later = sum(len(preview.later) for preview in previews)
+        if later:
+            transfers = format_count(later, "przeniesienie", "przeniesienia", "przeniesień")
+            ui.label(
+                f"{transfers} z Trezora zostaje na później; możesz wrócić do kroku 3 i wybrać drugie konto."
+            ).classes("text-sm").mark("crypto-later")
+        return True
+
+    def _keep_deposits(self, account_id: int, keep: bool) -> None:
+        if keep:
+            self.no_deposits.discard(account_id)
+        else:
+            self.no_deposits.add(account_id)
+
+    def _review(self, previews: list[CryptoPreview], names: dict[int, str]) -> bool:
+        if self.done:
+            ui.label("Zapisano. Sprawdź jeszcze wskazówki poniżej.").classes("text-positive font-bold").mark(
+                "crypto-done"
+            )
+        if any(preview.needs_choices for preview in previews):
+            ui.label("Wróć do kroku 3 i wybierz konta i instrumenty.").classes("k-muted")
+            return False
+        describe = Describer(names, {instrument.id: instrument.name for instrument in list_instruments(self.engine)})
+        for preview in previews:
+            self._summary(preview, describe)
+        deposits = kept_deposits(self.engine, previews, self._decisions())
+        if deposits:
+            ui.label(f"Uzupełnienia: {_deposits_total(deposits)}.").mark("crypto-deposits-summary")
+        actions = sum(len(preview.actions) for preview in previews) + len(deposits)
+        apply = ui.button(f"Zastosuj ({actions})", icon="save", on_click=self.apply).props("no-caps")
+        apply.mark("crypto-apply")
+        if any(preview.blocked for preview in previews) or not actions:
+            apply.disable()
+        with ui.expansion("Wskazówki do ręcznych poprawek", value=True).classes("w-full").mark("crypto-hints"):
+            for hint in HINTS:
+                ui.label(f"• {hint}").classes("text-sm")
+        return True
 
     def _source(self, preview: CryptoPreview, names: dict[int, str]) -> None:
         """One source's choices: its Account, the wallet, and a Trezor's transfers that pair with none."""
@@ -301,4 +478,5 @@ class CryptoImportSection:
         show_warnings(applied.warnings)
         if self.on_saved is not None:
             self.on_saved()
+        self.done = True
         self.render()

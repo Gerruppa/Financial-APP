@@ -1010,6 +1010,26 @@ def lowest_cash_balance(
     return min(cash_balances(own, on=day, currency=currency).get(account_id, Decimal(0)) for day in days)
 
 
+def covering_deposits(
+    transactions: Iterable[TransactionDraft], account_id: int, comment: str
+) -> list[TransactionDraft]:
+    """The PLN Deposits that keep the Account's end-of-day Cash Balance from going below zero: on each day it would,
+    the amount it lacks. For history whose deposits are missing, e.g. a crypto exchange's export, whose purchases were
+    paid by card."""
+    by_day: dict[date, list[TransactionDraft]] = {}
+    for t in transactions:
+        if account_id in (t.account_id, t.target_account_id):
+            by_day.setdefault(t.date, []).append(t)
+    deposits: list[TransactionDraft] = []
+    balance = Decimal(0)
+    for day in sorted(by_day):
+        balance += cash_balances(by_day[day]).get(account_id, Decimal(0))
+        if balance < 0:
+            deposits.append(TransactionDraft(account_id, day, TransactionType.DEPOSIT, -balance, comment))
+            balance = Decimal(0)
+    return deposits
+
+
 def costs_by_account(transactions: Iterable[TransactionDraft]) -> dict[int, Decimal]:
     """Commissions and costs in PLN per Account id: Costs, commissions (a foreign one at its trade's rate) and FX
     Conversion Fees (spec section 5)."""
