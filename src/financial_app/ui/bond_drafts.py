@@ -73,7 +73,7 @@ def _coupon_row(engine: Engine, draft: CouponDraft, name_account: bool, on_saved
                 ui.notify(str(exc), type="negative")
                 return
             ui.notify(f"Zapisano odsetki {draft.instrument.name}.", type="positive")
-            show_warnings(saved.warnings)
+            show_warnings(saved.warnings, engine=engine, on_saved=on_saved)
             on_saved()
 
         ui.button("Zatwierdź odsetki", on_click=confirm).props("flat").mark("confirm-coupon")
@@ -103,7 +103,7 @@ def _draft_row(engine: Engine, draft: MaturityDraft, name_account: bool, on_save
                 ui.notify(str(exc), type="negative")
                 return
             ui.notify(f"Zapisano wykup {draft.instrument.name}.", type="positive")
-            show_warnings(saved.warnings)
+            show_warnings(saved.warnings, engine=engine, on_saved=on_saved)
             on_saved()
 
         ui.button("Zatwierdź wykup", on_click=redeem).props("flat").mark("confirm-redemption")
@@ -143,7 +143,7 @@ def _rollover_dialog(engine: Engine, draft: MaturityDraft, on_saved: Callable[[]
                 return
             dialog.close()
             ui.notify(f"Zapisano zamianę {draft.instrument.name}.", type="positive")
-            show_warnings(saved.warnings)
+            show_warnings(saved.warnings, engine=engine, on_saved=on_saved)
             on_saved()
 
         show()

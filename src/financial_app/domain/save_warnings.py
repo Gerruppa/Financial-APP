@@ -33,6 +33,7 @@ class CashShortfall:
     account_name: str
     currency: str
     lowest: Decimal
+    account_id: int
 
     def message(self, done: str) -> str:
         cash = "Saldo gotówki" if self.currency == PLN else f"Saldo gotówki {self.currency}"
@@ -87,6 +88,12 @@ class SaveWarnings:
     @property
     def any(self) -> bool:
         return bool(self.over_limit or self.negative_cash or self.unsplit or self.locked_cash or self.not_allowed)
+
+    @property
+    def short_of_pln(self) -> tuple[int, ...]:
+        """The ids of the Accounts whose PLN cash went below zero: the warning offers their covering Deposits
+        (``domain/transactions.py`` ``covering_deposits``, PLN only, #267); a foreign shortfall only warns."""
+        return tuple(shortfall.account_id for shortfall in self.negative_cash if shortfall.currency == PLN)
 
     def messages(self, done: str, *, unsplit: bool = True) -> list[str]:
         """The Polish warnings; ``done`` opens a cash one ("Zapisano", "Usunięto"). Without ``unsplit`` the caller
@@ -218,5 +225,5 @@ def _negative_cash(
     for (account_id, currency), start in starts.items():
         lowest = lowest_cash_balance(after, account_id, start=start, currency=currency)
         if lowest < 0:
-            shortfalls.append(CashShortfall(names[account_id], currency, lowest))
+            shortfalls.append(CashShortfall(names[account_id], currency, lowest, account_id))
     return shortfalls

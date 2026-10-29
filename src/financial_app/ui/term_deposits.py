@@ -290,7 +290,7 @@ def _save_capital(engine: Engine, deposit: TermDeposit, source: str, on_saved: C
     except TransactionError as exc:
         ui.notify(str(exc), type="negative")
         return
-    show_warnings(saved.warnings)
+    show_warnings(saved.warnings, engine=engine, on_saved=on_saved)
     on_saved()
 
 

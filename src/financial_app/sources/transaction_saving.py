@@ -2,13 +2,13 @@
 import, the XTB Reconciliation, confirmed bond Drafts) goes through ``checked_save``, which returns what the save
 warns of (``domain/save_warnings.py``), so the UI only shows it."""
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 
 from sqlalchemy import Engine
 
 from financial_app.domain.save_warnings import SaveWarnings, save_warnings
-from financial_app.domain.transactions import Transaction, TransactionDraft, covering_exchange
+from financial_app.domain.transactions import Transaction, TransactionDraft, covering_deposits, covering_exchange
 from financial_app.persistence.accounts import list_accounts
 from financial_app.persistence.bond_series import drop_if_unused, series_instrument
 from financial_app.persistence.contribution_limits import load_limits
@@ -17,10 +17,15 @@ from financial_app.persistence.term_deposits import list_deposits
 from financial_app.persistence.transactions import (
     add_transactions,
     delete_transaction,
+    list_transactions,
     restore_transaction,
     transactions_in_entry_order,
     update_transaction,
 )
+
+# The comment of a proposed covering Deposit (the negative cash warning's, the crypto import's), so the user can find
+# and correct it
+COVERING_COMMENT = "Wpłata uzupełniająca: pokrywa brakującą gotówkę"
 
 
 @dataclass(frozen=True)
@@ -83,6 +88,19 @@ def save_transaction(
         return draft
 
     return checked_save(engine, write)
+
+
+def covering_proposals(engine: Engine, account_ids: Iterable[int]) -> dict[int, list[TransactionDraft]]:
+    """The PLN Deposits that keep each Account's cash from going below zero (``covering_deposits``), by Account id,
+    for the Accounts that need any: the fix the negative cash warning offers (``SaveWarnings.short_of_pln``, #267)."""
+    transactions = list_transactions(engine)
+    proposed = {i: covering_deposits(transactions, i, COVERING_COMMENT) for i in dict.fromkeys(account_ids)}
+    return {account_id: deposits for account_id, deposits in proposed.items() if deposits}
+
+
+def save_covering(engine: Engine, deposits: Sequence[TransactionDraft]) -> Saved[list[Transaction]]:
+    """Save the proposed Deposits the user kept, all or none."""
+    return checked_save(engine, lambda: add_transactions(engine, deposits))
 
 
 def delete_saved(engine: Engine, transaction_id: int) -> Saved[None]:

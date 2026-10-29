@@ -414,7 +414,7 @@ def open_transaction_dialog(
                 return
             dialog.close()
             # The dialog asks for a Multi-asset Split itself, so it is no warning here
-            show_warnings(saved.warnings, unsplit=False)
+            show_warnings(saved.warnings, engine=engine, on_saved=on_saved, unsplit=False)
             on_saved()
             for unsplit in saved.warnings.unsplit:
                 open_split_dialog(engine, unsplit, on_saved)
@@ -425,7 +425,7 @@ def open_transaction_dialog(
             except TransactionError as exc:
                 ui.notify(f"Nie można cofnąć usunięcia. {exc}", type="negative", multi_line=True)
                 return
-            show_warnings(restored.warnings, "Przywrócono")
+            show_warnings(restored.warnings, "Przywrócono", engine=engine, on_saved=on_saved)
             on_saved()
 
         def delete() -> None:
@@ -437,7 +437,7 @@ def open_transaction_dialog(
                 error.text = f"Nie można usunąć tej transakcji. {exc}"
                 return
             dialog.close()
-            show_warnings(deleted.warnings, "Usunięto")
+            show_warnings(deleted.warnings, "Usunięto", engine=engine, on_saved=on_saved)
             on_saved()
             # No "are you sure?": the bar offers to put the Transaction back for a few seconds
             offer_undo("Usunięto transakcję.", lambda: restore(gone))

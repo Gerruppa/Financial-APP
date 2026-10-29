@@ -270,7 +270,7 @@ class XtbImportSection:
             return
         count = format_count(len(applied.value.actions()), "pozycję", "pozycje", "pozycji")
         ui.notify(f"Uzgodniono z XTB {count}.", type="positive")
-        show_warnings(applied.warnings)
+        show_warnings(applied.warnings, engine=self.engine, on_saved=self.on_saved)
         self.choices = {}
         if self.on_saved is not None:
             self.on_saved()

@@ -215,7 +215,7 @@ class SheetImportSection:
             self.render()
             return
         ui.notify(f"Zaimportowano transakcje: {saved.value.to_save}.", type="positive")
-        show_warnings(saved.warnings)
+        show_warnings(saved.warnings, engine=self.engine, on_saved=self.on_saved)
         if self.on_saved is not None:
             self.on_saved()
         self.render()

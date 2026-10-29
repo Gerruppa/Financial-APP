@@ -39,7 +39,7 @@ def interest_row(engine: Engine, draft: InterestDraft, name_account: bool, on_sa
                 ui.notify(str(exc), type="negative")
                 return
             ui.notify(f"Zapisano odsetki {draft.deposit.name}.", type="positive")
-            show_warnings(saved.warnings)
+            show_warnings(saved.warnings, engine=engine, on_saved=on_saved)
             on_saved()
 
         ui.button("Zatwierdź odsetki", on_click=confirm).props("flat").mark("confirm-deposit-interest")
@@ -84,7 +84,7 @@ def _interest_dialog(engine: Engine, draft: InterestDraft, on_saved: Callable[[]
                 return
             dialog.close()
             ui.notify(f"Zapisano odsetki {draft.deposit.name}.", type="positive")
-            show_warnings(saved.warnings)
+            show_warnings(saved.warnings, engine=engine, on_saved=on_saved)
             on_saved()
 
         with ui.row().classes("w-full justify-end"):

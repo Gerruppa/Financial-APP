@@ -91,7 +91,7 @@ def _confirm(engine: Engine, rates: NbpRates, draft: RecurringDraft, on_saved: C
         ui.notify(str(exc), type="negative")
         return
     ui.notify(f"Zapisano {draft.rule.name} z {format_date(draft.due)}.", type="positive")
-    show_warnings(saved.warnings)
+    show_warnings(saved.warnings, engine=engine, on_saved=on_saved)
     on_saved()
 
 

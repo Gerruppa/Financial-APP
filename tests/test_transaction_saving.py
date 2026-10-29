@@ -11,12 +11,25 @@ from sqlalchemy.pool import StaticPool
 from financial_app.domain.accounts import AccountDraft, AccountType
 from financial_app.domain.currencies import NbpRate
 from financial_app.domain.instruments import InstrumentDraft
-from financial_app.domain.transactions import TransactionDraft, TransactionError, TransactionType, buy_or_sell
+from financial_app.domain.transactions import (
+    TransactionDraft,
+    TransactionError,
+    TransactionType,
+    buy_or_sell,
+    lowest_cash_balance,
+)
 from financial_app.persistence.accounts import add_account
 from financial_app.persistence.db import migrate
 from financial_app.persistence.instruments import add_instrument, list_asset_classes, list_instruments
 from financial_app.persistence.transactions import add_transaction, list_transactions
-from financial_app.sources.transaction_saving import checked_save, delete_saved, save_transaction
+from financial_app.sources.transaction_saving import (
+    COVERING_COMMENT,
+    checked_save,
+    covering_proposals,
+    delete_saved,
+    save_covering,
+    save_transaction,
+)
 
 DAY = date(2026, 3, 2)
 
@@ -127,3 +140,25 @@ def test_any_other_save_goes_through_the_same_check(engine: Engine) -> None:
 
     assert saved.value == list_transactions(engine)[0].id
     assert saved.warnings.messages("Zapisano") == ["IKE 2026: przekroczono limit wpłat o 1\xa0740,00\xa0zł."]
+
+
+def test_a_save_short_of_pln_cash_proposes_the_deposits_that_bring_it_back_to_zero(engine: Engine) -> None:
+    """#267: the fix the negative cash warning offers, wherever the save came from."""
+    account = _account(engine)
+    other = add_account(engine, AccountDraft("Drugie", "Broker", AccountType.REGULAR, ("PLN",))).id
+    add_transaction(engine, _deposit(account, 100))
+    later = date(2026, 3, 9)
+    withdrawal = TransactionDraft(account, later, TransactionType.WITHDRAWAL, Decimal(150))
+    saved = save_transaction(engine, lambda _: withdrawal)
+
+    proposed = covering_proposals(engine, saved.warnings.short_of_pln)
+
+    covering = TransactionDraft(account, later, TransactionType.DEPOSIT, Decimal(50), COVERING_COMMENT)
+    assert proposed == {account: [covering]}
+    assert covering_proposals(engine, [other]) == {}
+
+    covered = save_covering(engine, proposed[account])
+
+    assert covered.warnings.negative_cash == ()
+    assert lowest_cash_balance(list_transactions(engine), account, start=DAY) == 0
+    assert covering_proposals(engine, [account]) == {}

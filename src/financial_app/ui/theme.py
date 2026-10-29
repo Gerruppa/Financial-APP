@@ -139,9 +139,11 @@ body.theme-golden .k-menu-item.k-active { color:var(--k-accent) !important; }
 body.theme-golden .q-card { background:linear-gradient(180deg,#171717,#101010); }
 .k-faq { background:#fff; border-radius:4px; }
 body.theme-golden .k-faq { background:#171717; }
-.k-undo { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); z-index:6000; background:var(--k-text);
-  color:var(--k-page); border-radius:10px; padding:6px 8px 6px 16px; box-shadow:0 4px 14px rgba(0,0,0,.3); }
-.k-undo .q-btn { color:inherit; font-weight:700; text-decoration:underline; }
+.k-undo, .k-covering { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); z-index:6000;
+  background:var(--k-text); color:var(--k-page); border-radius:10px; padding:6px 8px 6px 16px;
+  box-shadow:0 4px 14px rgba(0,0,0,.3); }
+.k-covering { bottom:76px; }
+.k-undo .q-btn, .k-covering .q-btn { color:inherit; font-weight:700; text-decoration:underline; }
 .k-muted { color:var(--k-muted); }
 .k-gain { color:var(--k-gain); }
 .k-loss { color:var(--k-loss); }
