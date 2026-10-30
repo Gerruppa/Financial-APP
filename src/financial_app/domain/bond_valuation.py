@@ -186,7 +186,7 @@ def bond_value(
     rate: PeriodRate | None = None
     for year in range(period + 1):
         start, end = _anniversary(purchase_day, year), _anniversary(purchase_day, year + 1)
-        rate = _rate(series, year, start, cpi, reference)
+        rate = period_rate(series, year, start, cpi, reference)
         if rate is None:
             return None
         labels.append(rate.label)
@@ -213,10 +213,10 @@ def _coupon_bond_value(
     series: BondSeries, purchase_day: date, day: date, cpi: Cpi, reference: ReferenceRates
 ) -> BondValue | None:
     """A coupon type: its nominal plus the coupon accrued in the period ``day`` is in, the earlier coupons paid out."""
-    months = _period_months(series.bond_type)
+    months = period_months(series.bond_type)
     period = min(_periods_between(purchase_day, day, months), PERIODS[series.bond_type] - 1)
     start, end = add_months(purchase_day, months * period), add_months(purchase_day, months * (period + 1))
-    rate = _rate(series, period, start, cpi, reference)
+    rate = period_rate(series, period, start, cpi, reference)
     if rate is None:
         return None
     gone = min(day, end) - start
@@ -234,13 +234,13 @@ def coupons(
     bond_type = series.bond_type
     if bond_type not in COUPON_TYPES:
         return ()
-    months = _period_months(bond_type)
+    months = period_months(bond_type)
     paid = []
     for period in range(1, PERIODS[bond_type]):
         start, paid_on = add_months(purchase_day, months * (period - 1)), add_months(purchase_day, months * period)
         if paid_on > day:
             break
-        rate = _rate(series, period - 1, start, cpi, reference)
+        rate = period_rate(series, period - 1, start, cpi, reference)
         if rate is None:
             break
         amount = (ISSUE_PRICE * rate.rate * months / 12).quantize(GROSZ, ROUND_HALF_UP)
@@ -248,11 +248,11 @@ def coupons(
     return tuple(paid)
 
 
-def _period_months(bond_type: BondType) -> int:
+def period_months(bond_type: BondType) -> int:
     return TERM_MONTHS[bond_type] // PERIODS[bond_type]
 
 
-def _rate(series: BondSeries, period: int, start: date, cpi: Cpi, reference: ReferenceRates) -> PeriodRate | None:
+def period_rate(series: BondSeries, period: int, start: date, cpi: Cpi, reference: ReferenceRates) -> PeriodRate | None:
     """The rate of ``period`` (from 0), which starts on ``start``: MF's or the user's, else estimated."""
     rates = series.rates
     # A fixed rate holds every year; a TOS has one period in the MF file
@@ -292,7 +292,7 @@ def _anniversary(purchase_day: date, years: int) -> date:
 def next_anniversary(bond_type: BondType, purchase_day: date, day: date) -> date | None:
     """The first day after ``day`` a new interest period of a bond bought on ``purchase_day`` starts; ``None`` in the
     last period, which ends at maturity."""
-    months = _period_months(bond_type)
+    months = period_months(bond_type)
     for period in range(1, PERIODS[bond_type]):
         start = add_months(purchase_day, months * period)
         if start > day:

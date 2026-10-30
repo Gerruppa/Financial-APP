@@ -14,6 +14,7 @@ from financial_app.domain.bonds import BondType
 from financial_app.domain.currencies import MissingNbpRateError
 from financial_app.domain.formatting import (
     format_exact,
+    parse_date,
 )
 from financial_app.domain.instruments import InstrumentError
 from financial_app.domain.lots import InsufficientQuantityError
@@ -53,6 +54,7 @@ from financial_app.sources.transaction_saving import (
     save_shortfalls,
     save_transaction,
 )
+from financial_app.ui.bond_guide import open_bond_guide
 from financial_app.ui.dialogs import movable_dialog
 from financial_app.ui.multi_asset import open_split_dialog
 from financial_app.ui.quantity_corrections import HINT, correction_choices
@@ -140,6 +142,8 @@ def open_transaction_dialog(
             series_choice = ui.select({}, label="Seria", with_input=True).classes("w-full")
             series_choice.mark("transaction-bond-series-choice")
             series_text = ui.label().classes("text-sm k-muted").mark("transaction-bond-series")
+            bond_help = ui.button("Jak wpisać obligacje?", icon="help_outline", on_click=lambda: open_help())
+            bond_help.props("flat dense no-caps").mark("transaction-bond-help")
             bond_hint = ui.label().classes("text-sm k-muted").mark("transaction-bond-hint")
             rollover = ui.checkbox("z rolowania", value=start.rollover).mark("transaction-rollover")
             # A Dividend without an Instrument is interest, e.g. on the Account's cash
@@ -258,7 +262,7 @@ def open_transaction_dialog(
             quantity.visible = layout.quantity.visible
             quantity.props(f'label="{layout.quantity.label}"')
             bond_mode.visible = layout.bond_mode
-            for bond_field in (bond_type, series_choice, series_text):
+            for bond_field in (bond_type, series_choice, series_text, bond_help):
                 bond_field.visible = layout.bond_fields
             instrument.set_options(dict(layout.instruments.options), value=layout.instruments.value)
             instrument.visible = layout.instrument
@@ -377,6 +381,16 @@ def open_transaction_dialog(
             if not rollover_changed and price.value.strip() and price.value != set_price[0]:
                 return
             price.value = set_price[0] = value
+
+        def open_help() -> None:
+            """The bond help window on the chosen Series, bought on the typed date (issue #272)."""
+            current = state()
+            series = form.chosen_series(current)
+            try:
+                purchase_day: date | None = parse_date(current.day)
+            except ValueError:
+                purchase_day = None
+            open_bond_guide(engine, None if series is None else series.name, purchase_day)
 
         def account_changed() -> None:
             # A new Buy follows the Account: the bond mode on a Bonds Account, else an Instrument
