@@ -183,7 +183,7 @@ def test_trades_move_the_cash_balance() -> None:
     ("quantity", "price", "fee", "message"),
     [
         ("0", "10", "0", "Liczba musi być większa od zera"),
-        ("1", "0", "0", "Cena musi być większa od zera"),
+        ("1", "-1", "0", "Cena musi być większa od zera"),
         ("1", "10", "-1", "Prowizja nie może być ujemna"),
         ("1", "10", "0.001", "Prowizję podaj z dokładnością do grosza"),
     ],

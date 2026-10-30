@@ -16,6 +16,7 @@ from sqlalchemy import Engine
 from financial_app.domain.accounts import Account
 from financial_app.domain.formatting import format_count, format_date, format_pln, format_quantity
 from financial_app.domain.instruments import Instrument
+from financial_app.domain.quantity_corrections import Fix
 from financial_app.domain.reconciliation import Choice, Pair, item_key
 from financial_app.domain.transactions import TransactionDraft, TransactionError
 from financial_app.domain.xtb_import import XtbStatement, yahoo_symbol
@@ -25,6 +26,7 @@ from financial_app.sources.spreadsheet import NbpLookup
 from financial_app.sources.transaction_saving import checked_save
 from financial_app.sources.xtb import LEFT_OUT, XtbDecisions, XtbPreview, apply_xtb, preview_xtb, read_statements
 from financial_app.ui.accounts import open_account_dialog
+from financial_app.ui.quantity_corrections import HINT, correction_choices
 from financial_app.ui.save_warnings import show_warnings
 
 NEW = "new"
@@ -53,6 +55,8 @@ class XtbImportSection:
     accounts: dict[str, int | None] = field(default_factory=dict)
     instruments: dict[str, int] = field(default_factory=dict)
     choices: dict[str, Choice] = field(default_factory=dict)
+    # The fix chosen for each Sell left uncovered, by ``shortfall_key``
+    corrections: dict[str, Fix] = field(default_factory=dict)
 
     def build(self) -> None:
         self.card = ui.card().classes("w-full max-w-4xl")
@@ -83,6 +87,7 @@ class XtbImportSection:
         self.accounts = {}
         self.instruments = {}
         self.choices = {}
+        self.corrections = {}
 
     def reset(self) -> None:
         """Forget the statements and choices, e.g. after the data was cleared: they name removed ids."""
@@ -91,7 +96,7 @@ class XtbImportSection:
         self.result.clear()
 
     def _decisions(self) -> XtbDecisions:
-        return XtbDecisions(dict(self.accounts), dict(self.instruments), dict(self.choices))
+        return XtbDecisions(dict(self.accounts), dict(self.instruments), dict(self.choices), dict(self.corrections))
 
     def render(self) -> None:
         preview = preview_xtb(self.engine, self.statements, self.rates, self._decisions())
@@ -111,6 +116,10 @@ class XtbImportSection:
                 )
             self._summary(preview)
             self._lists(preview, describe)
+            if preview.shortfalls:
+                ui.label("Sprzedaże bez pokrycia (wybierz poprawkę albo inną wersję powyżej):").classes("font-bold")
+                ui.label(HINT).classes("text-sm")
+                correction_choices(preview.shortfalls, describe, self._choose_correction, "xtb-corrections")
             pending = len(preview.actions())
             apply = ui.button(f"Zastosuj ({pending})", icon="save", on_click=self.apply).props("no-caps")
             apply.mark("xtb-apply")
@@ -213,6 +222,10 @@ class XtbImportSection:
         self.choices[key] = choice
         self.render()
 
+    def _choose_correction(self, key: str, fix: Fix) -> None:
+        self.corrections[key] = fix
+        self.render()
+
     def _all(self, preview: XtbPreview, choice: Choice) -> None:
         result = preview.reconciliation
         items: list[Pair | TransactionDraft] = [*result.pairs, *result.broker_only, *result.mine_only]
@@ -272,6 +285,7 @@ class XtbImportSection:
         ui.notify(f"Uzgodniono z XTB {count}.", type="positive")
         show_warnings(applied.warnings, engine=self.engine, on_saved=self.on_saved)
         self.choices = {}
+        self.corrections = {}
         if self.on_saved is not None:
             self.on_saved()
         self.render()

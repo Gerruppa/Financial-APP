@@ -12,7 +12,7 @@ from sqlalchemy import Engine
 from financial_app.domain.accounts import AccountDraft, AccountType
 from financial_app.domain.currencies import NbpRate
 from financial_app.domain.instruments import InstrumentDraft
-from financial_app.domain.lots import InsufficientQuantityError
+from financial_app.domain.quantity_corrections import CORRECTION_COMMENT, Fix
 from financial_app.domain.reconciliation import Choice
 from financial_app.domain.transactions import (
     Origin,
@@ -147,7 +147,10 @@ def test_nothing_is_saved_when_a_sell_would_lose_its_cover(engine: Engine, ike: 
     choices = {f"mine-{sell.id}": Choice.MINE, "xtb-101": Choice.MINE}
     preview = preview_xtb(engine, statements, FixedNbp(), XtbDecisions(choices=choices))
     assert [t.id for t in preview.reconciliation.mine_only] == [buy.id, sell.id]
-    with pytest.raises(InsufficientQuantityError):
+    # Nothing was held, so no fix is proposed until one is chosen
+    [shortfall] = preview.shortfalls
+    assert (shortfall.uncovered, shortfall.fix) == (sell, None) and preview.blocked
+    with pytest.raises(XtbError, match="bez pokrycia"):
         apply_xtb(engine, statements, FixedNbp(), XtbDecisions(choices=choices), TODAY)
     assert list_transactions(engine) == [sell, buy]
     assert preview_xtb(engine, statements, FixedNbp(), XtbDecisions()).handled == 0
@@ -237,3 +240,33 @@ def test_an_account_in_another_currency_is_refused(tmp_path: Path) -> None:
     book.save(path)
     with pytest.raises(XtbError, match="USD"):
         read_statements(path)
+
+
+def test_a_sale_a_hair_above_what_was_bought_is_topped_up_with_the_import(
+    engine: Engine, ike: int, isac: int, tmp_path: Path
+) -> None:
+    path = write_statement(
+        tmp_path / "IKE.xlsx",
+        IKE_NUMBER,
+        [
+            op("IKE deposit", datetime(2026, 7, 30, 6, 49), 6000.0, "100"),
+            op("Stock purchase", datetime(2026, 7, 30, 9, 52), -5000.0, "101", "OPEN BUY 15 @ 90.00", "ISAC.UK",
+               "MSCI ACWI", "9"),
+            op("Stock sell", datetime(2026, 8, 3, 9, 0), 5100.0, "103", "CLOSE BUY 15.01 @ 92.00", "ISAC.UK",
+               "MSCI ACWI", "9"),
+        ],
+    )  # fmt: skip
+    statements = read_statements(path)
+    preview = preview_xtb(engine, statements, FixedNbp(), XtbDecisions())
+    [shortfall] = preview.shortfalls
+    assert (shortfall.key, shortfall.gap, shortfall.fix) == ("xtb-103", Decimal("0.01"), Fix.FREE_BUY)
+    assert not preview.blocked
+
+    apply_xtb(engine, statements, FixedNbp(), XtbDecisions(), TODAY)
+    [correction] = [t for t in list_transactions(engine) if t.comment == CORRECTION_COMMENT]
+    assert (correction.date, correction.quantity, correction.actual_amount) == (
+        date(2026, 8, 3),
+        Decimal("0.01"),
+        Decimal(0),
+    )
+    assert preview_xtb(engine, statements, FixedNbp(), XtbDecisions()).shortfalls == []

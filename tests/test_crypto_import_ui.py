@@ -207,3 +207,66 @@ async def test_a_file_that_is_not_an_export_is_refused(user: User, tmp_path: Pat
     await user.should_see(marker="crypto-step-2")
     # Nothing loaded, so the next step waits
     assert not user.find(marker="crypto-next", kind=ui.button).elements.pop().enabled
+
+
+def _short_sale(fee: str) -> str:
+    """An OKX purchase of 0.003 BTC that pays its ``fee`` in the coin, then a sale of the full 0.003 BTC."""
+    return (
+        OKX.splitlines(keepends=True)[0]
+        + OKX.splitlines(keepends=True)[1]
+        + f"9,2026-10-15 14:54:57,Spot,BTC-USDC,0,Buy,MARKET,300,0.003,USDC,100000,100000,USDC,0,-{fee},BTC,COMPLETE,\n"
+        + "10,2026-10-16 10:00:00,Spot,BTC-USDC,0,Sell,MARKET,0.003,0.003,BTC,100000,100000,USDC,0,0,USDC,COMPLETE,\n"
+    )
+
+
+async def test_a_sale_short_by_the_coin_fee_is_topped_up_at_cost_zero(
+    engine: Engine, user: User, tmp_path: Path
+) -> None:
+    account = add_account(engine, AccountDraft("OKX", "Krypto", AccountType.REGULAR, ("PLN",)))
+    bitcoin(engine)
+    export = tmp_path / "Order History.csv"
+    export.write_text(_short_sale("0.000003"), encoding="utf-8")
+
+    await load(user, export)
+    choose(user, "crypto-account", account.id)
+    user.find(marker="crypto-next").click()
+
+    await user.should_see(marker="crypto-step-4")
+    with user.scope(marker="crypto-corrections-1"):
+        await user.should_see("Brakuje 0,000003 szt.")
+    await user.should_not_see(marker="crypto-corrections-large-1")
+    [fix] = user.find(marker="crypto-corrections-fix-1", kind=ui.radio).elements
+    assert fix.value == "free_buy"
+    user.find(marker="crypto-next").click()
+
+    await user.should_see(marker="crypto-step-5")
+    await user.should_see("Poprawki ilości: 1 poprawka ilości.")
+    user.find(marker="crypto-apply").click()
+    await user.should_see(marker="crypto-done")
+    sale = next(t for t in list_transactions(engine) if t.transaction_type is TransactionType.SELL)
+    [correction] = [t for t in list_transactions(engine) if t.transaction_type is TransactionType.BUY and not t.price]
+    assert (correction.date, correction.quantity, sale.quantity) == (sale.date, Decimal("0.000003"), Decimal("0.003"))
+
+
+async def test_a_large_gap_waits_for_a_chosen_fix(engine: Engine, user: User, tmp_path: Path) -> None:
+    account = add_account(engine, AccountDraft("OKX", "Krypto", AccountType.REGULAR, ("PLN",)))
+    bitcoin(engine)
+    export = tmp_path / "Order History.csv"
+    export.write_text(_short_sale("0.0001"), encoding="utf-8")
+
+    await load(user, export)
+    choose(user, "crypto-account", account.id)
+    user.find(marker="crypto-next").click()
+    await user.should_see(marker="crypto-corrections-large-1")
+    user.find(marker="crypto-next").click()
+    await user.should_see(marker="crypto-step-5")
+    await user.should_see(marker="crypto-corrections-missing")
+    assert not user.find(marker="crypto-apply", kind=ui.button).elements.pop().enabled
+
+    user.find(marker="crypto-back").click()
+    user.find(marker="crypto-corrections-fix-1", kind=ui.radio).elements.pop().set_value("trim")
+    user.find(marker="crypto-next").click()
+    user.find(marker="crypto-apply").click()
+    await user.should_see(marker="crypto-done")
+    sale = next(t for t in list_transactions(engine) if t.transaction_type is TransactionType.SELL)
+    assert (sale.quantity, sale.actual_amount) == (Decimal("0.0029"), Decimal("1200.00"))

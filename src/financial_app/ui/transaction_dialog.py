@@ -16,6 +16,8 @@ from financial_app.domain.formatting import (
     format_exact,
 )
 from financial_app.domain.instruments import InstrumentError
+from financial_app.domain.lots import InsufficientQuantityError
+from financial_app.domain.quantity_corrections import Fix, Shortfall
 from financial_app.domain.recurring import RECURRING_TYPES, repeating
 from financial_app.domain.transaction_form import (
     BOND_TYPE_OPTIONS,
@@ -41,13 +43,24 @@ from financial_app.persistence.bond_series import list_bond_series, load_bond_da
 from financial_app.persistence.instruments import list_instruments
 from financial_app.persistence.transactions import transactions_in_entry_order
 from financial_app.sources.nbp import NbpRates
-from financial_app.sources.transaction_saving import delete_saved, restore_saved, save_transaction
+from financial_app.sources.transaction_saving import (
+    Saved,
+    delete_corrected,
+    delete_saved,
+    delete_shortfalls,
+    restore_saved,
+    save_corrected,
+    save_shortfalls,
+    save_transaction,
+)
 from financial_app.ui.dialogs import movable_dialog
 from financial_app.ui.multi_asset import open_split_dialog
+from financial_app.ui.quantity_corrections import HINT, correction_choices
 from financial_app.ui.recurring_rules import open_rule_dialog
 from financial_app.ui.restore_dialog import undo_delete
 from financial_app.ui.save_warnings import show_warnings
 from financial_app.ui.undo import offer_undo
+from financial_app.ui.xtb_import import Describer
 
 
 def open_transaction_dialog(
@@ -166,6 +179,10 @@ def open_transaction_dialog(
         auto_exchange = ui.checkbox("Wymień walutę automatycznie").mark("transaction-auto-exchange")
         comment = ui.input("Komentarz", value=texts.comment).classes("w-full").mark("transaction-comment")
         error = ui.label().classes("text-negative").mark("transaction-error")
+        # The fixes a save or delete leaving a Sell uncovered offers (#278)
+        corrections = ui.column().classes("w-full gap-1").mark("transaction-corrections")
+        corrections.visible = False
+        fixes: dict[str, Fix] = {}
 
         picked: list[str | None] = [None]  # a Series the user picked instead of the one the date gives
         offered: list[tuple[list[str], str | None] | None] = [None]  # the Series list and value shown last
@@ -400,8 +417,61 @@ def open_transaction_dialog(
         for proposal_input in (spend, price, commission, fx_rate):
             proposal_input.on_value_change(propose_quantity)
 
+        def offer_corrections(
+            find: Callable[[], list[Shortfall]], confirm: Callable[[list[Shortfall]], None], button: str
+        ) -> None:
+            """Show below the error the fixes for the Sells the change leaves uncovered, and ``button`` making the
+            change with them; a fix picked redraws them, as it may change what a later Sell lacks."""
+            shortfalls = find()
+            corrections.clear()
+            corrections.visible = bool(shortfalls)
+            if not shortfalls:
+                return
+            describe = Describer(dict(form.accounts), {i.id: i.name for i in list_instruments(engine)})
+
+            def choose(key: str, fix: Fix) -> None:
+                fixes[key] = fix
+                offer_corrections(find, confirm, button)
+
+            with corrections:
+                ui.label(HINT).classes("text-sm")
+                correction_choices(shortfalls, describe, choose, "transaction-corrections")
+                confirming = ui.button(button, icon="save", on_click=lambda: confirm(find())).props("no-caps")
+                confirming.mark("transaction-save-corrected")
+                if any(shortfall.fix is None for shortfall in shortfalls):
+                    confirming.disable()
+
+        def own_draft() -> TransactionDraft | None:
+            """The draft the form saves, unless it buys a Bond Series, whose Sells name their Lot (no corrections)."""
+            form_state = state()
+            if form.series_to_buy(form_state) is not None:
+                return None
+            try:
+                return (link or _unlinked)(form.draft(form_state, None))
+            except TransactionError, MissingNbpRateError, InstrumentError:
+                return None
+
+        def save_shortfalls_now() -> list[Shortfall]:
+            draft = own_draft()
+            if draft is None:
+                return []
+            exchange = form.with_exchange(state())
+            return save_shortfalls(engine, draft, edited=transaction, with_exchange=exchange, fixes=fixes)
+
+        def save_with(shortfalls: list[Shortfall]) -> None:
+            draft = own_draft()
+            assert draft is not None  # the corrections are offered for it
+            exchange = form.with_exchange(state())
+            try:
+                saved = save_corrected(engine, draft, shortfalls, edited=transaction, with_exchange=exchange)
+            except TransactionError as exc:
+                error.text = str(exc)
+                return
+            done(saved)
+
         def save() -> None:
             form_state = state()
+            corrections.visible = False
             try:
                 saved = save_transaction(
                     engine,
@@ -410,9 +480,16 @@ def open_transaction_dialog(
                     series=form.series_to_buy(form_state),
                     with_exchange=form.with_exchange(form_state),
                 )
+            except InsufficientQuantityError as exc:
+                error.text = str(exc)
+                offer_corrections(save_shortfalls_now, save_with, "Zapisz z poprawką")
+                return
             except (TransactionError, MissingNbpRateError, InstrumentError) as exc:
                 error.text = str(exc)
                 return
+            done(saved)
+
+        def done(saved: Saved[TransactionDraft]) -> None:
             dialog.close()
             # The dialog asks for a Multi-asset Split itself, so it is no warning here
             show_warnings(saved.warnings, engine=engine, on_saved=on_saved, unsplit=False)
@@ -432,11 +509,31 @@ def open_transaction_dialog(
         def delete() -> None:
             assert transaction is not None
             gone = transaction
+            corrections.visible = False
             try:
                 deleted = delete_saved(engine, gone.id)
+            except InsufficientQuantityError as exc:
+                error.text = f"Nie można usunąć tej transakcji. {exc}"
+                offer_corrections(
+                    lambda: delete_shortfalls(engine, gone.id, fixes),
+                    lambda shortfalls: delete_with(gone, shortfalls),
+                    "Usuń z poprawką",
+                )
+                return
             except TransactionError as exc:
                 error.text = f"Nie można usunąć tej transakcji. {exc}"
                 return
+            removed(gone, deleted)
+
+        def delete_with(gone: Transaction, shortfalls: list[Shortfall]) -> None:
+            try:
+                deleted = delete_corrected(engine, gone.id, shortfalls)
+            except TransactionError as exc:
+                error.text = f"Nie można usunąć tej transakcji. {exc}"
+                return
+            removed(gone, deleted)
+
+        def removed(gone: Transaction, deleted: Saved[list[Transaction]]) -> None:
             dialog.close()
             show_warnings(deleted.warnings, "Usunięto", engine=engine, on_saved=on_saved)
             on_saved()

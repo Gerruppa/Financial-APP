@@ -19,6 +19,7 @@ from financial_app.domain.accounts import Account
 from financial_app.domain.crypto_import import EXCHANGE_NAMES
 from financial_app.domain.formatting import format_count, format_date, format_quantity
 from financial_app.domain.instruments import Instrument
+from financial_app.domain.quantity_corrections import CORRECTION_COMMENT, Fix, chosen_corrections
 from financial_app.domain.transactions import COVERING_COMMENT, TransactionError
 from financial_app.persistence.accounts import list_accounts
 from financial_app.persistence.instruments import list_instruments
@@ -30,6 +31,7 @@ from financial_app.sources.crypto import (
     apply_crypto,
     kept_deposits,
     preview_crypto,
+    proposed_corrections,
     proposed_deposits,
     read_crypto,
     yahoo_prices,
@@ -38,6 +40,7 @@ from financial_app.sources.spreadsheet import NbpLookup
 from financial_app.sources.transaction_saving import checked_save
 from financial_app.sources.yahoo import YahooSource
 from financial_app.ui.accounts import open_account_dialog
+from financial_app.ui.quantity_corrections import HINT, correction_choices, corrections_total
 from financial_app.ui.save_warnings import deposit_choices, deposits_total, show_warnings
 from financial_app.ui.wizard import Wizard, WizardStep
 from financial_app.ui.xtb_import import NEW, Describer
@@ -83,6 +86,8 @@ INSTRUCTIONS = (
 HINTS = (
     f"Wpłaty uzupełniające mają komentarz „{COVERING_COMMENT}”: znajdziesz je w Transakcjach i poprawisz ich datę "
     "albo kwotę, jeśli wiesz, kiedy i ile naprawdę wpłacałeś.",
+    f"Zakupy dodane jako poprawka ilości mają komentarz „{CORRECTION_COMMENT}”. Jeśli znajdziesz brakujący zakup albo "
+    "transfer, usuń poprawkę i wpisz go.",
     "Ceny zakupów z Binance to kurs zamknięcia z Yahoo z dnia transakcji, a nie cena, którą zapłaciłeś. Jeśli ją znasz "
     "(np. z wyciągu karty), popraw ją w Transakcjach.",
     "Operacje z listy nieobsługiwanych dodaj ręcznie przyciskiem + w Transakcjach: monety przeniesione między kontami "
@@ -121,6 +126,8 @@ class CryptoImportSection:
     skipped: set[str] = field(default_factory=set)
     # The Accounts whose proposed Deposits the user declined
     no_deposits: set[int] = field(default_factory=set)
+    # The fix chosen for each uncovered Sell or Security Transfer, by ``shortfall_key``
+    corrections: dict[str, Fix] = field(default_factory=dict)
     # The window: the path typed, and whether this import was applied
     path: str = ""
     done: bool = False
@@ -167,6 +174,7 @@ class CryptoImportSection:
         self.counterparts = {}
         self.skipped = set()
         self.no_deposits = set()
+        self.corrections = {}
         self.done = False
 
     def _decisions(self) -> CryptoDecisions:
@@ -177,6 +185,7 @@ class CryptoImportSection:
             dict(self.counterparts),
             frozenset(self.skipped),
             frozenset(self.no_deposits),
+            dict(self.corrections),
         )
 
     def render(self) -> None:
@@ -222,16 +231,23 @@ class CryptoImportSection:
         return True
 
     def _deposits(self) -> bool:
-        """The Deposits proposed where the purchases would take an Account's cash below zero, one checkbox per
-        Account; and how many wallet transfers are left for later."""
+        """The quantity corrections of the Sells and transfers the import would leave uncovered; the Deposits
+        proposed where the purchases would take an Account's cash below zero, one checkbox per Account; and how many
+        wallet transfers are left for later."""
         previews, names = self._previews(), self._names()
+        shortfalls = proposed_corrections(self.engine, previews, self._decisions())
+        if shortfalls:
+            ui.label("Sprzedaże i transfery bez pokrycia").classes("font-bold")
+            ui.label(HINT).classes("text-sm")
+            describe = Describer(names, {i.id: i.name for i in list_instruments(self.engine)})
+            correction_choices(shortfalls, describe, self._choose_correction, "crypto-corrections")
         ui.label(
             "Eksporty giełd nie zawierają wpłat złotówek (zakup „With Fiat” na Binance to płatność kartą, wpłaty USDC "
             "na OKX są pomijane), więc zakupy zdjęłyby gotówkę z konta poniżej zera. Aplikacja proponuje wpłaty "
             "w dniach, w których brakuje gotówki, dokładnie na brakującą kwotę. Odznacz konto, jeśli wpłaty "
             "wpiszesz sam."
         ).classes("text-sm")
-        proposed = proposed_deposits(self.engine, previews)
+        proposed = proposed_deposits(self.engine, previews, self._decisions())
         if not proposed:
             ui.label("Gotówka na kontach importu nie spada poniżej zera: nic do uzupełnienia.").mark(
                 "crypto-no-deposits"
@@ -244,6 +260,10 @@ class CryptoImportSection:
                 f"{transfers} z Trezora zostaje na później; możesz wrócić do kroku 3 i wybrać drugie konto."
             ).classes("text-sm").mark("crypto-later")
         return True
+
+    def _choose_correction(self, key: str, fix: Fix) -> None:
+        self.corrections[key] = fix
+        self.render()
 
     def _keep_deposits(self, account_id: int, keep: bool) -> None:
         if keep:
@@ -266,10 +286,19 @@ class CryptoImportSection:
         deposits = kept_deposits(self.engine, previews, self._decisions())
         if deposits:
             ui.label(f"Uzupełnienia: {deposits_total(deposits)}.").mark("crypto-deposits-summary")
-        actions = sum(len(preview.actions) for preview in previews) + len(deposits)
+        shortfalls = proposed_corrections(self.engine, previews, self._decisions())
+        if shortfalls:
+            ui.label(f"Poprawki ilości: {corrections_total(shortfalls)}.").mark("crypto-corrections-summary")
+        unresolved = any(shortfall.fix is None for shortfall in shortfalls)
+        if unresolved:
+            ui.label(
+                "Wróć do kroku 4 i wybierz poprawkę dla każdej sprzedaży i każdego transferu bez pokrycia."
+            ).classes("text-negative").mark("crypto-corrections-missing")
+        _, buys = chosen_corrections(shortfalls)
+        actions = sum(len(preview.actions) for preview in previews) + len(deposits) + len(buys)
         apply = ui.button(f"Zastosuj ({actions})", icon="save", on_click=self.apply).props("no-caps")
         apply.mark("crypto-apply")
-        if any(preview.blocked for preview in previews) or not actions:
+        if any(preview.blocked for preview in previews) or unresolved or not actions:
             apply.disable()
         with ui.expansion("Wskazówki do ręcznych poprawek", value=True).classes("w-full").mark("crypto-hints"):
             for hint in HINTS:

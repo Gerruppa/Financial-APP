@@ -231,7 +231,7 @@ class TransactionDraft:
         if not self.transaction_type.has_amount:
             if self.actual_amount:
                 raise TransactionError(f"{self.transaction_type.label} nie ma kwoty.")
-        elif not self.actual_amount > 0:
+        elif not (self.actual_amount > 0 or self.costs_nothing and self.actual_amount == 0):
             raise TransactionError("Kwota musi być większa od zera.")
         elif self.actual_amount != self.actual_amount.quantize(GROSZ):
             raise TransactionError("Kwotę podaj z dokładnością do grosza.")
@@ -262,7 +262,9 @@ class TransactionDraft:
         if self.transaction_type.is_buy_or_sell:
             if self.instrument_id is None:
                 raise TransactionError("Wybierz instrument.")
-            _check_buy_or_sell_fields(self.quantity, self.price, self.commission)
+            _check_buy_or_sell_fields(self.transaction_type, self.quantity, self.price, self.commission)
+            if self.costs_nothing and (self.actual_amount or self.fx_conversion_fee_percent is not None):
+                raise TransactionError("Zakup po cenie 0 nie ma kwoty ani przewalutowania.")
             _check_rates(self.fx_rate, self.nbp_rate)
             _check_settlement(self.cash_currency, self.nbp_rate)
             _check_commission_currency(self.commission_currency, self.cash_currency)
@@ -360,6 +362,12 @@ class TransactionDraft:
         assert self.quantity is not None
         if self.actual_amount != _pln(self.quantity * (self.fx_rate or self.nbp_rate.rate)):
             raise TransactionError(f"Kwota {_AMOUNT_OF[kind]} w PLN musi wynikać z kursu.")
+
+    @property
+    def costs_nothing(self) -> bool:
+        """A Buy at price 0: units the Account got without paying, such as a quantity correction (#278) for a fee
+        an exchange took in the coin; its Lot costs 0, so the cost of the units already held carries it."""
+        return _is_free_buy(self.transaction_type, self.price)
 
     def with_id(self, transaction_id: int) -> Transaction:
         """The Transaction saved from this draft under ``transaction_id``."""
@@ -569,7 +577,7 @@ def buy_or_sell(
     ``commission_currency``. With a broker ``conversion``, quantity × price is worth the PLN the broker charged, and
     the trade records its FX Conversion Fee.
     """
-    _check_buy_or_sell_fields(quantity, price, commission)
+    _check_buy_or_sell_fields(transaction_type, quantity, price, commission)
     _check_rates(fx_rate, nbp_rate)
     _check_settlement(cash_currency, nbp_rate)
     _check_commission_currency(commission_currency, cash_currency)
@@ -586,7 +594,7 @@ def buy_or_sell(
         fee_percent = conversion.fee_percent
         _check_conversion(fee_percent, fx_rate, nbp_rate, cash_currency)
         value = conversion.charged
-    if value.is_zero():
+    if value.is_zero() and price:
         raise TransactionError("Wartość transakcji (liczba × cena) musi wynosić co najmniej 0,01 zł.")
     if transaction_type is TransactionType.SELL:
         _check_withheld_on_sale(withholding_tax, nbp_rate)
@@ -971,11 +979,21 @@ def _check_withheld_on_sale(withholding_tax: Decimal, nbp_rate: NbpRate | None) 
         raise TransactionError("Pobrany podatek podaj z dokładnością do grosza.")
 
 
-def _check_buy_or_sell_fields(quantity: Decimal | None, price: Decimal | None, commission: Decimal) -> None:
+def _is_free_buy(transaction_type: TransactionType, price: Decimal | None) -> bool:
+    return transaction_type is TransactionType.BUY and price == 0
+
+
+def _check_buy_or_sell_fields(
+    transaction_type: TransactionType, quantity: Decimal | None, price: Decimal | None, commission: Decimal
+) -> None:
+    """A Buy may be at price 0 (``TransactionDraft.costs_nothing``), without a commission; anything else costs."""
     if quantity is None or not quantity > 0:
         raise TransactionError("Liczba musi być większa od zera.")
-    if price is None or not price > 0:
+    free = _is_free_buy(transaction_type, price)
+    if price is None or not (price > 0 or free):
         raise TransactionError("Cena musi być większa od zera.")
+    if free and commission:
+        raise TransactionError("Zakup po cenie 0 nie ma prowizji.")
     if commission < 0:
         raise TransactionError("Prowizja nie może być ujemna.")
     if commission != commission.quantize(GROSZ):

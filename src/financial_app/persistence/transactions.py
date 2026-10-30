@@ -1,6 +1,6 @@
 """Reading, saving, editing and deleting Transactions (spec 3.3)."""
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from decimal import Decimal
 
@@ -73,15 +73,7 @@ def update_transaction(engine: Engine, transaction_id: int, draft: TransactionDr
     """
     with Session(engine) as session, session.begin():
         row = get_row(session, transaction_id)
-        draft = replace(
-            draft,
-            origin=Origin(row.origin),
-            external_id=row.external_id,
-            recurring_rule_id=row.recurring_rule_id,
-            recurring_occurrence=row.recurring_occurrence,
-            term_deposit_id=row.term_deposit_id,
-            term_deposit_period=row.term_deposit_period,
-        )
+        draft = _keeping(row, draft)
         check_references(session, draft)
         _check_coverage(session, draft, replacing=row)
         fill_row(row, draft)
@@ -89,19 +81,78 @@ def update_transaction(engine: Engine, transaction_id: int, draft: TransactionDr
         return to_transaction(row)
 
 
+def _keeping(row: TransactionRow, draft: TransactionDraft) -> TransactionDraft:
+    """``draft`` replacing ``row`` with what an edit keeps (see ``update_transaction``)."""
+    return replace(
+        draft,
+        origin=Origin(row.origin),
+        external_id=row.external_id,
+        recurring_rule_id=row.recurring_rule_id,
+        recurring_occurrence=row.recurring_occurrence,
+        term_deposit_id=row.term_deposit_id,
+        term_deposit_period=row.term_deposit_period,
+    )
+
+
 def delete_transaction(engine: Engine, transaction_id: int) -> None:
     """Delete the Transaction; blocked with InsufficientQuantityError if a later Sell would lose its cover, and with
     TransactionError while a coupon (interest naming its Lot, L-8) names the Buy."""
     with Session(engine) as session, session.begin():
         row = get_row(session, transaction_id)
-        coupons = select(TransactionRow.id).where(
-            TransactionRow.lot_id == transaction_id,
-            TransactionRow.transaction_type == TransactionType.DIVIDEND.value,
-        )
-        if session.scalar(coupons.limit(1)) is not None:
-            raise TransactionError("Od tej partii zapisano odsetki; usuń je najpierw.")
+        _check_no_coupons(session, transaction_id)
         _check_coverage(session, None, replacing=row)
         session.delete(row)
+
+
+def _check_no_coupons(session: Session, transaction_id: int) -> None:
+    coupons = select(TransactionRow.id).where(
+        TransactionRow.lot_id == transaction_id,
+        TransactionRow.transaction_type == TransactionType.DIVIDEND.value,
+    )
+    if session.scalar(coupons.limit(1)) is not None:
+        raise TransactionError("Od tej partii zapisano odsetki; usuń je najpierw.")
+
+
+def save_changes(
+    engine: Engine,
+    *,
+    added: Sequence[TransactionDraft] = (),
+    updated: Mapping[int, TransactionDraft] | None = None,
+    deleted: Sequence[int] = (),
+) -> list[Transaction]:
+    """Delete ``deleted``, replace each of ``updated`` (by id, as ``update_transaction``) and add ``added`` in this
+    entry order, all or none, then replay the Positions they touch: a quantity correction (#278) is saved with the
+    change it covers. Blocked as each change alone would be; returns what was added."""
+    with Session(engine) as session, session.begin():
+        touched: set[int | None] = set()
+        for transaction_id in deleted:
+            row = get_row(session, transaction_id)
+            _check_no_coupons(session, transaction_id)
+            touched.add(row.instrument_id)
+            session.delete(row)
+        for transaction_id, draft in (updated or {}).items():
+            row = get_row(session, transaction_id)
+            draft = _keeping(row, draft)
+            check_references(session, draft)
+            touched.update((row.instrument_id, draft.instrument_id))
+            fill_row(row, draft)
+        saved = []
+        for draft in added:
+            check_references(session, draft)
+            row = TransactionRow()
+            fill_row(row, draft)
+            session.add(row)
+            session.flush()
+            touched.add(draft.instrument_id)
+            saved.append(to_transaction(row))
+        session.flush()
+        instruments = {i for i in touched if i is not None}
+        if instruments:
+            rows = session.scalars(
+                select(TransactionRow).where(TransactionRow.instrument_id.in_(instruments)).order_by(TransactionRow.id)
+            )
+            open_positions(to_transaction(row) for row in rows)
+        return saved
 
 
 def restore_transaction(engine: Engine, transaction: Transaction, dropping: Sequence[int] = ()) -> Transaction:
@@ -168,7 +219,8 @@ def check_references(session: Session, draft: TransactionDraft) -> None:
         currency = instrument.quote_currency
         if currency == "PLN" and draft.nbp_rate is not None:
             raise TransactionError("Instrument w PLN nie potrzebuje kursu NBP.")
-        if currency != "PLN" and draft.nbp_rate is None:
+        # A Buy at price 0 (a quantity correction, #278) costs 0 zł at any rate
+        if currency != "PLN" and draft.nbp_rate is None and not draft.costs_nothing:
             raise TransactionError(f"Brak kursu NBP {currency}. Zapis zablokowany.")
         if draft.nbp_rate is not None and draft.nbp_rate.currency != currency:
             raise TransactionError(f"Kurs NBP musi być kursem waluty instrumentu ({currency}).")

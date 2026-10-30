@@ -11,6 +11,8 @@ from sqlalchemy.pool import StaticPool
 from financial_app.domain.accounts import AccountDraft, AccountType
 from financial_app.domain.currencies import NbpRate
 from financial_app.domain.instruments import InstrumentDraft
+from financial_app.domain.lots import InsufficientQuantityError
+from financial_app.domain.quantity_corrections import NEW, Fix
 from financial_app.domain.transactions import (
     COVERING_COMMENT,
     TransactionDraft,
@@ -22,13 +24,17 @@ from financial_app.domain.transactions import (
 from financial_app.persistence.accounts import add_account
 from financial_app.persistence.db import migrate
 from financial_app.persistence.instruments import add_instrument, list_asset_classes, list_instruments
-from financial_app.persistence.transactions import add_transaction, list_transactions
+from financial_app.persistence.transactions import add_transaction, add_transactions, list_transactions
 from financial_app.sources.transaction_saving import (
     checked_save,
     covering_proposals,
+    delete_corrected,
     delete_saved,
+    delete_shortfalls,
     restore_saved,
+    save_corrected,
     save_covering,
+    save_shortfalls,
     save_transaction,
     since_deleted,
 )
@@ -185,3 +191,62 @@ def test_undoing_a_delete_can_drop_the_covering_deposits_that_took_its_place(eng
     assert restored.warnings.negative_cash == ()
     assert sorted(t.id for t in list_transactions(engine)) == sorted([deposit.id, deposit.id - 1])
     assert lowest_cash_balance(list_transactions(engine), account, start=DAY) == 0
+
+
+def _stock(engine: Engine) -> int:
+    shares = next(c for c in list_asset_classes(engine) if c.name == "Akcje polskie")
+    return add_instrument(engine, InstrumentDraft("Spółka", shares.id, "PLN")).id
+
+
+def _trade(account: int, stock: int, kind: TransactionType, quantity: str, day: int) -> TransactionDraft:
+    return buy_or_sell(account, date(2026, 3, day), kind, stock, Decimal(quantity), Decimal(100))
+
+
+def test_an_uncovered_sale_is_saved_trimmed_or_with_its_correction(engine: Engine) -> None:
+    account, stock = _account(engine), _stock(engine)
+    add_transaction(engine, _trade(account, stock, TransactionType.BUY, "2", 2))
+    sale = _trade(account, stock, TransactionType.SELL, "2.01", 3)
+    with pytest.raises(InsufficientQuantityError):
+        save_transaction(engine, lambda _: sale)
+
+    [shortfall] = save_shortfalls(engine, sale)
+    assert (shortfall.key, shortfall.gap, shortfall.fix) == (NEW, Decimal("0.01"), Fix.FREE_BUY)
+    save_corrected(engine, sale, [shortfall])
+    assert sorted((t.transaction_type, t.quantity) for t in list_transactions(engine)) == [
+        (TransactionType.BUY, Decimal("0.01")),
+        (TransactionType.BUY, Decimal(2)),
+        (TransactionType.SELL, Decimal("2.01")),
+    ]
+
+    # Editing the Buy down uncovers the saved sale, which the correction trims, both saved at once
+    buy = next(t for t in list_transactions(engine) if t.quantity == 2)
+    saved_sale = next(t for t in list_transactions(engine) if t.transaction_type is TransactionType.SELL)
+    fewer = _trade(account, stock, TransactionType.BUY, "1.99", 2)
+    [uncovered] = save_shortfalls(engine, fewer, edited=buy, fixes={f"#{saved_sale.id}": Fix.TRIM})
+    assert uncovered.fix is Fix.TRIM
+    save_corrected(engine, fewer, [uncovered], edited=buy)
+    sold = next(t for t in list_transactions(engine) if t.transaction_type is TransactionType.SELL)
+    assert (sold.quantity, sold.actual_amount) == (Decimal(2), Decimal(201))
+
+
+def test_a_delete_that_uncovers_a_sale_is_saved_with_its_correction(engine: Engine) -> None:
+    account, stock = _account(engine), _stock(engine)
+    first, _, _ = add_transactions(
+        engine,
+        [
+            _trade(account, stock, TransactionType.BUY, "0.01", 1),
+            _trade(account, stock, TransactionType.BUY, "2", 2),
+            _trade(account, stock, TransactionType.SELL, "2.01", 3),
+        ],
+    )
+    with pytest.raises(InsufficientQuantityError):
+        delete_saved(engine, first.id)
+    [shortfall] = delete_shortfalls(engine, first.id)
+    assert shortfall.fix is Fix.FREE_BUY
+    delete_corrected(engine, first.id, [shortfall])
+    buys = [t for t in list_transactions(engine) if t.transaction_type is TransactionType.BUY]
+    assert sorted((t.date, t.quantity) for t in buys) == [
+        (date(2026, 3, 2), Decimal(2)),
+        (date(2026, 3, 3), Decimal("0.01")),
+    ]
+    assert first.id not in {t.id for t in list_transactions(engine)}

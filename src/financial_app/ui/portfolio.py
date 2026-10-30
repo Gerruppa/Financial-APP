@@ -253,7 +253,9 @@ def _valuation_cells(position: Position, current: InstrumentPrice) -> None:
         if current.unit_spot_pln is not None:
             ui.label(f"spot {format_pln(position.value(current.unit_spot_pln))}").classes("text-xs k-muted")
     ui.label(format_pln(result, signed=True)).classes(f"text-right {_result_color(result)}")
-    ui.label(format_percent(position.result_percent(price), signed=True)).classes(f"text-right {_result_color(result)}")
+    # A Position of units bought at cost 0 (quantity corrections, #278) has no percentage
+    percent = format_percent(position.result_percent(price), signed=True) if position.cost else "—"
+    ui.label(percent).classes(f"text-right {_result_color(result)}")
 
 
 def _price_cell(price: Decimal, current: InstrumentPrice) -> None:

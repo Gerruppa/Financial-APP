@@ -8,6 +8,7 @@ from sqlalchemy import ColumnElement, Engine, or_, select
 from sqlalchemy.orm import Session
 
 from financial_app.domain.lots import open_positions
+from financial_app.domain.quantity_corrections import Shortfall, chosen_corrections, shortfall_key
 from financial_app.domain.transactions import (
     PLN,
     Origin,
@@ -17,7 +18,13 @@ from financial_app.domain.transactions import (
     TransactionType,
 )
 from financial_app.persistence.models import InstrumentRow, SkippedBrokerRow, TransactionRow
-from financial_app.persistence.transactions import check_references, fill_row, get_row, to_transaction
+from financial_app.persistence.transactions import (
+    check_references,
+    fill_row,
+    get_row,
+    to_transaction,
+    transactions_in_entry_order,
+)
 
 # What a broker's cash statement can show; the other types (a Split, a Cost, a Currency Exchange, ...) are never
 # offered for pairing, so the broker's version cannot delete them
@@ -75,6 +82,31 @@ class SkipBroker:
 
 
 Action = AddBroker | TakeBroker | KeepMine | DeleteMine | SkipBroker
+
+
+def after_actions(engine: Engine, actions: Sequence[Action]) -> list[TransactionDraft]:
+    """The Transactions in entry order as applying ``actions`` would leave them, to find what they leave uncovered
+    (#278): a taken one in its place as the broker's draft, a deleted one gone, an added one last."""
+    taken = {action.transaction_id: action.draft for action in actions if isinstance(action, TakeBroker)}
+    deleted = {action.transaction_id for action in actions if isinstance(action, DeleteMine)}
+    saved = [taken.get(t.id, t) for t in transactions_in_entry_order(engine) if t.id not in deleted]
+    return [*saved, *(action.draft for action in actions if isinstance(action, AddBroker))]
+
+
+def with_corrections(actions: Sequence[Action], shortfalls: Sequence[Shortfall]) -> list[Action]:
+    """``actions`` with the quantity corrections chosen for ``shortfalls`` (#278), found on the drafts the actions
+    add or take: a trimmed draft in place of the one it trims, and each correcting Buy added last."""
+    trimmed, added = chosen_corrections(shortfalls)
+    corrected: list[Action] = []
+    for action in actions:
+        match action:
+            case AddBroker(draft, broker_id) if shortfall_key(draft) in trimmed:
+                corrected.append(AddBroker(trimmed[shortfall_key(draft)], broker_id))
+            case TakeBroker(transaction_id, draft) if shortfall_key(draft) in trimmed:
+                corrected.append(TakeBroker(transaction_id, trimmed[shortfall_key(draft)]))
+            case _:
+                corrected.append(action)
+    return [*corrected, *(AddBroker(buy) for buy in added)]
 
 
 def handled_broker_ids(engine: Engine) -> set[str]:

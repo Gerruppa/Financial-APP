@@ -12,6 +12,7 @@ from financial_app.domain.crypto_import import CryptoError
 from financial_app.domain.currencies import NbpRate
 from financial_app.domain.instruments import InstrumentDraft
 from financial_app.domain.prices import YAHOO
+from financial_app.domain.quantity_corrections import CORRECTION_COMMENT, Fix
 from financial_app.domain.transactions import Origin, TransactionType, lowest_cash_balance
 from financial_app.persistence.accounts import add_account
 from financial_app.persistence.db import init_db
@@ -25,6 +26,7 @@ from financial_app.sources.crypto import (
     CryptoPreview,
     apply_crypto,
     preview_crypto,
+    proposed_corrections,
     proposed_deposits,
     read_crypto,
 )
@@ -373,3 +375,53 @@ def test_an_exchange_withdrawal_pairs_with_the_transfer_the_wallet_import_added_
     apply_crypto(engine, files, FixedNbp(), prices, CryptoDecisions({"binance": account}, {"binance": wallet}), TODAY)
     transfers = [t for t in list_transactions(engine) if t.transaction_type is TransactionType.SECURITY_TRANSFER]
     assert [t.external_id for t in transfers] == ["trezor-r1"]
+
+
+# The conversion takes a hair more than was bought: the fee Binance took in the coin
+SHORT_SALE = (
+    "User ID,Time,Account,Operation,Coin,Change,Remark\n"
+    "1,2026-01-05 21:53:52,Spot,Buy Crypto With Fiat,BTC,0.01,Via CashBalance\n"
+    "1,2026-02-06 10:00:00,Spot,Binance Convert,BTC,-0.01001,\n"
+)
+
+
+def test_an_uncovered_sale_is_proposed_a_buy_at_cost_zero_saved_with_the_import(
+    engine: Engine, account: int, bitcoin: int, tmp_path: Path
+) -> None:
+    files = read_one(write(tmp_path, "binance.csv", SHORT_SALE))
+    decisions = CryptoDecisions({"binance": account})
+    previews = preview_crypto(engine, files, FixedNbp(), prices, decisions)
+    [shortfall] = proposed_corrections(engine, previews, decisions)
+    assert (shortfall.gap, shortfall.fix) == (Decimal("0.00001"), Fix.FREE_BUY)
+
+    apply_crypto(engine, files, FixedNbp(), prices, decisions, TODAY)
+    [correction] = [t for t in list_transactions(engine) if t.comment == CORRECTION_COMMENT]
+    assert (correction.transaction_type, correction.date, correction.quantity, correction.actual_amount) == (
+        TransactionType.BUY,
+        date(2026, 2, 6),
+        Decimal("0.00001"),
+        Decimal(0),
+    )
+    assert correction.origin is Origin.BROKER
+    # Nothing is offered again: the sale and its correction are both imported
+    again = preview_crypto(engine, files, FixedNbp(), prices, decisions)
+    assert proposed_corrections(engine, again, decisions) == []
+
+
+def test_a_large_gap_blocks_the_import_until_a_fix_is_chosen(
+    engine: Engine, account: int, bitcoin: int, tmp_path: Path
+) -> None:
+    files = read_one(write(tmp_path, "binance.csv", SHORT_SALE.replace("-0.01001", "-0.011")))
+    decisions = CryptoDecisions({"binance": account})
+    [shortfall] = proposed_corrections(engine, preview_crypto(engine, files, FixedNbp(), prices, decisions), decisions)
+    assert shortfall.large and shortfall.fix is None
+    with pytest.raises(CryptoError, match="bez pokrycia"):
+        apply_crypto(engine, files, FixedNbp(), prices, decisions, TODAY)
+    assert list_transactions(engine) == []
+
+    trimmed = CryptoDecisions({"binance": account}, corrections={shortfall.key: Fix.TRIM})
+    apply_crypto(engine, files, FixedNbp(), prices, trimmed, TODAY)
+    sale = next(t for t in list_transactions(engine) if t.transaction_type is TransactionType.SELL)
+    assert (sale.quantity, sale.actual_amount) == (Decimal("0.01"), Decimal("2200.00"))
+    # The proposed Deposit covers the purchase only: the trimmed sale brings its full amount
+    assert lowest_cash_balance(list_transactions(engine), account, start=date(2026, 1, 1)) == 0

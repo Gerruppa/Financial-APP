@@ -12,11 +12,12 @@ from sqlalchemy import Engine
 
 from financial_app.domain.accounts import AccountDraft, AccountType
 from financial_app.domain.currencies import NbpRate
+from financial_app.domain.instruments import InstrumentDraft
 from financial_app.domain.transactions import Origin, TransactionDraft, TransactionType
 from financial_app.persistence.accounts import add_account
 from financial_app.persistence.contribution_limits import set_limits
 from financial_app.persistence.db import init_db
-from financial_app.persistence.instruments import list_instruments
+from financial_app.persistence.instruments import add_instrument, list_asset_classes, list_instruments
 from financial_app.persistence.transactions import add_transaction, list_transactions
 from financial_app.sources.nbp import NbpRates
 from financial_app.ui.shell import build_shell
@@ -133,3 +134,34 @@ async def test_applying_deposits_over_the_contribution_limit_warns_once(
         marker="limit-paid-2026-ike", content="wpłacono 1\N{NO-BREAK SPACE}000,00\N{NO-BREAK SPACE}zł"
     )
     assert ike.id in {t.account_id for t in list_transactions(engine)}
+
+
+async def test_a_sale_above_what_was_bought_waits_for_its_correction(
+    engine: Engine, user: User, tmp_path: Path
+) -> None:
+    add_account(engine, AccountDraft("IKE", "XTB", AccountType.IKE, ("PLN",)))
+    shares = next(c for c in list_asset_classes(engine) if c.name == "Akcje polskie")
+    add_instrument(engine, InstrumentDraft("XTB", shares.id, "PLN"))
+    path = write_statement(
+        tmp_path / "IKE.xlsx",
+        IKE_NUMBER,
+        [
+            op("IKE deposit", datetime(2026, 10, 8, 21, 14), 1000.0, "100"),
+            op("Stock purchase", datetime(2026, 10, 9, 7), -973.0, "101", "OPEN BUY XTB.PL 7 @ 139.00", "XTB.PL",
+               "XTB", "9"),
+            op("Stock sell", datetime(2026, 10, 10, 7), 1050.0, "102", "CLOSE BUY XTB.PL 7.5 @ 140.00", "XTB.PL",
+               "XTB", "9"),
+        ],
+    )  # fmt: skip
+    load(user, path)
+
+    with user.scope(marker="xtb-corrections-1"):
+        await user.should_see("Brakuje 0,5 szt.")
+    await user.should_see(marker="xtb-corrections-large-1")
+    assert not user.find(marker="xtb-apply", kind=ui.button).elements.pop().enabled
+
+    user.find(marker="xtb-corrections-fix-1", kind=ui.radio).elements.pop().set_value("trim")
+    user.find(marker="xtb-apply").click()
+    await user.should_see("Uzgodniono z XTB")
+    sale = next(t for t in list_transactions(engine) if t.transaction_type is TransactionType.SELL)
+    assert (sale.quantity, sale.actual_amount) == (Decimal(7), Decimal("1050.00"))
