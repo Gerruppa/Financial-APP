@@ -41,6 +41,7 @@ from financial_app.domain.transactions import (
 from financial_app.persistence.accounts import list_accounts
 from financial_app.persistence.bond_data import load_series_terms
 from financial_app.persistence.bond_series import list_bond_series, load_bond_data
+from financial_app.persistence.contribution_limits import load_limits
 from financial_app.persistence.instruments import list_instruments
 from financial_app.persistence.transactions import transactions_in_entry_order
 from financial_app.sources.nbp import NbpRates
@@ -52,10 +53,12 @@ from financial_app.sources.transaction_saving import (
     restore_saved,
     save_corrected,
     save_shortfalls,
+    save_split,
     save_transaction,
 )
 from financial_app.ui.bond_guide import open_bond_guide
 from financial_app.ui.dialogs import movable_dialog
+from financial_app.ui.limits_guide import open_limits_guide
 from financial_app.ui.multi_asset import open_split_dialog
 from financial_app.ui.quantity_corrections import HINT, correction_choices
 from financial_app.ui.recurring_rules import open_rule_dialog
@@ -95,6 +98,7 @@ def open_transaction_dialog(
             bond_data=load_bond_data(engine),
             rates=rates.before,
             edited=transaction,
+            limits=load_limits(engine),
         )
     )
     with dialog, ui.card().classes("w-[460px]"):
@@ -177,6 +181,21 @@ def open_transaction_dialog(
         commission = ui.input("Prowizja (zł)", value=texts.commission).classes("w-full")
         commission.mark("transaction-commission")
         cash_hint = ui.label().classes("text-sm text-negative").mark("transaction-cash-hint")
+        # A Deposit into an IKE, IKZE or OIPE: what its year's limit still takes, and one over it split in two (#273)
+        with ui.column().classes("w-full gap-1") as limit_box:
+            limit_hint = ui.label().classes("text-sm").mark("transaction-limit-hint")
+            limit_help = ui.button("Jak działają limity?", icon="help_outline", on_click=lambda: open_limits())
+            limit_help.props("flat dense no-caps").mark("transaction-limit-help")
+            with ui.row().classes("w-full items-center no-wrap gap-2") as split_row:
+                remainder = ui.select(
+                    form.remainder_accounts,
+                    label="Nadwyżkę wpłać na",
+                    value=next(iter(form.remainder_accounts), None),
+                )
+                remainder.classes("grow").mark("transaction-limit-remainder")
+                split_button = ui.button("Podziel wpłatę", icon="call_split", on_click=lambda: save_split_now())
+                split_button.props("no-caps").mark("transaction-limit-split")
+                split_button.tooltip("Część mieszcząca się w limicie zostaje na tym koncie, nadwyżka trafia na wybrane")
         convert = ui.checkbox(value=start.convert).mark("transaction-conversion")
         charged = ui.input("Kwota pobrana przez brokera (zł)", value=texts.charged).classes("w-full")
         charged.props('hint="Za liczbę × cenę, bez prowizji"').mark("transaction-charged")
@@ -288,6 +307,7 @@ def open_transaction_dialog(
             propose_quantity()
             show_net()
             show_cash_hint()
+            show_limit()
             fx_rate.visible = layout.fx_rate.visible
             fx_rate.props(f'label="{layout.fx_rate.label}" hint="{layout.fx_rate.hint}"')
             paid_from.visible = layout.paid_from.visible
@@ -334,6 +354,18 @@ def open_transaction_dialog(
         def show_cash_hint() -> None:
             cash_hint.text = form.cash_hint(state())
             cash_hint.visible = bool(cash_hint.text)
+
+        def show_limit() -> None:
+            current = state()
+            limit_box.visible = form.limit_bar(current) is not None
+            limit_hint.text = form.limit_hint(current)
+            limit_hint.visible = bool(limit_hint.text)
+            # A Recurring Rule's occurrence is one Transaction, so it is never split
+            split_row.visible = link is None and form.limit_split(current, remainder.value) is not None
+
+        def open_limits() -> None:
+            bar = form.limit_bar(state())
+            open_limits_guide(engine, bar.year if bar is not None else date.today().year)
 
         set_price = [""]  # the price the bond mode set last, which it may set again
         # What the Early Redemption prefill set last in each field, which it may set again; a value the user typed (or
@@ -428,6 +460,8 @@ def open_transaction_dialog(
             net_input.on_value_change(show_net)
         for cash_input in (amount, foreign_amount, quantity, price, commission, fx_rate, charged):
             cash_input.on_value_change(show_cash_hint)
+        for limit_input in (amount, foreign_amount, fx_rate, remainder):
+            limit_input.on_value_change(show_limit)
         for proposal_input in (spend, price, commission, fx_rate):
             proposal_input.on_value_change(propose_quantity)
 
@@ -503,7 +537,18 @@ def open_transaction_dialog(
                 return
             done(saved)
 
-        def done(saved: Saved[TransactionDraft]) -> None:
+        def save_split_now() -> None:
+            split = form.limit_split(state(), remainder.value)
+            if split is None:
+                return
+            try:
+                saved = save_split(engine, split)
+            except TransactionError as exc:
+                error.text = str(exc)
+                return
+            done(saved)
+
+        def done(saved: Saved[object]) -> None:
             dialog.close()
             # The dialog asks for a Multi-asset Split itself, so it is no warning here
             show_warnings(saved.warnings, engine=engine, on_saved=on_saved, unsplit=False)

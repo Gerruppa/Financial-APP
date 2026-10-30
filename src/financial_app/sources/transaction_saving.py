@@ -7,6 +7,7 @@ from dataclasses import dataclass, replace
 
 from sqlalchemy import Engine
 
+from financial_app.domain.contribution_limits import LimitSplit
 from financial_app.domain.quantity_corrections import NEW, Fix, Shortfall, chosen_corrections, quantity_shortfalls
 from financial_app.domain.save_warnings import SaveWarnings, SinceDelete, save_warnings, since_delete
 from financial_app.domain.transactions import Transaction, TransactionDraft, covering_deposits, covering_exchange
@@ -173,6 +174,11 @@ def covering_proposals(engine: Engine, account_ids: Iterable[int]) -> dict[int, 
 def save_covering(engine: Engine, deposits: Sequence[TransactionDraft]) -> Saved[list[Transaction]]:
     """Save the proposed Deposits the user kept, all or none."""
     return checked_save(engine, lambda: add_transactions(engine, deposits))
+
+
+def save_split(engine: Engine, split: LimitSplit) -> Saved[list[Transaction]]:
+    """Save a Deposit split at its Contribution Limit (#273), both parts or none."""
+    return checked_save(engine, lambda: add_transactions(engine, split.deposits))
 
 
 def delete_saved(engine: Engine, transaction_id: int) -> Saved[list[Transaction]]:

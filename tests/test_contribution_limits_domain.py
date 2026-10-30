@@ -15,7 +15,10 @@ from financial_app.domain.contribution_limits import (
     over_limit,
     over_limit_warning,
     parse_limit,
+    remainder_accounts,
+    split_over_limit,
 )
+from financial_app.domain.currencies import NbpRate
 from financial_app.domain.transactions import TransactionDraft, TransactionType, cash_transfer
 
 IKE, IKZE, REGULAR = 1, 2, 3
@@ -164,3 +167,65 @@ def test_a_bar_shows_its_used_share_and_a_zero_limit_with_nothing_paid_none() ->
     assert LimitBar(AccountType.IKE, 2026, Decimal(0), Decimal(0)).share == 0
     assert LimitBar(AccountType.IKE, 2026, Decimal(5), Decimal(0)).share == 1
     assert LimitBar(AccountType.IKE, 2026, Decimal(5), None).share is None
+
+
+IKE_BAR = LimitBar(AccountType.IKE, 2026, paid=Decimal(28000), limit=Decimal(28260))
+
+
+def test_a_deposit_over_the_limit_splits_into_one_up_to_the_limit_and_the_rest_on_another_account() -> None:
+    deposit = TransactionDraft(IKE, date(2026, 5, 4), TransactionType.DEPOSIT, Decimal(1000), "premia")
+
+    split = split_over_limit(deposit, IKE_BAR, REGULAR)
+
+    assert split is not None
+    assert split.within == TransactionDraft(IKE, date(2026, 5, 4), TransactionType.DEPOSIT, Decimal(260), "premia")
+    assert split.remainder == TransactionDraft(
+        REGULAR, date(2026, 5, 4), TransactionType.DEPOSIT, Decimal(740), "premia (nadwyżka ponad limit IKE 2026)"
+    )
+    assert split.deposits == [split.within, split.remainder]
+    assert IKE_BAR.paid + split.within.actual_amount == IKE_BAR.limit
+
+
+def test_a_deposit_with_the_limit_used_up_moves_whole_and_one_within_it_does_not_split() -> None:
+    full = LimitBar(AccountType.IKE, 2026, paid=Decimal(28260), limit=Decimal(28260))
+    whole = split_over_limit(_deposit(IKE, date(2026, 5, 4), 500), full, REGULAR)
+    assert whole is not None and whole.within is None
+    assert whole.deposits == [
+        TransactionDraft(
+            REGULAR, date(2026, 5, 4), TransactionType.DEPOSIT, Decimal(500), "Nadwyżka ponad limit IKE 2026"
+        )
+    ]
+
+    assert split_over_limit(_deposit(IKE, date(2026, 5, 4), 260), IKE_BAR, REGULAR) is None
+    no_limit = LimitBar(AccountType.OIPE, 2026, paid=Decimal(0), limit=None)
+    assert split_over_limit(_deposit(IKE, date(2026, 5, 4), 999999), no_limit, REGULAR) is None
+
+
+def test_a_foreign_currency_deposit_is_not_split() -> None:
+    rate = NbpRate("EUR", Decimal("4.2"), date(2026, 5, 1), "083/A/NBP/2026")
+    euro = TransactionDraft(
+        IKE,
+        date(2026, 5, 4),
+        TransactionType.DEPOSIT,
+        Decimal(1050),
+        cash_currency="EUR",
+        nbp_rate=rate,
+        quantity=Decimal(250),
+    )
+
+    assert split_over_limit(euro, IKE_BAR, REGULAR) is None
+
+
+def test_the_rest_goes_to_an_active_unlimited_pln_account_the_last_deposited_into_first() -> None:
+    other, ppk, closed, euro = 5, 6, 7, 8
+    accounts = [
+        *ACCOUNTS,
+        _account(other, AccountType.OTHER),
+        _account(ppk, AccountType.PPK),
+        _account(closed, AccountType.REGULAR, active=False),
+        Account("Euro", "XTB", AccountType.REGULAR, ("EUR",), id=euro),
+    ]
+    assert [a.id for a in remainder_accounts(accounts, [])] == [REGULAR, other]
+
+    deposits = [_deposit(other, date(2026, 1, 2), 100), _deposit(REGULAR, date(2025, 1, 2), 100)]
+    assert [a.id for a in remainder_accounts(accounts, deposits)] == [other, REGULAR]

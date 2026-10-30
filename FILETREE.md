@@ -163,7 +163,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `changelog.py`: Parses the changelog Markdown into Releases and decides when a new version's first start announces it
 - `charts.py`: Dashboard chart data from History and Transactions: value, profit, XIRR, class shares and dividends by year, per scope and period
 - `commands.py`: Command palette matching: finds commands by the start of a label or keyword word, and the ">" command-only mode.
-- `contribution_limits.py`: Contribution Limits rules: which transactions count towards each IKE, IKZE or OIPE yearly limit, bars and over-limit warnings
+- `contribution_limits.py`: Contribution Limits rules: which transactions count towards each IKE, IKZE or OIPE yearly limit, bars, over-limit warnings and splitting an over-limit Deposit
 - `crypto_import.py`: Pure parser of Binance, OKX and Trezor CSV exports into crypto trades and Transaction drafts, and pairing of wallet transfers; no file or database access.
 - `currencies.py`: Currency code check and the NBP Rate value type, plus the error raised when a rate is missing.
 - `dashboard.py`: Dashboard totals, Account table, currency exposure and allocation from Transactions, prices, NBP Rates and History, plus estimated tax and profit by source
@@ -354,6 +354,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `instrument_card.py`: Instrument Card dialog: listings, price, chart, returns, currency switch, Add as Instrument or Edit; fund TER, size, issuer (Yahoo), TFI, group, benchmark (analizy.pl).
 - `instruments.py`: Ustawienia Klasy aktywów and Instrumenty cards: editable Asset Classes and the Instrument catalog with its dialog
 - `investment_goal.py`: Dashboard Investment Goal tile with progress and real forecast, and a dialog to set the goal as amount or FIRE
+- `limits_guide.py`: Contribution Limits help window for a Deposit into IKE, IKZE or OIPE; shows the year's limits, what counts and what to do over a limit
 - `login.py`: Login screen in the default Theme: pick a User and enter the password, create a User, explain a forgotten password
 - `multi_asset.py`: Multi-asset tab and split editor: edits an Instrument's Multi-asset Split and lists held Multi-asset Instruments by Asset Class
 - `notifications.py`: Header bell button and menu of reminders; shows the number of unread ones and marks the listed reminders read on click

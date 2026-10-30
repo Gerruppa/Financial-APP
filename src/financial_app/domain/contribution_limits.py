@@ -2,12 +2,13 @@
 (IKE, IKZE or OIPE) taken together."""
 
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from datetime import date
 from decimal import Decimal
 
 from financial_app.domain.accounts import Account, AccountType
 from financial_app.domain.formatting import format_pln, parse_number
-from financial_app.domain.transactions import TransactionDraft, TransactionType
+from financial_app.domain.transactions import PLN, TransactionDraft, TransactionType
 
 LIMITED_TYPES = (AccountType.IKE, AccountType.IKZE, AccountType.OIPE)
 
@@ -141,6 +142,48 @@ def over_limit(
 
 def over_limit_warning(bar: LimitBar) -> str:
     return f"{bar.account_type.label} {bar.year}: przekroczono limit wpłat o {format_pln(bar.over or Decimal(0))}."
+
+
+@dataclass(frozen=True)
+class LimitSplit:
+    """A Deposit over its limit split in two (#273): ``within`` brings its type exactly to the limit (``None`` when the
+    limit is used up already) and ``remainder`` puts the rest on an Account without a limit."""
+
+    within: TransactionDraft | None
+    remainder: TransactionDraft
+
+    @property
+    def deposits(self) -> list[TransactionDraft]:
+        return [deposit for deposit in (self.within, self.remainder) if deposit is not None]
+
+
+def split_over_limit(deposit: TransactionDraft, bar: LimitBar, account_id: int) -> LimitSplit | None:
+    """The split of a PLN ``deposit`` that goes over what ``bar`` (its type and year without it) leaves, the rest on
+    ``account_id``; ``None`` when it fits, there is no limit or it is in a foreign currency."""
+    left = bar.left
+    if left is None or deposit.actual_amount <= left or deposit.cash_currency != PLN:
+        return None
+    note = f"ponad limit {bar.account_type.label} {bar.year}"
+    comment = f"{deposit.comment} (nadwyżka {note})" if deposit.comment else f"Nadwyżka {note}"
+    remainder = replace(deposit, account_id=account_id, actual_amount=deposit.actual_amount - left, comment=comment)
+    return LimitSplit(replace(deposit, actual_amount=left) if left else None, remainder)
+
+
+def remainder_accounts(accounts: Iterable[Account], transactions: Iterable[TransactionDraft]) -> list[Account]:
+    """The Accounts the rest of a split may go to: active, holding PLN, without a limit and not PPK; the one deposited
+    into last comes first, the others in their own order."""
+    eligible = [
+        account
+        for account in accounts
+        if account.active
+        and PLN in account.cash_currencies
+        and account.account_type not in (*LIMITED_TYPES, AccountType.PPK)
+    ]
+    last: dict[int, date] = {}
+    for transaction in transactions:
+        if transaction.transaction_type is TransactionType.DEPOSIT:
+            last[transaction.account_id] = max(transaction.date, last.get(transaction.account_id, transaction.date))
+    return sorted(eligible, key=lambda account: last.get(account.id or 0, date.min), reverse=True)
 
 
 def parse_limit(text: str) -> Decimal | None:

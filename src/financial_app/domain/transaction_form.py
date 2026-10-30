@@ -31,6 +31,15 @@ from financial_app.domain.bonds import (
     series_of_type,
     sold_on,
 )
+from financial_app.domain.contribution_limits import (
+    LIMITED_TYPES,
+    LimitBar,
+    Limits,
+    LimitSplit,
+    contributions,
+    remainder_accounts,
+    split_over_limit,
+)
 from financial_app.domain.currencies import MissingNbpRateError, NbpRate
 from financial_app.domain.formatting import (
     currency_unit,
@@ -292,6 +301,7 @@ class FormContext:
     bond_data: BondData
     rates: RateLookup
     edited: Transaction | None = None
+    limits: Limits = field(default_factory=dict)
 
 
 class TransactionForm:
@@ -337,6 +347,10 @@ class TransactionForm:
             edited.dividend_currency if edited and edited.transaction_type.is_dividend else None
         )
         self._type_series: dict[BondType, dict[str, str]] = {}  # the Series offered for each type, built once
+        # Where the rest of a Deposit over its Contribution Limit may go, the Account deposited into last first (#273)
+        self.remainder_accounts = {
+            a.id: a.name for a in remainder_accounts(context.accounts, context.transactions) if a.id is not None
+        }
 
     def initial_state(self, today: date, prefill: FormPrefill | None = None) -> FormState:
         """The form as it opens: empty for a new Transaction or filled with ``prefill``, else filled from the edited
@@ -763,6 +777,51 @@ class TransactionForm:
         if paid_from.visible and currency != PLN and PLN in paid_from.options:
             return f"{hint} albo wybierz Płatność: {paid_from.options[PLN]}."
         return f"{hint}."
+
+    def limit_bar(self, state: FormState) -> LimitBar | None:
+        """A Deposit into an Account with a Contribution Limit: its type's bar in the form's year, without the edited
+        Transaction; ``None`` for another Transaction or while the date does not read."""
+        if state.kind is not TransactionType.DEPOSIT or state.account_id not in self._accounts:
+            return None
+        account_type = self._accounts[state.account_id].account_type
+        if account_type not in LIMITED_TYPES:
+            return None
+        try:
+            year = parse_date(state.day).year
+        except ValueError:
+            return None
+        others = [t for t in self.context.transactions if self.edited is None or t.id != self.edited.id]
+        paid = contributions(others, self.context.accounts, year)[account_type]
+        return LimitBar(account_type, year, paid, self.context.limits.get(year, {}).get(account_type))
+
+    def limit_hint(self, state: FormState) -> str:
+        """How much the Deposit's year still takes, and by how much the typed amount goes over it (#273)."""
+        bar = self.limit_bar(state)
+        if bar is None:
+            return ""
+        if bar.left is None:
+            return f"Brak limitu wpłat {bar.account_type.label} na {bar.year}: uzupełnij w Ustawieniach."
+        hint = f"Do limitu {bar.account_type.label} {bar.year} zostało: {format_pln(bar.left)}."
+        draft = self._read_draft(state)
+        if draft is not None and draft.actual_amount > bar.left:
+            hint += f" Ta wpłata przekracza go o {format_pln(draft.actual_amount - bar.left)}."
+        return hint
+
+    def limit_split(self, state: FormState, account_id: int | None) -> LimitSplit | None:
+        """A new Deposit over its limit split in two, the rest on ``account_id`` (one of ``remainder_accounts``);
+        ``None`` while there is nothing to split or no such Account is chosen."""
+        bar = self.limit_bar(state)
+        if self.edited is not None or bar is None or account_id not in self.remainder_accounts:
+            return None
+        draft = self._read_draft(state)
+        return None if draft is None else split_over_limit(draft, bar, account_id)
+
+    def _read_draft(self, state: FormState) -> TransactionDraft | None:
+        """The form's draft, or ``None`` while it does not read yet."""
+        try:
+            return self.draft(state)
+        except TransactionError, ValueError, MissingNbpRateError:
+            return None
 
     # The layout
 
