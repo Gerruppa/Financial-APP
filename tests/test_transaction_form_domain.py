@@ -406,3 +406,50 @@ def test_the_cash_hint_for_a_trade_paid_from_foreign_cash_offers_paying_in_pln()
         "Za mało gotówki: saldo konta XTB spadnie do -500,00\xa0USD. "
         "Dodaj wpłatę z datą nie późniejszą niż ta transakcja albo wybierz Płatność: PLN z przewalutowaniem."
     )
+
+
+def _limited_form(edited: Transaction | None = None) -> TransactionForm:
+    paid = [
+        Transaction(IKE, date(2026, 1, 5), TransactionType.DEPOSIT, Decimal(28000), id=1),
+        Transaction(XTB, date(2026, 1, 5), TransactionType.DEPOSIT, Decimal(100), id=2),
+    ]
+    limits = {2026: {AccountType.IKE: Decimal(28260)}}
+    return TransactionForm(FormContext(ACCOUNTS, [], paid, {}, {}, BondData({}, []), _rates, edited, limits))
+
+
+def test_a_deposit_into_an_ike_shows_what_its_years_limit_still_takes_and_by_how_much_it_goes_over() -> None:
+    form = _limited_form()
+
+    assert form.limit_hint(_state(TransactionType.DEPOSIT)) == "Do limitu IKE 2026 zostało: 260,00\xa0zł."
+    assert form.limit_hint(_state(TransactionType.DEPOSIT, amount="1000")) == (
+        "Do limitu IKE 2026 zostało: 260,00\xa0zł. Ta wpłata przekracza go o 740,00\xa0zł."
+    )
+    assert form.limit_hint(_state(TransactionType.DEPOSIT, XTB, amount="1000")) == ""
+    assert form.limit_hint(_state(TransactionType.WITHDRAWAL, amount="1000")) == ""
+
+
+def test_an_edited_deposit_does_not_count_against_its_own_limit_and_is_never_split() -> None:
+    edited = Transaction(IKE, date(2026, 1, 5), TransactionType.DEPOSIT, Decimal(28000), id=1)
+    form = _limited_form(edited)
+
+    assert form.limit_hint(_state(TransactionType.DEPOSIT)) == "Do limitu IKE 2026 zostało: 28\xa0260,00\xa0zł."
+    assert form.limit_split(_state(TransactionType.DEPOSIT, amount="30000"), XTB) is None
+
+
+def test_a_new_deposit_over_its_limit_splits_the_rest_onto_the_chosen_account() -> None:
+    form = _limited_form()
+    assert list(form.remainder_accounts) == [XTB, BONDS]  # XTB took the last Deposit; the inactive one is left out
+
+    split = form.limit_split(_state(TransactionType.DEPOSIT, amount="1000"), XTB)
+
+    assert split is not None
+    assert [(d.account_id, d.actual_amount) for d in split.deposits] == [(IKE, Decimal(260)), (XTB, Decimal(740))]
+    assert form.limit_split(_state(TransactionType.DEPOSIT, amount="200"), XTB) is None
+    assert form.limit_split(_state(TransactionType.DEPOSIT, amount="1000"), None) is None
+
+
+def test_a_deposit_in_a_year_without_a_limit_says_so() -> None:
+    state = FormState(IKE, TransactionType.DEPOSIT, "02.03.2027", FormTexts(amount="100"))
+
+    assert _limited_form().limit_hint(state) == "Brak limitu wpłat IKE na 2027: uzupełnij w Ustawieniach."
+    assert _limited_form().limit_split(state, XTB) is None

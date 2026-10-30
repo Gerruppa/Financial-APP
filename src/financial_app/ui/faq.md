@@ -245,7 +245,7 @@ Przejdź do: /strategie
 ## Jak działają Limity wpłat IKE / IKZE / OIPE? {#limity}
 Przejdź do: /ustawienia
 
-W **Ustawieniach**, w sekcji **Limity wpłat**, wpisz roczne limity i kliknij **Ustaw limity**; kolejny rok dodasz przyciskiem **Dodaj rok**. Wpłaty i przelewy z kont innego typu na IKE, IKZE i OIPE liczą się do limitu swojego roku. Dashboard pokazuje paski z wykorzystaniem limitu, a zapis wpłaty, która go przekracza, kończy się ostrzeżeniem.
+W **Ustawieniach**, w sekcji **Limity wpłat**, wpisz roczne limity i kliknij **Ustaw limity**; kolejny rok dodasz przyciskiem **Dodaj rok**. Wpłaty i przelewy z kont innego typu na IKE, IKZE i OIPE liczą się do limitu swojego roku. Dashboard pokazuje paski z wykorzystaniem limitu, a zapis wpłaty, która go przekracza, kończy się ostrzeżeniem. W oknie nowej wpłaty na takie konto widać, ile jeszcze zostało do limitu; wpłatę ponad limit przycisk **Podziel wpłatę** zapisze jako dwie: do limitu i resztę na wybrane zwykłe konto.
 
 # Dane i bezpieczeństwo
 

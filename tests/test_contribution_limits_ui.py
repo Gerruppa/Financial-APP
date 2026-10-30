@@ -15,7 +15,7 @@ from financial_app.domain.transactions import TransactionDraft, TransactionType
 from financial_app.persistence.accounts import add_account
 from financial_app.persistence.contribution_limits import load_limits
 from financial_app.persistence.db import init_db
-from financial_app.persistence.transactions import add_transaction
+from financial_app.persistence.transactions import add_transaction, list_transactions
 from financial_app.sources.nbp import NbpRates
 from financial_app.ui.shell import build_shell
 
@@ -141,3 +141,35 @@ async def test_saving_a_deposit_over_the_limit_warns_but_saves(engine: Engine) -
         user.find("Zapisz").click()
 
         await user.should_see(f"IKE 2026: przekroczono limit wpłat o {_pln('740,00')}.")
+
+
+async def test_the_deposit_dialog_shows_the_limit_left_and_saves_an_over_limit_deposit_split(engine: Engine) -> None:
+    async with user_simulation(lambda: _shell(engine)) as user:
+        await user.open("/transakcje")
+        user.find(marker="add-transaction").click()
+        user.find(marker="transaction-account", kind=ui.select).elements.pop().set_value(1)
+        user.find(marker="transaction-date").clear().type("08.10.2026")
+        await user.should_see(marker="transaction-limit-hint", content=f"Do limitu IKE 2026 zostało: {_pln('260,00')}.")
+        await user.should_not_see(marker="transaction-limit-split")
+
+        user.find(marker="transaction-amount").type("1 000")
+        await user.should_see(marker="transaction-limit-hint", content=f"przekracza go o {_pln('740,00')}")
+        # The rest goes to mBank, the Regular Account deposited into last
+        await user.should_see(marker="transaction-limit-remainder", content="mBank")
+        user.find(marker="transaction-limit-split").click()
+
+        await user.should_not_see("przekroczono limit wpłat")
+        deposits = [t for t in list_transactions(engine) if t.date == date(2026, 10, 8)]
+        assert sorted((t.account_id, t.actual_amount) for t in deposits) == [(1, Decimal(260)), (3, Decimal(740))]
+
+
+async def test_the_limits_help_window_lists_the_years_limits(engine: Engine) -> None:
+    async with user_simulation(lambda: _shell(engine)) as user:
+        await user.open("/transakcje")
+        user.find(marker="add-transaction").click()
+        user.find(marker="transaction-account", kind=ui.select).elements.pop().set_value(1)
+        user.find(marker="transaction-limit-help").click()
+
+        with user.scope(marker="limits-guide"):
+            await user.should_see(f"IKE: {_pln('28 260,00')}")
+            await user.should_see("Co liczy się do limitu")
