@@ -40,7 +40,7 @@ SOURCE_HELP = {
 }
 
 MANUAL_HELP = (
-    "Cena ręczna: gdy żadne źródło nie notuje instrumentu (np. udziały, obligacje kupione poza giełdą). "
+    "Gdy żadne źródło nie notuje instrumentu (np. udziały, obligacje kupione poza giełdą). "
     "Wpisujesz ją sam i sam ją aktualizujesz."
 )
 
