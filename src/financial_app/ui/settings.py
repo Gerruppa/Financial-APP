@@ -3,6 +3,7 @@
 and clearing the data."""
 
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 
 from nicegui import ui
 from sqlalchemy import Engine
@@ -14,6 +15,7 @@ from financial_app.ui.accounts import AccountsSection
 from financial_app.ui.contribution_limits import ContributionLimitsSection
 from financial_app.ui.crypto_import import CryptoImportSection
 from financial_app.ui.first_rule import FirstRuleWizard
+from financial_app.ui.first_run import FirstRunWizard
 from financial_app.ui.import_sheet import SheetImportSection
 from financial_app.ui.instruments import AssetClassesSection, InstrumentsSection
 from financial_app.ui.recurring_rules import RecurringRulesSection
@@ -23,6 +25,24 @@ from financial_app.ui.unpriced import UnpricedSection
 from financial_app.ui.user_section import UserSection
 from financial_app.ui.visibility import Layout, VisibilitySection
 from financial_app.ui.xtb_import import XtbImportSection
+
+# The Inwestomat sheet import was a one-off migration, hidden in Import (#269); True brings its card back
+SHOW_SHEET_IMPORT = False
+
+
+@dataclass
+class SettingsSection:
+    """The Ustawienia section to show, so that another window can go straight to one (the first-run window, #270):
+    the page on screen switches to it, a page drawn later starts on it."""
+
+    key: str | None = None
+    tabs: ui.tabs | None = None
+
+    def show(self, key: str) -> None:
+        if self.tabs is not None and not self.tabs.is_deleted:
+            self.tabs.value = key
+        else:
+            self.key = key
 
 
 def build_settings_page(
@@ -38,24 +58,32 @@ def build_settings_page(
     layout: Layout | None = None,
     theme: ThemeChoice | None = None,
     user_section: UserSection | None = None,
+    section: SettingsSection | None = None,
+    first_run: FirstRunWizard | None = None,
 ) -> None:
     """``unpriced`` is kept by the shell, which redraws it on the changes it declares; ``on_instruments_changed`` is
     called after an Instrument or Asset Class is saved; ``sources`` check the Source Symbols typed in the Instrument
     dialog. ``on_transactions_changed`` redraws the other tabs after an XTB Reconciliation is applied;
     ``on_account_deleted`` gets the id of an Account deleted in Konta; ``on_rules_changed`` redraws the Recurring
     Rules' Drafts after a rule or its skips change; ``layout`` is the window's hidden elements, which the shell
-    redraws on, and ``theme`` its Theme, which the shell reloads the window on."""
+    redraws on, and ``theme`` its Theme, which the shell reloads the window on. ``section`` picks the section drawn
+    first and switches it later; ``first_run`` is the first-run window that Konta reopens."""
     ui.label("Ustawienia").classes("text-2xl font-bold")
     limits = ContributionLimitsSection(engine)
     first_rule = FirstRuleWizard(engine, rates.today, on_saved=lambda: rules.changed())
     rules = RecurringRulesSection(engine, rates.today, on_changed=on_rules_changed, open_first_rule=first_rule.open)
     accounts = AccountsSection(
-        engine, on_deleted=on_account_deleted, on_changed=lambda: _all(limits.refresh, rules.refresh)
+        engine,
+        on_deleted=on_account_deleted,
+        on_changed=lambda: _all(limits.refresh, rules.refresh),
+        open_first_run=None if first_run is None else lambda: first_run.open(accounts.changed),
     )
     instruments = InstrumentsSection(engine, search, sources, on_changed=on_instruments_changed)
     asset_classes = AssetClassesSection(engine, on_changed=instruments.refresh)
-    sheet_import = SheetImportSection(
-        engine, rates, on_saved=limits.refresh, on_account_added=accounts.account_list.refresh
+    sheet_import = (
+        SheetImportSection(engine, rates, on_saved=limits.refresh, on_account_added=accounts.account_list.refresh)
+        if SHOW_SHEET_IMPORT
+        else None
     )
     xtb_import = XtbImportSection(
         engine,
@@ -77,7 +105,8 @@ def build_settings_page(
         accounts.account_list.refresh()
         asset_classes.class_list.refresh()
         instruments.refresh()  # also redraws the Instruments without a price
-        sheet_import.reset()
+        if sheet_import is not None:
+            sheet_import.reset()
         xtb_import.reset()
         crypto_import.reset()
         limits.refresh()
@@ -89,7 +118,8 @@ def build_settings_page(
         unpriced.build(open_instrument=instruments.open_dialog)
 
     def build_imports() -> None:
-        sheet_import.build()
+        if sheet_import is not None:
+            sheet_import.build()
         xtb_import.build()
         crypto_import.build()
 
@@ -109,10 +139,15 @@ def build_settings_page(
     ]
     if user_section is not None:
         sections.insert(0, ("user", "Użytkownik", user_section.build))
+    section = section or SettingsSection()
+    keys = [key for key, _, _ in sections]
+    start = section.key if section.key in keys else keys[0]
+    section.key = None
     with ui.tabs().props("dense align=left shrink").classes("w-full") as tabs:
         for key, title, _ in sections:
             ui.tab(key, label=title).mark(f"settings-section-{key}")
-    with ui.tab_panels(tabs, value=sections[0][0]).props("keep-alive").classes("w-full"):
+    section.tabs = tabs
+    with ui.tab_panels(tabs, value=start).props("keep-alive").classes("w-full"):
         for key, _, build in sections:
             with ui.tab_panel(key).classes("p-0"):
                 build()

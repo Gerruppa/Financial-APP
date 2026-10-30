@@ -40,6 +40,7 @@ from financial_app.ui.changes import Change, ChangeEvents, Redrawing
 from financial_app.ui.dashboard import DashboardPage
 from financial_app.ui.dialogs import install_movable_dialogs
 from financial_app.ui.discreet import DiscreetChoice, apply_discreet, build_discreet_button, switch_discreet
+from financial_app.ui.first_run import FirstRunWizard
 from financial_app.ui.header_search import HeaderSearch
 from financial_app.ui.help import HELP_PATH, build_help_page
 from financial_app.ui.history import forget_history, history_status, shared_history
@@ -60,7 +61,7 @@ from financial_app.ui.portfolio import PortfolioPage
 from financial_app.ui.results import ResultsPage
 from financial_app.ui.sale_summary import SaleSummaryPage
 from financial_app.ui.sayings import menu_saying
-from financial_app.ui.settings import build_settings_page
+from financial_app.ui.settings import SettingsSection, build_settings_page
 from financial_app.ui.strategy import PlannedDeposit, StrategyPage, out_of_band_notice
 from financial_app.ui.theme import ThemeChoice, apply_theme
 from financial_app.ui.transaction_dialog import open_transaction_dialog
@@ -131,6 +132,7 @@ def build_shell(
     pseudonym: str = "Demo",
     user_section: UserSection | None = None,
     updates: UpdateSource | None = None,
+    offer_first_run: bool = False,
 ) -> None:
     """Build the whole window; tabs are client-side sub-pages backed by the database at ``engine``.
 
@@ -146,7 +148,8 @@ def build_shell(
     and benchmark of its Polish funds and GPW ETFs (by default from analizy.pl). ``on_switch_user`` returns to the login
     screen (the avatar's menu offers it only when given), ``pseudonym`` is the signed-in User's and
     ``user_section`` the Użytkownik card of Ustawienia (none in the demo). ``updates`` checks GitHub for a newer
-    version after the start (none: no check).
+    version after the start (none: no check). With ``offer_first_run`` a database with no Account opens the first-run
+    window (#270), unless it was closed before; Ustawienia > Konta reopens it either way.
     """
     rates = rates or NbpRates(engine)
     if sources is None:
@@ -420,6 +423,15 @@ def build_shell(
     pages["/benchmarki"] = lambda: scope_pages(benchmarks_page.build)
     pages["/sprzedaz"] = lambda: scope_pages(sale_page.build)
     pages["/dochod-pasywny"] = lambda: scope_pages(income_page.build)
+    settings_section = SettingsSection()
+
+    def open_settings(key: str) -> None:
+        settings_section.show(key)
+        ui.navigate.to(SETTINGS_PATH)
+
+    first_run = FirstRunWizard(
+        engine, open_settings, lambda: open_transaction_dialog(engine, rates, transactions_changed)
+    )
     pages[SETTINGS_PATH] = lambda: build_settings_page(
         engine,
         rates,
@@ -433,10 +445,14 @@ def build_shell(
         layout,
         theme,
         user_section,
+        settings_section,
+        first_run,
     )
     pages[HELP_PATH] = lambda: build_help_page({tab.path: tab.label for tab in TABS})
     pages = {path: showing_add_button(path, build, path not in WITHOUT_ADD_BUTTON) for path, build in pages.items()}
     ui.sub_pages(pages).classes("w-full px-2").mark("page-content")
+    if offer_first_run:
+        first_run.open_if_new()
 
     # Once the window is up, so that it never waits for the sources or the computation
     ui.timer(0, load_history, once=True)

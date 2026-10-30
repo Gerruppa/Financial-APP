@@ -23,6 +23,7 @@ from financial_app.persistence.instruments import (
     rename_asset_class,
 )
 from financial_app.persistence.transactions import add_transactions
+from financial_app.ui import settings
 from financial_app.ui.shell import build_shell
 
 NBSP = "\xa0"
@@ -172,8 +173,9 @@ async def test_editing_a_buy_of_a_multi_asset_instrument_without_a_split_asks_fo
 
 
 async def test_an_import_with_an_unsplit_multi_asset_instrument_points_to_the_multi_asset_tab(
-    engine: Engine, tmp_path: Path
+    engine: Engine, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    monkeypatch.setattr(settings, "SHOW_SHEET_IMPORT", True)  # hidden in Ustawienia (#269)
     add_account(engine, AccountDraft("IKE", "mBank", AccountType.IKE, ("PLN",)))
     workbook = tmp_path / "sheet.xlsx"
     book = openpyxl.Workbook()

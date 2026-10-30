@@ -15,6 +15,7 @@ Layout (`src/financial_app/`, see ADR-0001):
 - [XTB import and Reconciliation (L-17, spec 7)](architecture/xtb-import-reconciliation.md)
 - [Crypto exchange import (Binance, OKX)](architecture/crypto-import.md)
 - [Step-by-step window (#268)](architecture/wizard.md)
+- [First-run window (#270)](architecture/first-run.md)
 - [`domain/transactions.py`](architecture/transactions.md)
 - [Saving Transactions (#110)](architecture/transaction-saving.md)
 - [Quantity corrections (#278)](architecture/quantity-corrections.md)

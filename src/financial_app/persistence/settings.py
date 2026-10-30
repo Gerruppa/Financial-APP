@@ -28,6 +28,8 @@ UI_NOTIFICATIONS_READ = "ui.notifications_read"
 PORTFOLIO_GROUPING = "ui.portfolio_grouping"
 # The last app version whose start was seen, so its first start opens "Co nowego" once (issue #200); kept on clearing
 LAST_SEEN_VERSION = "ui.last_seen_version"
+# ``1`` once the first-run window was closed (#270), so it never opens by itself again; kept on clearing the data
+FIRST_RUN_DISMISSED = "ui.first_run_dismissed"
 # The XTB import's remembered matches (L-17): an XTB account number's Account id, a ticker's Instrument id; clearing
 # the data removes every key starting with ``XTB_PREFIX``, as they name ids new rows may take again
 XTB_PREFIX = "xtb_"
