@@ -27,6 +27,7 @@ class Wizard:
         self.prefix = prefix
         self.steps = tuple(steps)
         self.step = 1
+        self.next_button: ui.button | None = None
         self.dialog = ui.dialog()
         with self.dialog, ui.card().classes(f"{width} max-w-full").mark(f"{prefix}-wizard"):
             self.body = ui.column().classes("w-full gap-2")
@@ -43,8 +44,14 @@ class Wizard:
         self.step = step
         self.render()
 
+    def set_ready(self, ready: bool) -> None:
+        """Let "Dalej" follow or hold it without redrawing the step, so a field being typed in keeps the focus."""
+        if self.next_button is not None:
+            self.next_button.set_enabled(ready)
+
     def render(self) -> None:
         """Redraw the current step and the buttons; "Dalej" waits for what the step needs."""
+        self.next_button = None
         self.body.clear()
         with self.body:
             title = self.steps[self.step - 1].title
@@ -61,5 +68,6 @@ class Wizard:
                 if self.step < len(self.steps):
                     next_button = ui.button("Dalej", on_click=lambda: self.go(self.step + 1)).props("no-caps")
                     next_button.mark(f"{self.prefix}-next")
+                    self.next_button = next_button
                     if not ready:
                         next_button.disable()

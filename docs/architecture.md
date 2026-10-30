@@ -31,6 +31,7 @@ Layout (`src/financial_app/`, see ADR-0001):
 - [Header search and Instrument Card (#175)](architecture/header-search.md)
 - [`sources/prices.py`](architecture/price-refresh.md)
 - [Unpriced Instruments](architecture/unpriced-instruments.md)
+- [Price source help window (#274)](architecture/price-source-guide.md)
 - [`sources/stooq.py`](architecture/stooq-price-history.md)
 - [`domain/portfolio_history.py` (#68, spec 6.1, ADR-0006)](architecture/portfolio-history.md)
 - [`domain/metrics.py` (#69, spec 6.1)](architecture/metrics.md)

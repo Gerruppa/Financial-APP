@@ -115,7 +115,7 @@ def build_settings_page(
 
     def build_instruments() -> None:
         instruments.build()
-        unpriced.build(open_instrument=instruments.open_dialog)
+        unpriced.build(open_instrument=instruments.open_dialog, on_saved=instruments.refresh)
 
     def build_imports() -> None:
         if sheet_import is not None:

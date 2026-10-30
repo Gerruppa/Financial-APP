@@ -92,6 +92,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `passive-income.md`: Architecture entry for Passive-income calendar (#93, spec 6.2): main functions, UI markers and decisions.
 - `portfolio-history.md`: Architecture entry for domain/portfolio_history.py (#68, spec 6.1, ADR-0006): main functions, UI markers and decisions.
 - `price-refresh.md`: Architecture entry for sources/prices.py: main functions, UI markers and decisions.
+- `price-source-guide.md`: Architecture entry for the price source help window: advised Price Sources per Instrument, its wizard steps and symbol check.
 - `prices.md`: Architecture entry for domain/prices.py: main functions, UI markers and decisions.
 - `quantity-corrections.md`: Architecture entry for quantity corrections (#278): the shortfall search, the fixes offered and where imports and the transaction dialog offer them.
 - `real-return.md`: Architecture entry for Real return (L-10, spec 3.4.1): main functions, UI markers and decisions.
@@ -186,6 +187,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `periods.py`: Period presets and custom ranges for charts and results, with date calculation and text persistence
 - `portfolio_groups.py`: Groups an Account's Positions by Instrument Type or Asset Class with each group's value and share
 - `portfolio_history.py`: Computes daily Portfolio value and Net Deposits per Account and Asset Class from transactions and cached prices
+- `price_source_guide.py`: Advises which Price Sources fit an Instrument and how to find its Source Symbol in each, for the help window.
 - `prices.py`: Quote model, Price Source keys and names, and the per-Asset-Class Fallback Order deciding which sources to try.
 - `profit_sources.py`: Splits the View Scope's result into price, FX, Dividends, interest, costs and taxes for the Dashboard waterfall
 - `quantity_corrections.py`: Finds Sells and transfers taking more units than held and proposes a correcting free or priced Buy, or trimming the Sell.
@@ -362,6 +364,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `passive_income.py`: Dochód pasywny tab: year navigation, Monthly Income Goal, tiles, monthly chart and table with progress, forecast coupons.
 - `periods.py`: Period selector UI: preset buttons and custom range inputs, remembered per user and redrawing listeners
 - `portfolio.py`: Read-only Portfolio tab: per-Account cards with cash balances, valued Positions, Lots, FX result and dividends
+- `price_source_guide.py`: Price source help window for an Instrument without a price: advised sources, symbol check, and saving the chosen source or Manual Price.
 - `price_sources.py`: Stooq API key storage and its Ustawienia section, kept in code but no longer shown there
 - `quantity_corrections.py`: Shared UI drawing the quantity-correction choices per shortfall: what is missing, a large-gap warning and a radio of fixes.
 - `recurring_drafts.py`: Due Recurring Rule Drafts in the Transakcje tab; confirm, edit or skip each
@@ -381,7 +384,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `transaction_dialog.py`: Transaction dialog for adding, editing and deleting every supported transaction type, bound to the form model
 - `transactions.py`: Transakcje tab: the Transaction list with column sorting and filters
 - `undo.py`: Timed action bar at the window's foot: the undo bar's Cofnij after a delete, and the pill other offers (covering Deposits) reuse
-- `unpriced.py`: Ustawienia Instrumenty bez wyceny card listing held Instruments lacking an automatic price, with reasons
+- `unpriced.py`: Settings card listing held Instruments without an automatic price, with reasons and a per-row price source help button
 - `user_menu.py`: Header avatar menu with initials and pseudonym (Settings, Theme, Help, switch user) and the Wesprzyj button to buycoffee.to
 - `user_section.py`: Ustawienia Użytkownik card: change the User's pseudonym and password, and delete the User with their folder after password and pseudonym confirmation.
 - `view_scope.py`: View Scope header switcher and breadcrumbs, listing Accounts by value with share and daily change
@@ -535,6 +538,8 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_price_history.py`: Tests an Instrument's Quotes in a date range, fetching missing days from Stooq once and caching them.
 - `test_price_history_ui.py`: Tests the Stooq Source Symbol in the Instrument dialog and the Stooq API key section, which is kept out of Ustawienia
 - `test_price_refresh.py`: Tests refreshing held Instruments' Quotes from Price Sources in order, using fake sources.
+- `test_price_source_guide_domain.py`: Tests which Price Sources the price source help window advises for each Instrument type, without widgets.
+- `test_price_source_guide_ui.py`: UI tests for the price source help window, run on a fake Yahoo source with no browser.
 - `test_prices_domain.py`: Tests the order of Price Sources per Instrument and when start-up price refresh is due.
 - `test_prices_repository.py`: Tests saving Source Symbols and Quotes in SQLite.
 - `test_prices_ui.py`: Tests Source Symbols in the Instrument dialog, Portfolio valuation from Quotes and refresh status badges.

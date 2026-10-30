@@ -180,7 +180,7 @@ def build_shell(
         on_saved=lambda: events.publish(Change.TRANSACTIONS),
         on_deposits_changed=lambda: events.publish(Change.TERM_DEPOSITS),
     )
-    unpriced = UnpricedSection(engine)
+    unpriced = UnpricedSection(engine, sources)
     sale_page = SaleSummaryPage(engine, scope, period)
     income_page = PassiveIncomePage(engine, rates, scope)
     benchmarks_page = BenchmarksPage(engine, scope, period, lambda: shared.days, lambda: fetch_in_background())
