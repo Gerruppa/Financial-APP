@@ -8,16 +8,8 @@ from datetime import date
 from nicegui import ui
 from sqlalchemy import Engine
 
-from financial_app.domain.account_rules import refusal
 from financial_app.domain.bonds import bond_type_of
-from financial_app.domain.formatting import (
-    format_amount,
-    format_count,
-    format_date,
-    format_exact,
-    parse_date,
-    parse_number,
-)
+from financial_app.domain.formatting import format_amount, format_count, format_date, format_exact
 from financial_app.domain.recurring import (
     RECURRING_TYPES,
     Frequency,
@@ -25,9 +17,11 @@ from financial_app.domain.recurring import (
     RecurringRuleDraft,
     RecurringRuleError,
     RuleDefaults,
+    check_buy,
     first_occurrence_after,
     new_rule_defaults,
     next_occurrence,
+    parse_rule_fields,
 )
 from financial_app.domain.transactions import PLN, TransactionType
 from financial_app.persistence.accounts import list_accounts
@@ -67,11 +61,13 @@ def accounts_of(rule: RecurringRule, accounts: dict[int, str]) -> str:
 @dataclass
 class RecurringRulesSection:
     """The Transakcje cykliczne card; ``on_changed`` runs after a rule is saved, switched, deleted or its skips
-    change, so the Drafts redraw."""
+    change, so the Drafts redraw. ``open_first_rule`` opens the first rule's window (``ui/first_rule.py``), offered
+    while there is no rule."""
 
     engine: Engine
     today: Callable[[], date]
     on_changed: Callable[[], object] | None = None
+    open_first_rule: Callable[[], object] | None = None
 
     def build(self) -> None:
         with ui.card().classes("w-full max-w-4xl"):
@@ -96,6 +92,10 @@ class RecurringRulesSection:
         rules = list_rules(self.engine)
         if not rules:
             ui.label("Nie dodano jeszcze żadnej reguły.").classes("k-muted")
+            if self.open_first_rule is not None:
+                ui.button("Pierwsza reguła krok po kroku", icon="auto_fix_high", on_click=self.open_first_rule).props(
+                    "outline no-caps"
+                ).mark("first-rule-open")
             return
         accounts = {account.id: account.name for account in list_accounts(self.engine)}
         instruments = instrument_labels(self.engine)
@@ -130,11 +130,11 @@ class RecurringRulesSection:
             ).mark("delete-recurring-rule")
 
     def open_dialog(self, rule: RecurringRule | None) -> None:
-        open_rule_dialog(self.engine, self.today(), self._changed, rule)
+        open_rule_dialog(self.engine, self.today(), self.changed, rule)
 
     def _switch(self, rule: RecurringRule) -> None:
         set_rule_active(self.engine, rule.id, not rule.active)
-        self._changed()
+        self.changed()
 
     def _confirm_delete(self, rule: RecurringRule) -> None:
         confirmation = ui.dialog()
@@ -143,7 +143,7 @@ class RecurringRulesSection:
         def delete() -> None:
             confirmation.close()
             delete_rule(self.engine, rule.id)
-            self._changed()
+            self.changed()
 
         with confirmation, ui.card():
             ui.label(f"Usunąć regułę „{rule.name}”?").classes("text-lg font-bold")
@@ -153,7 +153,8 @@ class RecurringRulesSection:
                 ui.button("Usuń", on_click=delete).props("color=negative").mark("confirm-delete-recurring-rule")
         confirmation.open()
 
-    def _changed(self) -> None:
+    def changed(self) -> None:
+        """Redraw the list and let the Drafts redraw: a rule was added, changed or removed."""
         self.rule_list.refresh()
         if self.on_changed is not None:
             self.on_changed()
@@ -264,25 +265,12 @@ def open_rule_dialog(
         frequency.on_value_change(propose_start)
 
         def draft() -> RecurringRuleDraft:
-            try:
-                parsed_amount = parse_number(amount.value or "")
-            except ValueError:
-                raise RecurringRuleError("Kwota musi być liczbą, np. 1 000,50.") from None
-            try:
-                parsed_day = int((day.value or "").strip())
-            except ValueError:
-                raise RecurringRuleError("Dzień miesiąca musi być od 1 do 31.") from None
-            try:
-                parsed_start = parse_date(first.value or "")
-                parsed_end = parse_date(end.value) if (end.value or "").strip() else None
-            except ValueError:
-                raise RecurringRuleError("Datę podaj jako dd.mm.rrrr, np. 10.11.2026.") from None
+            parsed_amount, parsed_day, parsed_start, parsed_end = parse_rule_fields(
+                amount.value or "", day.value or "", first.value or "", end.value or ""
+            )
             buying = kind.value == TransactionType.BUY.value
             if buying and instrument.value in saved_instruments:
-                # The Buy this rule proposes would be refused in the transaction dialog, so refuse the rule
-                why = refusal(accounts[account.value], saved_instruments[instrument.value])
-                if why is not None:
-                    raise RecurringRuleError(why)
+                check_buy(accounts[account.value], saved_instruments[instrument.value])
             return RecurringRuleDraft(
                 name=name.value or "",
                 account_id=account.value,

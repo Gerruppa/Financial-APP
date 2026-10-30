@@ -158,7 +158,6 @@ class CryptoImportSection:
         """Forget the files and choices, e.g. after the data was cleared: they name removed ids."""
         self.files = []
         self._forget_choices()
-        self.wizard.step = 1
         self.wizard.close()
 
     def _forget_choices(self) -> None:
