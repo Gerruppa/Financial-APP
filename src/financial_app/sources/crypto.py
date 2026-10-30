@@ -39,6 +39,7 @@ from financial_app.domain.currencies import MissingNbpRateError, NbpRate
 from financial_app.domain.formatting import format_date
 from financial_app.domain.instruments import Instrument
 from financial_app.domain.prices import YAHOO, PriceSourceError
+from financial_app.domain.quantity_corrections import Fix, Shortfall, quantity_shortfalls
 from financial_app.domain.transactions import (
     PLN,
     Transaction,
@@ -52,9 +53,11 @@ from financial_app.persistence.reconciliation import (
     AddBroker,
     KeepMine,
     SkipBroker,
+    after_actions,
     apply_reconciliation,
     handled_broker_ids,
     unpaired_security_transfers,
+    with_corrections,
 )
 from financial_app.persistence.settings import CRYPTO_ACCOUNT, CRYPTO_COIN, CRYPTO_WALLET, load_setting, save_setting
 from financial_app.persistence.transactions import list_transactions
@@ -97,6 +100,8 @@ class CryptoDecisions:
     skipped: frozenset[str] = frozenset()
     # The Accounts whose proposed deposits (``proposed_deposits``) the user declined
     no_deposits: frozenset[int] = frozenset()
+    # The fix of each uncovered Sell or Security Transfer (``proposed_corrections``), by ``shortfall_key``
+    corrections: Mapping[str, Fix] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -371,8 +376,12 @@ def apply_crypto(
         if preview.problems:
             first = preview.problems[0]
             raise CryptoError(f"Transakcja z {format_date(first.trade.day)}: {first.message}")
+    actions = _actions(previews)
+    shortfalls = _shortfalls(engine, actions, decisions)
+    if any(shortfall.fix is None for shortfall in shortfalls):
+        raise CryptoError("Wybierz poprawkę dla każdej sprzedaży i każdego transferu bez pokrycia.")
     deposits = [AddBroker(deposit) for deposit in kept_deposits(engine, previews, decisions)]
-    apply_reconciliation(engine, [*_actions(previews), *deposits], today)
+    apply_reconciliation(engine, [*with_corrections(actions, shortfalls), *deposits], today)
     for preview in previews:
         save_setting(engine, CRYPTO_ACCOUNT + preview.file.exchange, str(preview.account_id))
         if preview.wallet_id is not None:
@@ -382,11 +391,31 @@ def apply_crypto(
     return previews
 
 
-def proposed_deposits(engine: Engine, previews: Sequence[CryptoPreview]) -> dict[int, list[TransactionDraft]]:
+def proposed_corrections(
+    engine: Engine, previews: Sequence[CryptoPreview], decisions: CryptoDecisions
+) -> list[Shortfall]:
+    """The Sells and Security Transfers left uncovered after what is saved and what the import adds, each with the
+    fix chosen in ``decisions`` or proposed (#278): a fee an exchange took in the coin leaves its sale a hair short.
+    Applying saves the fixes with the import; a saved Transaction is only topped up, as the import adds."""
+    return _shortfalls(engine, _actions(previews), decisions)
+
+
+def _shortfalls(engine: Engine, actions: Sequence[Action], decisions: CryptoDecisions) -> list[Shortfall]:
+    """The shortfalls after ``actions``, for ``with_corrections`` to apply to them."""
+    return quantity_shortfalls(after_actions(engine, actions), decisions.corrections, trim_saved=False)
+
+
+def proposed_deposits(
+    engine: Engine, previews: Sequence[CryptoPreview], decisions: CryptoDecisions | None = None
+) -> dict[int, list[TransactionDraft]]:
     """The Deposits that keep the cash of each Account of the import from going below zero, by Account id, after what
-    is saved and what the import adds: an exchange's export has no PLN deposits (a Binance purchase "With Fiat" was
-    paid by card, OKX's stablecoin deposits are left out), so its purchases would take the cash below zero."""
-    known = [*list_transactions(engine), *(draft for preview in previews for draft in preview.drafts)]
+    is saved, what the import adds and the quantity corrections chosen in ``decisions``: an exchange's export has no
+    PLN deposits (a Binance purchase "With Fiat" was paid by card, OKX's stablecoin deposits are left out), so its
+    purchases would take the cash below zero."""
+    actions = _actions(previews)
+    shortfalls = _shortfalls(engine, actions, decisions or CryptoDecisions())
+    added = [action.draft for action in with_corrections(actions, shortfalls) if isinstance(action, AddBroker)]
+    known = [*list_transactions(engine), *added]
     accounts = dict.fromkeys(preview.account_id for preview in previews if preview.account_id is not None)
     proposed = {account_id: covering_deposits(known, account_id) for account_id in accounts}
     return {account_id: deposits for account_id, deposits in proposed.items() if deposits}
@@ -396,7 +425,7 @@ def kept_deposits(
     engine: Engine, previews: Sequence[CryptoPreview], decisions: CryptoDecisions
 ) -> list[TransactionDraft]:
     """The proposed Deposits applying saves: those of the Accounts the user did not decline."""
-    proposed = proposed_deposits(engine, previews)
+    proposed = proposed_deposits(engine, previews, decisions)
     return [d for account_id, deposits in proposed.items() if account_id not in decisions.no_deposits for d in deposits]
 
 

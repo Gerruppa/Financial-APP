@@ -26,10 +26,20 @@ _SAME_DAY_ORDER = {
 
 
 class InsufficientQuantityError(TransactionError):
-    """A Sell or Security Transfer needs more units than the Account held that day; saving it is blocked (spec 3.3)."""
+    """A Sell or Security Transfer needs more units than the Account held that day; saving it is blocked (spec 3.3).
+
+    ``transaction`` is the one taking its units FIFO (``None`` for a Sell naming its Lot), and ``held_cost`` the
+    Actual cost of the units held, so a quantity correction (#278) can be proposed for it."""
 
     def __init__(
-        self, day: date, held: Decimal, requested: Decimal, kind: TransactionType = TransactionType.SELL
+        self,
+        day: date,
+        held: Decimal,
+        requested: Decimal,
+        kind: TransactionType = TransactionType.SELL,
+        *,
+        transaction: TransactionDraft | None = None,
+        held_cost: Decimal = Decimal(0),
     ) -> None:
         what = "transfer" if kind is TransactionType.SECURITY_TRANSFER else "sprzedaż"
         super().__init__(
@@ -39,6 +49,8 @@ class InsufficientQuantityError(TransactionError):
         self.day = day
         self.held = held
         self.requested = requested
+        self.transaction = transaction
+        self.held_cost = held_cost
 
 
 class SplitBeforeFirstBuyError(TransactionError):
@@ -294,14 +306,14 @@ def _replay(
             ever_held.add(key)
         elif t.transaction_type is TransactionType.SECURITY_TRANSFER:
             assert t.target_account_id is not None
-            moved = _consume(lots, t.date, t.quantity, t.transaction_type)
+            moved = _consume(lots, t)
             target_key = (t.target_account_id, t.instrument_id)
             # Stable, so a moved Lot dated like one already there comes after it
             positions[target_key] = sorted([*positions.get(target_key, []), *moved], key=lambda lot: lot.date)
             ever_held.add(target_key)
         else:
             if t.lot_id is None:
-                sold = _consume(lots, t.date, t.quantity, t.transaction_type)
+                sold = _consume(lots, t)
             else:
                 sold = [_consume_lot(lots, t.date, t.quantity, t.lot_id)]
             closed.extend(ClosedLot(t, lot) for lot in sold)
@@ -500,14 +512,15 @@ def _split(lot: Lot, units: Decimal) -> tuple[Lot, Lot]:
     return taken, lot.rest(taken)
 
 
-def _consume(lots: list[Lot], day: date, quantity: Decimal, kind: TransactionType) -> list[Lot]:
-    """Take ``quantity`` units from the oldest Lots and return them; a partly used Lot splits both costs pro rata.
-
-    ``kind`` (a Sell or Security Transfer) names the Transaction in the error.
-    """
+def _consume(lots: list[Lot], t: TransactionDraft) -> list[Lot]:
+    """Take the units of ``t``, a Sell or Security Transfer, from the oldest Lots and return them; a partly used Lot
+    splits both costs pro rata."""
+    assert t.quantity is not None  # a Sell or Security Transfer has one
+    quantity = t.quantity
     held = sum((lot.quantity for lot in lots), Decimal(0))
     if quantity > held:
-        raise InsufficientQuantityError(day, held, quantity, kind)
+        held_cost = sum((lot.cost for lot in lots), Decimal(0))
+        raise InsufficientQuantityError(t.date, held, quantity, t.transaction_type, transaction=t, held_cost=held_cost)
     taken = []
     while quantity:
         oldest = lots[0]

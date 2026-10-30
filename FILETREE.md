@@ -91,6 +91,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `portfolio-history.md`: Architecture entry for domain/portfolio_history.py (#68, spec 6.1, ADR-0006): main functions, UI markers and decisions.
 - `price-refresh.md`: Architecture entry for sources/prices.py: main functions, UI markers and decisions.
 - `prices.md`: Architecture entry for domain/prices.py: main functions, UI markers and decisions.
+- `quantity-corrections.md`: Architecture entry for quantity corrections (#278): the shortfall search, the fixes offered and where imports and the transaction dialog offer them.
 - `real-return.md`: Architecture entry for Real return (L-10, spec 3.4.1): main functions, UI markers and decisions.
 - `recurring-rules.md`: Architecture entry for Recurring Rules (#97, spec 3.3.1): main functions, UI markers and decisions.
 - `reset.md`: Architecture entry for persistence/reset.py: main functions, UI markers and decisions.
@@ -184,6 +185,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `portfolio_history.py`: Computes daily Portfolio value and Net Deposits per Account and Asset Class from transactions and cached prices
 - `prices.py`: Quote model, Price Source keys and names, and the per-Asset-Class Fallback Order deciding which sources to try.
 - `profit_sources.py`: Splits the View Scope's result into price, FX, Dividends, interest, costs and taxes for the Dashboard waterfall
+- `quantity_corrections.py`: Finds Sells and transfers taking more units than held and proposes a correcting free or priced Buy, or trimming the Sell.
 - `reconciliation.py`: Pairs broker Transactions with entered ones and classifies matches, broker-only and entered-only; resolves choices
 - `recurring.py`: Recurring Rules: validated rule fields, occurrence schedule, and Drafts left after matching Transactions and skips
 - `report.py`: Report model: titled sections of typed rows and notes for Sell Summary, Wyniki, Portfolio and passive income of a year and View Scope; no file format
@@ -355,6 +357,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `periods.py`: Period selector UI: preset buttons and custom range inputs, remembered per user and redrawing listeners
 - `portfolio.py`: Read-only Portfolio tab: per-Account cards with cash balances, valued Positions, Lots, FX result and dividends
 - `price_sources.py`: Stooq API key storage and its Ustawienia section, kept in code but no longer shown there
+- `quantity_corrections.py`: Shared UI drawing the quantity-correction choices per shortfall: what is missing, a large-gap warning and a radio of fixes.
 - `recurring_drafts.py`: Due Recurring Rule Drafts in the Transakcje tab; confirm, edit or skip each
 - `recurring_rules.py`: Ustawienia section listing Recurring Rules, with the rule dialog and its skipped occurrences
 - `report_export.py`: Year select and Eksportuj XLSX button shared by report tabs, handing the file to the browser
@@ -527,6 +530,8 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_prices_repository.py`: Tests saving Source Symbols and Quotes in SQLite.
 - `test_prices_ui.py`: Tests Source Symbols in the Instrument dialog, Portfolio valuation from Quotes and refresh status badges.
 - `test_profit_sources_domain.py`: Tests the profit-by-source split adds up to the result the Dashboard tiles show
+- `test_quantity_corrections_domain.py`: Domain tests for quantity corrections: shortfall search, the free, priced and trim fixes, and cost-zero Buys.
+- `test_quantity_corrections_ui.py`: UI tests for the transaction dialog's quantity corrections on save and delete: a dust shortfall, a large gap and trimming.
 - `test_reconciliation_domain.py`: Tests pairing of broker and entered Transactions in the Reconciliation domain logic
 - `test_recurring_domain.py`: Tests Recurring Rule schedules, Draft matching with Transactions, and rule validation messages
 - `test_recurring_repository.py`: Tests saving Recurring Rules and skips, confirming Drafts, and cascading deletes against the database

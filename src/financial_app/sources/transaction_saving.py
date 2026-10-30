@@ -2,11 +2,12 @@
 import, the XTB Reconciliation, confirmed bond Drafts) goes through ``checked_save``, which returns what the save
 warns of (``domain/save_warnings.py``), so the UI only shows it."""
 
-from collections.abc import Callable, Iterable, Sequence
-from dataclasses import dataclass
+from collections.abc import Callable, Iterable, Mapping, Sequence
+from dataclasses import dataclass, replace
 
 from sqlalchemy import Engine
 
+from financial_app.domain.quantity_corrections import NEW, Fix, Shortfall, chosen_corrections, quantity_shortfalls
 from financial_app.domain.save_warnings import SaveWarnings, SinceDelete, save_warnings, since_delete
 from financial_app.domain.transactions import Transaction, TransactionDraft, covering_deposits, covering_exchange
 from financial_app.persistence.accounts import list_accounts
@@ -19,6 +20,7 @@ from financial_app.persistence.transactions import (
     delete_transaction,
     list_transactions,
     restore_transaction,
+    save_changes,
     transactions_in_entry_order,
     update_transaction,
 )
@@ -84,6 +86,80 @@ def save_transaction(
         return draft
 
     return checked_save(engine, write)
+
+
+def save_shortfalls(
+    engine: Engine,
+    draft: TransactionDraft,
+    *,
+    edited: Transaction | None = None,
+    with_exchange: bool = False,
+    fixes: Mapping[str, Fix] | None = None,
+) -> list[Shortfall]:
+    """The Sells and Security Transfers that saving ``draft`` as ``save_transaction`` would leave uncovered, each with
+    its fix (#278): ``draft`` itself (its key ``NEW``) or a saved one an edit takes the units of."""
+    own = replace(draft, external_id=None)  # keyed NEW, whatever import it came from
+    saved = transactions_in_entry_order(engine)
+    if edited is None:
+        known = [*saved, *([covering_exchange(own)] if with_exchange else []), own]
+    else:
+        known = [own if t.id == edited.id else t for t in saved]
+    return quantity_shortfalls(known, fixes)
+
+
+def save_corrected(
+    engine: Engine,
+    draft: TransactionDraft,
+    shortfalls: Sequence[Shortfall],
+    *,
+    edited: Transaction | None = None,
+    with_exchange: bool = False,
+) -> Saved[TransactionDraft]:
+    """Save ``draft`` (in place of ``edited``) with the fixes chosen for ``shortfalls`` (``save_shortfalls``), all or
+    none; returns what was saved for ``draft``, trimmed if so chosen."""
+    trimmed, updated, buys = _fixes(shortfalls)
+    own = trimmed or replace(draft, external_id=None)
+
+    def write() -> TransactionDraft:
+        if edited is None:
+            exchange = [covering_exchange(own)] if with_exchange else []
+            save_changes(engine, added=[*exchange, own, *buys], updated=updated)
+        else:
+            save_changes(engine, added=buys, updated={**updated, edited.id: own})
+        return own
+
+    return checked_save(engine, write)
+
+
+def delete_shortfalls(engine: Engine, transaction_id: int, fixes: Mapping[str, Fix] | None = None) -> list[Shortfall]:
+    """The Sells and Security Transfers deleting the Transaction would leave uncovered, each with its fix (#278)."""
+    known = [t for t in transactions_in_entry_order(engine) if t.id != transaction_id]
+    return quantity_shortfalls(known, fixes)
+
+
+def delete_corrected(engine: Engine, transaction_id: int, shortfalls: Sequence[Shortfall]) -> Saved[list[Transaction]]:
+    """``delete_saved`` with the fixes chosen for ``shortfalls`` (``delete_shortfalls``), all or none."""
+    _, updated, buys = _fixes(shortfalls)
+
+    def write() -> list[Transaction]:
+        save_changes(engine, added=buys, updated=updated, deleted=[transaction_id])
+        return list_transactions(engine)
+
+    return checked_save(engine, write)
+
+
+def _fixes(
+    shortfalls: Sequence[Shortfall],
+) -> tuple[TransactionDraft | None, dict[int, TransactionDraft], list[TransactionDraft]]:
+    """What the chosen fixes save: the dialog's own draft trimmed (``None`` unless it is), the saved Transactions
+    they trim by id, and the correcting Buys."""
+    trimmed, buys = chosen_corrections(shortfalls)
+    updated = {
+        shortfall.uncovered.id: trimmed[shortfall.key]
+        for shortfall in shortfalls
+        if isinstance(shortfall.uncovered, Transaction) and shortfall.key in trimmed
+    }
+    return trimmed.get(NEW), updated, buys
 
 
 def covering_proposals(engine: Engine, account_ids: Iterable[int]) -> dict[int, list[TransactionDraft]]:

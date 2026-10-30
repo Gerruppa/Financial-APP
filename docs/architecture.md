@@ -17,6 +17,7 @@ Layout (`src/financial_app/`, see ADR-0001):
 - [Step-by-step window (#268)](architecture/wizard.md)
 - [`domain/transactions.py`](architecture/transactions.md)
 - [Saving Transactions (#110)](architecture/transaction-saving.md)
+- [Quantity corrections (#278)](architecture/quantity-corrections.md)
 - [Transaction form (#111)](architecture/transaction-form.md)
 - [`domain/lots.py`](architecture/lots.md)
 - [`domain/valuation.py`](architecture/valuation.md)

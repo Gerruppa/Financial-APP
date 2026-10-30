@@ -20,6 +20,7 @@ from financial_app.domain.accounts import Account, AccountType
 from financial_app.domain.currencies import MissingNbpRateError, NbpRate
 from financial_app.domain.formatting import format_date
 from financial_app.domain.instruments import Instrument
+from financial_app.domain.quantity_corrections import Fix, Shortfall, quantity_shortfalls
 from financial_app.domain.reconciliation import Choice, Reconciliation, item_key, reconcile
 from financial_app.domain.transactions import PLN, TransactionDraft, TransactionError
 from financial_app.domain.xtb_import import (
@@ -44,10 +45,12 @@ from financial_app.persistence.reconciliation import (
     KeepMine,
     SkipBroker,
     TakeBroker,
+    after_actions,
     apply_reconciliation,
     handled_broker_ids,
     incoming_transfers,
     unreconciled_transactions,
+    with_corrections,
 )
 from financial_app.persistence.settings import XTB_ACCOUNT, XTB_TICKER, load_setting, save_setting
 from financial_app.sources.spreadsheet import NbpLookup
@@ -66,6 +69,8 @@ class XtbDecisions:
     accounts: Mapping[str, int | None] = field(default_factory=dict)
     instruments: Mapping[str, int] = field(default_factory=dict)
     choices: Mapping[str, Choice] = field(default_factory=dict)
+    # The fix of each Sell left uncovered (``XtbPreview.shortfalls``), by ``shortfall_key``
+    corrections: Mapping[str, Fix] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -89,15 +94,23 @@ class XtbPreview:
     handled: int
     reconciliation: Reconciliation
     choices: Mapping[str, Choice]
+    # The Sells and Security Transfers the choices leave uncovered, each with its fix (#278)
+    shortfalls: list[Shortfall] = field(default_factory=list)
 
     @property
     def blocked(self) -> bool:
-        return bool(self.unmatched_accounts or self.unmatched_tickers or self.problems)
+        unresolved = any(shortfall.fix is None for shortfall in self.shortfalls)
+        return bool(self.unmatched_accounts or self.unmatched_tickers or self.problems or unresolved)
 
     def choice(self, key: str) -> Choice:
         return self.choices.get(key, Choice.BROKER)
 
     def actions(self) -> list[Action]:
+        """What applying saves: each item as chosen, with the quantity corrections."""
+        return with_corrections(self.chosen_actions(), self.shortfalls)
+
+    def chosen_actions(self) -> list[Action]:
+        """Each Reconciliation item as chosen, before the quantity corrections."""
         actions: list[Action] = []
         for pair in self.reconciliation.pairs:
             if pair.linked:
@@ -192,7 +205,7 @@ def preview_xtb(
 
     ranges = {mapped[s.account]: (s.first_day, s.last_day) for s in included}
     reconciliation = reconcile(drafts, unreconciled_transactions(engine, ranges), incoming_transfers(engine, ranges))
-    return XtbPreview(
+    preview = XtbPreview(
         list(statements),
         decided,
         unmatched_accounts,
@@ -203,6 +216,10 @@ def preview_xtb(
         reconciliation,
         dict(decisions.choices),
     )
+    if unmatched_accounts or unmatched_tickers:
+        return preview
+    known = after_actions(engine, preview.chosen_actions())
+    return replace(preview, shortfalls=quantity_shortfalls(known, decisions.corrections, trim_saved=False))
 
 
 def apply_xtb(
@@ -218,6 +235,8 @@ def apply_xtb(
     if preview.problems:
         first = preview.problems[0]
         raise XtbError(f"Operacja XTB z {format_date(first.entry.day)}: {first.message}")
+    if any(shortfall.fix is None for shortfall in preview.shortfalls):
+        raise XtbError("Wybierz poprawkę dla każdej sprzedaży bez pokrycia.")
     apply_reconciliation(engine, preview.actions(), today)
     for number, account_id in preview.accounts.items():
         save_setting(engine, XTB_ACCOUNT + number, LEFT_OUT if account_id is None else str(account_id))
