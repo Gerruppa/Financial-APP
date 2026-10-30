@@ -12,8 +12,12 @@ from datetime import date, timedelta
 from decimal import Decimal
 from enum import StrEnum
 
+from financial_app.domain.account_rules import refusal
+from financial_app.domain.accounts import Account
 from financial_app.domain.bonds import BondType
 from financial_app.domain.currencies import NbpRate
+from financial_app.domain.formatting import parse_date, parse_number
+from financial_app.domain.instruments import Instrument
 from financial_app.domain.transactions import (
     PLN,
     Transaction,
@@ -93,6 +97,29 @@ class RecurringRuleDraft:
             raise RecurringRuleError("Data końca nie może być przed datą początku.")
 
 
+def parse_rule_fields(amount: str, day: str, start: str, end: str = "") -> tuple[Decimal, int, date, date | None]:
+    """A rule's typed amount, day of the month, first and optional last occurrence, or a ``RecurringRuleError``."""
+    try:
+        parsed_amount = parse_number(amount)
+    except ValueError:
+        raise RecurringRuleError("Kwota musi być liczbą, np. 1 000,50.") from None
+    try:
+        parsed_day = int(day.strip())
+    except ValueError:
+        raise RecurringRuleError("Dzień miesiąca musi być od 1 do 31.") from None
+    try:
+        return parsed_amount, parsed_day, parse_date(start), parse_date(end) if end.strip() else None
+    except ValueError:
+        raise RecurringRuleError("Datę podaj jako dd.mm.rrrr, np. 10.11.2026.") from None
+
+
+def check_buy(account: Account, instrument: Instrument) -> None:
+    """Refuse a rule buying ``instrument`` on ``account``: the transaction dialog would refuse the Buy it proposes."""
+    why = refusal(account, instrument)
+    if why is not None:
+        raise RecurringRuleError(why)
+
+
 @dataclass(frozen=True)
 class RecurringRule(RecurringRuleDraft):
     """A saved Recurring Rule."""
@@ -165,6 +192,17 @@ def occurrences(rule: RecurringRuleDraft, until: date) -> list[date]:
     found: list[date] = []
     for day in _schedule(rule.day_of_month, rule.frequency, rule.start_date):
         if day > last:
+            return found
+        if day >= rule.start_date:
+            found.append(day)
+    raise AssertionError  # the schedule never ends
+
+
+def upcoming_occurrences(rule: RecurringRuleDraft, count: int) -> list[date]:
+    """The rule's first ``count`` occurrences from its start, fewer past its end: the Drafts a new rule will bring."""
+    found: list[date] = []
+    for day in _schedule(rule.day_of_month, rule.frequency, rule.start_date):
+        if len(found) == count or (rule.end_date is not None and day > rule.end_date):
             return found
         if day >= rule.start_date:
             found.append(day)

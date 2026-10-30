@@ -116,6 +116,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `valuation.md`: Architecture entry for domain/valuation.py: main functions, UI markers and decisions.
 - `version-installer.md`: Architecture entry for Version and installer (#99): main functions, UI markers and decisions.
 - `view-scope-periods.md`: Architecture entry for View Scope and period selector (#71, spec 5 and 6.1): main functions, UI markers and decisions.
+- `wizard.md`: Architecture entry for the shared step-by-step Wizard window: its shell, UI markers and the crypto import and first Recurring Rule users.
 - `wyniki.md`: Architecture entry for Wyniki (#74, spec 6.1): main functions, UI markers and decisions.
 - `xtb-import-reconciliation.md`: Architecture entry for XTB import and Reconciliation (L-17, spec 7): main functions, UI markers and decisions.
 - `yahoo.md`: Architecture entry for sources/yahoo.py: main functions, UI markers and decisions.
@@ -187,6 +188,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `recurring.py`: Recurring Rules: validated rule fields, occurrence schedule, and Drafts left after matching Transactions and skips
 - `report.py`: Report model: titled sections of typed rows and notes for Sell Summary, Wyniki, Portfolio and passive income of a year and View Scope; no file format
 - `results.py`: Wyniki tab figures: period XIRR, TWR, drawdown, volatility and fixed-period returns per Total and Account, from History
+- `rule_examples.py`: Examples the first Recurring Rule pre-fills (IKE deposit, ETF buy, cash transfer, own rule) with default Account and start date.
 - `sale_summary.py`: Sell Summary: Sale Pairs from the FIFO replay with attributed Dividends, and closed-position statistics (win rate, days, best, worst).
 - `save_warnings.py`: Warnings a Transactions save shows (cash shortfalls, over-limit contributions, unsplit Multi-asset, disallowed Instruments), and what changed since a delete before its undo
 - `sayings.py`: Saying of the day: fixed list of lines from Walaszek's cartoons (Kapitan Bomba, Egzorcysta, Chłopaki z baraków) and the day-based pick shown at the foot of the menu
@@ -335,6 +337,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `discreet.py`: Discreet mode UI: page script and CSS that blur amounts and charts, plus the header eye toggle remembered in settings.
 - `faq.md`: FAQ text shown on the Pomoc tab; sections, questions with slugs, and links to tabs
 - `file_delivery.py`: Hands an exported file to the user: a browser download, or a save to Downloads in the native window with a dialog showing its path.
+- `first_rule.py`: Ustawienia step-by-step window for the first Recurring Rule: choose an example, fill in the rule, preview its Drafts, save.
 - `fund_details.py`: Builds the short fund detail texts (TER, Distribution Policy, domicile) shared by Instrument list and Portfolio
 - `header_search.py`: Header search field, its results list and the command palette; opens Instrument Cards or runs commands on a chosen row.
 - `help.py`: Help tab (Pomoc); shows the FAQ as collapsible questions with a search and Przejdź do buttons to tabs
@@ -374,6 +377,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `user_section.py`: Ustawienia Użytkownik card: change the User's pseudonym and password, and delete the User with their folder after password and pseudonym confirmation.
 - `view_scope.py`: View Scope header switcher and breadcrumbs, listing Accounts by value with share and daily change
 - `visibility.py`: Window Layout of hidden elements, plus the Ustawienia switches and View Profile presets that change it
+- `wizard.py`: Shared step-by-step dialog shell: header "Krok N z M", Wstecz, Zamknij and Dalej buttons, Dalej held until the step is ready.
 - `xtb_import.py`: Ustawienia card for importing XTB statements and resolving the Reconciliation before applying
 
 ## src/financial_app/ui/assets/fonts/
@@ -464,6 +468,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_export_ui.py`: UI tests for the Transakcje export buttons saving CSV and XLSX files
 - `test_fallback_order_ui.py`: UI tests for editing an Asset Class's Fallback Order in Ustawienia: showing, removing, adding, moving and saving sources.
 - `test_faq_domain.py`: Unit tests of FAQ Markdown parsing, format errors and search
+- `test_first_rule_ui.py`: UI tests for the first Recurring Rule window: example prefill, saving with next Drafts, Buy instrument check, day-to-start follow.
 - `test_foreign_cash_domain.py`: Domain tests for foreign cash Lots, Currency Exchange and FX result per Account
 - `test_foreign_cash_repository.py`: Tests saving Currency Exchanges and foreign-cash Buys to SQLite
 - `test_foreign_cash_transfer_domain.py`: Tests foreign-currency Cash Transfers in the domain: oldest cash Lots move with dates and costs, no FX result, NBP-rate PLN value.
@@ -531,6 +536,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_report_export_ui.py`: UI tests for the Eksportuj XLSX buttons of Sell Summary and Wyniki: default year, chosen year and View Scope
 - `test_results_domain.py`: Tests for the Wyniki tab's period results and fixed-period rows per Total and Account
 - `test_results_ui.py`: UI tests for the Wyniki tab: tiles, drawdown chart, results table and pending state
+- `test_rule_examples.py`: Unit tests for Recurring Rule example defaults and the upcoming occurrences a rule brings.
 - `test_sale_summary_domain.py`: Tests Sale Pairs across Lots, Splits and DRIPs, Dividend and coupon attribution, statistics and the view filter.
 - `test_sale_summary_ui.py`: UI tests of the Podsumowanie sprzedaży tab: pairs, statistics, Account scope and an empty period.
 - `test_save_warnings_domain.py`: Tests the save warnings computed from Transactions before and after a save
@@ -580,6 +586,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_view_scope_domain.py`: Tests the View Scope domain: Total or one Account, its text setting, and the Accounts the switcher offers.
 - `test_view_scope_ui.py`: UI tests for the View Scope switcher, breadcrumbs, scope-following tabs and the period selector.
 - `test_windowless.py`: Tests that windowless launches redirect stdout and stderr to a log file while console launches stay untouched
+- `test_wizard.py`: UI tests for the shared Wizard: header, Wstecz and Dalej held until the step is ready.
 - `test_xtb_import_domain.py`: Tests reading XTB statements into entries and Transaction drafts
 - `test_xtb_import_ui.py`: Tests the XTB import card in Ustawienia: matching, resolving and applying without a browser
 - `test_xtb_parity.py`: Checks the user's XTB exports against XTB's own positions and cash; skipped without reference data

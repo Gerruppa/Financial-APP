@@ -13,6 +13,7 @@ from financial_app.sources.prices import PriceSource
 from financial_app.ui.accounts import AccountsSection
 from financial_app.ui.contribution_limits import ContributionLimitsSection
 from financial_app.ui.crypto_import import CryptoImportSection
+from financial_app.ui.first_rule import FirstRuleWizard
 from financial_app.ui.import_sheet import SheetImportSection
 from financial_app.ui.instruments import AssetClassesSection, InstrumentsSection
 from financial_app.ui.recurring_rules import RecurringRulesSection
@@ -46,7 +47,8 @@ def build_settings_page(
     redraws on, and ``theme`` its Theme, which the shell reloads the window on."""
     ui.label("Ustawienia").classes("text-2xl font-bold")
     limits = ContributionLimitsSection(engine)
-    rules = RecurringRulesSection(engine, rates.today, on_changed=on_rules_changed)
+    first_rule = FirstRuleWizard(engine, rates.today, on_saved=lambda: rules.changed())
+    rules = RecurringRulesSection(engine, rates.today, on_changed=on_rules_changed, open_first_rule=first_rule.open)
     accounts = AccountsSection(
         engine, on_deleted=on_account_deleted, on_changed=lambda: _all(limits.refresh, rules.refresh)
     )
