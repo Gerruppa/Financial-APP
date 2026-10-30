@@ -1,4 +1,5 @@
-"""Ustawienia > Import z XTB i uzgadnianie (L-17): matching, resolving and applying, without a browser."""
+"""Ustawienia > Import z XTB i uzgadnianie (L-17, #271): the step-by-step window matching, resolving and applying,
+without a browser."""
 
 from collections.abc import AsyncIterator
 from datetime import date, datetime
@@ -12,8 +13,9 @@ from sqlalchemy import Engine
 
 from financial_app.domain.accounts import AccountDraft, AccountType
 from financial_app.domain.currencies import NbpRate
+from financial_app.domain.formatting import format_pln
 from financial_app.domain.instruments import InstrumentDraft
-from financial_app.domain.transactions import Origin, TransactionDraft, TransactionType
+from financial_app.domain.transactions import COVERING_COMMENT, Origin, TransactionDraft, TransactionType
 from financial_app.persistence.accounts import add_account
 from financial_app.persistence.contribution_limits import set_limits
 from financial_app.persistence.db import init_db
@@ -61,27 +63,111 @@ async def user(engine: Engine) -> AsyncIterator[User]:
         yield user
 
 
-def load(user: User, path: Path) -> None:
+async def load(user: User, path: Path) -> None:
+    """Open the import window, read its instructions and load ``path``."""
+    user.find(marker="settings-section-import").click()
+    user.find(marker="xtb-open").click()
+    await user.should_see(marker="xtb-step-1")
+    await user.should_see("Po jednym zestawieniu na rachunek")
+    user.find(marker="xtb-next").click()
+    await user.should_see(marker="xtb-step-2")
     user.find(marker="xtb-path").type(str(path))
     user.find(marker="xtb-load").click()
+    await user.should_see(marker="xtb-step-3")
+
+
+def forward(user: User, steps: int) -> None:
+    for _ in range(steps):
+        user.find(marker="xtb-next").click()
+
+
+def choose(user: User, marker: str, value: object) -> None:
+    user.find(marker=marker, kind=ui.select).elements.pop().set_value(value)
+
+
+def new_instrument(user: User) -> None:
+    choose(user, "xtb-instrument-XTB.PL", NEW)
+    user.find(marker="instrument-name").type("XTB")
+    choose(user, "instrument-class", 1)
+    user.find("Zapisz").click()
+
+
+async def test_the_window_guides_through_the_import_and_proposes_the_missing_deposit(
+    engine: Engine, user: User, tmp_path: Path
+) -> None:
+    ike = add_account(engine, AccountDraft("IKE", "XTB", AccountType.IKE, ("PLN",)))
+    shares = next(c for c in list_asset_classes(engine) if c.name == "Akcje polskie")
+    add_instrument(engine, InstrumentDraft("XTB", shares.id, "PLN"))
+    mine = add_transaction(engine, TransactionDraft(ike.id, date(2026, 10, 9), TransactionType.DEPOSIT, Decimal(400)))
+    # Exported from the day of the purchase: the Deposit that paid for it is not in the statement
+    path = write_statement(
+        tmp_path / "IKE.xlsx",
+        IKE_NUMBER,
+        [
+            op("Stock purchase", datetime(2026, 10, 9, 7), -973.0, "101", "OPEN BUY XTB.PL 7 @ 139.00", "XTB.PL",
+               "XTB", "9"),
+            op("Deposit", datetime(2026, 10, 10, 8), 100.0, "102"),
+        ],
+    )  # fmt: skip
+
+    await load(user, path)
+    # The one IKE Account is suggested and the ticker matched by name, so the next step follows
+    assert user.find(marker="xtb-next", kind=ui.button).elements.pop().enabled
+    forward(user, 1)
+
+    await user.should_see(marker="xtb-step-4")
+    await user.should_see("tylko w XTB: 2, tylko w aplikacji: 1")
+    await user.should_see(marker="xtb-no-different")
+    forward(user, 1)
+
+    await user.should_see(marker="xtb-step-5")
+    await user.should_see(marker="xtb-item")
+    forward(user, 1)
+
+    # The entered Deposit XTB lacks is deleted by default; kept, it pays for part of the purchase
+    await user.should_see(marker="xtb-step-6")
+    user.find(marker=f"xtb-choice-mine-{mine.id}", kind=ui.toggle).elements.pop().set_value("mine")
+    forward(user, 1)
+
+    await user.should_see(marker="xtb-step-7")
+    await user.should_see(marker=f"xtb-deposits-{ike.id}")
+    await user.should_see(f"09.10.2026: {format_pln(Decimal('573'))}")
+    forward(user, 1)
+
+    await user.should_see(marker="xtb-step-8")
+    await user.should_see("Tylko w XTB: dodane 2, pominięte 0. Tylko w aplikacji: usunięte 0, zostawione 1.")
+    await user.should_see(marker="xtb-deposits-summary")
+    await user.should_see(marker="xtb-hints")
+    user.find(marker="xtb-apply").click()
+
+    saved = list_transactions(engine)
+    assert mine in saved
+    [covering] = [t for t in saved if t.comment == COVERING_COMMENT]
+    assert (covering.account_id, covering.date, covering.actual_amount) == (ike.id, date(2026, 10, 9), Decimal(573))
+    assert len(saved) == 4
+    await user.should_see(marker="xtb-done")
 
 
 async def test_a_new_instrument_for_a_ticker_then_the_statement_is_added(
     engine: Engine, statement: Path, user: User
 ) -> None:
     ike = add_account(engine, AccountDraft("IKE", "XTB", AccountType.IKE, ("PLN",)))
-    load(user, statement)
+    await load(user, statement)
     await user.should_see(marker="xtb-instrument-XTB.PL")
-    await user.should_not_see(marker="xtb-apply")
+    assert not user.find(marker="xtb-next", kind=ui.button).elements.pop().enabled
 
-    user.find(marker="xtb-instrument-XTB.PL", kind=ui.select).elements.pop().set_value(NEW)
+    choose(user, "xtb-instrument-XTB.PL", NEW)
     assert user.find(marker="instrument-search", kind=ui.input).elements.pop().value == "XTB.WA"
     user.find(marker="instrument-name").type("XTB")
-    user.find(marker="instrument-class", kind=ui.select).elements.pop().set_value(1)
+    choose(user, "instrument-class", 1)
     user.find("Zapisz").click()
 
+    forward(user, 1)
     await user.should_see(marker="xtb-summary")
     await user.should_see("tylko w XTB: 2")
+    forward(user, 3)
+    await user.should_see(marker="xtb-no-deposits")
+    forward(user, 1)
     user.find(marker="xtb-apply").click()
 
     saved = list_transactions(engine)
@@ -90,28 +176,34 @@ async def test_a_new_instrument_for_a_ticker_then_the_statement_is_added(
         (TransactionType.DEPOSIT, ike.id, Origin.BROKER),
     ]
     assert [i.name for i in list_instruments(engine)] == ["XTB"]
+    for _ in range(4):
+        user.find(marker="xtb-back").click()
     await user.should_see("już uzgodnione: 2")
 
 
 async def test_keeping_an_entered_deposit_xtb_does_not_have(engine: Engine, statement: Path, user: User) -> None:
     ike = add_account(engine, AccountDraft("IKE", "XTB", AccountType.IKE, ("PLN",)))
     mine = add_transaction(engine, TransactionDraft(ike.id, date(2026, 5, 9), TransactionType.DEPOSIT, Decimal(500)))
-    load(user, statement)
-    user.find(marker="xtb-account-" + IKE_NUMBER, kind=ui.select).elements.pop().set_value("skip")
+    await load(user, statement)
+    choose(user, "xtb-account-" + IKE_NUMBER, "skip")
+    forward(user, 1)
     await user.should_see("tylko w XTB: 0, tylko w aplikacji: 0")
-    user.find(marker="xtb-account-" + IKE_NUMBER, kind=ui.select).elements.pop().set_value(ike.id)
-    user.find(marker="xtb-instrument-XTB.PL", kind=ui.select).elements.pop().set_value(NEW)
-    user.find(marker="instrument-name").type("XTB")
-    user.find(marker="instrument-class", kind=ui.select).elements.pop().set_value(1)
-    user.find("Zapisz").click()
+    user.find(marker="xtb-back").click()
+    choose(user, "xtb-account-" + IKE_NUMBER, ike.id)
+    new_instrument(user)
+    forward(user, 1)
 
     await user.should_see("tylko w aplikacji: 1")
+    forward(user, 2)
     user.find(marker=f"xtb-choice-mine-{mine.id}", kind=ui.toggle).elements.pop().set_value("mine")
+    forward(user, 2)
     user.find(marker="xtb-apply").click()
 
     assert mine in list_transactions(engine)
     assert len(list_transactions(engine)) == 3
-    await user.should_see("tylko w aplikacji: 0")
+    user.find(marker="xtb-back").click()
+    user.find(marker="xtb-back").click()
+    await user.should_see(marker="xtb-no-mine-only")
 
 
 async def test_applying_deposits_over_the_contribution_limit_warns_once(
@@ -119,12 +211,10 @@ async def test_applying_deposits_over_the_contribution_limit_warns_once(
 ) -> None:
     ike = add_account(engine, AccountDraft("IKE", "XTB", AccountType.IKE, ("PLN",)))
     set_limits(engine, 2026, {AccountType.IKE: Decimal(500)})
-    load(user, statement)
+    await load(user, statement)
     await user.should_see(marker="xtb-instrument-XTB.PL")
-    user.find(marker="xtb-instrument-XTB.PL", kind=ui.select).elements.pop().set_value(NEW)
-    user.find(marker="instrument-name").type("XTB")
-    user.find(marker="instrument-class", kind=ui.select).elements.pop().set_value(1)
-    user.find("Zapisz").click()
+    new_instrument(user)
+    forward(user, 5)
     await user.should_see(marker="xtb-apply")
 
     user.find(marker="xtb-apply").click()
@@ -153,14 +243,18 @@ async def test_a_sale_above_what_was_bought_waits_for_its_correction(
                "XTB", "9"),
         ],
     )  # fmt: skip
-    load(user, path)
+    await load(user, path)
+    forward(user, 5)
+
+    await user.should_see(marker="xtb-corrections-missing")
+    assert not user.find(marker="xtb-apply", kind=ui.button).elements.pop().enabled
+    user.find(marker="xtb-back").click()
 
     with user.scope(marker="xtb-corrections-1"):
         await user.should_see("Brakuje 0,5 szt.")
     await user.should_see(marker="xtb-corrections-large-1")
-    assert not user.find(marker="xtb-apply", kind=ui.button).elements.pop().enabled
-
     user.find(marker="xtb-corrections-fix-1", kind=ui.radio).elements.pop().set_value("trim")
+    forward(user, 1)
     user.find(marker="xtb-apply").click()
     await user.should_see("Uzgodniono z XTB")
     sale = next(t for t in list_transactions(engine) if t.transaction_type is TransactionType.SELL)

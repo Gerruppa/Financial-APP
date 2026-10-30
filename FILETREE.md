@@ -383,7 +383,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `view_scope.py`: View Scope header switcher and breadcrumbs, listing Accounts by value with share and daily change
 - `visibility.py`: Window Layout of hidden elements, plus the Ustawienia switches and View Profile presets that change it
 - `wizard.py`: Shared step-by-step dialog shell: header "Krok N z M", Wstecz, Zamknij and Dalej buttons, Dalej held until the step is ready.
-- `xtb_import.py`: Ustawienia card for importing XTB statements and resolving the Reconciliation before applying
+- `xtb_import.py`: Ustawienia XTB import wizard: steps from loading statements through account and ticker matching, reconciliation, covering Deposits to applying.
 
 ## src/financial_app/ui/assets/fonts/
 
@@ -596,7 +596,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_windowless.py`: Tests that windowless launches redirect stdout and stderr to a log file while console launches stay untouched
 - `test_wizard.py`: UI tests for the shared Wizard: header, Wstecz and Dalej held until the step is ready.
 - `test_xtb_import_domain.py`: Tests reading XTB statements into entries and Transaction drafts
-- `test_xtb_import_ui.py`: Tests the XTB import card in Ustawienia: matching, resolving and applying without a browser
+- `test_xtb_import_ui.py`: Tests the XTB import wizard window in Ustawienia: step navigation, matching, resolving, covering Deposits and applying without a browser.
 - `test_xtb_parity.py`: Checks the user's XTB exports against XTB's own positions and cash; skipped without reference data
 - `test_xtb_reconciliation.py`: Tests the XTB import and Reconciliation against a database with synthetic statements
 - `test_yahoo_search.py`: Tests Yahoo Instrument search by ISIN and name on saved responses, with error handling

@@ -22,7 +22,7 @@ from financial_app.domain.formatting import format_date
 from financial_app.domain.instruments import Instrument
 from financial_app.domain.quantity_corrections import Fix, Shortfall, quantity_shortfalls
 from financial_app.domain.reconciliation import Choice, Reconciliation, item_key, reconcile
-from financial_app.domain.transactions import PLN, TransactionDraft, TransactionError
+from financial_app.domain.transactions import PLN, TransactionDraft, TransactionError, covering_deposits
 from financial_app.domain.xtb_import import (
     SHEET_NAME,
     EntryContext,
@@ -71,6 +71,8 @@ class XtbDecisions:
     choices: Mapping[str, Choice] = field(default_factory=dict)
     # The fix of each Sell left uncovered (``XtbPreview.shortfalls``), by ``shortfall_key``
     corrections: Mapping[str, Fix] = field(default_factory=dict)
+    # The Accounts whose covering Deposits (``XtbPreview.deposits``) the user declined
+    no_deposits: frozenset[int] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -96,6 +98,10 @@ class XtbPreview:
     choices: Mapping[str, Choice]
     # The Sells and Security Transfers the choices leave uncovered, each with its fix (#278)
     shortfalls: list[Shortfall] = field(default_factory=list)
+    # The Deposits that keep each Account's cash from going below zero after the choices and fixes, by Account id
+    # (#271): a statement exported from a later day than the account's opening lacks the Deposits before it
+    deposits: dict[int, list[TransactionDraft]] = field(default_factory=dict)
+    no_deposits: frozenset[int] = frozenset()
 
     @property
     def blocked(self) -> bool:
@@ -106,8 +112,13 @@ class XtbPreview:
         return self.choices.get(key, Choice.BROKER)
 
     def actions(self) -> list[Action]:
-        """What applying saves: each item as chosen, with the quantity corrections."""
-        return with_corrections(self.chosen_actions(), self.shortfalls)
+        """What applying saves: each item as chosen, with the quantity corrections and the covering Deposits kept."""
+        deposits = [AddBroker(deposit) for deposit in self.kept_deposits()]
+        return [*with_corrections(self.chosen_actions(), self.shortfalls), *deposits]
+
+    def kept_deposits(self) -> list[TransactionDraft]:
+        """The covering Deposits of the Accounts the user did not decline."""
+        return [d for account_id, ds in self.deposits.items() if account_id not in self.no_deposits for d in ds]
 
     def chosen_actions(self) -> list[Action]:
         """Each Reconciliation item as chosen, before the quantity corrections."""
@@ -215,11 +226,16 @@ def preview_xtb(
         done,
         reconciliation,
         dict(decisions.choices),
+        no_deposits=decisions.no_deposits,
     )
     if unmatched_accounts or unmatched_tickers:
         return preview
-    known = after_actions(engine, preview.chosen_actions())
-    return replace(preview, shortfalls=quantity_shortfalls(known, decisions.corrections, trim_saved=False))
+    chosen_actions = preview.chosen_actions()
+    shortfalls = quantity_shortfalls(after_actions(engine, chosen_actions), decisions.corrections, trim_saved=False)
+    known = after_actions(engine, with_corrections(chosen_actions, shortfalls))
+    proposed = {account_id: covering_deposits(known, account_id) for account_id in dict.fromkeys(mapped.values())}
+    deposits = {account_id: found for account_id, found in proposed.items() if found}
+    return replace(preview, shortfalls=shortfalls, deposits=deposits)
 
 
 def apply_xtb(

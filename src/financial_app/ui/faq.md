@@ -154,8 +154,10 @@ Gdy przychodzi termin, aplikacja nie zapisuje transakcji sama: na górze zakład
 Przejdź do: /ustawienia
 
 1. W xStation otwórz historię konta i wyeksportuj zestawienie do pliku .xlsx (dla kilku rachunków możesz zapisać pliki w jednym folderze).
-2. W **Ustawieniach**, w sekcji **Import z XTB i uzgadnianie**, wpisz ścieżkę pliku albo folderu i kliknij **Wczytaj**.
+2. W **Ustawieniach**, w zakładce **Import**, w karcie **Import z XTB i uzgadnianie** kliknij **Otwórz kreator importu XTB**. Okno prowadzi krok po kroku: wpisz ścieżkę pliku albo folderu i kliknij **Wczytaj**.
 3. Dopasuj rachunki XTB do kont w aplikacji i tickery do instrumentów (brakujący instrument utworzysz od razu).
+4. Zdecyduj o różnicach, potem o operacjach tylko w XTB i transakcjach tylko w aplikacji; każdy krok wyjaśnia, co oznacza wybór.
+5. Sprawdź uzupełnienia: jeśli zestawienie nie ma wcześniejszych wpłat i gotówka spadłaby poniżej zera, okno proponuje wpłaty uzupełniające (do odznaczenia). Na końcu kliknij **Zastosuj** i przeczytaj wskazówki do ręcznych poprawek.
 
 **Uzgadnianie** porównuje transakcje z XTB z tymi, które już wpisałeś: pokazuje te, które się różnią, te tylko w XTB i te tylko w aplikacji. Domyślnie obowiązuje wersja XTB (**Wszędzie wersja XTB**), a przy każdej pozycji możesz wybrać inaczej. Nic nie jest zapisywane przed kliknięciem **Zastosuj**. Ponowny import tego samego zestawienia nie dubluje transakcji.
 
