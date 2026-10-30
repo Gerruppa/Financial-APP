@@ -4,4 +4,4 @@
 
 The user keeps the state the steps share (choices, loaded files) and makes the `Wizard` inside an element that outlives it, such as its card in Ustawienia: NiceGUI deletes a dialog with the element it was opened in (CLAUDE.md).
 
-Users: the crypto import window (`ui/crypto_import.py`, prefix `crypto`) and the first Recurring Rule (`ui/first_rule.py`, prefix `first-rule`, see `recurring-rules.md`). `tests/test_wizard.py` checks the header, "Wstecz", and "Dalej" held until a step is ready.
+Users: the crypto import window (`ui/crypto_import.py`, prefix `crypto`), the first Recurring Rule (`ui/first_rule.py`, prefix `first-rule`, see `recurring-rules.md`) and the first-run window (`ui/first_run.py`, prefix `first-run`, see `first-run.md`). `tests/test_wizard.py` checks the header, "Wstecz", and "Dalej" held until a step is ready.

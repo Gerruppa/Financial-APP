@@ -10,9 +10,13 @@
 - „Cofnij” po usunięciu transakcji sprawdza, co zmieniło się od tamtej chwili na jej kontach: jeśli coś się zmieniło, przed przywróceniem pokazuje, co wróci, i wyjaśnia każdą różnicę (np. dodane w międzyczasie wpłaty uzupełniające, które po przywróceniu zawyżyłyby gotówkę), z możliwością przywrócenia razem z ich usunięciem. Pasek „Cofnij” nie znika, dopóki otwarte jest okno wpłat uzupełniających, a po jego zamknięciu ma znów pełny czas.
 - Gdy nie ma jeszcze żadnej reguły cyklicznej, w Ustawieniach > Limity i reguły przycisk „Pierwsza reguła krok po kroku” otwiera okno z gotowymi przykładami (miesięczna wpłata na IKE lub IKZE, miesięczny zakup ETF, transfer gotówki między kontami albo własna): przykład wypełnia regułę, a przed zapisem widać najbliższe szkice oraz to, gdzie się pojawią i jak je zatwierdzić lub pominąć.
 - Sprzedaż albo transfer papierów, który wymaga trochę więcej jednostek, niż było na koncie (np. opłata giełdy pobrana w monecie), nie blokuje już importu kryptowalut ani XTB: podgląd proponuje poprawkę zapisywaną razem z importem, a w oknie transakcji obok błędu można ją wybrać przy zapisie, edycji albo usunięciu. Do wyboru jest zakup brakujących jednostek po 0 zł albo po cenie sprzedaży, albo zmniejszenie liczby do tego, co było na koncie; okno pokazuje różnicę i to, jak każda opcja zmienia koszt i wynik, a przy różnicy powyżej 1% ostrzega, że raczej brakuje zakupu albo transferu, i niczego nie zaznacza.
+- Przy pierwszym uruchomieniu, gdy nie ma jeszcze żadnego konta, okno „Pierwsze kroki” prowadzi przez start: czym jest KAPITA, dodanie kont (z typami i limitami wpłat na IKE i IKZE), skąd wziąć historię transakcji (import z XTB lub kryptowalut albo ręcznie), skąd biorą się wyceny i gdzie co znaleźć; po zamknięciu nie otwiera się już samo, a otworzysz je ponownie przyciskiem „Pierwsze kroki” w Ustawieniach > Konta.
 
 ### Poprawki
 - Historia nie zawodzi już błędem „Sprzedaż bez pokrycia”, gdy papiery (np. kryptowaluta bez ceny z tego dnia) przeniesione na konto zostały na nim sprzedane tego samego dnia.
+
+### Zmiany
+- Import arkusza Inwestomat zniknął z Ustawień > Import: służył jednorazowemu przeniesieniu danych; import z XTB i kryptowalut zostaje bez zmian.
 
 ## 1.3.1 — 2026-10-29
 

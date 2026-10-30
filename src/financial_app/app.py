@@ -199,6 +199,7 @@ def main(argv: Sequence[str] | None = None) -> None:
                 on_switch_user=None if args.demo else switch_user,
                 pseudonym=session.current.pseudonym,
                 updates=None if args.demo else UpdateSource.real(),
+                offer_first_run=True,
                 user_section=None if signed is None else UserSection(store, signed, changed, partial(deleted, signed)),
             )
 

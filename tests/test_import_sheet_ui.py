@@ -18,6 +18,7 @@ from financial_app.persistence.accounts import add_account, list_accounts
 from financial_app.persistence.db import init_db
 from financial_app.persistence.transactions import list_transactions
 from financial_app.sources.nbp import NbpRates
+from financial_app.ui import settings
 from financial_app.ui.import_sheet import NEW_ACCOUNT
 from financial_app.ui.reset import CONFIRMATION_PHRASE
 from financial_app.ui.shell import build_shell
@@ -72,11 +73,27 @@ def workbook(tmp_path: Path) -> Path:
     return path
 
 
+@pytest.fixture(autouse=True)
+def shown(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The section is hidden in Ustawienia (#269); these tests switch it back on."""
+    monkeypatch.setattr(settings, "SHOW_SHEET_IMPORT", True)
+
+
 @pytest.fixture
 async def user(engine: Engine, workbook: Path) -> AsyncIterator[User]:
     async with user_simulation(lambda: build_shell(engine, FixedNbp(engine))) as user:
         await user.open("/ustawienia")
         yield user
+
+
+async def test_the_section_is_hidden_while_its_switch_is_off(engine: Engine, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "SHOW_SHEET_IMPORT", False)
+    async with user_simulation(lambda: build_shell(engine, FixedNbp(engine))) as user:
+        await user.open("/ustawienia")
+
+        await user.should_not_see(marker="import-path")
+        await user.should_see(marker="xtb-path")
+        await user.should_see(marker="crypto-open")
 
 
 async def test_preview_saves_nothing_and_save_imports_the_rows(engine: Engine, workbook: Path, user: User) -> None:

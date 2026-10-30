@@ -25,17 +25,23 @@ ACCOUNT_TYPE_OPTIONS = {account_type.value: account_type.label for account_type 
 @dataclass
 class AccountsSection:
     """The Konta card; ``refresh`` redraws the list after a save. ``on_deleted`` gets a deleted Account's id;
-    ``on_changed`` runs after an Account is saved or deleted here."""
+    ``on_changed`` runs after an Account is saved or deleted here; ``open_first_run`` reopens the first-run window
+    (#270)."""
 
     engine: Engine
     on_deleted: Callable[[int], object] | None = None
     on_changed: Callable[[], object] | None = None
+    open_first_run: Callable[[], object] | None = None
 
     def build(self) -> None:
         with ui.card().classes("w-full max-w-4xl"):
             with ui.row().classes("w-full items-center"):
                 ui.label("Konta").classes("text-xl font-bold")
                 ui.space()
+                if self.open_first_run is not None:
+                    ui.button("Pierwsze kroki", icon="explore", on_click=self.open_first_run).props(
+                        "no-caps flat"
+                    ).mark("first-run-open")
                 ui.button("Dodaj konto", icon="add", on_click=lambda: self.open_dialog(None)).props("no-caps")
             # The marker sits outside the refreshable list so it survives a refresh
             with ui.column().classes("w-full gap-1").mark("accounts"):
@@ -69,15 +75,16 @@ class AccountsSection:
 
     def open_dialog(self, account: Account | None) -> None:
         """Open a fresh form for a new Account (``None``) or for editing ``account``."""
-        open_account_dialog(self.engine, account, on_saved=lambda _: self._saved(), on_deleted=self._deleted)
+        open_account_dialog(self.engine, account, on_saved=lambda _: self.changed(), on_deleted=self._deleted)
 
-    def _saved(self) -> None:
+    def changed(self) -> None:
+        """Redraw the list and tell ``on_changed``, after an Account is saved here or elsewhere."""
         self.account_list.refresh()
         if self.on_changed is not None:
             self.on_changed()
 
     def _deleted(self, account_id: int) -> None:
-        self._saved()
+        self.changed()
         if self.on_deleted is not None:
             self.on_deleted(account_id)
 
