@@ -39,6 +39,7 @@ from financial_app.sources.transaction_saving import checked_save
 from financial_app.sources.yahoo import YahooSource
 from financial_app.ui.accounts import open_account_dialog
 from financial_app.ui.save_warnings import deposit_choices, deposits_total, show_warnings
+from financial_app.ui.wizard import Wizard, WizardStep
 from financial_app.ui.xtb_import import NEW, Describer
 
 OpenInstrument = Callable[..., None]
@@ -120,8 +121,7 @@ class CryptoImportSection:
     skipped: set[str] = field(default_factory=set)
     # The Accounts whose proposed Deposits the user declined
     no_deposits: set[int] = field(default_factory=set)
-    # The window: its step (1 to len(STEPS)), the path typed, and whether this import was applied
-    step: int = 1
+    # The window: the path typed, and whether this import was applied
     path: str = ""
     done: bool = False
 
@@ -136,16 +136,13 @@ class CryptoImportSection:
             ui.button("Otwórz kreator importu kryptowalut", icon="currency_bitcoin", on_click=self.open).props(
                 "no-caps"
             ).mark("crypto-open")
-            # Opened from the card, which outlives it
-            self.dialog = ui.dialog()
-            with self.dialog, ui.card().classes("w-[52rem] max-w-full").mark("crypto-wizard"):
-                self.body = ui.column().classes("w-full gap-2")
+            # Opened from the card, which outlives it; each step in the order of STEPS
+            bodies = (self._instructions, self._choose_files, self._choices, self._deposits, self._review)
+            self.wizard = Wizard("crypto", [WizardStep(title, body) for title, body in zip(STEPS, bodies, strict=True)])
 
     def open(self) -> None:
-        self.step = 1
         self.done = False
-        self.render()
-        self.dialog.open()
+        self.wizard.open()
 
     def load(self, text: str) -> None:
         self.path = text
@@ -155,14 +152,14 @@ class CryptoImportSection:
             ui.notify(str(error), type="negative")
             return
         self._forget_choices()
-        self._go(3)
+        self.wizard.go(3)
 
     def reset(self) -> None:
         """Forget the files and choices, e.g. after the data was cleared: they name removed ids."""
         self.files = []
         self._forget_choices()
-        self.step = 1
-        self.dialog.close()
+        self.wizard.step = 1
+        self.wizard.close()
 
     def _forget_choices(self) -> None:
         self.accounts = {}
@@ -183,39 +180,16 @@ class CryptoImportSection:
             frozenset(self.no_deposits),
         )
 
-    def _go(self, step: int) -> None:
-        self.step = step
-        self.render()
-
     def render(self) -> None:
-        """Redraw the window's current step and its buttons; "Dalej" waits for what the step needs."""
-        self.body.clear()
-        previews = (
-            preview_crypto(self.engine, self.files, self.rates, self.prices, self._decisions())
-            if self.step >= 3 and self.files
-            else []
-        )
-        names = {account.id: account.name for account in list_accounts(self.engine)}
-        with self.body:
-            ui.label(f"Krok {self.step} z {len(STEPS)}: {STEPS[self.step - 1]}").classes("text-lg font-bold").mark(
-                f"crypto-step-{self.step}"
-            )
-            # Each step in the order of STEPS draws itself and says whether the next one can follow
-            bodies = (self._instructions, self._choose_files, self._choices, self._deposits, self._review)
-            ready = bodies[self.step - 1](previews, names)
-            with ui.row().classes("w-full justify-end gap-2"):
-                if self.step > 1:
-                    ui.button("Wstecz", on_click=lambda: self._go(self.step - 1)).props("flat no-caps").mark(
-                        "crypto-back"
-                    )
-                ui.button("Zamknij", on_click=self.dialog.close).props("flat no-caps").mark("crypto-close")
-                if self.step < len(STEPS):
-                    next_button = ui.button("Dalej", on_click=lambda: self._go(self.step + 1)).props("no-caps")
-                    next_button.mark("crypto-next")
-                    if not ready:
-                        next_button.disable()
+        self.wizard.render()
 
-    def _instructions(self, previews: list[CryptoPreview], names: dict[int, str]) -> bool:
+    def _previews(self) -> list[CryptoPreview]:
+        return preview_crypto(self.engine, self.files, self.rates, self.prices, self._decisions()) if self.files else []
+
+    def _names(self) -> dict[int, str]:
+        return {account.id: account.name for account in list_accounts(self.engine)}
+
+    def _instructions(self) -> bool:
         ui.label("Zanim zaczniesz, przygotuj eksporty:").classes("text-sm")
         for number, (title, text) in enumerate(INSTRUCTIONS, start=1):
             with ui.row().classes("w-full no-wrap gap-2"):
@@ -225,7 +199,7 @@ class CryptoImportSection:
                     ui.label(text).classes("text-sm")
         return True
 
-    def _choose_files(self, previews: list[CryptoPreview], names: dict[int, str]) -> bool:
+    def _choose_files(self) -> bool:
         ui.label("Wskaż plik CSV albo folder z eksportami z Binance, OKX i Trezora (także w podfolderach).").classes(
             "text-sm"
         )
@@ -238,7 +212,8 @@ class CryptoImportSection:
             ui.label(f"Wczytane: {found}.").classes("text-sm").mark("crypto-loaded")
         return bool(self.files)
 
-    def _choices(self, previews: list[CryptoPreview], names: dict[int, str]) -> bool:
+    def _choices(self) -> bool:
+        previews, names = self._previews(), self._names()
         for preview in previews:
             self._source(preview, names)
         self._coins(previews, list_instruments(self.engine))
@@ -247,9 +222,10 @@ class CryptoImportSection:
             return False
         return True
 
-    def _deposits(self, previews: list[CryptoPreview], names: dict[int, str]) -> bool:
+    def _deposits(self) -> bool:
         """The Deposits proposed where the purchases would take an Account's cash below zero, one checkbox per
         Account; and how many wallet transfers are left for later."""
+        previews, names = self._previews(), self._names()
         ui.label(
             "Eksporty giełd nie zawierają wpłat złotówek (zakup „With Fiat” na Binance to płatność kartą, wpłaty USDC "
             "na OKX są pomijane), więc zakupy zdjęłyby gotówkę z konta poniżej zera. Aplikacja proponuje wpłaty "
@@ -276,7 +252,8 @@ class CryptoImportSection:
         else:
             self.no_deposits.add(account_id)
 
-    def _review(self, previews: list[CryptoPreview], names: dict[int, str]) -> bool:
+    def _review(self) -> bool:
+        previews, names = self._previews(), self._names()
         if self.done:
             ui.label("Zapisano. Sprawdź jeszcze wskazówki poniżej.").classes("text-positive font-bold").mark(
                 "crypto-done"
