@@ -1,6 +1,6 @@
 # Historia zmian
 
-## Nieopublikowane
+## 1.4.0 — 2026-10-30
 
 ### Nowe funkcje
 - Import kryptowalut czyta też eksport CSV z Trezor Suite; jego opłata sieciowa wysyłki jest importowana jak opłata wypłaty z Binance, a przeniesienie bez pary w innych eksportach możesz przypisać do konta, pominąć albo zostawić na później.
