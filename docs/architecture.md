@@ -56,6 +56,7 @@ Layout (`src/financial_app/`, see ADR-0001):
 - [Obligacje tab and Net Value (L-4, spec 3.4.1)](architecture/obligacje-tab.md)
 - [Early Redemption (L-5, spec 3.4.1, ADR-0007)](architecture/early-redemption.md)
 - [Maturity and Rollover Drafts (L-6, spec 3.4.1)](architecture/bond-drafts.md)
+- [Bond help window (#272, spec 3.4.1)](architecture/bond-guide.md)
 - [Recurring Rules (#97, spec 3.3.1)](architecture/recurring-rules.md)
 - [Term Deposits (#160, spec 3.3.2)](architecture/term-deposits.md)
 - [Bond calendar (L-9, spec 3.4.1)](architecture/bond-calendar.md)

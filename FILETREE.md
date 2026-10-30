@@ -58,6 +58,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `bond-calendar.md`: Architecture entry for Bond calendar (L-9, spec 3.4.1): main functions, UI markers and decisions.
 - `bond-data.md`: Architecture entry for Bond data (Stage 3, L-1, spec 3.4.1): main functions, UI markers and decisions.
 - `bond-drafts.md`: Architecture entry for Maturity and Rollover Drafts (L-6, spec 3.4.1): main functions, UI markers and decisions.
+- `bond-guide.md`: Architecture entry for the bond help window (#272): period listing, rate sources, UI markers and where it opens.
 - `bond-series.md`: Architecture entry for Bond Series (L-2, spec 3.4.1): main functions, UI markers and decisions.
 - `bossa.md`: Architecture entry for sources/bossa.py: main functions, UI markers and decisions.
 - `catalyst-bonds.md`: Architecture entry for Catalyst bonds (L-23, L-24, spec 4.2): main functions, UI markers and decisions.
@@ -153,6 +154,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `benchmarks.py`: Benchmarks: CPI, Instrument or Account with a pp/year offset, daily growth factors and the Portfolio-vs-benchmark comparison over a period.
 - `bond_calendar.py`: Calendar of coupons, anniversaries and maturities of held Bond Series over the next 12 months, by View Scope
 - `bond_drafts.py`: Drafts for matured Bond Series Lots (redemption, Rollover) and coupons of COI, ROR and DOR Lots, with the Sell or interest Transaction each confirms
+- `bond_guide.py`: Interest periods of a Bond Series for the help window: dates, the valuation's rate and its source (MF, corrected, estimated)
 - `bond_holdings.py`: Obligacje tab data: each Bond Series held in the View Scope with its Lots, gross and net values, rates and dates
 - `bond_redemption.py`: Net value of a retail treasury bond on redemption: gross value less early-redemption fee and withheld Belka tax
 - `bond_valuation.py`: Values Bond Series by MF letters and CPI or NBP estimates, including COI, ROR and DOR coupon accrual and the coupons they pay
@@ -325,6 +327,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `benchmarks.py`: Benchmarki tab: comparison table with chart toggles and delete, the add form, and value charts over the period.
 - `bond_data.py`: Header status listing failing bond data sources with their reasons, shown only while one keeps failing
 - `bond_drafts.py`: Dochód stały tab's "Do zatwierdzenia" list of bond maturities, unpaid coupons, and Term Deposit interest and maturities.
+- `bond_guide.py`: Bond help window: series codes and how each pays interest, the chosen Series' periods, Rollover help and a statement checklist
 - `bond_series.py`: Bond Series rate summary and dialog for correcting MF rates by hand in Ustawienia Instrumenty
 - `bond_type_card.py`: Treasury bond type card opened from the header search: current MF offer, the user's Bond Series of the type and a Buy button.
 - `bonds.py`: Dochód stały tab UI: Term Deposits section, expandable Bond Series table with Lots and values, the "Do zatwierdzenia" list, and the 12-month calendar.
@@ -423,6 +426,8 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_bond_drafts_domain.py`: Tests Draft rules for maturities, Rollovers and coupons: which Lots are Drafts and what they redeem, roll or pay
 - `test_bond_drafts_repository.py`: Tests saving bond Drafts (redemptions, Rollovers and coupon interest) as Transactions, including rollback on failure
 - `test_bond_drafts_ui.py`: Tests the Drafts list in the Obligacje tab (maturities and coupons) and the header count
+- `test_bond_guide_domain.py`: Tests the bond help window's periods per type (EDO, TOS, OTS, ROR) with rates and their sources
+- `test_bond_guide_ui.py`: UI tests opening the bond help window from the bond purchase and the Rollover dialog with the Series' periods
 - `test_bond_holdings_domain.py`: Tests the Obligacje tab's Series holdings: Lot sums, rate labels, Tax Regime effect and scope filtering
 - `test_bond_parity.py`: Parity test of bond valuation against the user's spreadsheet Obligacje tab, skipped without reference data
 - `test_bond_purchase_ui.py`: UI tests for buying retail treasury bonds in the transaction dialog's bond mode

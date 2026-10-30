@@ -18,6 +18,7 @@ from financial_app.domain.transactions import TransactionError
 from financial_app.persistence.bond_drafts import confirm_draft, confirm_rollover, pending_drafts, rollover_price
 from financial_app.persistence.deposit_drafts import pending_deposit_drafts
 from financial_app.sources.transaction_saving import checked_save
+from financial_app.ui.bond_guide import open_bond_guide
 from financial_app.ui.deposit_drafts import interest_row, maturity_row
 from financial_app.ui.save_warnings import show_warnings
 
@@ -148,7 +149,15 @@ def _rollover_dialog(engine: Engine, draft: MaturityDraft, on_saved: Callable[[]
 
         show()
         bond_type.on_value_change(show)
-        with ui.row().classes("w-full justify-end"):
+        with ui.row().classes("w-full items-center"):
+            ui.button(
+                "Jak działa zamiana?",
+                icon="help_outline",
+                on_click=lambda: open_bond_guide(
+                    engine, draft.rollover_series(BondType(bond_type.value)), draft.maturity
+                ),
+            ).props("flat dense no-caps").mark("rollover-help")
+            ui.space()
             ui.button("Anuluj", on_click=dialog.close).props("flat")
             ui.button("Zapisz", on_click=save).mark("save-rollover")
     dialog.on("hide", dialog.delete)
