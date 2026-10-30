@@ -92,7 +92,7 @@ async def test_the_section_is_hidden_while_its_switch_is_off(engine: Engine, mon
         await user.open("/ustawienia")
 
         await user.should_not_see(marker="import-path")
-        await user.should_see(marker="xtb-path")
+        await user.should_see(marker="xtb-open")
         await user.should_see(marker="crypto-open")
 
 

@@ -113,7 +113,7 @@ async def test_the_history_step_goes_to_the_import_section(user: User) -> None:
 
     user.find(marker="first-run-import").click()
 
-    await user.should_see(marker="xtb-path")
+    await user.should_see(marker="xtb-open")
     assert settings_section(user) == "import"
     assert not window_open(user)
 

@@ -15,6 +15,7 @@ from financial_app.domain.instruments import InstrumentDraft
 from financial_app.domain.quantity_corrections import CORRECTION_COMMENT, Fix
 from financial_app.domain.reconciliation import Choice
 from financial_app.domain.transactions import (
+    COVERING_COMMENT,
     Origin,
     Transaction,
     TransactionDraft,
@@ -270,3 +271,35 @@ def test_a_sale_a_hair_above_what_was_bought_is_topped_up_with_the_import(
         Decimal(0),
     )
     assert preview_xtb(engine, statements, FixedNbp(), XtbDecisions()).shortfalls == []
+
+
+def test_deposits_are_proposed_where_the_statement_takes_the_cash_below_zero(
+    engine: Engine, ike: int, isac: int, tmp_path: Path
+) -> None:
+    # Exported from a later day than the account's opening: the Deposit that paid for the purchase is not in it
+    path = write_statement(
+        tmp_path / "IKE.xlsx",
+        IKE_NUMBER,
+        [
+            op("Stock purchase", datetime(2026, 7, 30, 9, 52), -5000.0, "101", "OPEN BUY 15 @ 90.00", "ISAC.UK",
+               "MSCI ACWI", "9"),
+            op("Deposit", datetime(2026, 8, 4, 6, 49), 1000.0, "102"),
+        ],
+    )  # fmt: skip
+    statements = read_statements(path)
+    preview = preview_xtb(engine, statements, FixedNbp(), XtbDecisions())
+    [deposit] = preview.deposits[ike]
+    assert (deposit.date, deposit.actual_amount, deposit.comment) == (
+        date(2026, 7, 30),
+        Decimal(5000),
+        COVERING_COMMENT,
+    )
+    assert len(preview.actions()) == 3
+
+    declined = preview_xtb(engine, statements, FixedNbp(), XtbDecisions(no_deposits=frozenset({ike})))
+    assert len(declined.actions()) == 2
+
+    apply_xtb(engine, statements, FixedNbp(), XtbDecisions(), TODAY)
+    covering = [t for t in list_transactions(engine) if t.comment == COVERING_COMMENT]
+    assert [(t.date, t.actual_amount) for t in covering] == [(date(2026, 7, 30), Decimal(5000))]
+    assert preview_xtb(engine, statements, FixedNbp(), XtbDecisions()).deposits == {}
