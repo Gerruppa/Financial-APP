@@ -44,7 +44,9 @@ from financial_app.sources.todays_view import TodaysView, todays_view
 from financial_app.ui.changes import TODAYS_VALUE
 from financial_app.ui.file_delivery import deliver_file
 from financial_app.ui.fund_details import fund_details
+from financial_app.ui.page_header import page_header
 from financial_app.ui.report_export import export_controls
+from financial_app.ui.theme import gain_or_loss
 from financial_app.ui.view_scope import ViewScope, breadcrumbs
 
 COLUMNS = "grid-template-columns: minmax(8rem, 2fr) repeat(7, minmax(6rem, 1fr))"
@@ -80,15 +82,17 @@ class PortfolioPage:
         self.cards.refresh()
 
     def build(self) -> None:
-        with ui.row().classes("w-full max-w-screen-2xl items-center"):
-            ui.label("Portfolio").classes("text-2xl font-bold")
-            ui.space()
+        with page_header("Portfolio"):
             export_controls("portfolio", self.engine, self.rates.today(), self.export)
-            grouping = ui.select(
-                {choice: choice.label for choice in Grouping},
-                label="Grupuj",
-                value=Grouping.parse(load_setting(self.engine, PORTFOLIO_GROUPING)),
-            ).classes("w-56")
+            grouping = (
+                ui.select(
+                    {choice: choice.label for choice in Grouping},
+                    label="Grupuj",
+                    value=Grouping.parse(load_setting(self.engine, PORTFOLIO_GROUPING)),
+                )
+                .props("dense")
+                .classes("w-56")
+            )
             grouping.mark("portfolio-grouping")
             grouping.on_value_change(lambda event: self._group(event.value))
         # The marker sits outside the refreshable cards so it survives a refresh
@@ -143,7 +147,7 @@ def _account_card(
             ui.space()
             if positions or foreign:
                 result = value.result
-                result_label = ui.label(format_pln(result, signed=True)).classes(_result_color(result))
+                result_label = ui.label(format_pln(result, signed=True)).classes(gain_or_loss(result))
                 result_label.mark("account-result")
             ui.label(format_pln(value.value)).classes("text-lg font-medium")
         with ui.row().classes("w-full items-center"):
@@ -167,7 +171,7 @@ def _account_card(
             with ui.row().classes("w-full items-center"):
                 ui.label("Wynik walutowy").classes("k-muted")
                 excluded = " (wyłączony z wyniku konta)" if account.exclude_fx_result else ""
-                fx_label = ui.label(f"{format_pln(value.fx, signed=True)}{excluded}").classes(_result_color(value.fx))
+                fx_label = ui.label(f"{format_pln(value.fx, signed=True)}{excluded}").classes(gain_or_loss(value.fx))
                 fx_label.mark("fx-result")
         if positions:
             groups = group_positions(positions, view.instruments, view.pln_prices, grouping, value.value)
@@ -192,7 +196,7 @@ def _foreign_cash_table(foreign: list[ForeignCash], rates: dict[str, Decimal]) -
                 result = balance.result(rate)
                 ui.label(format_rate(rate)).classes("text-right")
                 ui.label(format_pln(balance.value(rate))).classes("text-right")
-                ui.label(format_pln(result, signed=True)).classes(f"text-right {_result_color(result)}")
+                ui.label(format_pln(result, signed=True)).classes(f"text-right {gain_or_loss(result)}")
 
 
 def _positions_table(
@@ -252,10 +256,10 @@ def _valuation_cells(position: Position, current: InstrumentPrice) -> None:
         ui.label(format_pln(position.value(price)))
         if current.unit_spot_pln is not None:
             ui.label(f"spot {format_pln(position.value(current.unit_spot_pln))}").classes("text-xs k-muted")
-    ui.label(format_pln(result, signed=True)).classes(f"text-right {_result_color(result)}")
+    ui.label(format_pln(result, signed=True)).classes(f"text-right {gain_or_loss(result)}")
     # A Position of units bought at cost 0 (quantity corrections, #278) has no percentage
     percent = format_percent(position.result_percent(price), signed=True) if position.cost else "—"
-    ui.label(percent).classes(f"text-right {_result_color(result)}")
+    ui.label(percent).classes(f"text-right {gain_or_loss(result)}")
 
 
 def _price_cell(price: Decimal, current: InstrumentPrice) -> None:
@@ -323,7 +327,3 @@ def _lots_table(position: Position, instrument: Instrument, bond: BondPrice | No
                     ui.label(format_pln(lot.quantity * bond.of(lot))).classes("text-right")
     details.visible = False
     return details
-
-
-def _result_color(result: Decimal) -> str:
-    return "text-positive" if result > 0 else "text-negative" if result < 0 else ""

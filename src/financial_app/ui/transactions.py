@@ -46,7 +46,9 @@ from financial_app.sources.export import FileFormat, export_transactions
 from financial_app.sources.nbp import NbpRates
 from financial_app.ui.changes import Change
 from financial_app.ui.file_delivery import deliver_file
+from financial_app.ui.page_header import page_header
 from financial_app.ui.recurring_drafts import prefill_of, recurring_drafts_list
+from financial_app.ui.theme import gain_or_loss
 from financial_app.ui.transaction_dialog import open_transaction_dialog
 from financial_app.ui.view_scope import ViewScope, breadcrumbs
 
@@ -92,13 +94,12 @@ class TransactionsPage:
         self.rows.refresh()
 
     def build(self) -> None:
-        ui.label("Transakcje").classes("text-2xl font-bold")
-        with ui.row().classes("gap-2"):
-            ui.button("Eksportuj CSV", on_click=lambda: self.export("csv")).props("outline")
-            ui.button("Eksportuj XLSX", on_click=lambda: self.export("xlsx")).props("outline")
+        with page_header("Transakcje"):
+            ui.button("Eksportuj CSV", icon="download", on_click=lambda: self.export("csv")).props("outline")
+            ui.button("Eksportuj XLSX", icon="download", on_click=lambda: self.export("xlsx")).props("outline")
         self.recurring()
         # The marker sits outside the refreshable list so it survives a refresh
-        with ui.column().classes("w-full max-w-screen-2xl gap-0").mark("transactions"):
+        with ui.card().classes("w-full max-w-screen-2xl gap-0").mark("transactions"):
             self.notes()
             # The headers stay while the list redraws, so an open filter stays open as it is typed in
             self._header_row = ui.element("div").classes("grid w-full gap-x-4 border-b py-1 font-medium").style(COLUMNS)
@@ -235,11 +236,15 @@ class TransactionsPage:
                             ui.label(f"podatkowa {tax}").classes("text-xs k-muted")
                     elif transaction.is_paid_in_foreign_cash:
                         currency = transaction.cash_currency
-                        ui.label(format_amount(transaction.foreign_cash_change, currency, signed=True))
+                        ui.label(format_amount(transaction.foreign_cash_change, currency, signed=True)).classes(
+                            gain_or_loss(transaction.foreign_cash_change)
+                        )
                         actual = format_pln(transaction.actual_cash_change, signed=True)
                         ui.label(f"rzeczywista {actual}").classes("text-xs k-muted")
                     else:
-                        ui.label(format_pln(transaction.cash_change, signed=True))
+                        ui.label(format_pln(transaction.cash_change, signed=True)).classes(
+                            gain_or_loss(transaction.cash_change)
+                        )
                     if kind is not TransactionType.DRIP and transaction.tax_amount != transaction.actual_amount:
                         tax = format_pln(transaction.tax_cash_change, signed=True)
                         ui.label(f"podatkowa {tax}").classes("text-xs k-muted")

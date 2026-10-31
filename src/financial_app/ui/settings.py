@@ -18,6 +18,7 @@ from financial_app.ui.first_rule import FirstRuleWizard
 from financial_app.ui.first_run import FirstRunWizard
 from financial_app.ui.import_sheet import SheetImportSection
 from financial_app.ui.instruments import AssetClassesSection, InstrumentsSection
+from financial_app.ui.page_header import page_header
 from financial_app.ui.recurring_rules import RecurringRulesSection
 from financial_app.ui.reset import ClearDataSection
 from financial_app.ui.theme import ThemeChoice
@@ -68,7 +69,7 @@ def build_settings_page(
     Rules' Drafts after a rule or its skips change; ``layout`` is the window's hidden elements, which the shell
     redraws on, and ``theme`` its Theme, which the shell reloads the window on. ``section`` picks the section drawn
     first and switches it later; ``first_run`` is the first-run window that Konta reopens."""
-    ui.label("Ustawienia").classes("text-2xl font-bold")
+    page_header("Ustawienia")
     limits = ContributionLimitsSection(engine)
     first_rule = FirstRuleWizard(engine, rates.today, on_saved=lambda: rules.changed())
     rules = RecurringRulesSection(engine, rates.today, on_changed=on_rules_changed, open_first_rule=first_rule.open)

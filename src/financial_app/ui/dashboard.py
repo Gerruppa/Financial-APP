@@ -34,8 +34,10 @@ from financial_app.ui.contribution_limits import limits_section
 from financial_app.ui.help import HELP_PATH
 from financial_app.ui.info import card_title
 from financial_app.ui.investment_goal import goal_tile
+from financial_app.ui.page_header import page_header
 from financial_app.ui.periods import PeriodChoice, period_selector
 from financial_app.ui.strategy import PlannedDeposit, scope_strategy, strategy_section
+from financial_app.ui.theme import gain_or_loss
 from financial_app.ui.view_scope import ViewScope
 from financial_app.ui.visibility import Layout
 
@@ -110,9 +112,7 @@ class DashboardPage:
         self.period.on_change(self.refresh)
 
     def build(self) -> None:
-        with ui.column().classes("gap-0"):
-            ui.label("Dashboard").classes("text-3xl font-bold")
-            ui.label("Przegląd Twoich inwestycji i wyników portfela").classes("k-muted")
+        page_header("Dashboard", "Przegląd Twoich inwestycji i wyników portfela")
         with ui.column().classes("w-full max-w-screen-2xl gap-4").mark("dashboard"):
             self.content()
 
@@ -235,8 +235,7 @@ class DashboardPage:
             with ui.row().classes("w-full items-end no-wrap"):
                 with ui.column().classes("gap-0 grow"):
                     ui.label(format_pln(totals.value)).classes("text-lg font-semibold")
-                    colour_class = "" if profit is None else "text-negative" if profit < 0 else "text-positive"
-                    ui.label(text).classes(f"text-sm {colour_class}")
+                    ui.label(text).classes(f"text-sm {gain_or_loss(profit)}")
                 if values:
                     sparkline(values, str(row.account.id))
 

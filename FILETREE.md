@@ -361,6 +361,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `login.py`: Login screen in the default Theme: pick a User and enter the password, create a User, explain a forgotten password
 - `multi_asset.py`: Multi-asset tab and split editor: edits an Instrument's Multi-asset Split and lists held Multi-asset Instruments by Asset Class
 - `notifications.py`: Header bell button and menu of reminders; shows the number of unread ones and marks the listed reminders read on click
+- `page_header.py`: Shared tab header: title, optional muted subtitle, and a row of actions on the right
 - `palette.py`: The palette's commands: a tab jump for each tab, plus add transaction, theme, discreet mode, refresh prices and user switch.
 - `passive_income.py`: Dochód pasywny tab: year navigation, Monthly Income Goal, tiles, monthly chart and table with progress, forecast coupons.
 - `periods.py`: Period selector UI: preset buttons and custom range inputs, remembered per user and redrawing listeners

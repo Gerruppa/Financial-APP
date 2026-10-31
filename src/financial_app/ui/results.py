@@ -24,6 +24,7 @@ from financial_app.ui.changes import Change
 from financial_app.ui.charts import drawdown_chart
 from financial_app.ui.file_delivery import deliver_file
 from financial_app.ui.info import card_title
+from financial_app.ui.page_header import page_header
 from financial_app.ui.periods import PeriodChoice, period_selector
 from financial_app.ui.report_export import export_controls
 from financial_app.ui.view_scope import ViewScope
@@ -67,9 +68,9 @@ class ResultsPage:
         self.period.on_change(self.refresh)
 
     def build(self) -> None:
-        ui.label("Wyniki").classes("text-2xl font-bold")
+        with page_header("Wyniki"):
+            export_controls("results", self.engine, self.period.today(), self.export, self.export_pdf)
         period_selector(self.period)
-        export_controls("results", self.engine, self.period.today(), self.export, self.export_pdf)
         with ui.column().classes("w-full max-w-screen-2xl").mark("results"):
             self.content()
 

@@ -54,6 +54,7 @@ from financial_app.ui.instrument_card import (
 from financial_app.ui.instruments import InstrumentsSection
 from financial_app.ui.multi_asset import MultiAssetPage
 from financial_app.ui.notifications import NotificationBell
+from financial_app.ui.page_header import page_header
 from financial_app.ui.palette import palette_commands
 from financial_app.ui.passive_income import PassiveIncomePage
 from financial_app.ui.periods import PeriodChoice
@@ -537,7 +538,6 @@ def _opened_path() -> str:
 
 def _placeholder_page(title: str) -> Callable[[], None]:
     def build() -> None:
-        ui.label(title).classes("text-2xl font-bold")
-        ui.label("Ta zakładka jest w przygotowaniu.").classes("k-muted")
+        page_header(title, "Ta zakładka jest w przygotowaniu.")
 
     return build

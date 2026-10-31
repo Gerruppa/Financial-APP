@@ -16,6 +16,7 @@ from financial_app.sources.nbp import NbpRates
 from financial_app.sources.todays_view import todays_view
 from financial_app.ui.changes import TODAYS_VALUE
 from financial_app.ui.dialogs import movable_dialog
+from financial_app.ui.page_header import page_header
 from financial_app.ui.view_scope import ViewScope
 
 
@@ -110,7 +111,7 @@ class MultiAssetPage:
         self.content.refresh()
 
     def build(self) -> None:
-        ui.label("Multi-asset").classes("text-2xl font-bold")
+        page_header("Multi-asset")
         with ui.column().classes("w-full max-w-4xl").mark("multi-asset"):
             self.content()
 

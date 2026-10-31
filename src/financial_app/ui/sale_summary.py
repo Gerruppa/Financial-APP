@@ -23,8 +23,10 @@ from financial_app.persistence.transactions import transactions_in_entry_order
 from financial_app.sources.report_export import export_sale_summary
 from financial_app.ui.changes import Change
 from financial_app.ui.file_delivery import deliver_file
+from financial_app.ui.page_header import page_header
 from financial_app.ui.periods import PeriodChoice, period_selector
 from financial_app.ui.report_export import export_controls
+from financial_app.ui.theme import gain_or_loss
 from financial_app.ui.view_scope import ViewScope
 
 DASH = "—"
@@ -66,9 +68,9 @@ class SaleSummaryPage:
         self.content.refresh()
 
     def build(self) -> None:
-        ui.label("Podsumowanie sprzedaży").classes("text-2xl font-bold")
+        with page_header("Podsumowanie sprzedaży"):
+            export_controls("sale", self.engine, self.period.today(), self.export)
         period_selector(self.period)
-        export_controls("sale", self.engine, self.period.today(), self.export)
         with ui.column().classes("w-full").mark("sale-summary"):
             self.content()
 
@@ -134,18 +136,19 @@ def _table(pairs: list[SalePair], names: dict[int, str], accounts: dict[int, str
                 ui.label(accounts.get(pair.account_id, "")).classes("min-w-0 break-words")
                 ui.label(format_date(pair.bought_on)).classes("whitespace-nowrap")
                 ui.label(format_date(pair.sold_on)).classes("whitespace-nowrap")
-                for text in (
-                    format_quantity(pair.quantity),
-                    format_pln(pair.cost),
-                    format_pln(pair.revenue),
-                    format_pln(pair.result, signed=True),
-                    _percent(pair.return_rate),
-                    str(pair.days_held),
-                    format_pln(pair.dividends),
-                    format_pln(pair.result_with_dividends, signed=True),
-                    _percent(pair.return_with_dividends),
+                result, with_dividends = gain_or_loss(pair.result), gain_or_loss(pair.result_with_dividends)
+                for text, tone in (
+                    (format_quantity(pair.quantity), ""),
+                    (format_pln(pair.cost), ""),
+                    (format_pln(pair.revenue), ""),
+                    (format_pln(pair.result, signed=True), result),
+                    (_percent(pair.return_rate), result),
+                    (str(pair.days_held), ""),
+                    (format_pln(pair.dividends), ""),
+                    (format_pln(pair.result_with_dividends, signed=True), with_dividends),
+                    (_percent(pair.return_with_dividends), with_dividends),
                 ):
-                    ui.label(text).classes("text-right whitespace-nowrap")
+                    ui.label(text).classes(f"text-right whitespace-nowrap {tone}")
 
 
 def _percent(fraction: Decimal | None) -> str:

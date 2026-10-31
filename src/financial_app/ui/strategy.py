@@ -40,6 +40,7 @@ from financial_app.sources.nbp import NbpRates
 from financial_app.ui.changes import TODAYS_VALUE
 from financial_app.ui.dialogs import movable_dialog
 from financial_app.ui.info import info_icon
+from financial_app.ui.page_header import page_header
 from financial_app.ui.view_scope import ViewScope
 
 ROW_COLUMNS = "grid-template-columns: minmax(10rem, 2fr) repeat(6, minmax(6rem, 1fr)) minmax(8rem, 1.5fr)"
@@ -144,8 +145,8 @@ class StrategyPage:
         self.content.refresh()
 
     def build(self) -> None:
-        ui.label("Strategie inwestycyjne").classes("text-2xl font-bold")
-        with ui.column().classes("w-full max-w-screen-2xl").mark("strategy"):
+        page_header("Strategie inwestycyjne")
+        with ui.card().classes("w-full max-w-screen-2xl").mark("strategy"):
             self.content()
 
     @ui.refreshable_method

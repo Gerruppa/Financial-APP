@@ -8,7 +8,7 @@ import pytest
 from financial_app.domain.strategy import BandStatus
 from financial_app.domain.themes import Theme
 from financial_app.ui.account_ranking import tile_colours
-from financial_app.ui.theme import BAND_COLOURS, TEXT_COLOURS, THEME_COLOURS
+from financial_app.ui.theme import BAND_COLOURS, TEXT_COLOURS, THEME_COLOURS, gain_or_loss
 
 AA = 4.5
 
@@ -53,3 +53,10 @@ def test_every_text_tone_is_readable_on_every_background(theme: Theme, tone: str
     # The page, a card, a hovered row and the highlighted field (the transaction dialog's Account)
     for background in ("card", "page", "hover", "field"):
         assert _contrast(colours[tone], colours[background]) >= AA, background
+
+
+@pytest.mark.parametrize(
+    ("amount", "tone"), [(Decimal("0.01"), "k-gain"), (Decimal("-5"), "k-loss"), (Decimal(0), ""), (None, "")]
+)
+def test_a_signed_amount_is_coloured_by_its_sign(amount: Decimal | None, tone: str) -> None:
+    assert gain_or_loss(amount) == tone

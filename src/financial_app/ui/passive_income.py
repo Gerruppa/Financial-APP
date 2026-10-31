@@ -28,6 +28,7 @@ from financial_app.sources.report_export import export_passive_income
 from financial_app.ui.changes import TODAYS_VALUE
 from financial_app.ui.charts import pln_bars_chart
 from financial_app.ui.file_delivery import deliver_file
+from financial_app.ui.page_header import page_header
 from financial_app.ui.report_export import export_controls
 from financial_app.ui.view_scope import ViewScope
 
@@ -69,9 +70,8 @@ class PassiveIncomePage:
         self.content.refresh()
 
     def build(self) -> None:
-        ui.label("Dochód pasywny").classes("text-2xl font-bold")
-        ui.label("Dywidendy i odsetki netto: otrzymane oraz prognozowane kupony obligacji.").classes("text-sm k-muted")
-        export_controls("income", self.engine, self.rates.today(), self.export)
+        with page_header("Dochód pasywny", "Dywidendy i odsetki netto: otrzymane oraz prognozowane kupony obligacji."):
+            export_controls("income", self.engine, self.rates.today(), self.export)
         with ui.column().classes("w-full max-w-screen-2xl").mark("passive-income"):
             self.content()
 

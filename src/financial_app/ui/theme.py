@@ -7,6 +7,7 @@ through ``echart``. Choosing a Theme reloads the window, which then builds every
 """
 
 from collections.abc import Callable
+from decimal import Decimal
 from typing import Any
 
 from nicegui import context, ui
@@ -96,6 +97,14 @@ TILE_UNKNOWN = {Theme.LIGHT: "#dfe5ee", Theme.GOLDEN: "#333333"}
 _EVEN_CONTRAST = (1.05 * 0.05) ** 0.5 - 0.05
 
 
+def gain_or_loss(amount: Decimal | None) -> str:
+    """The class colouring a signed amount: ``k-gain`` above zero, ``k-loss`` below, none at zero or without one; every
+    tab colours a result, a difference or a cash change alike."""
+    if amount is None or amount == 0:
+        return ""
+    return "k-gain" if amount > 0 else "k-loss"
+
+
 def readable_label(background: str) -> str:
     """Black or white, whichever contrasts more with the ``#rrggbb`` ``background``; by WCAG either reaches 4.5:1 on
     any colour between them."""
@@ -138,6 +147,10 @@ body.theme-golden .k-side { background:var(--k-side) MOUNTAINS no-repeat bottom 
 body.theme-golden .k-menu-item.k-active { color:var(--k-accent) !important; }
 .q-card { border:1px solid var(--k-border); border-radius:14px; box-shadow:0 1px 3px rgba(15,23,42,.06); }
 body.theme-golden .q-card { background:linear-gradient(180deg,#171717,#101010); }
+/* Buttons and tabs as written ("Eksportuj XLSX"), as most already are with no-caps, never Quasar's capitals */
+.q-btn, .q-tab { text-transform:none; }
+/* A link in the Theme's accent (gold in Golden), not the browser's blue */
+a.nicegui-link { color:var(--q-primary); }
 /* Quasar paints tab panels white (dark grey in dark mode): beside a card narrower than the page it showed as a band */
 .q-tab-panels { background:transparent; }
 .k-faq { background:#fff; border-radius:4px; }

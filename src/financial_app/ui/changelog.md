@@ -5,6 +5,9 @@
 ### Poprawki
 - Poprawki wyglądu: w tabeli miesięcy Dochodu pasywnego i przy instrumentach w Strategiach kwoty stoją pod swoimi nagłówkami, w Ustawieniach zniknął jasny pas obok kart, kafelki mapy kont pokazują nazwę i wartość konta w łagodnym kolorze, nagłówek nie rośnie w czasie pobierania historii, ostatnią kartę można przewinąć spod przycisku „+”, a menu po przeładowaniu okna od razu podświetla otwartą zakładkę.
 
+### Zmiany
+- Zakładki wyglądają spójnie: każda zaczyna się takim samym nagłówkiem z przyciskami eksportu po prawej (wybór roku nazywa się teraz „Rok eksportu”), przyciski i zakładki Ustawień nie są pisane wersalikami, Strategie, Transakcje i Dochód stały mają swoje karty, kwoty ze znakiem są zielone lub czerwone także w Transakcjach, Podsumowaniu sprzedaży i Benchmarkach, a linki w motywie Golden są złote.
+
 ## 1.4.2 — 2026-10-31
 
 ### Zmiany
