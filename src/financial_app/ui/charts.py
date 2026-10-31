@@ -302,11 +302,13 @@ def pln_bars_chart(
     if line is not None and bars:
         label, level = line
         bars[0]["markLine"] = {"symbol": "none", "label": {"formatter": label}, "data": [{"yAxis": _pln(level)}]}
+    rotate = 30 if len(categories) > 6 and max(map(len, categories)) > 6 else 0
     options = {
         "tooltip": {"trigger": "axis", ":valueFormatter": PLN_FORMATTER},
         "legend": {"type": "scroll", "bottom": 0},
         "grid": {"containLabel": True, "bottom": 40},
-        "xAxis": {"type": "category", "data": list(categories)},
+        # Every category named: many long names (the benchmarks) slant rather than ECharts skipping every other one
+        "xAxis": {"type": "category", "data": list(categories), "axisLabel": {"interval": 0, "rotate": rotate}},
         "yAxis": {"type": "value", "axisLabel": {":formatter": _AXIS_PLN}},
         "series": bars,
     }

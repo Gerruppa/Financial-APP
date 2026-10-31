@@ -78,7 +78,8 @@ class HeaderSearch:
 
     def build(self) -> None:
         with ui.element("div").classes("relative w-[24rem] max-w-full shrink min-w-[10rem]") as self.box:
-            self.field = ui.input(placeholder="Szukaj instrumentu: symbol, ISIN, nazwa lub > polecenie")
+            # Short enough to fit the field whole
+            self.field = ui.input(placeholder="Szukaj: symbol, ISIN, nazwa, > polecenie")
             self.field.props("dense outlined rounded clearable").classes("w-full k-header-search")
             self.field.mark("header-search")
             with self.field.add_slot("prepend"):

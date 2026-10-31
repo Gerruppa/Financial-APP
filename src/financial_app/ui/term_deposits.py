@@ -42,6 +42,7 @@ from financial_app.persistence.transactions import add_transaction
 from financial_app.sources.todays_view import TodaysView
 from financial_app.sources.transaction_saving import checked_save
 from financial_app.ui.dialogs import movable_dialog
+from financial_app.ui.empty_state import empty_state
 from financial_app.ui.save_warnings import show_warnings
 
 CAPITALIZATION_LABELS = {
@@ -71,6 +72,8 @@ class DepositsSection:
     account_id: int | None
     on_changed: Callable[[], None]
     on_saved: Callable[[], None]
+    # Shows an Ustawienia section by its key: with no Account to hold a deposit, the empty section goes to Konta
+    open_settings: Callable[[str], None] = lambda key: None
 
     def build(self) -> None:
         with ui.row().classes("w-full items-center mt-2"):
@@ -85,10 +88,16 @@ class DepositsSection:
         )
         with ui.column().classes("w-full gap-0").mark("term-deposits"):
             if not rows:
-                text = "Brak trwających lokat."
-                if not _holding_accounts(self.view.accounts):
-                    text += " Lokatę założysz na koncie typu „Lokata / oszczędności” (Ustawienia → Konta)."
-                ui.label(text).classes("k-muted").mark("deposits-empty")
+                if _holding_accounts(self.view.accounts):
+                    # "Dodaj lokatę" is already beside the title
+                    message = empty_state("savings", "Brak trwających lokat.")
+                else:
+                    message = empty_state(
+                        "savings",
+                        "Brak trwających lokat. Lokatę założysz na koncie typu „Lokata / oszczędności”.",
+                        ("Przejdź do kont", lambda: self.open_settings("accounts")),
+                    )
+                message.mark("deposits-empty")
                 return
             with ui.element("div").classes("grid w-full gap-x-4 border-b py-1 font-medium").style(COLUMNS):
                 for header in HEADERS:

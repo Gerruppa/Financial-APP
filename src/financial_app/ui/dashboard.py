@@ -38,6 +38,7 @@ from financial_app.ui.page_header import page_header
 from financial_app.ui.periods import PeriodChoice, period_selector
 from financial_app.ui.strategy import PlannedDeposit, scope_strategy, strategy_section
 from financial_app.ui.theme import gain_or_loss
+from financial_app.ui.tile_grid import balanced_columns
 from financial_app.ui.view_scope import ViewScope
 from financial_app.ui.visibility import Layout
 
@@ -269,11 +270,7 @@ def _totals(totals: Totals, after_tax: bool, shows: Callable[[str], bool]) -> No
         return
     # What part of the Portfolio the cash and the costs are, under their amounts
     notes = {key: totals.share_of_value(amount) for key, amount in (("cash", totals.cash), ("costs", totals.costs))}
-    with (
-        ui.element("div")
-        .classes("grid w-full gap-4")
-        .style("grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr))")
-    ):
+    with ui.element("div").classes("grid w-full gap-4").style(balanced_columns(len(tiles), 4, "14rem")):
         for key, title, text in tiles:
             icon, background, colour = TILE_ICONS[key]
             with ui.card().classes("p-4"), ui.row().classes("w-full items-start no-wrap gap-3"):
@@ -375,10 +372,12 @@ def _first_steps() -> None:
 
 
 def _prices_line(refresh: RefreshStatus | None, unpriced: int) -> None:
-    """When prices were last refreshed and how many Instruments failed, as in the header; the Instruments without a
-    price lead to their list in Ustawienia."""
+    """A refresh that failed for some Instruments, in red, and the Instruments without a price, leading to their list
+    in Ustawienia."""
     with ui.row().classes("items-center gap-4 text-sm").mark("dashboard-prices"):
-        ui.label(refresh_summary(refresh)).classes("text-negative" if refresh and refresh.failures else "k-muted")
+        # The header already says when prices were refreshed; repeated here only when the refresh had errors
+        if refresh and refresh.failures:
+            ui.label(refresh_summary(refresh)).classes("text-negative")
         if unpriced:
             text = format_count(unpriced, "instrument bez wyceny", "instrumenty bez wyceny", "instrumentów bez wyceny")
             ui.link(text, "/ustawienia")

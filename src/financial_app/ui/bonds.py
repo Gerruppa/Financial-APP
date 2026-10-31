@@ -22,8 +22,10 @@ from financial_app.sources.nbp import NbpRates
 from financial_app.sources.todays_view import todays_view
 from financial_app.ui.bond_drafts import drafts_list
 from financial_app.ui.changes import TODAYS_VALUE
+from financial_app.ui.empty_state import empty_state
 from financial_app.ui.page_header import page_header
 from financial_app.ui.term_deposits import DepositsSection
+from financial_app.ui.transaction_dialog import open_transaction_dialog
 from financial_app.ui.view_scope import ViewScope
 
 COLUMNS = "grid-template-columns: minmax(8rem, 2fr) repeat(7, minmax(6rem, 1fr))"
@@ -59,6 +61,8 @@ class BondsPage:
     on_saved: Callable[[], None] = field(default=lambda: None)
     # Called once a Term Deposit is added, edited, ended, renewed or deleted
     on_deposits_changed: Callable[[], None] = field(default=lambda: None)
+    # Shows an Ustawienia section by its key (the empty Lokaty go to Konta)
+    open_settings: Callable[[str], None] = field(default=lambda key: None)
 
     def refresh(self) -> None:
         """Redraw the tab if it is on screen (e.g. after a save, a price refresh or a scope change)."""
@@ -76,15 +80,19 @@ class BondsPage:
         drafts_list(self.engine, today, self.scope.account_id, self.on_saved, self.on_deposits_changed)
         # Each section in its card, as on the other tabs
         with ui.card().classes("w-full gap-1"):
-            DepositsSection(self.engine, view, self.scope.account_id, self.on_deposits_changed, self.on_saved).build()
+            DepositsSection(
+                self.engine, view, self.scope.account_id, self.on_deposits_changed, self.on_saved, self.open_settings
+            ).build()
         positions, instruments, accounts, bonds = view.positions, view.instruments, view.accounts, view.bonds
         holdings = bond_holdings(positions, instruments, accounts, bonds, today, self.scope.account_id)
         with ui.card().classes("w-full gap-1"):
             ui.label("Obligacje").classes("text-lg font-bold")
             if not holdings:
-                ui.label(
-                    "Brak obligacji skarbowych w portfelu. Zakup obligacji dodasz przyciskiem „+” w trybie obligacji."
-                ).classes("k-muted").mark("bonds-empty")
+                empty_state(
+                    "account_balance",
+                    "Brak obligacji skarbowych w portfelu. Zakup dodasz w oknie transakcji, w trybie obligacji.",
+                    ("Dodaj zakup obligacji", lambda: open_transaction_dialog(self.engine, self.rates, self.on_saved)),
+                ).mark("bonds-empty")
                 return
             with ui.element("div").classes("grid w-full gap-x-4 border-b py-1 font-medium").style(COLUMNS):
                 for header in HEADERS:

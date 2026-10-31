@@ -52,7 +52,8 @@ from financial_app.ui.theme import gain_or_loss
 from financial_app.ui.transaction_dialog import open_transaction_dialog
 from financial_app.ui.view_scope import ViewScope, breadcrumbs
 
-COLUMNS = "grid-template-columns: 7rem minmax(8rem, 1fr) 6rem minmax(9rem, 1fr) 9rem minmax(8rem, 2fr)"
+# Typ is wide enough for "Dywidenda / odsetki" on one line
+COLUMNS = "grid-template-columns: 7rem minmax(8rem, 1fr) 9rem minmax(9rem, 1fr) 9rem minmax(8rem, 2fr)"
 
 
 HEADERS = {

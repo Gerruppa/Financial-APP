@@ -2,7 +2,7 @@
 dialog, and the Multi-asset tab listing the Multi-asset Instruments held with their value in each Asset Class."""
 
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal
 
 from nicegui import ui
@@ -16,6 +16,7 @@ from financial_app.sources.nbp import NbpRates
 from financial_app.sources.todays_view import todays_view
 from financial_app.ui.changes import TODAYS_VALUE
 from financial_app.ui.dialogs import movable_dialog
+from financial_app.ui.empty_state import empty_state
 from financial_app.ui.page_header import page_header
 from financial_app.ui.view_scope import ViewScope
 
@@ -105,6 +106,8 @@ class MultiAssetPage:
     rates: NbpRates
     scope: ViewScope
     on_split_saved: Callable[[], None]
+    # Shows an Ustawienia section by its key: the empty tab's button goes to Instrumenty
+    open_settings: Callable[[str], None] = field(default=lambda key: None)
 
     def refresh(self) -> None:
         """Redraw the tab if it is on screen (e.g. after a save, a price refresh or a scope change)."""
@@ -120,10 +123,12 @@ class MultiAssetPage:
         view = todays_view(self.engine, self.rates)
         holdings = multi_asset_holdings(view.positions, view.instruments, view.pln_prices, self.scope.account_id)
         if not holdings:
-            ui.label(
+            empty_state(
+                "pie_chart",
                 "Brak instrumentów Multi-asset w portfelu. Instrument klasy Multi-asset dostaje podział na klasy "
-                "w swoim oknie w Ustawienia > Instrumenty."
-            ).classes("k-muted").mark("multi-asset-empty")
+                "w swoim oknie w Ustawienia > Instrumenty.",
+                ("Przejdź do instrumentów", lambda: self.open_settings("instruments")),
+            ).mark("multi-asset-empty")
             return
         for holding in holdings:
             self._holding_row(holding)
@@ -148,7 +153,7 @@ class MultiAssetPage:
             else:
                 ui.label(
                     f"Brak podziału: liczy się w całości do klasy {instrument.asset_class_name}. Kliknij, aby go dodać."
-                ).classes("text-sm text-warning").mark("multi-asset-no-split")
+                ).classes("text-sm k-warning").mark("multi-asset-no-split")
 
 
 def _split_text(holding: MultiAssetHolding) -> str:

@@ -106,7 +106,7 @@ class PriceSourceGuide:
                     ui.label(
                         f"Klasa „{self.instrument.asset_class_name}” nie pobiera cen z {name}: dodaj to źródło "
                         "w Ustawienia > Klasy aktywów i wróć tutaj."
-                    ).classes("text-xs text-warning")
+                    ).classes("text-xs k-warning")
             if advice.in_order:
                 _pick_button(self.choice == advice.source, lambda: self._pick(advice.source)).mark(
                     f"price-guide-source-{advice.source}"
@@ -250,6 +250,6 @@ def _check_lines(found: SymbolCheck) -> None:
     if found.quote is not None:
         ui.label(f"{format_unit_price(found.quote.price, found.quote.currency)} · {format_date(found.quote.day)}")
     if found.warning:
-        ui.label(found.warning).classes("text-warning")
+        ui.label(found.warning).classes("k-warning")
     if found.error:
         ui.label(found.error).classes("text-negative")

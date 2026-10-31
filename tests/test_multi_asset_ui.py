@@ -227,3 +227,13 @@ async def test_the_multi_asset_tab_shows_each_instrument_with_its_value_per_clas
         user.find(marker="save-split").click()
 
         await user.should_not_see(marker="multi-asset-no-split")
+
+
+async def test_the_empty_tab_leads_to_the_instruments_in_ustawienia(engine: Engine) -> None:
+    async with user_simulation(lambda: build_shell(engine)) as user:
+        await user.open("/multi-asset")
+        with user.scope(marker="multi-asset-empty"):
+            user.find("Przejdź do instrumentów").click()
+
+        await user.should_see(marker="settings-section-instruments")
+        await user.should_see(marker="instruments")

@@ -339,7 +339,7 @@ class InstrumentsSection:
                     if one.instrument_type is not None:
                         told_type(one.instrument_type)
                     if one.warning:
-                        ui.label(prefix + one.warning).classes("text-warning")
+                        ui.label(prefix + one.warning).classes("k-warning")
                     if one.error:
                         ui.label(prefix + one.error).classes("text-negative")
 
