@@ -1,6 +1,6 @@
 # Historia zmian
 
-## Nieopublikowane
+## 1.4.1 — 2026-10-31
 
 ### Nowe funkcje
 - Okno „Pierwsze kroki” pokazuje u góry listę kroków ze znaczkiem ✓ przy tych już zrobionych (konto, transakcje, wyceny, w tym ceny ręczne; także na wcześniej założonym użytkowniku), przechodzi do kroku po kliknięciu i otwiera się na pierwszym niezrobionym; dopóki któryś czeka, w nagłówku widać przycisk „Pierwsze kroki 1/3” (do schowania krzyżykiem), a po zapisaniu transakcji wpisanej z tego okna okno wraca.
