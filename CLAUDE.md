@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project state
 
-The app is called KAPITA; version 1.0.0 (`financial_app.__version__`) ships as a Windows installer built by `scripts/build_installer.ps1` (#99). Stages 1 (transactions and Portfolio), 2 (automatic prices), 3 (Polish treasury bonds), 4 (Dashboard, History, Results) and 5 (reports: Benchmarks, Sell Summary, passive-income calendar) are done; Stage 6 (#7) is nearly done (L-17 XTB import and Reconciliation, L-27 Transakcje filters, #95 Contribution Limits, #99 installer). Open work is in GitHub Issues (Stage 6: #94–#100). The git remote `origin` is https://github.com/Gerruppa/Financial-APP.git, the default branch `main`; work goes on a feature branch and a PR.
+The app is called KAPITA; it ships as a Windows installer (`scripts/build_installer.ps1`) through GitHub Releases, and the installed app offers each new one. Its version is `financial_app.__version__`. Open work is in GitHub Issues, grouped by milestones (`gh issue list`). The git remote `origin` is https://github.com/Gerruppa/Financial-APP.git, the default branch `main`; work goes on a feature branch and a PR.
 
 ## Layout
 
@@ -32,7 +32,7 @@ The app re-implements the inwestomat.eu "Portfolio tracker" Google Sheet. The ag
   - The full suite, once before each commit: `.venv/Scripts/python.exe -m pytest -n auto` (3-4 minutes on an idle machine, up to 15 while the user works on it, so run it in the background; UI tests use NiceGUI's `user_simulation`, with no browser; `-m "not ui"` skips them). Copy the pass count into a commit or PR from its last line, once it has finished. CI (`.github/workflows/ci.yml`) runs it on a milestone's closing, a `v*` tag and by hand (`gh workflow run CI`), not on PRs.
   - Type check: `.venv/Scripts/python.exe -m mypy` (strict)
   - Lint and format: `.venv/Scripts/python.exe -m ruff check .` and `.venv/Scripts/python.exe -m ruff format .`
-- Change source files with the Edit tool, one call per replacement; Python heredocs piped through Git Bash break on quotes.
+- Change source files with the Edit tool, one call per replacement: a replacement that does not match fails at once, on its own line, while a script making several replacements (a Python heredoc through Git Bash, `sed`) hides a missed or wrong one until tests go red.
 - To merge a PR, run `gh pr merge <n> --merge --delete-branch` as a command of its own: only that exact form matches the allow rule in `.claude/settings.json`. A PR stacked on another's branch goes to `main` first (`gh pr edit <n> --base main`): `--delete-branch` on the lower PR closes it otherwise.
 - A small task (one PR, no spec or migration: a visual tweak, a label, a doc fix) needs no issue and no triage: branch, change, full suite, PR, then merge it without asking once pre-commit and the full suite pass. Ask before merging anything larger, a migration or a change to `domain/lots.py`.
 - Review the uncommitted diff (`git diff main`) before the first commit, apply the fixes, then commit once.
