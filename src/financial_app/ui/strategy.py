@@ -253,7 +253,9 @@ def _class_rows(current: ScopeStrategy, details: bool, edit: EditInstruments | N
             ui.label(header).classes("" if header in ("Klasa", "") else "text-right")
     for row in current.view.rows:
         asset_class = by_name.get(row.asset_class)
-        line = ui.element("div").classes("grid w-full gap-x-4 border-b py-1 text-sm items-center").style(ROW_COLUMNS)
+        # k-hover: in a wide window the row under the cursor stands out
+        line = ui.element("div").classes("grid w-full gap-x-4 border-b py-1 text-sm items-center k-hover")
+        line.style(ROW_COLUMNS)
         if row.status is not None:
             # The band's colour follows the Theme (ui/theme.py BAND_COLOURS)
             line.classes(f"k-band-{row.status.value}")
@@ -294,7 +296,8 @@ def _instrument_rows(
     with ui.column().classes("w-full gap-0").mark(f"instruments-{asset_class.id}"):
         for held in row.instruments:
             # On the class rows' grid, so that each figure stands under its column; the share is within the class
-            line = ui.element("div").classes("grid w-full gap-x-4 py-1 text-sm items-center").style(ROW_COLUMNS)
+            line = ui.element("div").classes("grid w-full gap-x-4 py-1 text-sm items-center k-hover")
+            line.style(ROW_COLUMNS)
             with line.mark("instrument-row"):
                 ui.label(held.instrument.name).classes("pl-8")
                 ui.label(format_pln(held.value)).classes("text-right")

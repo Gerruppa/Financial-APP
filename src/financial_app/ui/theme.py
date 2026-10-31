@@ -167,6 +167,7 @@ body.theme-golden .k-faq { background:#171717; }
 .k-gain { color:var(--k-gain); }
 .k-loss { color:var(--k-loss); }
 .k-warning { color:var(--k-warning); }.k-hover:hover { background:var(--k-hover); }
+.k-hover[class*="k-band-"]:hover { box-shadow:inset 0 0 0 100vmax rgba(128,128,128,.18); }
 body .k-field.q-field--filled .q-field__control { background:var(--k-field); }
 .k-hero { color:var(--k-hero); }
 .k-accent { color:var(--k-accent); }
