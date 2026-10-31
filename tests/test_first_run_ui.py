@@ -12,9 +12,11 @@ from nicegui.testing import User, user_simulation
 from sqlalchemy import Engine
 
 from financial_app.domain.accounts import AccountDraft, AccountType
-from financial_app.domain.transactions import TransactionDraft, TransactionType
+from financial_app.domain.instruments import InstrumentDraft
+from financial_app.domain.transactions import TransactionDraft, TransactionType, buy_or_sell
 from financial_app.persistence.accounts import add_account, list_accounts
 from financial_app.persistence.db import init_db
+from financial_app.persistence.instruments import add_instrument, list_asset_classes
 from financial_app.persistence.settings import FIRST_RUN_CHIP_HIDDEN, FIRST_RUN_DISMISSED, load_setting
 from financial_app.persistence.transactions import add_transaction, list_transactions
 from financial_app.sources.nbp import NbpRates
@@ -238,3 +240,44 @@ async def test_a_transaction_saved_from_the_window_brings_it_back(engine: Engine
         await user.should_see(marker="first-run-done-3")
         # A Deposit holds no Instrument, so with it every step is done
         await user.should_not_see(marker="first-run-chip")
+
+
+def hold(engine: Engine, account_id: int, manual_price: Decimal | None) -> None:
+    """A held Instrument with no Price Source, priced by hand or not at all."""
+    shares = list_asset_classes(engine)[0].id
+    instrument = add_instrument(engine, InstrumentDraft("PZU", shares, "PLN", manual_price=manual_price)).id
+    deposit(engine, account_id)
+    add_transaction(
+        engine, buy_or_sell(account_id, date(2026, 1, 6), TransactionType.BUY, instrument, Decimal(1), Decimal(40))
+    )
+
+
+async def test_an_instrument_without_a_price_keeps_the_prices_step_waiting(engine: Engine) -> None:
+    hold(engine, ike(engine), None)
+    async with user_simulation(shell(engine)) as user:
+        await user.open("/")
+
+        await user.should_see("Pierwsze kroki 2/3")
+
+
+async def test_a_manual_price_counts_as_a_price(engine: Engine) -> None:
+    hold(engine, ike(engine), Decimal(60))
+    async with user_simulation(shell(engine)) as user:
+        await user.open("/")
+
+        await user.should_not_see(marker="first-run-chip")
+
+
+async def test_an_account_added_from_the_chip_shows_in_konta(user: User) -> None:
+    user.find(marker="first-run-close").click()
+    await user.open("/ustawienia")
+    user.find(marker="first-run-chip-open").click()
+    user.find(marker="first-run-goto-2").click()
+
+    user.find(marker="first-run-add-account").click()
+    user.find(marker="account-name").type("Maklerskie")
+    user.find("Zapisz").click()
+
+    with user.scope(marker="accounts"):
+        await user.should_see("Maklerskie")
+    await user.should_see("Pierwsze kroki 1/3")
