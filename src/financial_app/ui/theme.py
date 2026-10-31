@@ -153,6 +153,12 @@ body .k-field.q-field--filled .q-field__control { background:var(--k-field); }
 .k-hero { color:var(--k-hero); }
 .k-accent { color:var(--k-accent); }
 .k-highlight { background:var(--k-highlight); }
+/* An Account's View Scope: the header's switcher and the breadcrumbs' last step outlined in the accent, and its row
+   in the switcher's menu marked like the lit menu item */
+body .k-scope-chosen { background:var(--k-highlight); color:var(--k-accent) !important; font-weight:700;
+  box-shadow:inset 0 0 0 1.5px var(--k-accent); border-radius:999px; }
+.k-scope-row.k-highlight { box-shadow:inset 3px 0 0 var(--k-accent); }
+.k-scope-row.k-highlight .k-scope-name { color:var(--k-accent); font-weight:700; }
 .k-icon { width:44px; height:44px; border-radius:999px; display:flex; align-items:center; justify-content:center; }
 body.theme-golden .k-icon { background:rgba(212,175,55,.12) !important; color:var(--k-accent) !important; }
 .q-linear-progress__track { background:var(--k-chip) !important; opacity:1 !important; }
