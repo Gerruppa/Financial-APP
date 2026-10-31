@@ -1,5 +1,10 @@
 # Historia zmian
 
+## Nieopublikowane
+
+### Zmiany
+- Okno „Cele instrumentów” w Strategiach pokazuje tylko instrumenty klasy, które posiadasz lub które mają już cel, w tej samej kolejności co w tabeli (od największej wartości); instrument jeszcze nieposiadany dodasz z listy „Dodaj instrument”.
+
 ## 1.5.0 — 2026-10-31
 
 ### Poprawki

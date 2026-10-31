@@ -183,12 +183,14 @@ class StrategyPage:
     def _edit_targets(self, strategy: Strategy) -> None:
         _targets_dialog(list_asset_classes(self.engine), strategy, self._save)
 
-    def _edit_instruments(self, asset_class: AssetClass, instruments: Sequence[Instrument]) -> None:
+    def _edit_instruments(
+        self, asset_class: AssetClass, shown: Sequence[Instrument], addable: Sequence[Instrument]
+    ) -> None:
         strategy = list_strategies(self.engine).get(self.scope.account_id) or Strategy(self.scope.account_id)
-        _instrument_targets_dialog(asset_class, instruments, strategy, self._save)
+        _instrument_targets_dialog(asset_class, shown, addable, strategy, self._save)
 
 
-type EditInstruments = Callable[[AssetClass, Sequence[Instrument]], None]
+type EditInstruments = Callable[[AssetClass, Sequence[Instrument], Sequence[Instrument]], None]
 
 
 def _strategy_body(
@@ -280,9 +282,14 @@ def _instrument_rows(
     row: ClassRow, asset_class: AssetClass, instruments: Mapping[int, Instrument], edit: EditInstruments | None
 ) -> None:
     """The class's Instruments, held or targeted, with their part of the deposit, and the button editing their
-    Instrument Targets (among the catalog's Instruments of the class)."""
-    catalog = [i for i in instruments.values() if i.asset_class_id == asset_class.id]
-    if not row.instruments and not catalog:
+    Instrument Targets: the same Instruments in the same order, and the class's others in the catalog to add."""
+    shown = [held.instrument for held in row.instruments]
+    shown_ids = {instrument.id for instrument in shown}
+    addable = sorted(
+        (i for i in instruments.values() if i.asset_class_id == asset_class.id and i.id not in shown_ids),
+        key=lambda i: i.name.casefold(),
+    )
+    if not shown and not addable:
         return
     with ui.column().classes("w-full gap-0").mark(f"instruments-{asset_class.id}"):
         for held in row.instruments:
@@ -304,8 +311,8 @@ def _instrument_rows(
                 f"Cele instrumentów sumują się do {format_percent(row.instrument_targets_sum or 0)}, a nie do 100%: "
                 "wpłata nie jest dzielona na instrumenty tej klasy."
             ).classes("pl-8 text-sm k-warning").mark("instrument-split-blocked")
-        if edit is not None and catalog:
-            ui.button("Cele instrumentów", on_click=lambda: edit(asset_class, catalog)).props(
+        if edit is not None:
+            ui.button("Cele instrumentów", on_click=lambda: edit(asset_class, shown, addable)).props(
                 "flat dense no-caps"
             ).classes("ml-6").mark(f"edit-instrument-targets-{asset_class.id}")
 
@@ -374,22 +381,23 @@ def _targets_dialog(
 
 def _instrument_targets_dialog(
     asset_class: AssetClass,
-    instruments: Sequence[Instrument],
+    shown: Sequence[Instrument],
+    addable: Sequence[Instrument],
     strategy: Strategy,
     on_save: Callable[[Strategy], None],
 ) -> None:
-    """A field per Instrument of the class in the catalog, held or not: its percent of the class."""
+    """A field per Instrument of the class held or targeted, in the given order: its percent of the class; an
+    Instrument not held yet is added from ``addable`` (the class's others in the catalog)."""
     dialog = movable_dialog()
     dialog.on("hide", dialog.delete)
     fields: dict[int, ui.input] = {}
     with dialog, ui.card().classes("w-[480px]").mark("instrument-targets-dialog"):
         ui.label(f"Cele instrumentów: {asset_class.name}").classes("text-lg font-bold")
         ui.label("Udział instrumentu w klasie; razem 100%. Puste pole: bez celu.").classes("text-sm k-muted")
-        for instrument in sorted(instruments, key=lambda i: i.name.casefold()):
-            share = strategy.instrument_targets.get(instrument.id)
-            field_ = ui.input(instrument.name, value="" if share is None else format_exact(share))
-            field_.props('dense suffix="%"').classes("w-full").mark(f"instrument-target-{instrument.id}")
-            fields[instrument.id] = field_
+        listed = ui.column().classes("w-full gap-0")
+        options = {instrument.id: instrument.name for instrument in addable}
+        add = ui.select(options, label="Dodaj instrument").props("dense clearable").classes("w-full")
+        add.mark("add-instrument-target").set_visibility(bool(options))
         total = ui.label().classes("text-sm").mark("instrument-targets-total")
         error = ui.label().classes("text-negative").mark("instrument-targets-error")
 
@@ -420,8 +428,25 @@ def _instrument_targets_dialog(
             dialog.close()
             on_save(updated)
 
-        for input_field in fields.values():
-            input_field.on_value_change(show_total)
+        def add_field(instrument_id: int, name: str) -> ui.input:
+            share = strategy.instrument_targets.get(instrument_id)
+            with listed:
+                field_ = ui.input(name, value="" if share is None else format_exact(share))
+            field_.props('dense suffix="%"').classes("w-full").mark(f"instrument-target-{instrument_id}")
+            field_.on_value_change(show_total)
+            fields[instrument_id] = field_
+            return field_
+
+        def added(instrument_id: int | None) -> None:
+            if instrument_id is None:
+                return
+            add_field(instrument_id, options.pop(instrument_id)).run_method("focus")
+            add.set_options(options, value=None)
+            add.set_visibility(bool(options))
+
+        for instrument in shown:
+            add_field(instrument.id, instrument.name)
+        add.on_value_change(lambda event: added(event.value))
         show_total()
         with ui.row().classes("w-full justify-end"):
             ui.button("Anuluj", on_click=dialog.close).props("flat")
