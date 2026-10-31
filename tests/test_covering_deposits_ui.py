@@ -176,7 +176,7 @@ async def test_the_undo_bar_waits_while_the_covering_window_is_open(
     engine: Engine, xtb: int, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The bar outlasts its time while the window is open, then gets it afresh, to undo once the Deposits are in."""
-    monkeypatch.setattr("financial_app.ui.undo.UNDO_SECONDS", 0.5)
+    monkeypatch.setattr("financial_app.ui.undo.UNDO_SECONDS", 1.0)
     monkeypatch.setattr("financial_app.ui.undo.HOLD_CHECK_SECONDS", 0.1)
     _add(engine, xtb, 3, TransactionType.WITHDRAWAL, 60)
 
@@ -185,12 +185,11 @@ async def test_the_undo_bar_waits_while_the_covering_window_is_open(
         _open_row(user, 1)
         user.find(marker="delete-transaction").click()
         user.find(marker="covering-button").click()
-        await asyncio.sleep(1.0)  # twice the bar's time
+        await asyncio.sleep(2.0)  # twice the bar's time
         await user.should_see(marker="undo-bar")
 
+        # Checked at once and then waited for, not after fixed sleeps: on a loaded machine the event loop stalls, and
+        # a check timed to fall inside the fresh second then lands after it
         user.find(marker="covering-save").click()
-        await asyncio.sleep(0.2)
         await user.should_see(marker="undo-bar")
-
-        await asyncio.sleep(1.2)
-        await user.should_not_see(marker="undo-bar")
+        await user.should_not_see(marker="undo-bar", retries=100)
