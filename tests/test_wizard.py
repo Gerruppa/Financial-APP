@@ -73,3 +73,34 @@ async def test_wizard_opens_again_on_its_first_step(user: User) -> None:
     user.find(marker="demo-close").click()
     user.find(marker="demo-open").click()
     await user.should_see(marker="demo-step-1")
+
+
+def checked_page() -> None:
+    """A wizard whose middle step's job is done and whose last one's is not."""
+    with ui.card():
+        steps = (
+            WizardStep("Początek", lambda: True),
+            WizardStep("Zrobiony", lambda: True, done=lambda: True),
+            WizardStep("Czekający", lambda: True, done=lambda: False),
+        )
+        wizard = Wizard("checked", steps)
+        ui.button("Otwórz", on_click=lambda: wizard.open(3)).mark("checked-open")
+
+
+async def test_a_wizard_with_jobs_lists_its_steps_ticked_and_goes_to_one() -> None:
+    async with user_simulation(checked_page) as user:
+        await user.open("/")
+        user.find(marker="checked-open").click()
+        await user.should_see(marker="checked-step-3")
+        await user.should_see(marker="checked-done-2")
+        await user.should_not_see(marker="checked-done-3")
+
+        user.find(marker="checked-goto-1").click()
+
+        await user.should_see(marker="checked-step-1")
+
+
+async def test_a_wizard_without_jobs_lists_no_steps(user: User) -> None:
+    user.find(marker="demo-open").click()
+    await user.should_see(marker="demo-step-1")
+    await user.should_not_see(marker="demo-steps")

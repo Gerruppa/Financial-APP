@@ -13,10 +13,12 @@ from nicegui import ui
 
 @dataclass(frozen=True)
 class WizardStep:
-    """One step: its title in the header, and the body that draws it and says whether "Dalej" may follow."""
+    """One step: its title in the header, and the body that draws it and says whether "Dalej" may follow. ``done``
+    says whether the job the step points to is done; a window with such steps lists them all above the step."""
 
     title: str
     body: Callable[[], bool]
+    done: Callable[[], bool] | None = None
 
 
 class Wizard:
@@ -32,9 +34,9 @@ class Wizard:
         with self.dialog, ui.card().classes(f"{width} max-w-full").mark(f"{prefix}-wizard"):
             self.body = ui.column().classes("w-full gap-2")
 
-    def open(self) -> None:
-        """Open the window on its first step."""
-        self.go(1)
+    def open(self, step: int = 1) -> None:
+        """Open the window on ``step``, the first by default."""
+        self.go(step)
         self.dialog.open()
 
     def close(self) -> None:
@@ -54,6 +56,8 @@ class Wizard:
         self.next_button = None
         self.body.clear()
         with self.body:
+            if any(step.done is not None for step in self.steps):
+                self._step_list()
             title = self.steps[self.step - 1].title
             ui.label(f"Krok {self.step} z {len(self.steps)}: {title}").classes("text-lg font-bold").mark(
                 f"{self.prefix}-step-{self.step}"
@@ -71,3 +75,17 @@ class Wizard:
                     self.next_button = next_button
                     if not ready:
                         next_button.disable()
+
+    def _step_list(self) -> None:
+        """Every step's title, with a tick on those done, each going to its step; marked ``<prefix>-goto-<n>``, a
+        done one ``<prefix>-done-<n>`` too."""
+        with ui.row().classes("w-full gap-1").mark(f"{self.prefix}-steps"):
+            for number, step in enumerate(self.steps, start=1):
+                done = step.done is not None and step.done()
+                icon = "check_circle" if done else "radio_button_unchecked" if step.done is not None else None
+                color = "primary" if number == self.step else "positive" if done else "ink"
+                button = ui.button(step.title, on_click=lambda number=number: self.go(number))
+                if icon is not None:
+                    button.props(f"icon={icon}")
+                button.props(f"flat dense no-caps color={color}").classes("text-xs")
+                button.mark(f"{self.prefix}-goto-{number}" + (f" {self.prefix}-done-{number}" if done else ""))

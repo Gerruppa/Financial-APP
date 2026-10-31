@@ -75,7 +75,9 @@ def build_settings_page(
     accounts = AccountsSection(
         engine,
         on_deleted=on_account_deleted,
-        on_changed=lambda: _all(limits.refresh, rules.refresh),
+        on_changed=lambda: _all(
+            limits.refresh, rules.refresh, None if first_run is None else first_run.progress_changed
+        ),
         open_first_run=None if first_run is None else lambda: first_run.open(accounts.changed),
     )
     instruments = InstrumentsSection(engine, search, sources, on_changed=on_instruments_changed)
