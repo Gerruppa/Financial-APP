@@ -78,8 +78,11 @@ def build_settings_page(
         on_changed=lambda: _all(
             limits.refresh, rules.refresh, None if first_run is None else first_run.progress_changed
         ),
-        open_first_run=None if first_run is None else lambda: first_run.open(accounts.changed),
+        open_first_run=None if first_run is None else first_run.open,
     )
+    if first_run is not None:
+        # An Account added in the window redraws this Konta list, whichever button opened it
+        first_run.on_accounts_changed = accounts.changed
     instruments = InstrumentsSection(engine, search, sources, on_changed=on_instruments_changed)
     asset_classes = AssetClassesSection(engine, on_changed=instruments.refresh)
     sheet_import = (

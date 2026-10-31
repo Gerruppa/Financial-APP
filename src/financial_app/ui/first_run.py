@@ -64,7 +64,8 @@ class FirstRunWizard:
     engine: Engine
     open_settings: Callable[[str], None]
     add_transaction: Callable[[Callable[[], None]], None]
-    # Runs after an Account is added here, e.g. to redraw the Konta list the window was reopened from
+    # Runs after an Account is added here: the Ustawienia page drawn last sets it to redraw its Konta list, whichever
+    # button opened the window
     on_accounts_changed: Callable[[], object] | None = field(default=None, init=False)
     # Runs when a step may have been done or the chip closed, e.g. to redraw the header's chip
     on_progress: Callable[[], object] | None = None
@@ -75,9 +76,8 @@ class FirstRunWizard:
         if load_setting(self.engine, FIRST_RUN_DISMISSED) is None and not list_accounts(self.engine):
             self.open()
 
-    def open(self, on_accounts_changed: Callable[[], object] | None = None) -> None:
+    def open(self) -> None:
         """Open the window on the first step not done; on the welcome while none is, or once all are."""
-        self.on_accounts_changed = on_accounts_changed
         if self.wizard is None:
             steps = (
                 WizardStep("Witaj w KAPITA", self._welcome),
@@ -112,8 +112,11 @@ class FirstRunWizard:
         return bool(list_transactions(self.engine))
 
     def _all_priced(self) -> bool:
-        """Every held Instrument has a price: none is in "Instrumenty bez wyceny", once there is a Transaction."""
-        return self._has_transaction() and not unpriced_instruments(self.engine)
+        """Every held Instrument has a price, once there is a Transaction: none is in "Instrumenty bez wyceny" but
+        those with a Manual Price."""
+        return self._has_transaction() and all(
+            unpriced.instrument.manual_price is not None for unpriced in unpriced_instruments(self.engine)
+        )
 
     def chip(self) -> None:
         """The header's "Pierwsze kroki n/3" chip opening the window, while a step is not done and it was not closed
@@ -124,7 +127,7 @@ class FirstRunWizard:
         if done == of:
             return
         with ui.row().classes("items-center gap-0 no-wrap").mark("first-run-chip"):
-            ui.button(f"Pierwsze kroki {done}/{of}", icon="explore", on_click=lambda: self.open()).props(
+            ui.button(f"Pierwsze kroki {done}/{of}", icon="explore", on_click=self.open).props(
                 "flat no-caps no-wrap color=ink"
             ).mark("first-run-chip-open")
             ui.button(icon="close", on_click=self._hide_chip).props(
@@ -177,9 +180,11 @@ class FirstRunWizard:
     def _account_added(self) -> None:
         assert self.wizard is not None
         self.wizard.render()
-        self.progress_changed()
+        # The Konta list's redraw tells the chip too
         if self.on_accounts_changed is not None:
             self.on_accounts_changed()
+        else:
+            self.progress_changed()
 
     def _history(self) -> bool:
         ui.label(HISTORY).classes("text-sm")
