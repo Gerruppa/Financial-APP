@@ -87,10 +87,11 @@ BAND_COLOURS = {
     Theme.GOLDEN: {BandStatus.GREEN: "#163a24", BandStatus.YELLOW: "#3d3210", BandStatus.RED: "#45191b"},
 }
 # The Accounts treemap's tiles (ui/account_ranking.py): from the tile without P&L, pale in Jasny and the dark of a
-# card in Golden, towards the gain's green or the loss's red; grey without a result
+# card in Golden, towards the gain's green or the loss's red; a soft neutral without a result (while History is
+# computed), close to the page rather than a grey that reads as broken
 TILE_PALE = {Theme.LIGHT: (232, 245, 233), Theme.GOLDEN: (38, 38, 38)}
 TILE_GAIN, TILE_LOSS = (46, 125, 50), (198, 40, 40)
-TILE_UNKNOWN = {Theme.LIGHT: "#9e9e9e", Theme.GOLDEN: "#525252"}
+TILE_UNKNOWN = {Theme.LIGHT: "#dfe5ee", Theme.GOLDEN: "#333333"}
 # The relative luminance at which black and white text contrast alike: (L + 0.05) / 0.05 = 1.05 / (L + 0.05)
 _EVEN_CONTRAST = (1.05 * 0.05) ** 0.5 - 0.05
 
@@ -137,6 +138,8 @@ body.theme-golden .k-side { background:var(--k-side) MOUNTAINS no-repeat bottom 
 body.theme-golden .k-menu-item.k-active { color:var(--k-accent) !important; }
 .q-card { border:1px solid var(--k-border); border-radius:14px; box-shadow:0 1px 3px rgba(15,23,42,.06); }
 body.theme-golden .q-card { background:linear-gradient(180deg,#171717,#101010); }
+/* Quasar paints tab panels white (dark grey in dark mode): beside a card narrower than the page it showed as a band */
+.q-tab-panels { background:transparent; }
 .k-faq { background:#fff; border-radius:4px; }
 body.theme-golden .k-faq { background:#171717; }
 .k-undo, .k-covering { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); z-index:6000;

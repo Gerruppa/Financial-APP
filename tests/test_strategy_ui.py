@@ -184,10 +184,11 @@ async def test_instrument_targets_split_a_class_part_of_the_deposit_and_may_name
         user.find(marker="planned-deposit").type("2000")
 
         # The class's 1400 PLN first brings ACWI up to CSPX, then both together
-        await user.should_see(f"z wpłaty {_pln('1 200,00')}")
+        # Under the class columns Wartość, Udział (within the class), Cel and Z wpłaty
+        await user.should_see(_pln("1 200,00"))
         assert _rows(user, "instrument-row")[-2:] == [
-            ["CSPX", _pln("1 000,00"), _percent("100,00"), f"cel {_percent('50,00')}", f"z wpłaty {_pln('200,00')}"],
-            ["ACWI", _pln("0,00"), _percent("0,00"), f"cel {_percent('50,00')}", f"z wpłaty {_pln('1 200,00')}"],
+            ["CSPX", _pln("1 000,00"), _percent("100,00"), _percent("50,00"), _pln("200,00")],
+            ["ACWI", _pln("0,00"), _percent("0,00"), _percent("50,00"), _pln("1 200,00")],
         ]
     assert list_strategies(engine)[None].instrument_targets == {
         _instrument_id(engine, "CSPX"): Decimal(50),

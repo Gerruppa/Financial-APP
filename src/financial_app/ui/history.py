@@ -91,7 +91,9 @@ def history_status(engine: Engine, shared: SharedHistory) -> None:
         text = f"Historia: {format_count(failures, 'błąd', 'błędy', 'błędów')}"
     else:
         return
-    button = ui.button(text, on_click=lambda: _history_errors_dialog(engine, shared.failures)).props("flat no-caps")
+    # On one line: wrapped, it made the header taller while History was fetched
+    button = ui.button(text, on_click=lambda: _history_errors_dialog(engine, shared.failures))
+    button.props("flat no-caps no-wrap")
     button.props(f"color={'negative' if failures and shared.fetching is None else 'ink'}").mark("history-status")
 
 
