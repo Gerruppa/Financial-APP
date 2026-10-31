@@ -73,7 +73,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `early-redemption.md`: Architecture entry for Early Redemption (L-5, spec 3.4.1, ADR-0007): main functions, UI markers and decisions.
 - `edo-valuation.md`: Architecture entry for EDO valuation (L-3, spec 3.4.1): main functions, UI markers and decisions.
 - `export.md`: Architecture entry for Export: main functions, UI markers and decisions.
-- `first-run.md`: Architecture entry for the first-run window (ui/first_run.py): its five steps, when it opens and how it reopens from Ustawienia.
+- `first-run.md`: Architecture entry for the first-run window (ui/first_run.py): its five steps, the header chip, opening on the first undone step and reopening after a saved Transaction.
 - `header-search.md`: Architecture entry for the header search and Instrument Card (#175): main functions, UI markers and decisions.
 - `help-faq.md`: Architecture entry for Pomoc / FAQ (#156): main functions, UI markers and decisions.
 - `history-parity-test.md`: Architecture entry for tests/test_history_parity.py (#70, spec 6.1): main functions, UI markers and decisions.
@@ -346,7 +346,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `faq.md`: FAQ text shown on the Pomoc tab; sections, questions with slugs, and links to tabs
 - `file_delivery.py`: Hands an exported file to the user: a browser download, or a save to Downloads in the native window with a dialog showing its path.
 - `first_rule.py`: Ustawienia step-by-step window for the first Recurring Rule: choose an example, fill in the rule, preview its Drafts, save.
-- `first_run.py`: Five-step first-run window for an empty database; adds Accounts and points to import, transactions and instruments.
+- `first_run.py`: First-run window for an empty database: five steps with done ticks, opened from the header chip or Ustawienia; Accounts, imports, transactions, instruments.
 - `fund_details.py`: Builds the short fund detail texts (TER, Distribution Policy, domicile) shared by Instrument list and Portfolio
 - `header_search.py`: Header search field, its results list and the command palette; opens Instrument Cards or runs commands on a chosen row.
 - `help.py`: Help tab (Pomoc); shows the FAQ as collapsible questions with a search and Przejdź do buttons to tabs
@@ -389,7 +389,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `user_section.py`: Ustawienia Użytkownik card: change the User's pseudonym and password, and delete the User with their folder after password and pseudonym confirmation.
 - `view_scope.py`: View Scope header switcher and breadcrumbs, listing Accounts by value with share and daily change
 - `visibility.py`: Window Layout of hidden elements, plus the Ustawienia switches and View Profile presets that change it
-- `wizard.py`: Shared step-by-step dialog shell: header "Krok N z M", Wstecz, Zamknij and Dalej buttons, Dalej held until the step is ready.
+- `wizard.py`: Shared step-by-step dialog shell: header "Krok N z M", Wstecz, Zamknij and Dalej buttons, optional tick list of done steps, Dalej held until the step is ready.
 - `xtb_import.py`: Ustawienia XTB import wizard: steps from loading statements through account and ticker matching, reconciliation, covering Deposits to applying.
 
 ## src/financial_app/ui/assets/fonts/
@@ -483,7 +483,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_fallback_order_ui.py`: UI tests for editing an Asset Class's Fallback Order in Ustawienia: showing, removing, adding, moving and saving sources.
 - `test_faq_domain.py`: Unit tests of FAQ Markdown parsing, format errors and search
 - `test_first_rule_ui.py`: UI tests for the first Recurring Rule window: example prefill, saving with next Drafts, Buy instrument check, day-to-start follow.
-- `test_first_run_ui.py`: UI tests for the first-run window: opens on an empty database, dismissal is remembered, steps and reopening from Ustawienia.
+- `test_first_run_ui.py`: UI tests for the first-run window: opening on an empty database, dismissal, steps, reopening from Ustawienia or the header chip, and which steps are done.
 - `test_foreign_cash_domain.py`: Domain tests for foreign cash Lots, Currency Exchange and FX result per Account
 - `test_foreign_cash_repository.py`: Tests saving Currency Exchanges and foreign-cash Buys to SQLite
 - `test_foreign_cash_transfer_domain.py`: Tests foreign-currency Cash Transfers in the domain: oldest cash Lots move with dates and costs, no FX result, NBP-rate PLN value.
@@ -605,7 +605,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_view_scope_domain.py`: Tests the View Scope domain: Total or one Account, its text setting, and the Accounts the switcher offers.
 - `test_view_scope_ui.py`: UI tests for the View Scope switcher, breadcrumbs, scope-following tabs and the period selector.
 - `test_windowless.py`: Tests that windowless launches redirect stdout and stderr to a log file while console launches stay untouched
-- `test_wizard.py`: UI tests for the shared Wizard: header, Wstecz and Dalej held until the step is ready.
+- `test_wizard.py`: UI tests for the shared Wizard: header, Wstecz and Dalej held until ready, and the tick list of steps that go to a chosen step.
 - `test_xtb_import_domain.py`: Tests reading XTB statements into entries and Transaction drafts
 - `test_xtb_import_ui.py`: Tests the XTB import wizard window in Ustawienia: step navigation, matching, resolving, covering Deposits and applying without a browser.
 - `test_xtb_parity.py`: Checks the user's XTB exports against XTB's own positions and cash; skipped without reference data

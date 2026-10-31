@@ -326,9 +326,30 @@ def build_shell(
     )
     header_search = HeaderSearch(engine, search, lambda subject: open_instrument_card(card, subject), commands)
 
+    settings_section = SettingsSection()
+
+    def open_settings(key: str) -> None:
+        settings_section.show(key)
+        ui.navigate.to(SETTINGS_PATH)
+
+    def add_transaction_then(then: Callable[[], None]) -> None:
+        def saved() -> None:
+            transactions_changed()
+            then()
+
+        open_transaction_dialog(engine, rates, saved)
+
+    # The header's chip reopens it while a step is not done (#288)
+    first_run = FirstRunWizard(engine, open_settings, add_transaction_then)
+
     with ui.header(wrap=False).classes("k-header items-center px-6").props("bordered=false").mark("header") as header:
         header_search.build()
         ui.space()
+        if offer_first_run:
+            first_run_chip = ui.refreshable(first_run.chip)
+            first_run_chip()
+            first_run.on_progress = first_run_chip.refresh
+            events.subscribe(first_run_chip.refresh, {Change.TRANSACTIONS, Change.PRICES, Change.INSTRUMENTS})
         history_state = ui.refreshable(lambda: history_status(engine, shared))
         history_state()
         bond_state = ui.refreshable(lambda: bond_data_status(engine))
@@ -423,15 +444,6 @@ def build_shell(
     pages["/benchmarki"] = lambda: scope_pages(benchmarks_page.build)
     pages["/sprzedaz"] = lambda: scope_pages(sale_page.build)
     pages["/dochod-pasywny"] = lambda: scope_pages(income_page.build)
-    settings_section = SettingsSection()
-
-    def open_settings(key: str) -> None:
-        settings_section.show(key)
-        ui.navigate.to(SETTINGS_PATH)
-
-    first_run = FirstRunWizard(
-        engine, open_settings, lambda: open_transaction_dialog(engine, rates, transactions_changed)
-    )
     pages[SETTINGS_PATH] = lambda: build_settings_page(
         engine,
         rates,
