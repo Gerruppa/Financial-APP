@@ -224,11 +224,12 @@ def _strategy_body(
             rows.refresh()
 
     field_text = format_exact(planned.amount) if planned.amount else ""
-    deposit = ui.input("Planuję wpłacić", value=field_text).props('dense suffix="zł"').classes("w-48")
+    # Outlined, so that it reads as a field to type the amount in
+    deposit = ui.input("Planuję wpłacić", value=field_text).props('dense outlined suffix="zł"').classes("w-48")
     deposit.mark("planned-deposit").on_value_change(lambda event: typed(event.value or ""))
     if current.view.targets_sum != 100:
         ui.label(f"Cele klas sumują się do {format_percent(current.view.targets_sum)}, a nie do 100%.").classes(
-            "text-warning"
+            "k-warning"
         ).mark("targets-sum-warning")
     rows()
     return current
@@ -302,7 +303,7 @@ def _instrument_rows(
             ui.label(
                 f"Cele instrumentów sumują się do {format_percent(row.instrument_targets_sum or 0)}, a nie do 100%: "
                 "wpłata nie jest dzielona na instrumenty tej klasy."
-            ).classes("pl-8 text-sm text-warning").mark("instrument-split-blocked")
+            ).classes("pl-8 text-sm k-warning").mark("instrument-split-blocked")
         if edit is not None and catalog:
             ui.button("Cele instrumentów", on_click=lambda: edit(asset_class, catalog)).props(
                 "flat dense no-caps"
@@ -350,7 +351,7 @@ def _targets_dialog(
                 total.text = "Razem: —"
                 return
             total.text = f"Razem: {format_percent(summed)}"
-            total.classes(replace="text-sm" if summed in (0, 100) else "text-sm text-warning")
+            total.classes(replace="text-sm" if summed in (0, 100) else "text-sm k-warning")
 
         def save() -> None:
             try:
@@ -407,7 +408,7 @@ def _instrument_targets_dialog(
                 total.text = "Razem: —"
                 return
             total.text = f"Razem: {format_percent(summed)}"
-            total.classes(replace="text-sm" if summed in (0, 100) else "text-sm text-warning")
+            total.classes(replace="text-sm" if summed in (0, 100) else "text-sm k-warning")
 
         def save() -> None:
             others = {i: p for i, p in strategy.instrument_targets.items() if i not in fields}

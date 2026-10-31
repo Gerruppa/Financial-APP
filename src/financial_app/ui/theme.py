@@ -84,7 +84,8 @@ _THEME_CSS = "".join(
     for theme, colours in THEME_COLOURS.items()
 )
 BAND_COLOURS = {
-    Theme.LIGHT: {BandStatus.GREEN: "#e8f5e9", BandStatus.YELLOW: "#ffe082", BandStatus.RED: "#ffcdd2"},
+    # Pale tints, so that a class row is marked without the whole table shouting
+    Theme.LIGHT: {BandStatus.GREEN: "#edf7ee", BandStatus.YELLOW: "#fff4d1", BandStatus.RED: "#fde7e7"},
     Theme.GOLDEN: {BandStatus.GREEN: "#163a24", BandStatus.YELLOW: "#3d3210", BandStatus.RED: "#45191b"},
 }
 # The Accounts treemap's tiles (ui/account_ranking.py): from the tile without P&L, pale in Jasny and the dark of a
@@ -149,6 +150,8 @@ body.theme-golden .k-menu-item.k-active { color:var(--k-accent) !important; }
 body.theme-golden .q-card { background:linear-gradient(180deg,#171717,#101010); }
 /* Buttons and tabs as written ("Eksportuj XLSX"), as most already are with no-caps, never Quasar's capitals */
 .q-btn, .q-tab { text-transform:none; }
+/* A table's row lines in the Theme's soft border, not the text colour Tailwind's border-t/-b fall back to */
+.border-t, .border-b { border-color:var(--k-border); }
 /* A link in the Theme's accent (gold in Golden), not the browser's blue */
 a.nicegui-link { color:var(--q-primary); }
 /* Quasar paints tab panels white (dark grey in dark mode): beside a card narrower than the page it showed as a band */
@@ -163,8 +166,7 @@ body.theme-golden .k-faq { background:#171717; }
 .k-muted { color:var(--k-muted); }
 .k-gain { color:var(--k-gain); }
 .k-loss { color:var(--k-loss); }
-.k-warning { color:var(--k-warning); }
-.k-hover:hover { background:var(--k-hover); }
+.k-warning { color:var(--k-warning); }.k-hover:hover { background:var(--k-hover); }
 body .k-field.q-field--filled .q-field__control { background:var(--k-field); }
 .k-hero { color:var(--k-hero); }
 .k-accent { color:var(--k-accent); }

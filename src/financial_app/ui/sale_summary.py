@@ -27,6 +27,7 @@ from financial_app.ui.page_header import page_header
 from financial_app.ui.periods import PeriodChoice, period_selector
 from financial_app.ui.report_export import export_controls
 from financial_app.ui.theme import gain_or_loss
+from financial_app.ui.tile_grid import balanced_columns
 from financial_app.ui.view_scope import ViewScope
 
 DASH = "—"
@@ -112,9 +113,7 @@ def _tiles(stats: SaleStats, names: dict[int, str]) -> None:
         ("worst", "Najgorsza", format_pln(stats.worst.result, signed=True), pair_note(stats.worst)),
     )
     with (
-        ui.element("div")
-        .classes("grid w-full max-w-screen-2xl gap-4")
-        .style("grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr))")
+        ui.element("div").classes("grid w-full max-w-screen-2xl gap-4").style(balanced_columns(len(tiles), 4, "12rem"))
     ):
         for key, title, text, note in tiles:
             with ui.card().classes("gap-1"):

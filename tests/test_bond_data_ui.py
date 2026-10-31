@@ -67,7 +67,8 @@ async def test_the_refresh_button_fetches_the_bond_data(engine: Engine) -> None:
     async with user_simulation(shell) as user:
         await user.open("/")
         user.find(marker="refresh-prices").click()
-        await user.should_see("Wyceny: 12.10.2026 19:00")
+        # The header's status; the Dashboard repeats it only after a refresh with errors
+        await user.should_see(marker="price-status", content="Wyceny: 12.10, 19:00")
 
     assert load_cpi(engine) == [CPI]
 
@@ -80,7 +81,7 @@ async def test_a_start_with_fresh_prices_still_fetches_the_bond_data_due_today(e
 
     async with user_simulation(shell) as user:
         await user.open("/")
-        await user.should_see("Wyceny: 12.10.2026 19:00")
+        await user.should_see(marker="price-status", content="Wyceny: 12.10, 19:00")
         for _ in range(50):
             if load_cpi(engine):
                 break

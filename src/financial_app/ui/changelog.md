@@ -7,6 +7,7 @@
 
 ### Zmiany
 - Zakładki wyglądają spójnie: każda zaczyna się takim samym nagłówkiem z przyciskami eksportu po prawej (wybór roku nazywa się teraz „Rok eksportu”), przyciski i zakładki Ustawień nie są pisane wersalikami, Strategie, Transakcje i Dochód stały mają swoje karty, kwoty ze znakiem są zielone lub czerwone także w Transakcjach, Podsumowaniu sprzedaży i Benchmarkach, a linki w motywie Golden są złote.
+- Dopracowany wygląd: lżejsze linie w tabelach, niższe wiersze Benchmarków z podpisaną każdą nazwą na wykresie, łagodniejsze kolory pasm w Strategiach i czytelniejsze ostrzeżenia, puste sekcje z ikoną i przyciskiem, który prowadzi dalej, kafelki ułożone bez samotnego ostatniego, krótsza podpowiedź wyszukiwarki, „Wyceny” na Dashboardzie tylko przy błędach odświeżania i typ transakcji w jednej linii.
 
 ## 1.4.2 — 2026-10-31
 

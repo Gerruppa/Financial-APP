@@ -174,12 +174,19 @@ def build_shell(
     results_page = ResultsPage(engine, rates, scope, period, lambda: shared.days)
     transactions_page = TransactionsPage(engine, rates, scope, events.publish)
     portfolio_page = PortfolioPage(engine, rates, scope)
+    settings_section = SettingsSection()
+
+    def open_settings(key: str) -> None:
+        settings_section.show(key)
+        ui.navigate.to(SETTINGS_PATH)
+
     bonds_page = BondsPage(
         engine,
         rates,
         scope,
         on_saved=lambda: events.publish(Change.TRANSACTIONS),
         on_deposits_changed=lambda: events.publish(Change.TERM_DEPOSITS),
+        open_settings=open_settings,
     )
     unpriced = UnpricedSection(engine, sources)
     sale_page = SaleSummaryPage(engine, scope, period)
@@ -211,7 +218,9 @@ def build_shell(
     )
 
     # A Multi-asset Split changes the value History counts in each Asset Class
-    multi_asset_page = MultiAssetPage(engine, rates, scope, on_split_saved=lambda: events.publish(Change.INSTRUMENTS))
+    multi_asset_page = MultiAssetPage(
+        engine, rates, scope, on_split_saved=lambda: events.publish(Change.INSTRUMENTS), open_settings=open_settings
+    )
 
     async def fetch_history() -> None:
         # The status follows the fetch's progress, which a worker thread advances
@@ -326,12 +335,6 @@ def build_shell(
         switch_user=on_switch_user,
     )
     header_search = HeaderSearch(engine, search, lambda subject: open_instrument_card(card, subject), commands)
-
-    settings_section = SettingsSection()
-
-    def open_settings(key: str) -> None:
-        settings_section.show(key)
-        ui.navigate.to(SETTINGS_PATH)
 
     def add_transaction_then(then: Callable[[], None]) -> None:
         def saved() -> None:

@@ -31,7 +31,7 @@ HEADERS = (
     "Nazwa",
     "Wartość obecna",
     "Portfel vs benchmark",
-    "Portfel vs benchmark %",
+    "Różnica %",
     "Zwrot (TWR)",
     "Na wykresie",
     "",
@@ -101,14 +101,16 @@ class BenchmarksPage:
     def _table(self, rows: list[ComparisonRow]) -> None:
         with ui.card().classes("w-full overflow-x-auto").mark("benchmarks-table"):
             with ui.element("div").classes("grid w-full gap-x-4 text-sm font-medium").style(COLUMNS):
-                for header in HEADERS:
-                    ui.label(header)
+                # The amounts' headers to the right, over their amounts
+                for index, header in enumerate(HEADERS):
+                    ui.label(header).classes("text-right" if 1 <= index <= 4 else "")
             for row in rows:
-                line = ui.element("div").classes("grid w-full items-center gap-x-4 border-t py-1 text-sm")
+                line = ui.element("div").classes("grid w-full items-center gap-x-4 border-t py-0.5 text-sm")
                 with line.style(COLUMNS).mark("benchmark-row"):
                     name = ui.label(f"{row.name}*" if row.short_history else row.name).classes("font-medium")
                     if row.short_history:
-                        name.classes("k-loss")
+                        # A note, not an error: the asterisk points to the footnote
+                        name.tooltip(SHORT_HISTORY.removeprefix("* "))
                     ui.label(format_pln(row.value)).classes("text-right")
                     tone = gain_or_loss(row.difference)
                     ui.label(DASH if row.difference is None else format_pln(row.difference, signed=True)).classes(
@@ -118,11 +120,11 @@ class BenchmarksPage:
                     ui.label(_percent(row.twr)).classes("text-right")
                     self._row_controls(row.benchmark)
             if any(row.short_history for row in rows):
-                ui.label(SHORT_HISTORY).classes("text-xs k-loss")
+                ui.label(SHORT_HISTORY).classes("text-xs k-muted pt-2")
 
     def _row_controls(self, benchmark: Benchmark | None) -> None:
         if benchmark is None or benchmark.id is None:
-            ui.checkbox(value=True).props("disable")
+            ui.checkbox(value=True).props("disable dense")
             ui.label("")
             return
         benchmark_id = benchmark.id
@@ -131,7 +133,7 @@ class BenchmarksPage:
             set_shown(self.engine, benchmark_id, shown)
             self.refresh()
 
-        ui.checkbox(value=benchmark.shown, on_change=lambda e: toggle(bool(e.value))).mark(
+        ui.checkbox(value=benchmark.shown, on_change=lambda e: toggle(bool(e.value))).props("dense").mark(
             f"benchmark-shown-{benchmark_id}"
         )
 

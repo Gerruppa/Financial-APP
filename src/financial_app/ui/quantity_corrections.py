@@ -49,7 +49,7 @@ def correction_choices(
             ui.label(describe(shortfall.uncovered)).classes("text-sm font-bold")
             ui.label(shortfall_text(shortfall)).classes("text-sm")
             if shortfall.large:
-                ui.label(LARGE_WARNING).classes("text-sm text-warning").mark(f"{marker}-large-{number}")
+                ui.label(LARGE_WARNING).classes("text-sm k-warning").mark(f"{marker}-large-{number}")
             options = {fix.value: f"{fix.label}. {shortfall.effect(fix)}" for fix in shortfall.fixes}
             ui.radio(
                 options,

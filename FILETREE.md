@@ -344,6 +344,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `deposit_drafts.py`: Dochód stały rows for Term Deposit interest and maturity Drafts: confirm, edit amounts, end or renew a matured deposit
 - `dialogs.py`: Draggable dialog support with no backdrop, so the screen behind stays readable; Esc closes the newest
 - `discreet.py`: Discreet mode UI: page script and CSS that blur amounts and charts, plus the header eye toggle remembered in settings.
+- `empty_state.py`: Shared empty-section message: an icon, the reason the section is empty, and an optional action button
 - `faq.md`: FAQ text shown on the Pomoc tab; sections, questions with slugs, and links to tabs
 - `file_delivery.py`: Hands an exported file to the user: a browser download, or a save to Downloads in the native window with a dialog showing its path.
 - `first_rule.py`: Ustawienia step-by-step window for the first Recurring Rule: choose an example, fill in the rule, preview its Drafts, save.
@@ -383,6 +384,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `strategy.py`: Strategie inwestycyjne tab, Dashboard strategy section and post-refresh notice for classes outside their tolerance band
 - `term_deposits.py`: Lokaty section of Dochód stały: running Term Deposits with accrued interest, and the dialog to add, edit, break or delete one
 - `theme.py`: Applies the window's Theme (CSS, Quasar colours, dark mode), remembers it, and wraps ECharts in the Theme
+- `tile_grid.py`: Balanced column count and grid style for tile grids, so no tile is left alone on the last row
 - `transaction_dialog.py`: Transaction dialog for adding, editing and deleting every supported transaction type, bound to the form model
 - `transactions.py`: Transakcje tab: the Transaction list with column sorting and filters
 - `undo.py`: Timed action bar at the window's foot: the undo bar's Cofnij after a delete, and the pill other offers (covering Deposits) reuse
@@ -585,6 +587,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_term_deposits_valuation.py`: Tests Term Deposit interest counted in Account value, history, Dashboard profit and save warnings
 - `test_theme_contrast.py`: Tests WCAG AA contrast of Investment Strategy band rows and Accounts treemap tile labels in both Themes
 - `test_themes_domain.py`: Tests the Theme labels and reading the remembered Theme text back, with unknown text falling to Jasny
+- `test_tile_grid.py`: Unit tests for the balanced tile grid column counts
 - `test_todays_view.py`: Tests today's View state loaded once for the tabs, on an in-memory database with fixed NBP Rates
 - `test_trades_ui.py`: Tests PLN Buys and Sells end to end through the transaction dialog, Transakcje list and Portfolio.
 - `test_transaction_edit_ui.py`: UI tests for editing and deleting a Transaction from the Transakcje list, including blocked edits
