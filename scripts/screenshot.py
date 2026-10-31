@@ -32,17 +32,17 @@ def free_port() -> int:
         return int(sock.getsockname()[1])
 
 
-def wait_until_up(url: str, app: subprocess.Popen[bytes], seconds: float = 60) -> None:
+def wait_until_up(url: str, app: subprocess.Popen[bytes], log: Path, seconds: float = 60) -> None:
     deadline = time.monotonic() + seconds
     while time.monotonic() < deadline:
         if app.poll() is not None:
-            sys.exit(f"main.py --demo stopped with exit code {app.returncode}")
+            sys.exit(f"main.py --demo stopped with exit code {app.returncode}; its output is in {log}")
         try:
             urllib.request.urlopen(url, timeout=1)
             return
         except OSError:
             time.sleep(0.5)
-    sys.exit(f"{url} did not answer within {seconds:.0f} s")
+    sys.exit(f"{url} did not answer within {seconds:.0f} s; the app's output is in {log}")
 
 
 def choose_theme(theme: str, discreet: bool = False, account: str | None = None) -> None:
@@ -81,9 +81,18 @@ def main() -> None:
         sys.exit("Neither Chrome nor Edge is installed at " + ", ".join(map(str, BROWSERS)))
     args.out.mkdir(parents=True, exist_ok=True)
     port = free_port()
-    app = subprocess.Popen([sys.executable, str(ROOT / "main.py"), "--demo", "--port", str(port)], cwd=ROOT)
+    # The app's output goes to a log, read only when it fails: once it is stopped, its process pool's workers print
+    # tracebacks looking for the gone parent, which are noise
+    log = args.out / "demo.log"
+    with log.open("wb") as output:
+        app = subprocess.Popen(
+            [sys.executable, str(ROOT / "main.py"), "--demo", "--port", str(port)],
+            cwd=ROOT,
+            stdout=output,
+            stderr=subprocess.STDOUT,
+        )
     try:
-        wait_until_up(f"http://127.0.0.1:{port}/", app)
+        wait_until_up(f"http://127.0.0.1:{port}/", app, log)
         choose_theme(args.theme, args.discreet, args.account)
         for tab in args.tabs:
             name = tab.strip("/") or "dashboard"
