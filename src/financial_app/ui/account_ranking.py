@@ -53,6 +53,7 @@ def accounts_treemap(rows: Sequence[RankingRow], switch: Callable[[int], None]) 
         f"p => {{ const pln = {PLN_FORMATTER}; return p.name + '<br>' + pln(p.value)"
         " + '<br>Zysk / strata: ' + pln(p.data.profit); }"
     )
+    label = f"p => {{ const pln = {PLN_FORMATTER}; return p.name + '\\n' + pln(p.value); }}"
     options: dict[str, Any] = {
         "tooltip": {":formatter": tooltip},
         "series": [
@@ -64,6 +65,9 @@ def accounts_treemap(rows: Sequence[RankingRow], switch: Callable[[int], None]) 
                 "breadcrumb": {"show": False},
                 "width": "100%",
                 "height": "100%",
+                # Each tile names its Account and value, set apart from the next by a gap showing the card
+                "label": {":formatter": label},
+                "itemStyle": {"gapWidth": 3, "borderColor": "transparent"},
                 "data": [_tile(tile, theme) for tile in tiles],
             }
         ],

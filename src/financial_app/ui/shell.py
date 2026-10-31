@@ -373,8 +373,9 @@ def build_shell(
         build_support_button()
         build_user_menu(pseudonym, theme, SETTINGS_PATH, HELP_PATH, on_switch_user)
 
-    # The tab on screen, lit in the menu
-    shown_path = {"path": "/"}
+    # The tab on screen, lit in the menu: from the address the window opened at, so that the menu is drawn lit right
+    # rather than on the Dashboard until the tab's build redraws it (a reload on another tab showed the Dashboard lit)
+    shown_path = {"path": _opened_path()}
 
     # A tab hidden in Wygląd i widoczność leaves the menu, yet its address still opens it
     @ui.refreshable
@@ -462,7 +463,8 @@ def build_shell(
     )
     pages[HELP_PATH] = lambda: build_help_page({tab.path: tab.label for tab in TABS})
     pages = {path: showing_add_button(path, build, path not in WITHOUT_ADD_BUTTON) for path, build in pages.items()}
-    ui.sub_pages(pages).classes("w-full px-2").mark("page-content")
+    # pb-24: room below the last card, so that it scrolls clear of the "+" floating in the corner
+    ui.sub_pages(pages).classes("w-full px-2 pb-24").mark("page-content")
     if offer_first_run:
         first_run.open_if_new()
 
@@ -522,6 +524,15 @@ def _refresh_message(result: RefreshResult) -> str:
         names = ", ".join(failure.instrument for failure in result.failures)
         message += f" Bez notowania: {names}."
     return message
+
+
+def _opened_path() -> str:
+    """The tab's path the window was opened at, the Dashboard's for any other address or without a request."""
+    try:
+        path = ui.context.client.request.url.path
+    except RuntimeError:
+        return "/"
+    return path if any(tab.path == path for tab in TABS) else "/"
 
 
 def _placeholder_page(title: str) -> Callable[[], None]:

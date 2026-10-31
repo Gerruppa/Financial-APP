@@ -47,6 +47,7 @@ MONTH_NAMES = (
 )
 FORECAST = "Prognoza (kupony)"
 MONTH_COLUMNS = "grid-template-columns: minmax(7rem, 1fr) repeat(3, minmax(7rem, 1fr)) minmax(10rem, 2fr)"
+MONTH_COLUMNS_WITHOUT_GOAL = "grid-template-columns: minmax(7rem, 1fr) repeat(3, minmax(7rem, 1fr))"
 FORECAST_COLUMNS = "grid-template-columns: minmax(6rem, 1fr) minmax(8rem, 2fr) minmax(6rem, 1fr) minmax(7rem, 1fr)"
 
 
@@ -164,20 +165,26 @@ def _chart(months: list[MonthIncome], goal: Decimal | None) -> None:
 
 
 def _months(months: list[MonthIncome], goal: Decimal | None) -> None:
+    # The Cel column only with a goal set, so that no empty column pushes the amounts apart
+    columns = MONTH_COLUMNS if goal is not None else MONTH_COLUMNS_WITHOUT_GOAL
     with ui.card().classes("w-full overflow-x-auto").mark("income-months"):
-        with ui.element("div").classes("grid w-full gap-x-4 text-sm font-medium").style(MONTH_COLUMNS):
-            for header in ("Miesiąc", "Otrzymane", "Prognoza", "Razem", "Cel"):
-                ui.label(header)
+        with ui.element("div").classes("grid w-full gap-x-4 text-sm font-medium").style(columns):
+            ui.label("Miesiąc")
+            for header in ("Otrzymane", "Prognoza", "Razem"):
+                ui.label(header).classes("text-right")
+            if goal is not None:
+                ui.label("Cel")
         for month in months:
             line = ui.element("div").classes("grid w-full items-center gap-x-4 border-t py-1 text-sm")
-            with line.style(MONTH_COLUMNS).mark("income-month"):
+            with line.style(columns).mark("income-month"):
                 ui.label(MONTH_NAMES[month.month.month - 1]).classes("font-medium")
                 ui.label(format_pln(month.received_total)).classes("text-right")
                 ui.label(format_pln(month.forecast_total)).classes("text-right")
                 ui.label(format_pln(month.total)).classes("text-right")
                 progress = month.progress(goal)
                 if progress is None:
-                    ui.label("")
+                    if goal is not None:
+                        ui.label("")
                 else:
                     with ui.row().classes("items-center gap-2 no-wrap"):
                         ui.linear_progress(float(min(progress, Decimal(1))), show_value=False).classes("w-24")
@@ -194,8 +201,9 @@ def _forecast(items: list[IncomeItem], today: date, account_id: int | None, engi
             ui.label("Brak kuponów do wypłaty.").classes("k-muted")
             return
         with ui.element("div").classes("grid w-full gap-x-4 text-sm font-medium").style(FORECAST_COLUMNS):
-            for header in ("Data", "Seria", "Konto", "Netto"):
+            for header in ("Data", "Seria", "Konto"):
                 ui.label(header)
+            ui.label("Netto").classes("text-right")
         for item in coming:
             line = ui.element("div").classes("grid w-full gap-x-4 border-t py-1 text-sm")
             with line.style(FORECAST_COLUMNS).mark("income-forecast-row"):

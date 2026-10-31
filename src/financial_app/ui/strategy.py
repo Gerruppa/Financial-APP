@@ -282,25 +282,30 @@ def _instrument_rows(
     catalog = [i for i in instruments.values() if i.asset_class_id == asset_class.id]
     if not row.instruments and not catalog:
         return
-    with ui.column().classes("w-full pl-8 gap-0").mark(f"instruments-{asset_class.id}"):
+    with ui.column().classes("w-full gap-0").mark(f"instruments-{asset_class.id}"):
         for held in row.instruments:
-            with ui.row().classes("w-full items-center text-sm gap-4").mark("instrument-row"):
-                ui.label(held.instrument.name).classes("grow")
-                ui.label(format_pln(held.value)).classes("w-28 text-right")
-                ui.label(format_percent(held.share * 100)).classes("w-20 text-right")
-                target = "" if held.target is None else f"cel {format_percent(held.target)}"
-                ui.label(target).classes("w-24 text-right")
-                deposit = "" if not held.from_deposit else f"z wpłaty {format_pln(held.from_deposit)}"
-                ui.label(deposit).classes("w-40 text-right")
+            # On the class rows' grid, so that each figure stands under its column; the share is within the class
+            line = ui.element("div").classes("grid w-full gap-x-4 py-1 text-sm items-center").style(ROW_COLUMNS)
+            with line.mark("instrument-row"):
+                ui.label(held.instrument.name).classes("pl-8")
+                ui.label(format_pln(held.value)).classes("text-right")
+                ui.label(format_percent(held.share * 100)).classes("text-right k-muted").tooltip("Udział w klasie")
+                target = "" if held.target is None else format_percent(held.target)
+                ui.label(target).classes("text-right")
+                ui.label("")
+                ui.label("")
+                deposit = "" if not held.from_deposit else format_pln(held.from_deposit)
+                ui.label(deposit).classes("text-right")
+                ui.label("")
         if row.split_blocked:
             ui.label(
                 f"Cele instrumentów sumują się do {format_percent(row.instrument_targets_sum or 0)}, a nie do 100%: "
                 "wpłata nie jest dzielona na instrumenty tej klasy."
-            ).classes("text-sm text-warning").mark("instrument-split-blocked")
+            ).classes("pl-8 text-sm text-warning").mark("instrument-split-blocked")
         if edit is not None and catalog:
             ui.button("Cele instrumentów", on_click=lambda: edit(asset_class, catalog)).props(
                 "flat dense no-caps"
-            ).mark(f"edit-instrument-targets-{asset_class.id}")
+            ).classes("ml-6").mark(f"edit-instrument-targets-{asset_class.id}")
 
 
 def _targets_dialog(
