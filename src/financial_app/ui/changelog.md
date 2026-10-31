@@ -1,6 +1,6 @@
 # Historia zmian
 
-## Nieopublikowane
+## 1.4.2 — 2026-10-31
 
 ### Zmiany
 - Wybrane konto jest lepiej widoczne w obu motywach: w nagłówku i w ścieżce „Total › konto” ma obramowanie w kolorze akcentu, a na liście kont w przełączniku pasek z boku i wyróżnioną nazwę.
