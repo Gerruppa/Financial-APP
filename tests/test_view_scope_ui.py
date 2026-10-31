@@ -187,3 +187,28 @@ async def test_a_custom_period_ending_before_it_starts_is_refused(engine: Engine
 
         await user.should_see("Data początkowa okresu musi poprzedzać końcową.")
         assert load_setting(engine, PERIOD) is None
+
+
+async def test_an_account_scope_is_outlined_in_the_header_breadcrumbs_and_menu(engine: Engine) -> None:
+    async with user_simulation(_shell(engine)) as user:
+        await user.open("/")
+        [switcher] = user.find(marker="view-scope").elements
+        assert "k-scope-chosen" not in switcher.classes
+
+        user.find(marker="view-scope").click()
+        await user.should_see(marker="scope-menu")
+        user.find(marker="scope-2").click()
+
+        await user.should_see(marker="breadcrumb-scope", content="XTB")
+        [crumb] = user.find(marker="breadcrumb-scope").elements
+        assert "k-scope-chosen" in crumb.classes
+        assert "k-scope-chosen" in switcher.classes
+        user.find(marker="view-scope").click()
+        await user.should_see(marker="scope-2")
+        [chosen] = user.find(marker="scope-2").elements
+        assert {"k-highlight", "k-scope-row"} <= set(chosen.classes)
+
+        with user.scope(marker="breadcrumbs"):
+            user.find("Total").click()
+        await user.should_not_see(marker="breadcrumbs")
+        assert "k-scope-chosen" not in switcher.classes

@@ -136,7 +136,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `create_desktop_shortcut.ps1`: PowerShell script creating a Windows desktop shortcut that starts the console-less app window.
 - `make_icons.py`: Cuts the KAPITA app icons (png and ico) out of the logo in packaging/; run only when the logo changes
 - `new_migration.py`: Generates the next numbered migration by autogenerating against a scratch database, then ruff fixes and formats it.
-- `screenshot.py`: Screenshots KAPITA's tabs with headless Chrome or Edge on demo data, in the Jasny or Golden Theme, then stops the app
+- `screenshot.py`: Screenshots KAPITA's tabs with headless Chrome or Edge on demo data, in the Jasny or Golden Theme and optionally an Account's View Scope, then stops the app
 
 ## src/financial_app/
 
@@ -387,7 +387,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `unpriced.py`: Settings card listing held Instruments without an automatic price, with reasons and a per-row price source help button
 - `user_menu.py`: Header avatar menu with initials and pseudonym (Settings, Theme, Help, switch user) and the Wesprzyj button to buycoffee.to
 - `user_section.py`: Ustawienia Użytkownik card: change the User's pseudonym and password, and delete the User with their folder after password and pseudonym confirmation.
-- `view_scope.py`: View Scope header switcher and breadcrumbs, listing Accounts by value with share and daily change
+- `view_scope.py`: View Scope header switcher and breadcrumbs, listing Accounts by value with share and daily change, an Account scope outlined in the accent
 - `visibility.py`: Window Layout of hidden elements, plus the Ustawienia switches and View Profile presets that change it
 - `wizard.py`: Shared step-by-step dialog shell: header "Krok N z M", Wstecz, Zamknij and Dalej buttons, optional tick list of done steps, Dalej held until the step is ready.
 - `xtb_import.py`: Ustawienia XTB import wizard: steps from loading statements through account and ticker matching, reconciliation, covering Deposits to applying.

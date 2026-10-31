@@ -75,6 +75,11 @@ class ScopeSwitcher:
 
     def refresh(self) -> None:
         self.button.text = self.scope.name
+        # Outlined while an Account is chosen, so the scope is never mistaken for the Total
+        if self.scope.account_id is None:
+            self.button.classes(remove="k-scope-chosen px-4")
+        else:
+            self.button.classes("k-scope-chosen px-4")
         self.entries.refresh()
 
     def open(self) -> None:
@@ -117,12 +122,12 @@ class ScopeSwitcher:
         self, name: str, account_id: int | None, value: Decimal | None, share: Decimal | None, change: Decimal | None
     ) -> None:
         chosen = account_id == self.scope.account_id
-        row = ui.element("div").classes("w-full px-4 py-2 cursor-pointer k-hover")
+        row = ui.element("div").classes("w-full px-4 py-2 cursor-pointer k-hover k-scope-row")
         row.classes("k-highlight" if chosen else "").mark(f"scope-entry scope-{scope_setting(account_id)}")
         row.on("click", lambda: self.choose(account_id))
         with row:
             with ui.row().classes("w-full items-baseline justify-between no-wrap gap-4"):
-                ui.label(name).classes("font-medium")
+                ui.label(name).classes("font-medium k-scope-name")
                 ui.label(NO_VALUE if value is None else format_pln(value)).classes("whitespace-nowrap")
             with ui.row().classes("w-full items-center justify-between no-wrap gap-4"):
                 if account_id is not None:
@@ -144,4 +149,4 @@ def breadcrumbs(scope: ViewScope) -> None:
     with ui.row().classes("items-center gap-1 text-sm").mark("breadcrumbs"):
         ui.button(TOTAL_LABEL, on_click=lambda: scope.switch(None)).props("flat dense no-caps color=primary")
         ui.label("›").classes("k-muted")
-        ui.label(scope.name).classes("font-medium")
+        ui.label(scope.name).classes("k-scope-chosen px-3 py-0.5").mark("breadcrumb-scope")
