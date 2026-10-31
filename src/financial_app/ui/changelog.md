@@ -1,6 +1,6 @@
 # Historia zmian
 
-## Nieopublikowane
+## 1.5.0 — 2026-10-31
 
 ### Poprawki
 - Poprawki wyglądu: w tabeli miesięcy Dochodu pasywnego i przy instrumentach w Strategiach kwoty stoją pod swoimi nagłówkami, w Ustawieniach zniknął jasny pas obok kart, kafelki mapy kont pokazują nazwę i wartość konta w łagodnym kolorze, nagłówek nie rośnie w czasie pobierania historii, ostatnią kartę można przewinąć spod przycisku „+”, a menu po przeładowaniu okna od razu podświetla otwartą zakładkę.
