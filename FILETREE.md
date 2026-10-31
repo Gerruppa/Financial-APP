@@ -136,6 +136,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `create_desktop_shortcut.ps1`: PowerShell script creating a Windows desktop shortcut that starts the console-less app window.
 - `make_icons.py`: Cuts the KAPITA app icons (png and ico) out of the logo in packaging/; run only when the logo changes
 - `new_migration.py`: Generates the next numbered migration by autogenerating against a scratch database, then ruff fixes and formats it.
+- `release.py`: Release script: prepare bumps __version__ and dates the changelog section; publish builds the installer, pushes the tag and creates the GitHub Release
 - `screenshot.py`: Screenshots KAPITA's tabs with headless Chrome or Edge on demo data, in the Jasny or Golden Theme and optionally an Account's View Scope, then stops the app
 
 ## src/financial_app/
@@ -550,6 +551,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_recurring_domain.py`: Tests Recurring Rule schedules, Draft matching with Transactions, and rule validation messages
 - `test_recurring_repository.py`: Tests saving Recurring Rules and skips, confirming Drafts, and cascading deletes against the database
 - `test_recurring_ui.py`: UI tests for Recurring Rules in Ustawienia and their Drafts in Transakcje and the header
+- `test_release_script.py`: Tests for scripts/release.py: version bump, numbered changelog section and GitHub Release notes
 - `test_report_domain.py`: Tests the report model: the year's Sale Pairs, Wyniki figures, one Account against all, an empty year
 - `test_report_export_files.py`: Tests the report XLSX files read back with openpyxl: numbers, dates, file names, empty year, formula-like text
 - `test_report_export_ui.py`: UI tests for the Eksportuj XLSX buttons of Sell Summary and Wyniki: default year, chosen year and View Scope
