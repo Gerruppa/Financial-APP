@@ -165,15 +165,15 @@ def _instrument_id(engine: Engine, name: str) -> int:
     return next(i.id for i in list_instruments(engine) if i.name == name)
 
 
-async def test_instrument_targets_split_a_class_part_of_the_deposit_and_may_name_one_not_held(engine: Engine) -> None:
-    save_strategy(engine, _thirty_sixty_ten(engine))
+async def test_instrument_targets_split_a_class_part_of_the_deposit_and_may_keep_one_not_held(engine: Engine) -> None:
+    acwi = _instrument_id(engine, "ACWI")
+    save_strategy(engine, replace(_thirty_sixty_ten(engine), instrument_targets={acwi: Decimal(40)}))
     stocks = _class_id(engine, "Akcje zagraniczne")
     async with user_simulation(_shell(engine)) as user:
         await user.open("/strategie")
         user.find(marker=f"edit-instrument-targets-{stocks}").click()
         await user.should_see(marker="instrument-targets-dialog")
         user.find(marker=f"instrument-target-{_instrument_id(engine, 'CSPX')}").type("50")
-        user.find(marker=f"instrument-target-{_instrument_id(engine, 'ACWI')}").type("40")
         user.find(marker="save-instrument-targets").click()
         await user.should_see(marker="instrument-split-blocked")
 
@@ -194,6 +194,53 @@ async def test_instrument_targets_split_a_class_part_of_the_deposit_and_may_name
         _instrument_id(engine, "CSPX"): Decimal(50),
         _instrument_id(engine, "ACWI"): Decimal(50),
     }
+
+
+async def test_the_instrument_targets_dialog_lists_the_class_instruments_held_or_targeted_as_the_tab(
+    engine: Engine,
+) -> None:
+    """Not every Instrument of the class in the catalog: those the tab shows under it, in its order (largest first)."""
+    foreign = _class_id(engine, "Akcje zagraniczne")
+    vwce = InstrumentDraft("VWCE", foreign, "PLN", manual_price=Decimal(100))
+    vwce_id = add_instrument(engine, vwce).id
+    add_instrument(engine, InstrumentDraft("SXR8", foreign, "PLN"))
+    add_transactions(
+        engine,
+        [
+            TransactionDraft(XTB, date(2026, 8, 5), TransactionType.DEPOSIT, Decimal(100)),
+            buy_or_sell(XTB, date(2026, 8, 5), TransactionType.BUY, vwce_id, Decimal(1), Decimal(100)),
+        ],
+    )
+    acwi = _instrument_id(engine, "ACWI")
+    save_strategy(engine, replace(_thirty_sixty_ten(engine), instrument_targets={acwi: Decimal(10)}))
+    async with user_simulation(_shell(engine)) as user:
+        await user.open("/strategie")
+        user.find(marker=f"edit-instrument-targets-{foreign}").click()
+        await user.should_see(marker="instrument-targets-dialog")
+
+        dialog = user.find(marker="instrument-targets-dialog").elements.pop()
+        fields = [d for d in dialog.descendants() if isinstance(d, ui.input)]
+        assert [field.props["label"] for field in fields] == ["CSPX", "VWCE", "ACWI"]
+        assert [row[0] for row in _rows(user, "instrument-row")] == ["PZU", "CSPX", "VWCE", "ACWI"]
+
+
+async def test_an_instrument_not_held_is_added_to_the_targets_dialog_from_the_catalog(engine: Engine) -> None:
+    save_strategy(engine, _thirty_sixty_ten(engine))
+    foreign = _class_id(engine, "Akcje zagraniczne")
+    cspx, acwi = _instrument_id(engine, "CSPX"), _instrument_id(engine, "ACWI")
+    async with user_simulation(_shell(engine)) as user:
+        await user.open("/strategie")
+        user.find(marker=f"edit-instrument-targets-{foreign}").click()
+        await user.should_see(marker="instrument-targets-dialog")
+        await user.should_not_see(marker=f"instrument-target-{acwi}")
+
+        user.find(marker="add-instrument-target", kind=ui.select).elements.pop().set_value(acwi)
+        await user.should_see(marker=f"instrument-target-{acwi}")
+        user.find(marker=f"instrument-target-{cspx}").type("60")
+        user.find(marker=f"instrument-target-{acwi}").type("40")
+        user.find(marker="save-instrument-targets").click()
+        await user.should_not_see(marker="instrument-targets-dialog")
+    assert list_strategies(engine)[None].instrument_targets == {cspx: Decimal(60), acwi: Decimal(40)}
 
 
 async def _open_scope(user: User, account_id: int) -> None:
