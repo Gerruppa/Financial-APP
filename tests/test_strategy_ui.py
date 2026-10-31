@@ -224,6 +224,16 @@ async def test_the_instrument_targets_dialog_lists_the_class_instruments_held_or
         assert [row[0] for row in _rows(user, "instrument-row")] == ["PZU", "CSPX", "VWCE", "ACWI"]
 
 
+async def test_class_and_instrument_rows_light_up_under_the_cursor(engine: Engine) -> None:
+    """In a wide window the row under the cursor stands out, band rows included (ui/theme.py k-hover)."""
+    save_strategy(engine, _thirty_sixty_ten(engine))
+    async with user_simulation(_shell(engine)) as user:
+        await user.open("/strategie")
+        await user.should_see(marker="instrument-row")
+        rows = [*user.find(marker="strategy-row").elements, *user.find(marker="instrument-row").elements]
+        assert all("k-hover" in row.classes for row in rows)
+
+
 async def test_an_instrument_not_held_is_added_to_the_targets_dialog_from_the_catalog(engine: Engine) -> None:
     save_strategy(engine, _thirty_sixty_ten(engine))
     foreign = _class_id(engine, "Akcje zagraniczne")

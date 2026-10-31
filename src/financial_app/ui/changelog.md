@@ -1,5 +1,10 @@
 # Historia zmian
 
+## Nieopublikowane
+
+### Zmiany
+- W Strategiach inwestycyjnych wiersz klasy lub instrumentu pod kursorem lekko zmienia kolor, więc w szerokim oknie łatwo trzymać się jednego wiersza.
+
 ## 1.5.1 — 2026-10-31
 
 ### Zmiany
