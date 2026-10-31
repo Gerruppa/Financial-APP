@@ -21,7 +21,13 @@ def export_controls(
     first = min((t.date.year for t in list_transactions(engine)), default=default)
     years = list(range(today.year, min(first, default) - 1, -1))
     with ui.row().classes("items-center gap-2"):
-        year = ui.select(years, value=default, label="Rok raportu").classes("w-32").mark(f"{key}-export-year")
-        ui.button("Eksportuj XLSX", on_click=lambda: export(int(year.value))).props("outline").mark(f"{key}-export")
+        # Named for the export it feeds, so that it is not read as a filter of the tab beside its period
+        year = ui.select(years, value=default, label="Rok eksportu").props("dense").classes("w-32")
+        year.tooltip("Rok, za który powstanie plik; nie zmienia tego, co widać na stronie").mark(f"{key}-export-year")
+        ui.button("Eksportuj XLSX", icon="download", on_click=lambda: export(int(year.value))).props("outline").mark(
+            f"{key}-export"
+        )
         if pdf is not None:
-            ui.button("Raport roczny PDF", on_click=lambda: pdf(int(year.value))).props("outline").mark(f"{key}-pdf")
+            ui.button("Raport roczny PDF", icon="picture_as_pdf", on_click=lambda: pdf(int(year.value))).props(
+                "outline"
+            ).mark(f"{key}-pdf")

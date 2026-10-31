@@ -10,6 +10,7 @@ from importlib.resources import files
 from nicegui import ui
 
 from financial_app.domain.faq import Section, matching, parse_faq
+from financial_app.ui.page_header import page_header
 
 HELP_PATH = "/pomoc"
 
@@ -23,8 +24,7 @@ def build_help_page(tab_labels: Mapping[str, str]) -> None:
     """The tab; ``tab_labels`` names the tabs by path, for the "Przejdź do …" buttons."""
     faq = load_faq()
     with ui.column().classes("w-full max-w-4xl").mark("help"):
-        ui.label("Pomoc").classes("text-2xl font-bold")
-        ui.label("Najczęstsze pytania. Kliknij pytanie, aby zobaczyć odpowiedź.").classes("k-muted")
+        page_header("Pomoc", "Najczęstsze pytania. Kliknij pytanie, aby zobaczyć odpowiedź.")
         search = ui.input("Szukaj w pytaniach i odpowiedziach").props("clearable").classes("w-full")
         search.mark("faq-search")
         with search.add_slot("prepend"):

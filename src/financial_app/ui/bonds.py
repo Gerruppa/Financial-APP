@@ -22,6 +22,7 @@ from financial_app.sources.nbp import NbpRates
 from financial_app.sources.todays_view import todays_view
 from financial_app.ui.bond_drafts import drafts_list
 from financial_app.ui.changes import TODAYS_VALUE
+from financial_app.ui.page_header import page_header
 from financial_app.ui.term_deposits import DepositsSection
 from financial_app.ui.view_scope import ViewScope
 
@@ -64,8 +65,8 @@ class BondsPage:
         self.content.refresh()
 
     def build(self) -> None:
-        ui.label("Dochód stały").classes("text-2xl font-bold")
-        with ui.column().classes("w-full max-w-screen-2xl gap-0").mark("bonds"):
+        page_header("Dochód stały")
+        with ui.column().classes("w-full max-w-screen-2xl gap-4").mark("bonds"):
             self.content()
 
     @ui.refreshable_method
@@ -73,21 +74,24 @@ class BondsPage:
         view = todays_view(self.engine, self.rates)
         today = view.today
         drafts_list(self.engine, today, self.scope.account_id, self.on_saved, self.on_deposits_changed)
-        DepositsSection(self.engine, view, self.scope.account_id, self.on_deposits_changed, self.on_saved).build()
-        ui.label("Obligacje").classes("text-lg font-bold mt-6")
+        # Each section in its card, as on the other tabs
+        with ui.card().classes("w-full gap-1"):
+            DepositsSection(self.engine, view, self.scope.account_id, self.on_deposits_changed, self.on_saved).build()
         positions, instruments, accounts, bonds = view.positions, view.instruments, view.accounts, view.bonds
         holdings = bond_holdings(positions, instruments, accounts, bonds, today, self.scope.account_id)
-        if not holdings:
-            ui.label(
-                "Brak obligacji skarbowych w portfelu. Zakup obligacji dodasz przyciskiem „+” w trybie obligacji."
-            ).classes("k-muted").mark("bonds-empty")
-            return
-        with ui.element("div").classes("grid w-full gap-x-4 border-b py-1 font-medium").style(COLUMNS):
-            for header in HEADERS:
-                ui.label(header).classes("" if header == "Seria" else "text-right")
-        for holding in holdings:
-            self._series_row(holding)
-        _totals(holdings)
+        with ui.card().classes("w-full gap-1"):
+            ui.label("Obligacje").classes("text-lg font-bold")
+            if not holdings:
+                ui.label(
+                    "Brak obligacji skarbowych w portfelu. Zakup obligacji dodasz przyciskiem „+” w trybie obligacji."
+                ).classes("k-muted").mark("bonds-empty")
+                return
+            with ui.element("div").classes("grid w-full gap-x-4 border-b py-1 font-medium").style(COLUMNS):
+                for header in HEADERS:
+                    ui.label(header).classes("" if header == "Seria" else "text-right")
+            for holding in holdings:
+                self._series_row(holding)
+            _totals(holdings)
         self._calendar(bond_calendar(positions, instruments, accounts, bonds, today, self.scope.account_id))
 
     def _series_row(self, holding: SeriesHolding) -> None:
@@ -114,8 +118,8 @@ class BondsPage:
         row.on("click", lambda: lots.set_visibility(not lots.visible))
 
     def _calendar(self, events: list[CalendarEvent]) -> None:
-        ui.label("Kalendarz: najbliższe 12 miesięcy").classes("text-lg font-bold mt-6")
-        with ui.column().classes("w-full gap-0").mark("bond-calendar"):
+        with ui.card().classes("w-full gap-1"), ui.column().classes("w-full gap-0").mark("bond-calendar"):
+            ui.label("Kalendarz: najbliższe 12 miesięcy").classes("text-lg font-bold")
             if not events:
                 ui.label("W najbliższych 12 miesiącach nie przypadają odsetki, rocznice ani wykupy.").classes(
                     "k-muted"

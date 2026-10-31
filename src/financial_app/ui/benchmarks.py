@@ -19,7 +19,9 @@ from financial_app.persistence.instruments import list_instruments
 from financial_app.sources.benchmarks import benchmark_comparison
 from financial_app.ui.changes import Change
 from financial_app.ui.charts import pln_bars_chart, pln_lines_chart
+from financial_app.ui.page_header import page_header
 from financial_app.ui.periods import PeriodChoice, period_selector
+from financial_app.ui.theme import gain_or_loss
 from financial_app.ui.view_scope import ViewScope
 
 DASH = "—"
@@ -59,10 +61,10 @@ class BenchmarksPage:
         self.content.refresh()
 
     def build(self) -> None:
-        ui.label("Benchmarki").classes("text-2xl font-bold")
-        ui.label(
-            "Każda wpłata i wypłata trafia do benchmarku w dniu operacji po jego cenie w PLN, bez opłat i podatków."
-        ).classes("text-sm k-muted")
+        page_header(
+            "Benchmarki",
+            "Każda wpłata i wypłata trafia do benchmarku w dniu operacji po jego cenie w PLN, bez opłat i podatków.",
+        )
         if ensure_default_benchmarks(self.engine):
             self.fetch()
         period_selector(self.period)
@@ -108,10 +110,11 @@ class BenchmarksPage:
                     if row.short_history:
                         name.classes("k-loss")
                     ui.label(format_pln(row.value)).classes("text-right")
+                    tone = gain_or_loss(row.difference)
                     ui.label(DASH if row.difference is None else format_pln(row.difference, signed=True)).classes(
-                        "text-right"
+                        f"text-right {tone}"
                     )
-                    ui.label(_percent(row.difference_rate, signed=True)).classes("text-right")
+                    ui.label(_percent(row.difference_rate, signed=True)).classes(f"text-right {tone}")
                     ui.label(_percent(row.twr)).classes("text-right")
                     self._row_controls(row.benchmark)
             if any(row.short_history for row in rows):
