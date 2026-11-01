@@ -192,6 +192,11 @@ body.theme-golden .k-icon { background:rgba(212,175,55,.12) !important; color:va
   /* Quasar's greys for unchosen periods, icon buttons and outlined badges in the Theme's muted tone */
   body .text-grey-7, body .text-grey-8, body .q-badge--outline.text-grey { color:var(--k-muted) !important; }
 }
+/* An icon circle in the Theme's own tone (the Dashboard's totals), rather than a colour of its own */
+.k-tone { background:var(--k-highlight); color:var(--k-accent); }
+/* The Accounts ranking's best and worst figure of a column: an arrow, never the colours of a gain or a loss */
+.k-best::before { content:"▲ "; color:var(--k-accent); font-size:.75em; }
+.k-worst::before { content:"▼ "; color:var(--k-muted); font-size:.75em; }
 /* Room under each tab's last row for the "+" floating over the bottom-right corner */
 .nicegui-content { padding-bottom:104px; }
 .q-linear-progress__track { background:var(--k-chip) !important; opacity:1 !important; }

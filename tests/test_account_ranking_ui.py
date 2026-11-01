@@ -126,8 +126,15 @@ async def test_the_ranking_lists_each_accounts_figures_and_marks_the_best_and_wo
             "3\N{NO-BREAK SPACE}000,00\N{NO-BREAK SPACE}zł",
             "10,00\N{NO-BREAK SPACE}zł",
         ]
-        assert len(user.find(marker="ranking-best").elements) >= 1
-        assert len(user.find(marker="ranking-worst").elements) >= 1
+        best = user.find(marker="ranking-best").elements
+        worst = user.find(marker="ranking-worst").elements
+        assert best and worst
+        # Marked by an arrow, not by the colours of a gain or a loss: the lowest costs are the best, not a profit
+        assert all("k-best" in cell.classes and "text-positive" not in cell.classes for cell in best)
+        assert all("k-worst" in cell.classes and "text-negative" not in cell.classes for cell in worst)
+        cells = user.find(marker="ranking-profit", kind=ui.label).elements
+        profits = [cell for cell in cells if isinstance(cell, ui.label) and "+190,00" in cell.text]
+        assert profits and all("k-gain" in cell.classes for cell in profits)
 
 
 async def test_the_ranking_sorts_by_a_clicked_column_and_back(engine: Engine) -> None:

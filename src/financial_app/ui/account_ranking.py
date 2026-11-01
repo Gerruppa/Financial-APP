@@ -25,7 +25,16 @@ from financial_app.domain.formatting import format_percent, format_pln
 from financial_app.domain.themes import Theme
 from financial_app.ui.charts import PLN_FORMATTER, zoom_button
 from financial_app.ui.info import card_title
-from financial_app.ui.theme import TILE_GAIN, TILE_LOSS, TILE_PALE, TILE_UNKNOWN, current_theme, echart, readable_label
+from financial_app.ui.theme import (
+    TILE_GAIN,
+    TILE_LOSS,
+    TILE_PALE,
+    TILE_UNKNOWN,
+    current_theme,
+    echart,
+    gain_or_loss,
+    readable_label,
+)
 
 DASH = "—"
 # The tile colours run from pale at no P&L to full at this share of the Net Deposits
@@ -158,12 +167,21 @@ class AccountRanking:
             with line.mark("ranking-row"):
                 ui.label(row.account.name).classes("font-medium")
                 for column in RankingColumn:
-                    cell = ui.label(_text(column, row.figure(column))).classes("text-right")
+                    figure = row.figure(column)
+                    cell = ui.label(_text(column, figure)).classes("text-right")
+                    markers = []
+                    if column is RankingColumn.PROFIT:  # only a result takes the colours of a gain or a loss
+                        cell.classes(gain_or_loss(figure))
+                        markers.append("ranking-profit")
+                    # The best and worst by an arrow: the lowest costs are the best, which green would call a profit
                     best, worst = extremes[column]
                     if row.account.id == best:
-                        cell.classes("text-positive font-bold").mark("ranking-best")
+                        cell.classes("k-best font-bold").tooltip("Najlepsze w tej kolumnie")
+                        markers.append("ranking-best")
                     elif row.account.id == worst:
-                        cell.classes("text-negative font-bold").mark("ranking-worst")
+                        cell.classes("k-worst").tooltip("Najsłabsze w tej kolumnie")
+                        markers.append("ranking-worst")
+                    cell.mark(*markers)
 
 
 def _text(column: RankingColumn, figure: Decimal | None) -> str:
