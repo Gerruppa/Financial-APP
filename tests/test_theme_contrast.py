@@ -8,7 +8,15 @@ import pytest
 from financial_app.domain.strategy import BandStatus
 from financial_app.domain.themes import Theme
 from financial_app.ui.account_ranking import tile_colours
-from financial_app.ui.theme import BAND_COLOURS, TEXT_COLOURS, THEME_COLOURS, gain_or_loss
+from financial_app.ui.theme import (
+    BAND_COLOURS,
+    CSS,
+    ON_PRIMARY,
+    PRIMARY,
+    TEXT_COLOURS,
+    THEME_COLOURS,
+    gain_or_loss,
+)
 
 AA = 4.5
 
@@ -60,3 +68,16 @@ def test_every_text_tone_is_readable_on_every_background(theme: Theme, tone: str
 )
 def test_a_signed_amount_is_coloured_by_its_sign(amount: Decimal | None, tone: str) -> None:
     assert gain_or_loss(amount) == tone
+
+
+@pytest.mark.parametrize("theme", list(Theme))
+def test_text_on_a_filled_accent_button_is_readable(theme: Theme) -> None:
+    # The chosen period, "Edytuj cele klas", the "+": white on blue in Jasny, dark on gold in Golden
+    assert _contrast(ON_PRIMARY[theme], PRIMARY[theme]) >= AA
+
+
+def test_greyed_text_takes_the_themes_muted_tone() -> None:
+    # Quasar's grey-7/grey-8 (the unchosen periods, icon buttons) and grey badges vanish on Golden's near-black
+    for selector in (".text-grey-7", ".text-grey-8", ".q-badge--outline.text-grey"):
+        assert selector in CSS
+    assert "padding-bottom" in CSS  # room under each tab for the "+"
