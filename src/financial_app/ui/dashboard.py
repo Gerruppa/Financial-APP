@@ -1,6 +1,7 @@
 """The Dashboard tab (issues #72, #73 and #89, spec section 5): the View Scope's totals and charts, and in the Total
 scope the Accounts treemap and ranking. Its layout follows variant A of the #174 prototype: a main card with the value
-and its chart, tiles with coloured icons, and the Accounts as cards with the table one click away.
+and its chart, three key totals as large tiles with the rest in a compact list below, and the Accounts as cards with
+the table one click away.
 
 Positions are valued like in the Portfolio (``domain.valuation``, foreign ones at the NBP Rate from the last business
 day before today); Net Deposits come from History, "—" while it is computed. The "po podatku" toggle (not remembered)
@@ -32,7 +33,7 @@ from financial_app.ui.changes import Change
 from financial_app.ui.charts import dashboard_charts, hero_value_chart, sparkline
 from financial_app.ui.contribution_limits import limits_section
 from financial_app.ui.help import HELP_PATH
-from financial_app.ui.info import card_title
+from financial_app.ui.info import card_title, info_icon
 from financial_app.ui.investment_goal import goal_tile
 from financial_app.ui.page_header import page_header
 from financial_app.ui.periods import PeriodChoice, period_selector
@@ -64,19 +65,24 @@ TILE_INFO = {
         "(nie IKE/IKZE) oraz opłata i podatek przy przedterminowym wykupie obligacji."
     ),
 }
-# Each tile's icon with its circle's background and the icon's colour in Jasny (Golden makes them all gold)
+# Each total's icon, all in the Theme's accent: a colour of their own meant nothing, and red on the costs read as an
+# alarm
 TILE_ICONS = {
-    "net-deposits": ("account_balance_wallet", "#dcfce7", "#16a34a"),
-    "value": ("pie_chart", "#ede9fe", "#6d28d9"),
-    "open-positions": ("storage", "#dbeafe", "#2563eb"),
-    "cash": ("account_balance", "#fef3c7", "#d97706"),
-    "unrealized": ("trending_up", "#dcfce7", "#16a34a"),
-    "realized": ("bar_chart", "#dcfce7", "#16a34a"),
-    "dividends": ("paid", "#dbeafe", "#2563eb"),
-    "costs": ("sell", "#fee2e2", "#dc2626"),
-    "xirr": ("percent", "#dbeafe", "#2563eb"),
-    "estimated-tax": ("receipt_long", "#fee2e2", "#dc2626"),
+    "net-deposits": "account_balance_wallet",
+    "value": "pie_chart",
+    "open-positions": "storage",
+    "cash": "account_balance",
+    "unrealized": "trending_up",
+    "realized": "bar_chart",
+    "dividends": "paid",
+    "costs": "sell",
+    "xirr": "percent",
+    "estimated-tax": "receipt_long",
 }
+# The totals that lead, large: what went in, what it made, at what yearly rate; the rest stand in a compact list
+KEY_TOTALS = ("net-deposits", "unrealized", "xirr")
+# The results, coloured by their sign
+SIGNED_TOTALS = ("unrealized", "realized")
 # The circles of the Accounts' cards, in the order of the Accounts
 ACCOUNT_COLOURS = ("#f97316", "#2563eb", "#eab308", "#7c3aed", "#e11d48", "#0d9488")
 CURRENCY_INFO = (
@@ -246,8 +252,8 @@ class DashboardPage:
 
 
 def _totals(totals: Totals, after_tax: bool, shows: Callable[[str], bool]) -> None:
-    """The tiles ``shows`` shows by their ``tile-`` key; ``after_tax`` adds the estimated Belka and takes it off the
-    unrealised result."""
+    """The totals ``shows`` shows by their ``tile-`` key: the ``KEY_TOTALS`` as large tiles, the others in a compact
+    list below; ``after_tax`` adds the estimated Belka and takes it off the unrealised result."""
     tiles: list[tuple[str, str, str | None]] = [
         ("net-deposits", "Wpłaty netto", None if totals.net_deposits is None else format_pln(totals.net_deposits)),
         ("value", "Wartość konta", format_pln(totals.value)),
@@ -270,18 +276,41 @@ def _totals(totals: Totals, after_tax: bool, shows: Callable[[str], bool]) -> No
         return
     # What part of the Portfolio the cash and the costs are, under their amounts
     notes = {key: totals.share_of_value(amount) for key, amount in (("cash", totals.cash), ("costs", totals.costs))}
-    with ui.element("div").classes("grid w-full gap-4").style(balanced_columns(len(tiles), 4, "14rem")):
-        for key, title, text in tiles:
-            icon, background, colour = TILE_ICONS[key]
-            with ui.card().classes("p-4"), ui.row().classes("w-full items-start no-wrap gap-3"):
-                with ui.element("div").classes("k-icon shrink-0").style(f"background:{background}; color:{colour}"):
-                    ui.icon(icon).classes("text-2xl").mark(f"tile-icon-{key}")
-                with ui.column().classes("gap-0 grow min-w-0"):
-                    card_title(title, TILE_INFO.get(key), f"total-{key}", "text-sm k-muted")
-                    ui.label(DASH if text is None else text).classes("text-xl font-semibold").mark(f"total-{key}")
-                    if (share := notes.get(key)) is not None:
-                        note = f"{format_percent(share * 100)} portfela"
-                        ui.label(note).classes("text-xs k-muted").mark(f"total-{key}-note")
+    signs = {"unrealized": totals.unrealized_after(after_tax), "realized": totals.realized}
+
+    def figure(key: str, text: str | None, size: str) -> None:
+        tone = gain_or_loss(signs[key]) if key in SIGNED_TOTALS else ""
+        ui.label(DASH if text is None else text).classes(f"{size} font-semibold {tone}").mark(f"total-{key}")
+        if (share := notes.get(key)) is not None:
+            ui.label(f"{format_percent(share * 100)} portfela").classes("text-xs k-muted").mark(f"total-{key}-note")
+
+    leading = [tile for tile in tiles if tile[0] in KEY_TOTALS]
+    others = [tile for tile in tiles if tile[0] not in KEY_TOTALS]
+    if leading:
+        grid = ui.element("div").classes("grid w-full gap-4").style(balanced_columns(len(leading), 3, "14rem"))
+        with grid.mark("key-totals"):
+            for key, title, text in leading:
+                with ui.card().classes("p-5"), ui.row().classes("w-full items-start no-wrap gap-3"):
+                    with ui.element("div").classes("k-icon k-tone shrink-0"):
+                        ui.icon(TILE_ICONS[key]).classes("text-2xl").mark(f"tile-icon-{key}")
+                    with ui.column().classes("gap-1 grow min-w-0"):
+                        card_title(title, TILE_INFO.get(key), f"total-{key}", "text-sm k-muted")
+                        figure(key, text, "text-3xl")
+    if others:
+        # Label and amount on one line, in up to three columns: read down like a statement
+        with ui.card().classes("w-full p-4").mark("other-totals"):
+            columns = balanced_columns(len(others), 3, "16rem")
+            with ui.element("div").classes("grid w-full gap-x-8 gap-y-3").style(columns):
+                for key, title, text in others:
+                    with ui.row().classes("w-full items-start no-wrap gap-3"):
+                        ui.icon(TILE_ICONS[key]).classes("text-xl k-accent shrink-0 mt-1").mark(f"tile-icon-{key}")
+                        with ui.column().classes("gap-0 grow min-w-0"):
+                            # The "i" beside its label, not at the far end of a wide column
+                            with ui.row().classes("items-center no-wrap gap-1"):
+                                ui.label(title).classes("text-sm k-muted")
+                                if (info := TILE_INFO.get(key)) is not None:
+                                    info_icon(info, f"total-{key}")
+                            figure(key, text, "text-lg")
 
 
 def _since_snapshot(change: SnapshotChange | None) -> None:

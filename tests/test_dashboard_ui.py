@@ -245,3 +245,23 @@ async def test_accounts_show_as_cards_with_their_profit_and_the_table_one_click_
 
         user.find(marker="accounts-view-cards").click()
         await user.should_see(marker="account-card")
+
+
+async def test_three_key_totals_lead_and_the_rest_stand_in_a_compact_list(engine: Engine) -> None:
+    async with user_simulation(_shell(engine)) as user:
+        await user.open("/")
+        await _tile(user, "value", _pln("4 095,00"))
+
+        with user.scope(marker="key-totals"):
+            for key in ("net-deposits", "unrealized", "xirr"):
+                await user.should_see(marker=f"total-{key}")
+            await user.should_not_see(marker="total-cash")
+        with user.scope(marker="other-totals"):
+            for key in ("value", "open-positions", "cash", "realized", "dividends", "costs"):
+                await user.should_see(marker=f"total-{key}")
+        # A result is coloured by its sign; the icons share one tone instead of a colour each
+        [unrealized] = user.find(marker="total-unrealized").elements
+        assert "k-gain" in unrealized.classes
+        [icon] = user.find(marker="tile-icon-xirr").elements
+        assert icon.parent_slot is not None
+        assert "k-tone" in icon.parent_slot.parent.classes
