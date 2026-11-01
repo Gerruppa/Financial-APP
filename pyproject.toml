@@ -27,6 +27,8 @@ dev = [
     "types-openpyxl",
     "types-reportlab",
     "pypdf>=5",
+    # scripts/smoke_test.py drives the demo app in the installed Chrome or Edge (no browser download)
+    "playwright>=1.64",
 ]
 # Builds the Windows installer (scripts/build_installer.ps1) and the icons (scripts/make_icons.py)
 build = [
