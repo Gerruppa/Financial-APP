@@ -40,12 +40,15 @@ _QUASAR = {
         "dark_page": "#0b0b0c",
     },
 }
+# The accent a filled button, the "+" and the chosen period take, and the text on it: white on blue, dark on gold
+PRIMARY = {theme: colours["primary"] for theme, colours in _QUASAR.items()}
+ON_PRIMARY = {Theme.LIGHT: "#ffffff", Theme.GOLDEN: "#141414"}
 
 # Gold peaks fading into the dark, behind the header and at the foot of the menu
 _MOUNTAINS = (
     "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 300' "
     "preserveAspectRatio='none'><defs><linearGradient id='g' x1='0' y1='0' x2='0' y2='1'>"
-    "<stop offset='0' stop-color='%23d4af37' stop-opacity='0.3'/><stop offset='1' stop-color='%23000' "
+    "<stop offset='0' stop-color='%23d4af37' stop-opacity='0.2'/><stop offset='1' stop-color='%23000' "
     "stop-opacity='0'/></linearGradient></defs><path fill='url(%23g)' d='M0 300 L0 210 L90 150 L150 185 L260 60 "
     "L330 130 L390 95 L470 170 L560 80 L640 140 L720 110 L800 160 L800 300 Z'/></svg>\")"
 )
@@ -140,7 +143,8 @@ body.theme-golden .k-header { background:var(--k-page) MOUNTAINS no-repeat right
 .k-avatar { display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px;
   border-radius:50%; color:#fff; font-weight:700; font-size:0.85rem; }
 .k-side { background:var(--k-side); color:var(--k-side-text); }
-body.theme-golden .k-side { background:var(--k-side) MOUNTAINS no-repeat bottom / 100% 320px;
+/* Low at the foot of the menu, under the saying rather than behind Ustawienia and Pomoc */
+body.theme-golden .k-side { background:var(--k-side) MOUNTAINS no-repeat bottom / 100% 140px;
   border-right:1px solid var(--k-border); }
 .k-menu-item { color:var(--k-side-text) !important; border-radius:10px; }
 .k-menu-item.k-active { background:var(--k-side-active); color:#fff !important;
@@ -180,9 +184,19 @@ body .k-scope-chosen { background:var(--k-highlight); color:var(--k-accent) !imp
 .k-scope-row.k-highlight .k-scope-name { color:var(--k-accent); font-weight:700; }
 .k-icon { width:44px; height:44px; border-radius:999px; display:flex; align-items:center; justify-content:center; }
 body.theme-golden .k-icon { background:rgba(212,175,55,.12) !important; color:var(--k-accent) !important; }
+/* In NiceGUI's layer for Quasar's !important colour classes (.text-white, .text-grey-8): a layered !important beats
+   any unlayered one, so only inside that layer does the more specific rule win */
+@layer quasar_importants {
+  /* Text on a filled accent button (the chosen period, "Edytuj cele klas", the "+"): dark on Golden's gold */
+  body.theme-golden .q-btn.bg-primary.text-white { color:ON_PRIMARY_GOLDEN !important; }
+  /* Quasar's greys for unchosen periods, icon buttons and outlined badges in the Theme's muted tone */
+  body .text-grey-7, body .text-grey-8, body .q-badge--outline.text-grey { color:var(--k-muted) !important; }
+}
+/* Room under each tab's last row for the "+" floating over the bottom-right corner */
+.nicegui-content { padding-bottom:104px; }
 .q-linear-progress__track { background:var(--k-chip) !important; opacity:1 !important; }
 .q-circular-progress__track { color:var(--k-chip) !important; opacity:1 !important; }
-""".replace("MOUNTAINS", _MOUNTAINS)
+""".replace("MOUNTAINS", _MOUNTAINS).replace("ON_PRIMARY_GOLDEN", ON_PRIMARY[Theme.GOLDEN])
     + _THEME_CSS
     + _BAND_CSS
 )
