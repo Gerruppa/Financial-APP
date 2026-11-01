@@ -13,7 +13,7 @@ what its foreign cash pays, a trade's commission included.
 """
 
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date
 from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal
 
@@ -288,6 +288,8 @@ class FormLayout:
     charged: Shown
     auto_exchange: bool
     spend: Shown
+    # A Buy's currency of the amount to spend: the cash it is paid from, chosen beside the amount
+    spend_currency: Choice[str]
 
 
 @dataclass(frozen=True)
@@ -854,6 +856,13 @@ class TransactionForm:
         kinds = self.kinds(state)
         # A type the Account cannot take, after switching to one without PLN, falls back to a Deposit
         offered_kind = kind if kind in kinds else TransactionType.DEPOSIT
+        paid_from = self._paid_from(state)
+        spend_currency = self._spend_currency(state, paid_from)
+        if spend_currency.visible:  # the payment is chosen beside the amount to spend
+            paid_from = replace(paid_from, visible=False)
+        spend_label = "Kwota do wydania"
+        if not spend_currency.visible:
+            spend_label = f"{spend_label} ({currency_unit(settled_in)})"
         return FormLayout(
             kind=Choice(True, {k.value: label for k, label in kinds.items()}, offered_kind.value, "Typ"),
             amount=Shown(not trade and not dividend_type and not units_only, f"Kwota ({currency_unit(paid_in)})"),
@@ -891,7 +900,7 @@ class TransactionForm:
                 dividend_type or redemption, f"{'Podatek pobrany' if redemption else 'Podatek u źródła'} ({unit})"
             ),
             net=Shown(dividend_type or redemption, self.net_text(state)),
-            paid_from=self._paid_from(state),
+            paid_from=paid_from,
             # Interest paid into foreign cash takes a rate too: it values that cash in PLN, like a Buy paid from it; a
             # DRIP converts nothing, so it counts at the NBP Rate
             fx_rate=Shown(
@@ -913,8 +922,17 @@ class TransactionForm:
             and kind is TransactionType.BUY
             and settled_in != PLN
             and self._holds_pln(state),
-            spend=Shown(kind is TransactionType.BUY, f"Kwota do wydania ({currency_unit(settled_in)})"),
+            spend=Shown(kind is TransactionType.BUY, spend_label),
+            spend_currency=spend_currency,
         )
+
+    def _spend_currency(self, state: FormState, paid_from: Choice[str]) -> Choice[str]:
+        """A Buy's currency of the amount to spend, which is the cash it is paid from: shown beside the amount while the
+        Account offers a choice, in place of the payment select."""
+        offered = state.kind is TransactionType.BUY and paid_from.visible and len(paid_from.options) > 1
+        if not offered:
+            return Choice(False)
+        return Choice(True, {currency: currency for currency in paid_from.options}, paid_from.value, "Waluta")
 
     # The quantity proposed from the amount to spend (#120)
 

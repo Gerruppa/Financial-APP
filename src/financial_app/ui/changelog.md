@@ -3,7 +3,7 @@
 ## Nieopublikowane
 
 ### Nowe funkcje
-- Przy zakupie wystarczy podać „Kwotę do wydania” i liczbę kupionych jednostek (np. 1000 zł i 0,00323494 BTC), a cena uzupełni się sama.
+- Przy zakupie wystarczy podać „Kwotę do wydania” i liczbę kupionych jednostek (np. 1000 zł i 0,00323494 BTC), a cena uzupełni się sama. Na koncie z PLN i walutą obcą walutę kwoty wybierasz z listy obok niej, co wybiera też, z jakiej gotówki płacisz.
 
 ### Zmiany
 - W Strategiach inwestycyjnych wiersz klasy lub instrumentu pod kursorem lekko zmienia kolor, więc w szerokim oknie łatwo trzymać się jednego wiersza.
