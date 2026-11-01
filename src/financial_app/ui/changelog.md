@@ -2,6 +2,9 @@
 
 ## Nieopublikowane
 
+### Nowe funkcje
+- Przy zakupie wystarczy podać „Kwotę do wydania” i liczbę kupionych jednostek (np. 1000 zł i 0,00323494 BTC), a cena uzupełni się sama.
+
 ### Zmiany
 - W Strategiach inwestycyjnych wiersz klasy lub instrumentu pod kursorem lekko zmienia kolor, więc w szerokim oknie łatwo trzymać się jednego wiersza.
 

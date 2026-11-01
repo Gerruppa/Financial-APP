@@ -192,3 +192,51 @@ async def test_position_without_a_manual_price_is_shown_at_cost(engine: Engine, 
         with user.scope(marker="portfolio"):
             await user.should_see("CD Projekt")
             await user.should_see("brak ceny")
+
+
+async def test_the_amount_to_spend_and_the_quantity_propose_the_price(engine: Engine, ike: int, pzu: int) -> None:
+    _deposit(engine, ike, "1000")
+
+    async with user_simulation(lambda: build_shell(engine)) as user:
+        await user.open("/transakcje")
+        user.find(marker="add-transaction").click()
+        user.find(marker="transaction-type").click()
+        user.find("Zakup").click()
+        user.find(marker="transaction-instrument").click()
+        user.find("PZU").click()
+        user.find(marker="transaction-spend").type("500")
+        user.find(marker="transaction-quantity").type("22")
+        assert _price(user) == "22,7273"
+
+        # 1000 zł ÷ 22 = 45,4545…; the proposed price follows the amount, the typed quantity stays
+        user.find(marker="transaction-spend").clear().type("1000")
+        assert _price(user) == "45,4545"
+        assert _value(user, "transaction-quantity") == "22"
+        user.find("Zapisz").click()
+
+    [buy, _] = list_transactions(engine)
+    assert (buy.quantity, buy.price) == (Decimal(22), Decimal("45.4545"))
+
+
+async def test_a_price_the_user_typed_stays_when_the_quantity_changes(engine: Engine, ike: int, pzu: int) -> None:
+    async with user_simulation(lambda: build_shell(engine)) as user:
+        await user.open("/transakcje")
+        user.find(marker="add-transaction").click()
+        user.find(marker="transaction-type").click()
+        user.find("Zakup").click()
+        user.find(marker="transaction-instrument").click()
+        user.find("PZU").click()
+        user.find(marker="transaction-price").type("40")
+        user.find(marker="transaction-spend").type("1000")
+        assert _value(user, "transaction-quantity") == "25"
+
+        user.find(marker="transaction-quantity").clear().type("20")
+        assert _price(user) == "40"
+
+
+def _price(user: User) -> str:
+    return _value(user, "transaction-price")
+
+
+def _value(user: User, marker: str) -> str:
+    return str(user.find(marker=marker, kind=ui.input).elements.pop().value)

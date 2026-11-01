@@ -15,7 +15,7 @@ what its foreign cash pays, a trade's commission included.
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date
-from decimal import ROUND_DOWN, Decimal
+from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal
 
 from financial_app.domain.account_rules import Product, allowed_products, can_hold, refusal
 from financial_app.domain.accounts import Account, AccountType, tax_regime_for
@@ -102,6 +102,9 @@ QUANTITY_MESSAGE = "Liczba musi być liczbą, np. 10 lub 0,5."
 RATE_MESSAGE = "Kurs musi być liczbą, np. 3,65."
 TAX_MESSAGE = "Podatek musi być liczbą, np. 15,00."
 INSTRUMENT_MESSAGE = "Wybierz instrument."
+# A proposed price keeps quantity × price within half a hundredth of the amount, with at most this many decimals
+PRICE_TOLERANCE = Decimal("0.005")
+MAX_PRICE_DECIMALS = 10
 # The NBP Rate (D-1) of a currency for a day; raises MissingNbpRateError without one
 RateLookup = Callable[[str, date], NbpRate]
 
@@ -919,24 +922,56 @@ class TransactionForm:
         """The units a Buy's amount to spend buys: the amount (less the commission when both are in the same cash) at
         the rate it is paid at, divided by the price and rounded down to the Instrument's decimal places. ``None``
         until the amount and price read, without the NBP Rate, or when it buys nothing."""
+        amount = self._spend_in_trade_currency(state)
+        try:
+            price = parse_number(state.texts.price)
+        except ValueError:
+            return None
+        if amount is None or not price > 0:
+            return None
+        instrument = None if self.bonds_chosen(state) or state.instrument_id is None else state.instrument_id
+        decimals = 0 if instrument is None else self._instruments[instrument].quantity_decimals
+        units = (amount / price).quantize(Decimal(1).scaleb(-decimals), rounding=ROUND_DOWN)
+        return format_quantity(units) if units > 0 else None
+
+    def proposed_price(self, state: FormState) -> str | None:
+        """The price at which a Buy's amount to spend buys the quantity typed: the amount as ``proposed_quantity``
+        takes it, divided by the quantity, with the fewest decimals (at least two) that keep quantity × price within
+        half a hundredth of it. ``None`` until both read, in the bond mode (bonds have their own price), or when
+        nothing is left after the commission."""
+        if self.bonds_chosen(state):
+            return None
+        amount = self._spend_in_trade_currency(state)
+        try:
+            quantity = parse_number(state.texts.quantity)
+        except ValueError:
+            return None
+        if amount is None or not quantity > 0:
+            return None
+        exact = amount / quantity
+        price = exact
+        # Past the tolerance at every count of decimals (a huge quantity), the price keeps MAX_PRICE_DECIMALS
+        for places in range(2, MAX_PRICE_DECIMALS + 1):
+            price = exact.quantize(Decimal(1).scaleb(-places), rounding=ROUND_HALF_UP)
+            if price > 0 and abs(price * quantity - amount) < PRICE_TOLERANCE:
+                break
+        return format_exact(price)
+
+    def _spend_in_trade_currency(self, state: FormState) -> Decimal | None:
+        """A Buy's amount to spend in the Instrument's currency: less the commission when both are in the same cash,
+        at the rate it is paid at. ``None`` for another type, until it reads, without the NBP Rate, or at nothing."""
         if state.kind is not TransactionType.BUY:
             return None
         texts = state.texts
         try:
             amount = parse_number(texts.spend)
-            price = parse_number(texts.price)
             commission = parse_number(texts.commission) if texts.commission.strip() else Decimal(0)
             rate = self._spend_rate(state)
         except ValueError, MissingNbpRateError:
             return None
         if self.commission_currency(state) == self.settlement_currency(state):
             amount -= commission  # paid from the same cash as the amount; a PLN one on foreign cash is apart
-        if not (amount > 0 and price > 0 and rate > 0):
-            return None
-        instrument = None if self.bonds_chosen(state) or state.instrument_id is None else state.instrument_id
-        decimals = 0 if instrument is None else self._instruments[instrument].quantity_decimals
-        units = (amount / rate / price).quantize(Decimal(1).scaleb(-decimals), rounding=ROUND_DOWN)
-        return format_quantity(units) if units > 0 else None
+        return amount / rate if amount > 0 and rate > 0 else None
 
     def _spend_rate(self, state: FormState) -> Decimal:
         """PLN per unit of the Instrument's currency the amount to spend converts at: 1 when no conversion is needed;

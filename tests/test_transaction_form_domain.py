@@ -11,6 +11,7 @@ from financial_app.domain.accounts import Account, AccountType
 from financial_app.domain.bond_valuation import BondData
 from financial_app.domain.bonds import BondType
 from financial_app.domain.currencies import MissingNbpRateError, NbpRate
+from financial_app.domain.formatting import parse_number
 from financial_app.domain.instruments import Instrument
 from financial_app.domain.transaction_form import (
     SELL_CURRENCY,
@@ -372,6 +373,30 @@ def test_the_bond_mode_proposes_bonds_at_their_price() -> None:
     state = _state(TransactionType.BUY, bond_mode=True, spend="1050", price="100")
 
     assert _form().proposed_quantity(state) == "10"
+
+
+def test_a_buy_proposes_the_price_for_the_amount_to_spend_and_the_quantity_typed() -> None:
+    form = _form()
+    state = _state(TransactionType.BUY, instrument_id=CDR, spend="1000", quantity="22", commission="5")
+
+    # (1000 − 5) ÷ 22 = 45,2272…, with the decimals that keep 22 × price within a grosz of 995 zł
+    assert form.proposed_price(state) == "45,2273"
+    assert form.proposed_price(replace(state, texts=replace(state.texts, quantity=""))) is None
+    assert form.proposed_price(replace(state, texts=replace(state.texts, spend="5"))) is None
+    assert form.proposed_price(replace(state, kind=TransactionType.SELL)) is None
+
+
+def test_a_foreign_buy_proposes_the_price_in_the_instruments_currency() -> None:
+    state = _state(TransactionType.BUY, instrument_id=BTC, spend="1000", quantity="0,00323494")
+
+    # 1000 zł ÷ 4,00 = 250 USD ÷ 0,00323494 = 77 281,186…
+    assert parse_number(_form().proposed_price(state) or "") == Decimal("77281.19")
+
+
+def test_the_bond_mode_proposes_no_price_as_bonds_have_their_own() -> None:
+    state = _state(TransactionType.BUY, bond_mode=True, spend="1000", quantity="10")
+
+    assert _form().proposed_price(state) is None
 
 
 def test_a_buy_without_the_cash_hints_before_the_save_and_names_the_balance_it_falls_to() -> None:

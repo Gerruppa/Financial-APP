@@ -163,9 +163,10 @@ def open_transaction_dialog(
             )
             dividend_currency.classes("w-full")
             dividend_currency.mark("transaction-dividend-currency")
-            # A Buy's amount to spend proposes the quantity (#120); it is not saved
+            # A Buy's amount to spend proposes the quantity from the price (#120), or the price from the quantity; it
+            # is not saved
             spend = ui.input(value=texts.spend).classes("w-full").mark("transaction-spend")
-            spend.props('hint="Proponuje liczbę; nie jest zapisywana"')
+            spend.props('hint="Z ceną proponuje liczbę, z liczbą cenę; nie jest zapisywana"')
             quantity = ui.input("Liczba", value=texts.quantity).classes("w-full").mark("transaction-quantity")
             ratio = ui.input("Split (X:Y)", value=texts.ratio).classes("w-full").mark("transaction-split-ratio")
             ratio.props('hint="X nowych jednostek za każde Y dotychczasowych, np. 2:1"')
@@ -400,9 +401,23 @@ def open_transaction_dialog(
 
         def propose_quantity() -> None:
             """Fill the quantity the amount to spend buys, until the user types a quantity of their own (#120)."""
+            if proposed(price):
+                return  # a price the dialog proposed proposes nothing back
             proposal = form.proposed_quantity(state())
             if proposal is not None:
                 prefill(quantity, proposal)
+
+        def propose_price() -> None:
+            """Fill the price at which the amount to spend buys the quantity typed, until the user types a price."""
+            if proposed(quantity):
+                return  # a quantity the dialog proposed proposes nothing back
+            proposal = form.proposed_price(state())
+            if proposal is not None:
+                prefill(price, proposal)
+
+        def proposed(field: ui.input) -> bool:
+            """Whether the field still holds what the dialog filled in, not what the user typed."""
+            return bool(field.value.strip()) and field.value == prefilled.get(field)
 
         def bond_price(rollover_changed: bool = False) -> None:
             """Price the bond mode's purchase: 100 zł, or the Rollover price of the Series. A price the user typed (or
@@ -464,6 +479,8 @@ def open_transaction_dialog(
             limit_input.on_value_change(show_limit)
         for proposal_input in (spend, price, commission, fx_rate):
             proposal_input.on_value_change(propose_quantity)
+        for proposal_input in (spend, quantity, commission, fx_rate):
+            proposal_input.on_value_change(propose_price)
 
         def offer_corrections(
             find: Callable[[], list[Shortfall]], confirm: Callable[[list[Shortfall]], None], button: str
