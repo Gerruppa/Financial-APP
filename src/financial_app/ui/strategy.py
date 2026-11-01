@@ -45,6 +45,20 @@ from financial_app.ui.view_scope import ViewScope
 
 ROW_COLUMNS = "grid-template-columns: minmax(10rem, 2fr) repeat(6, minmax(6rem, 1fr)) minmax(8rem, 1.5fr)"
 ROW_HEADERS = ("Klasa", "Wartość", "Udział", "Cel", "Różnica", "Do celu", "Z wpłaty", "")
+# The columns whose sign needs saying, with their "i" and its marker's name
+HEADER_INFO = {
+    "Różnica": ("Udział klasy minus jej cel, w punktach procentowych (pp).", "strategy-difference"),
+    "Do celu": (
+        "Ile złotych brakuje klasie do celu (plus: tyle dokupić) albo ile ma ponad cel (minus).",
+        "strategy-to-target",
+    ),
+}
+# What each band colour of a class row means (ui/theme.py BAND_COLOURS), in the legend under the rows
+BAND_MEANINGS = {
+    BandStatus.GREEN: "w tolerancji",
+    BandStatus.YELLOW: "poza tolerancją",
+    BandStatus.RED: "ponad dwie tolerancje od celu",
+}
 
 
 @dataclass
@@ -215,6 +229,7 @@ def _strategy_body(
         shown = scope_strategy(engine, today, account_id, planned.amount)
         _rebalancing(shown.view)
         _class_rows(shown, details, edit)
+        _band_legend(shown.view.rows)
 
     def typed(text: str) -> None:
         try:
@@ -238,19 +253,44 @@ def _strategy_body(
 
 
 def _rebalancing(view: StrategyView) -> None:
+    """How much to deposit to reach the targets without selling or, when a class without a target holds value, which
+    one stands in the way and what to do about it."""
     with ui.row().classes("items-center gap-2 text-sm").mark("rebalancing"):
-        ui.label("Wpłata potrzebna do pełnego rebalansowania bez sprzedaży:")
-        if view.rebalancing_deposit is None:
-            ui.label("niemożliwe bez sprzedaży (klasa bez celu ma wartość)").mark("rebalancing-deposit")
-        else:
+        if view.rebalancing_deposit is not None:
+            ui.label("Ile wpłacić, by bez sprzedaży wrócić do celów:")
             ui.label(format_pln(view.rebalancing_deposit)).classes("font-medium").mark("rebalancing-deposit")
+            return
+        untargeted = [row.asset_class for row in view.rows if row.target is None and row.value > 0]
+        if len(untargeted) == 1:
+            reason = f"{untargeted[0]} nie ma celu, a ma wartość. Ustaw jej cel"
+        else:
+            reason = f"{', '.join(untargeted)} nie mają celu, a mają wartość. Ustaw ich cele"
+        ui.label(f"Samą wpłatą nie wrócisz do celów: {reason} w „Edytuj cele klas”.").mark("rebalancing-deposit")
+
+
+def _band_legend(rows: Sequence[ClassRow]) -> None:
+    """What the band rows' colours mean, once any class has a target."""
+    if not any(row.status is not None for row in rows):
+        return
+    with ui.row().classes("items-center gap-x-5 gap-y-1 text-sm k-muted").mark("band-legend"):
+        for status, meaning in BAND_MEANINGS.items():
+            with ui.row().classes("items-center no-wrap gap-2"):
+                ui.element("span").classes(f"k-band-{status.value} inline-block w-4 h-4 rounded border")
+                ui.label(meaning)
 
 
 def _class_rows(current: ScopeStrategy, details: bool, edit: EditInstruments | None) -> None:
     by_name = {asset_class.name: asset_class for asset_class in current.asset_classes}
     with ui.element("div").classes("grid w-full gap-x-4 border-b py-1 text-sm font-medium").style(ROW_COLUMNS):
         for header in ROW_HEADERS:
-            ui.label(header).classes("" if header in ("Klasa", "") else "text-right")
+            if header in HEADER_INFO:
+                # The "i" before the header, so that the figures stay right-aligned under it
+                with ui.row().classes("items-center justify-end no-wrap gap-1"):
+                    info, name = HEADER_INFO[header]
+                    info_icon(info, name)
+                    ui.label(header)
+            else:
+                ui.label(header).classes("" if header in ("Klasa", "") else "text-right")
     for row in current.view.rows:
         asset_class = by_name.get(row.asset_class)
         # k-hover: in a wide window the row under the cursor stands out
@@ -315,8 +355,9 @@ def _instrument_rows(
                 "wpłata nie jest dzielona na instrumenty tej klasy."
             ).classes("pl-8 text-sm k-warning").mark("instrument-split-blocked")
         if edit is not None:
-            ui.button("Cele instrumentów", on_click=lambda: edit(asset_class, shown, addable)).props(
-                "flat dense no-caps"
+            # Quiet, in the muted tone: one under every class, it should not outshout the figures
+            ui.button("Cele instrumentów", icon="tune", on_click=lambda: edit(asset_class, shown, addable)).props(
+                "flat dense no-caps color=grey-7"
             ).classes("ml-6").mark(f"edit-instrument-targets-{asset_class.id}")
 
 

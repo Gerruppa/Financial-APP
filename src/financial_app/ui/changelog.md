@@ -6,6 +6,7 @@
 - Przy zakupie wystarczy podać „Kwotę do wydania” i liczbę kupionych jednostek (np. 1000 zł i 0,00323494 BTC), a cena uzupełni się sama. Na koncie z PLN i walutą obcą walutę kwoty wybierasz z listy obok niej, co wybiera też, z jakiej gotówki płacisz.
 
 ### Poprawki
+- Strategie inwestycyjne mówią prościej: legenda wyjaśnia kolory wierszy, ikony „i” przy kolumnach „Różnica” i „Do celu” mówią, co znaczy plus i minus, a gdy samą wpłatą nie da się wrócić do celów, aplikacja podaje, która klasa nie ma celu i gdzie go ustawić.
 - Dashboard porządkuje kafelki: na górze trzy najważniejsze liczby (wpłaty netto, niezrealizowany zysk, XIRR), pozostałe w zwartej liście pod nimi. Zysk jest zielony lub czerwony według znaku, a ikony mają jeden kolor zamiast przypadkowych.
 - Ranking kont oznacza najlepszą i najsłabszą wartość strzałką zamiast zieleni i czerwieni, więc najniższe prowizje nie wyglądają już jak zysk.
 - Motyw Golden jest czytelniejszy: napisy na złotych przyciskach są ciemne, niewybrane okresy (1M, 3M, YTD…) i szare etykiety dobrze widać, a góry w menu nie zachodzą już na „Ustawienia” i „Pomoc”.

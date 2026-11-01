@@ -318,3 +318,32 @@ async def test_an_inactive_account_is_not_suggested_for_a_planned_deposit(engine
         await user.should_see(marker=f"deposit-{_class_id(engine, 'Akcje polskie')}", content=_pln("600,00"))
         await user.should_see(marker=f"accounts-{_class_id(engine, 'Akcje zagraniczne')}", content="Kup na: XTB")
         await user.should_not_see("Kup na: IKE")
+
+
+async def test_the_tab_explains_its_band_colours_and_its_columns_in_plain_words(engine: Engine) -> None:
+    save_strategy(engine, _thirty_sixty_ten(engine))
+    async with user_simulation(_shell(engine)) as user:
+        await user.open("/strategie")
+
+        with user.scope(marker="band-legend"):
+            for meaning in ("w tolerancji", "poza tolerancją", "ponad dwie tolerancje od celu"):
+                await user.should_see(meaning)
+        with user.scope(marker="rebalancing"):
+            await user.should_see("Ile wpłacić, by bez sprzedaży wrócić do celów")
+        await user.should_see(marker="info-strategy-to-target")
+        await user.should_see(marker="info-strategy-difference")
+
+
+async def test_without_a_target_for_a_class_holding_value_the_tab_names_it_and_the_way_out(engine: Engine) -> None:
+    targets = {
+        _class_id(engine, "Akcje polskie"): ClassTarget(Decimal(40)),
+        _class_id(engine, "Akcje zagraniczne"): ClassTarget(Decimal(60)),
+    }
+    save_strategy(engine, Strategy(None, targets))
+    async with user_simulation(_shell(engine)) as user:
+        await user.open("/strategie")
+
+        await user.should_see(
+            marker="rebalancing-deposit",
+            content="Samą wpłatą nie wrócisz do celów: Gotówka nie ma celu, a ma wartość. Ustaw jej cel",
+        )
