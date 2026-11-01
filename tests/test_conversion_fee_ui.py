@@ -6,6 +6,7 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
+from nicegui import ui
 from nicegui.testing import User, user_simulation
 from sqlalchemy import Engine
 
@@ -163,10 +164,11 @@ async def test_account_holding_the_currency_lets_the_user_pay_in_pln(engine: Eng
     async with user_simulation(lambda: _shell(engine)) as user:
         await user.open("/transakcje")
         _start_buy(user, account="XTB")
-        await user.should_see("gotówka USD")
+        # The payment is chosen by the currency of the amount to spend, beside it
+        await user.should_not_see(marker="transaction-paid-from")
         await user.should_not_see(marker="transaction-conversion")
 
-        _choose(user, "transaction-paid-from", "PLN z przewalutowaniem")
+        _choose(user, "transaction-spend-currency", "PLN")
         await user.should_not_see(marker="transaction-auto-exchange")
         user.find(marker="transaction-conversion").click()
         user.find(marker="transaction-charged").type("5451,90")
@@ -190,7 +192,7 @@ async def test_editing_keeps_a_trade_paid_from_foreign_cash_after_the_account_dr
     async with user_simulation(lambda: _shell(engine)) as user:
         await user.open("/transakcje")
         user.find(marker="transaction-row").click()
-        await user.should_see("gotówka USD")
+        assert user.find(marker="transaction-spend-currency", kind=ui.select).elements.pop().value == "USD"
         user.find(marker="transaction-comment").type("bez zmian")
         user.find("Zapisz zmiany").click()
         await user.should_see("bez zmian")

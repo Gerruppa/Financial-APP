@@ -11,9 +11,11 @@ from financial_app.domain.accounts import Account, AccountType
 from financial_app.domain.bond_valuation import BondData
 from financial_app.domain.bonds import BondType
 from financial_app.domain.currencies import MissingNbpRateError, NbpRate
+from financial_app.domain.formatting import parse_number
 from financial_app.domain.instruments import Instrument
 from financial_app.domain.transaction_form import (
     SELL_CURRENCY,
+    Choice,
     FormContext,
     FormError,
     FormState,
@@ -112,9 +114,22 @@ def test_a_foreign_buy_on_an_account_holding_the_currency_pays_from_it_by_defaul
     layout = _form().layout(_state(TransactionType.BUY, XTB, instrument_id=AAPL))
 
     assert (layout.price.label, layout.fx_rate.label) == ("Cena (USD)", "Kurs USD/PLN")
-    assert layout.paid_from.visible and layout.paid_from.value == "USD"
+    # A Buy chooses what it is paid from by the currency of the amount to spend, beside it
+    assert layout.spend_currency == Choice(True, {"USD": "USD", PLN: PLN}, "USD", "Waluta")
+    assert layout.spend.label == "Kwota do wydania"
+    assert not layout.paid_from.visible and layout.paid_from.value == "USD"
+    assert _form().settlement_currency(_state(TransactionType.BUY, XTB, instrument_id=AAPL, paid_from=PLN)) == PLN
     assert not layout.convert.visible  # paid from USD cash, nothing to convert
     assert layout.auto_exchange
+
+
+def test_a_sell_keeps_the_payment_select_and_a_buy_without_a_choice_has_no_currency_select() -> None:
+    form = _form()
+    sell = form.layout(_state(TransactionType.SELL, XTB, instrument_id=AAPL))
+    assert sell.paid_from.visible and not sell.spend_currency.visible
+
+    pln_buy = form.layout(_state(TransactionType.BUY, IKE, instrument_id=CDR))
+    assert not pln_buy.spend_currency.visible and pln_buy.spend.label == "Kwota do wydania (zł)"
 
 
 def test_paid_in_pln_on_an_account_with_a_conversion_fee_offers_the_broker_conversion() -> None:
@@ -364,7 +379,7 @@ def test_paid_from_foreign_cash_the_amount_is_in_that_currency_and_the_pln_commi
     form = _form()
     state = _state(TransactionType.BUY, XTB, instrument_id=AAPL, spend="1000", price="300", commission="5")
 
-    assert form.layout(state).spend.label == "Kwota do wydania (USD)"
+    assert form.layout(state).spend_currency.value == "USD"
     assert form.proposed_quantity(state) == "3"
 
 
@@ -372,6 +387,30 @@ def test_the_bond_mode_proposes_bonds_at_their_price() -> None:
     state = _state(TransactionType.BUY, bond_mode=True, spend="1050", price="100")
 
     assert _form().proposed_quantity(state) == "10"
+
+
+def test_a_buy_proposes_the_price_for_the_amount_to_spend_and_the_quantity_typed() -> None:
+    form = _form()
+    state = _state(TransactionType.BUY, instrument_id=CDR, spend="1000", quantity="22", commission="5")
+
+    # (1000 − 5) ÷ 22 = 45,2272…, with the decimals that keep 22 × price within a grosz of 995 zł
+    assert form.proposed_price(state) == "45,2273"
+    assert form.proposed_price(replace(state, texts=replace(state.texts, quantity=""))) is None
+    assert form.proposed_price(replace(state, texts=replace(state.texts, spend="5"))) is None
+    assert form.proposed_price(replace(state, kind=TransactionType.SELL)) is None
+
+
+def test_a_foreign_buy_proposes_the_price_in_the_instruments_currency() -> None:
+    state = _state(TransactionType.BUY, instrument_id=BTC, spend="1000", quantity="0,00323494")
+
+    # 1000 zł ÷ 4,00 = 250 USD ÷ 0,00323494 = 77 281,186…
+    assert parse_number(_form().proposed_price(state) or "") == Decimal("77281.19")
+
+
+def test_the_bond_mode_proposes_no_price_as_bonds_have_their_own() -> None:
+    state = _state(TransactionType.BUY, bond_mode=True, spend="1000", quantity="10")
+
+    assert _form().proposed_price(state) is None
 
 
 def test_a_buy_without_the_cash_hints_before_the_save_and_names_the_balance_it_falls_to() -> None:

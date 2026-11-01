@@ -163,9 +163,13 @@ def open_transaction_dialog(
             )
             dividend_currency.classes("w-full")
             dividend_currency.mark("transaction-dividend-currency")
-            # A Buy's amount to spend proposes the quantity (#120); it is not saved
-            spend = ui.input(value=texts.spend).classes("w-full").mark("transaction-spend")
-            spend.props('hint="Proponuje liczbę; nie jest zapisywana"')
+            # A Buy's amount to spend proposes the quantity from the price (#120), or the price from the quantity; it
+            # is not saved
+            with ui.row().classes("w-full items-start no-wrap gap-2") as spend_row:
+                spend = ui.input(value=texts.spend).classes("grow").mark("transaction-spend")
+                spend.props('hint="Z ceną proponuje liczbę, z liczbą cenę; nie jest zapisywana"')
+                # The cash the Buy is paid from, chosen by the amount's currency; kept in the payment select
+                spend_currency = ui.select({}, label="Waluta").classes("w-24").mark("transaction-spend-currency")
             quantity = ui.input("Liczba", value=texts.quantity).classes("w-full").mark("transaction-quantity")
             ratio = ui.input("Split (X:Y)", value=texts.ratio).classes("w-full").mark("transaction-split-ratio")
             ratio.props('hint="X nowych jednostek za każde Y dotychczasowych, np. 2:1"')
@@ -276,7 +280,7 @@ def open_transaction_dialog(
             if layout.dividend_currency.visible:
                 currencies = list(layout.dividend_currency.options)
                 dividend_currency.set_options(currencies, value=layout.dividend_currency.value)
-            spend.visible = layout.spend.visible
+            spend_row.visible = layout.spend.visible
             spend.props(f'label="{layout.spend.label}"')
             quantity.visible = layout.quantity.visible
             quantity.props(f'label="{layout.quantity.label}"')
@@ -305,6 +309,7 @@ def open_transaction_dialog(
             net.visible = layout.net.visible
             prefill_redemption()
             propose_quantity()
+            propose_price()  # the amount's currency may have changed
             show_net()
             show_cash_hint()
             show_limit()
@@ -312,8 +317,12 @@ def open_transaction_dialog(
             fx_rate.props(f'label="{layout.fx_rate.label}" hint="{layout.fx_rate.hint}"')
             paid_from.visible = layout.paid_from.visible
             paid_from.props(f'label="{layout.paid_from.label}"')
-            if layout.paid_from.visible:
+            if layout.paid_from.options:  # hidden while a Buy chooses it beside the amount, it still holds the choice
                 paid_from.set_options(dict(layout.paid_from.options), value=layout.paid_from.value)
+            # After the payment select has its options, as a currency chosen here is copied into it
+            spend_currency.visible = layout.spend_currency.visible
+            if layout.spend_currency.visible:
+                spend_currency.set_options(dict(layout.spend_currency.options), value=layout.spend_currency.value)
             convert.visible = layout.convert.visible
             if layout.convert.label:
                 convert.text = layout.convert.label
@@ -400,9 +409,23 @@ def open_transaction_dialog(
 
         def propose_quantity() -> None:
             """Fill the quantity the amount to spend buys, until the user types a quantity of their own (#120)."""
+            if proposed(price):
+                return  # a price the dialog proposed proposes nothing back
             proposal = form.proposed_quantity(state())
             if proposal is not None:
                 prefill(quantity, proposal)
+
+        def propose_price() -> None:
+            """Fill the price at which the amount to spend buys the quantity typed, until the user types a price."""
+            if proposed(quantity):
+                return  # a quantity the dialog proposed proposes nothing back
+            proposal = form.proposed_price(state())
+            if proposal is not None:
+                prefill(price, proposal)
+
+        def proposed(field: ui.input) -> bool:
+            """Whether the field still holds what the dialog filled in, not what the user typed."""
+            return bool(field.value.strip()) and field.value == prefilled.get(field)
 
         def bond_price(rollover_changed: bool = False) -> None:
             """Price the bond mode's purchase: 100 zł, or the Rollover price of the Series. A price the user typed (or
@@ -433,6 +456,12 @@ def open_transaction_dialog(
         if transaction is None:
             bond_price()
         account.on_value_change(account_changed)
+
+        def spend_currency_changed() -> None:
+            if spend_currency.visible and spend_currency.value and spend_currency.value != paid_from.value:
+                paid_from.value = spend_currency.value  # the payment select redraws the layout
+
+        spend_currency.on_value_change(spend_currency_changed)
         rollover.on_value_change(lambda: bond_price(rollover_changed=True))
         rollover.on_value_change(update)
         series_choice.on_value_change(series_picked)
@@ -464,6 +493,8 @@ def open_transaction_dialog(
             limit_input.on_value_change(show_limit)
         for proposal_input in (spend, price, commission, fx_rate):
             proposal_input.on_value_change(propose_quantity)
+        for proposal_input in (spend, quantity, commission, fx_rate):
+            proposal_input.on_value_change(propose_price)
 
         def offer_corrections(
             find: Callable[[], list[Shortfall]], confirm: Callable[[list[Shortfall]], None], button: str

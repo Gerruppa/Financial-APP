@@ -112,7 +112,7 @@ async def test_buy_on_an_account_holding_usd_is_paid_from_usd_cash(engine: Engin
     async with user_simulation(lambda: _shell(engine)) as user:
         await user.open("/transakcje")
         _start_buy(user)
-        await user.should_see("gotówka USD")
+        assert user.find(marker="transaction-spend-currency", kind=ui.select).elements.pop().value == "USD"
         user.find("Zapisz").click()
 
         with user.scope(marker="transactions"):
@@ -254,3 +254,24 @@ async def test_a_usd_deposit_at_the_users_rate_is_listed_and_held_as_usd_cash(en
         Decimal(1000),
     )
     assert (deposit.actual_amount, deposit.fx_rate) == (Decimal("3700.00"), Decimal("3.7"))
+
+
+async def test_the_amount_to_spend_in_pln_pays_the_buy_from_pln_and_proposes_the_usd_price(
+    engine: Engine, ibkr: int, apple: int
+) -> None:
+    async with user_simulation(lambda: _shell(engine)) as user:
+        await user.open("/transakcje")
+        user.find(marker="add-transaction").click()
+        _choose(user, "transaction-type", "Zakup")
+        _choose(user, "transaction-account", "IBKR")
+        _choose(user, "transaction-instrument", "Apple")
+        user.find(marker="transaction-date").clear().type("07.01.2026")
+        _choose(user, "transaction-spend-currency", "PLN")
+        user.find(marker="transaction-spend").type("3604,50")
+        user.find(marker="transaction-quantity").type("10")
+        # 3 604,50 zł ÷ 3,6045 = 1 000 USD ÷ 10
+        assert user.find(marker="transaction-price", kind=ui.input).elements.pop().value == "100,00"
+        user.find("Zapisz").click()
+
+    [buy] = list_transactions(engine)
+    assert (buy.cash_currency, buy.price, buy.actual_amount) == ("PLN", Decimal(100), Decimal("3604.50"))
