@@ -138,6 +138,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `new_migration.py`: Generates the next numbered migration by autogenerating against a scratch database, then ruff fixes and formats it.
 - `release.py`: Release script: prepare bumps __version__ and dates the changelog section; publish builds the installer, pushes the tag and creates the GitHub Release
 - `screenshot.py`: Screenshots KAPITA's tabs with headless Chrome or Edge on demo data, in the Jasny or Golden Theme and optionally an Account's View Scope, then stops the app
+- `smoke_test.py`: Clicks through KAPITA on demo data with Playwright in the installed Chrome or Edge: every tab in both Themes, transaction add, edit and delete, exports, settings; exits 1 on any failure or error
 
 ## src/financial_app/
 
@@ -568,6 +569,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_sayings_ui.py`: UI tests for the saying of the day: shown in the menu alone (not on Dashboard), signatures, and the Wygląd i widoczność switch hiding it
 - `test_settings_sections_ui.py`: Tests that Ustawienia's section buttons are listed and each shows its section, run without a browser
 - `test_shell.py`: Smoke tests of the app shell's tabs and navigation, run without a browser.
+- `test_smoke_test_script.py`: Tests for scripts/smoke_test.py's server-log reading: an app traceback counts, a browser's closed connection does not
 - `test_splits_and_transfers_domain.py`: Tests Splits, Cash Transfers and Security Transfers in the FIFO engine and Cash Balances.
 - `test_splits_and_transfers_repository.py`: Tests saving Splits, Cash Transfers and Security Transfers in SQLite.
 - `test_splits_and_transfers_ui.py`: Tests Splits, Cash Transfers and Security Transfers in the transaction dialog and Transakcje list.
