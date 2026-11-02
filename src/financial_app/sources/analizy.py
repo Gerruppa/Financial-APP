@@ -22,6 +22,7 @@ from financial_app.domain.fund_profile import FundProfile, Holding, largest_hold
 from financial_app.domain.instrument_search import FoundListing, InstrumentSearchError, looks_like_isin
 from financial_app.domain.instruments import InstrumentType
 from financial_app.domain.prices import ANALIZY, ANALIZY_HISTORY, CurrencyMismatchError, PriceSourceError, Quote
+from financial_app.sources.network import network_hint
 
 # The fund type in the path does not change the answer, so every fund is asked for as "fio"
 API = "https://www.analizy.pl/api/quotation/fio/{symbol}"
@@ -136,10 +137,8 @@ class AnalizySearch:
             body = self.fetch(SEARCH_API.format(query=url_quote(query, safe="")))
         except HTTPError as exc:
             raise InstrumentSearchError(f"analizy.pl zwróciło błąd HTTP {exc.code}. Spróbuj później.") from None
-        except OSError:
-            raise InstrumentSearchError(
-                "Nie udało się połączyć z analizy.pl. Sprawdź połączenie z internetem."
-            ) from None
+        except OSError as exc:
+            raise InstrumentSearchError(f"Nie udało się połączyć z analizy.pl. {network_hint(exc)}") from None
         try:
             products = json.loads(body or "")["products"]
             return [
@@ -243,8 +242,8 @@ def _valuations(fetch: Callable[[str], str | None], key: str) -> tuple[str, list
         body = fetch(API.format(symbol=url_quote(key, safe="")))
     except HTTPError as exc:
         raise PriceSourceError(f"analizy.pl zwróciło błąd HTTP {exc.code}. Spróbuj później.") from None
-    except OSError:
-        raise PriceSourceError("Nie udało się połączyć z analizy.pl. Sprawdź połączenie z internetem.") from None
+    except OSError as exc:
+        raise PriceSourceError(f"Nie udało się połączyć z analizy.pl. {network_hint(exc)}") from None
     if body is None:
         raise PriceSourceError(f"analizy.pl nie zna funduszu „{key}”.")
     try:

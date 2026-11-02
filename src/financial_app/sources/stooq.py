@@ -18,6 +18,7 @@ from decimal import Decimal, InvalidOperation
 from urllib.error import HTTPError
 
 from financial_app.domain.prices import STOOQ, PriceSourceError, Quote
+from financial_app.sources.network import network_hint
 
 SITE = "https://stooq.com"
 API = SITE + "/q/d/l/?s={symbol}&d1={first:%Y%m%d}&d2={last:%Y%m%d}&i=d&apikey={key}"
@@ -87,8 +88,8 @@ class StooqSource:
             body = self.fetch(url)
         except HTTPError as exc:
             raise PriceSourceError(f"Stooq zwrócił błąd HTTP {exc.code}. Spróbuj później.") from None
-        except OSError:
-            raise PriceSourceError("Nie udało się połączyć ze Stooq. Sprawdź połączenie z internetem.") from None
+        except OSError as exc:
+            raise PriceSourceError(f"Nie udało się połączyć ze Stooq. {network_hint(exc)}") from None
         return _closes(body.strip(), key, currency)
 
 

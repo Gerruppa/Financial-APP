@@ -1,11 +1,12 @@
 """The NBP Rate (D-1) from the NBP API with a local cache (issue #15), on saved NBP responses, without the network."""
 
 import json
+import ssl
 from datetime import date
 from decimal import Decimal
 from email.message import Message
 from pathlib import Path
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 
 import pytest
 from sqlalchemy import Engine
@@ -142,6 +143,16 @@ def test_latest_rate_is_the_one_before_today(engine: Engine) -> None:
     rate = _rates(engine, SavedNbp(), today=date(2026, 1, 7)).latest("USD")
 
     assert rate.published_on == date(2026, 1, 5)
+
+
+def test_an_untrusted_certificate_is_named_instead_of_the_connection(engine: Engine) -> None:
+    untrusted = SavedNbp(error=URLError(ssl.SSLCertVerificationError(1, "certificate verify failed")))
+
+    with pytest.raises(MissingNbpRateError, match="certyfikat") as raised:
+        _rates(engine, untrusted).before("USD", date(2026, 1, 7))
+    assert "połączenie z internetem" not in str(raised.value)
+    with pytest.raises(MissingNbpRateError, match="certyfikat"):
+        _rates(engine, untrusted).history("USD", date(2025, 12, 24), date(2026, 1, 6))
 
 
 def test_latest_rate_does_not_retry_a_failed_fetch_at_once(engine: Engine) -> None:

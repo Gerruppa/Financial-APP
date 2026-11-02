@@ -1,5 +1,10 @@
 # Historia zmian
 
+## Nieopublikowane
+
+### Poprawki
+- Dane obligacji z MF i GUS pobierają się także na świeżo zainstalowanym Windowsie, który nie zna jeszcze certyfikatu tych stron, a gdy strona ma certyfikat, któremu Windows nie ufa, komunikat mówi o certyfikacie zamiast o połączeniu z internetem.
+
 ## 1.6.0 — 2026-11-01
 
 ### Nowe funkcje

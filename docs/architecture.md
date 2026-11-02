@@ -33,6 +33,7 @@ Layout (`src/financial_app/`, see ADR-0001):
 - [Unpriced Instruments](architecture/unpriced-instruments.md)
 - [Price source help window (#274)](architecture/price-source-guide.md)
 - [`sources/stooq.py`](architecture/stooq-price-history.md)
+- [`sources/network.py`: HTTPS trust and network errors (#309)](architecture/network.md)
 - [`domain/portfolio_history.py` (#68, spec 6.1, ADR-0006)](architecture/portfolio-history.md)
 - [`domain/metrics.py` (#69, spec 6.1)](architecture/metrics.md)
 - [View Scope and period selector (#71, spec 5 and 6.1)](architecture/view-scope-periods.md)

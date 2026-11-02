@@ -1,9 +1,11 @@
 """Smoke test of the real entry point: one command shows the login screen, and signing in builds the User's database
 and shows the window."""
 
+import ssl
 from pathlib import Path
 
 import pytest
+import truststore
 from nicegui.testing import User, user_simulation
 
 from financial_app import app
@@ -140,6 +142,24 @@ def test_failed_move_stops_the_start_with_a_polish_message(monkeypatch: pytest.M
         app.main()
 
     assert len(shown) == 1 and "Zamknij" in shown[0]
+
+
+def test_start_verifies_https_through_the_windows_certificate_store(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Issue #309: Python alone trusts only the roots already in the Windows store, which Windows fills lazily, so
+    gov.pl (Certum Trusted Root CA) failed on a fresh computer; truststore lets Windows fetch a missing root."""
+
+    def stop_here() -> None:
+        raise PermissionError("stop after the first steps")
+
+    monkeypatch.setattr(app, "adopt_legacy_data_dir", stop_here)
+    monkeypatch.setattr(app, "show_startup_error", lambda message: None)
+    try:
+        with pytest.raises(SystemExit):
+            app.main()
+
+        assert ssl.SSLContext is truststore.SSLContext
+    finally:
+        truststore.extract_from_ssl()
 
 
 async def _open_user_settings(user: User) -> None:

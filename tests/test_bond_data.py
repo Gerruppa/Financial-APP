@@ -1,11 +1,12 @@
 """The bond data sources of Stage 3 (spec 3.4.1): the MF file, GUS CPI and the NBP reference rate, parsed from saved
 files and kept in SQLite, fetched at most once a day."""
 
+import ssl
 from collections.abc import Callable
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 
 import pytest
 from sqlalchemy import Engine
@@ -165,6 +166,20 @@ def test_an_mf_page_without_the_file_says_the_page_may_have_changed() -> None:
 def test_no_network_asks_to_check_the_connection() -> None:
     with pytest.raises(BondDataError, match="Nie udało się pobrać strony MF z obligacjami. Sprawdź połączenie"):
         MfBondFile(_offline).series()
+
+
+def test_an_untrusted_certificate_says_so_instead_of_blaming_the_connection() -> None:
+    # Issue #309: urllib wraps the verification failure in a URLError
+    def untrusted(url: str) -> bytes:
+        raise URLError(ssl.SSLCertVerificationError(1, "certificate verify failed: unable to get local issuer"))
+
+    with pytest.raises(BondDataError) as raised:
+        MfBondFile(untrusted).series()
+
+    message = str(raised.value)
+    assert message.startswith("Nie udało się pobrać strony MF z obligacjami.")
+    assert "certyfikat" in message
+    assert "połączenie z internetem" not in message
 
 
 def test_an_http_error_names_its_code() -> None:

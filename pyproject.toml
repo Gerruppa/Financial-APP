@@ -12,6 +12,8 @@ dependencies = [
     "openpyxl>=3.1",
     "reportlab>=4.2",
     "xlrd>=2.0",
+    # HTTPS verified through the Windows certificate store, which fetches missing roots (issue #309)
+    "truststore>=0.10",
 ]
 
 [project.optional-dependencies]

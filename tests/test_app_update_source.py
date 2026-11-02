@@ -29,7 +29,7 @@ def test_a_network_failure_is_an_update_error() -> None:
     def fetch(url: str) -> bytes:
         raise OSError("offline")
 
-    with pytest.raises(UpdateError, match="połączenia"):
+    with pytest.raises(UpdateError, match="połączyć z GitHubem"):
         _source(fetch).latest()
 
 

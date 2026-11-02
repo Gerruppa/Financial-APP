@@ -40,6 +40,7 @@ from financial_app.persistence.bond_data import (
     save_reference_rates,
     save_series_terms,
 )
+from financial_app.sources.network import network_hint
 
 BOND_DATA_NAMES = {MF: "Plik MF (obligacje)", GUS: "Inflacja CPI (GUS)", NBP_REFERENCE: "Stopa referencyjna NBP"}
 
@@ -115,8 +116,8 @@ def _get(fetch: Callable[[str], bytes], url: str, what: str) -> bytes:
         return fetch(url)
     except HTTPError as error:
         raise BondDataError(f"Serwer zwrócił błąd {error.code} przy pobieraniu {what}.") from None
-    except OSError:
-        raise BondDataError(f"Nie udało się pobrać {what}. Sprawdź połączenie z internetem.") from None
+    except OSError as error:
+        raise BondDataError(f"Nie udało się pobrać {what}. {network_hint(error)}") from None
 
 
 def parse_mf_file(content: bytes) -> list[SeriesTerms]:

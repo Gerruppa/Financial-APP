@@ -87,6 +87,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `metrics.md`: Architecture entry for domain/metrics.py (#69, spec 6.1): main functions, UI markers and decisions.
 - `multi-asset.md`: Architecture entry for Multi-asset (#75, spec 6.1): main functions, UI markers and decisions.
 - `nbp-rates.md`: Architecture entry for sources/nbp.py: main functions, UI markers and decisions.
+- `network.md`: Architecture entry for HTTPS trust through Windows and the network_hint advice after a failed download.
 - `notifications.md`: Header bell reminders (#176): NotificationBell menu, derived reminders, and read keys kept in app_settings
 - `obligacje-tab.md`: Architecture entry for Obligacje tab and Net Value (L-4, spec 3.4.1): main functions, UI markers and decisions.
 - `passive-income.md`: Architecture entry for Passive-income calendar (#93, spec 6.2): main functions, UI markers and decisions.
@@ -308,6 +309,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `history.py`: Returns an Instrument's Quotes in a date range, fetching missing days from Yahoo, analizy.pl or Stooq into cache
 - `instrument_card.py`: Instrument Card price history fetched live from Yahoo, else analizy.pl; nothing is saved.
 - `nbp.py`: Gets NBP exchange rates from the NBP API through the local cache
+- `network.py`: Polish advice after a failed download: names an untrusted server certificate or a missing internet connection.
 - `notifications.py`: Gathers the header bell's reminders from the database and loads or saves the read keys in app_settings
 - `passive_income.py`: Loads the passive-income items: income received from Transactions and the coupons and Term Deposit interest not entered for the next 12 months.
 - `pdf_report.py`: Lays out the annual report as an A4 PDF with reportlab: title page, report tables with repeated headers, disclaimer footer, and DejaVu fonts for Polish letters.
@@ -527,6 +529,7 @@ _Auto-maintained by `/filetree:update`. Content hashes live in the sidecar `FILE
 - `test_multi_asset_repository.py`: Tests saving Multi-asset Splits with their Instruments, Asset Class rules, and their removal on reset
 - `test_multi_asset_ui.py`: UI tests for the Multi-asset split in the Instrument dialog, the split dialog after a buy, and the Multi-asset tab
 - `test_nbp_rates.py`: Tests fetching and caching NBP D-1 rates from saved API responses, without the network.
+- `test_network.py`: Tests that every downloading source names an untrusted certificate instead of the connection, and keeps the connection advice when offline.
 - `test_notifications_domain.py`: Tests of bell reminder keys, unread filtering and the remembered read keys format
 - `test_notifications_ui.py`: UI tests of the header bell: its listed reminders, unread dot and read state
 - `test_passive_income_domain.py`: Tests received income kinds, monthly sums by scope, goal progress, the 12-month average and goal parsing.

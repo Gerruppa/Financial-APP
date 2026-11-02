@@ -19,6 +19,7 @@ from financial_app.domain.catalyst import BondFactsSource, bond_price
 from financial_app.domain.instruments import InstrumentType
 from financial_app.domain.prices import BOSSA, CurrencyMismatchError, PriceSourceError, Quote
 from financial_app.sources.catalyst import CatalystFacts
+from financial_app.sources.network import network_hint
 
 API = "https://bossa.pl/fl_api/API/GPW/v2/Q/C/{category}"
 # Searched in this order, each only when the symbol is not in the ones before
@@ -110,8 +111,8 @@ class BossaSource:
             body = self.fetch(API.format(category=category))
         except HTTPError as exc:
             return PriceSourceError(f"Bossa zwróciła błąd HTTP {exc.code}. Spróbuj później.")
-        except OSError:
-            return PriceSourceError("Nie udało się połączyć z Bossa. Sprawdź połączenie z internetem.")
+        except OSError as exc:
+            return PriceSourceError(f"Nie udało się połączyć z Bossa. {network_hint(exc)}")
         try:
             listings = [listing for block in json.loads(body)["_d"] for listing in block["_t"]]
         except ValueError, KeyError, TypeError:
