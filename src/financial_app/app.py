@@ -13,6 +13,7 @@ from functools import partial
 from pathlib import Path
 from typing import Any, TextIO
 
+import truststore
 from nicegui import ui
 from sqlalchemy import Engine
 
@@ -140,6 +141,9 @@ class Session:
 
 
 def main(argv: Sequence[str] | None = None) -> None:
+    # Every source verifies HTTPS through Windows, which fetches a root it lacks; Python alone trusts only the roots
+    # already in the store and so failed on gov.pl on a fresh computer (issue #309)
+    truststore.inject_into_ssl()
     args = parse_args(sys.argv[1:] if argv is None else argv)
     browser = args.browser or args.demo
     if args.demo:

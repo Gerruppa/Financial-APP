@@ -13,6 +13,7 @@ from urllib.parse import quote as url_quote
 from financial_app.domain.instrument_search import FoundListing, InstrumentSearchError, looks_like_isin
 from financial_app.domain.instruments import CRYPTO_CLASS, InstrumentType
 from financial_app.domain.prices import BOSSA, YAHOO, YAHOO_HISTORY, CurrencyMismatchError, PriceSourceError, Quote
+from financial_app.sources.network import network_hint
 
 API = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?range=5d&interval=1d"
 HISTORY_API = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?period1={start}&period2={end}&interval=1d"
@@ -203,8 +204,8 @@ def _get(fetch: Callable[[str], str | None], url: str, error: type[Exception], s
         return fetch(url)
     except HTTPError as exc:
         raise error(f"Yahoo zwróciło błąd HTTP {exc.code}{subject}. Spróbuj później.") from None
-    except OSError:
-        raise error("Nie udało się połączyć z Yahoo. Sprawdź połączenie z internetem.") from None
+    except OSError as exc:
+        raise error(f"Nie udało się połączyć z Yahoo. {network_hint(exc)}") from None
 
 
 def _latest(fetch: Callable[[str], str | None], symbol: str) -> tuple[Decimal, str, date, str]:

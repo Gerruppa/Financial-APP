@@ -15,6 +15,7 @@ from financial_app.domain.formatting import format_date
 from financial_app.domain.history import ONE_DAY, Cover, days_to_fetch
 from financial_app.persistence.history import nbp_history_cover, nbp_rates_between, save_nbp_history
 from financial_app.persistence.nbp_rates import cache_rate, cached_rate
+from financial_app.sources.network import network_hint
 
 API = "https://api.nbp.pl/api/exchangerates/rates/a/{currency}/{start:%Y-%m-%d}/{end:%Y-%m-%d}/?format=json"
 # The longest run of days without a table (Christmas plus a weekend) is far shorter
@@ -106,10 +107,8 @@ class NbpRates:
             body = self.fetch(API.format(currency=currency.lower(), start=days.first, end=days.last))
         except HTTPError:
             raise MissingNbpRateError(f"Serwis NBP zwrócił błąd przy pobieraniu kursów {period}.") from None
-        except OSError:
-            raise MissingNbpRateError(
-                f"Nie udało się pobrać kursów NBP {period}. Sprawdź połączenie z internetem."
-            ) from None
+        except OSError as exc:
+            raise MissingNbpRateError(f"Nie udało się pobrać kursów NBP {period}. {network_hint(exc)}") from None
         if body is None:
             return []
         try:
@@ -126,9 +125,9 @@ class NbpRates:
             raise MissingNbpRateError(
                 f"Serwis NBP zwrócił błąd przy pobieraniu kursu {before}. Spróbuj później. Zapis zablokowany."
             ) from None
-        except OSError:
+        except OSError as exc:
             raise MissingNbpRateError(
-                f"Nie udało się pobrać kursu NBP {before}. Sprawdź połączenie z internetem. Zapis zablokowany."
+                f"Nie udało się pobrać kursu NBP {before}. {network_hint(exc)} Zapis zablokowany."
             ) from None
         if body is None:
             raise MissingNbpRateError(f"Brak kursu NBP {before}. Zapis zablokowany.")

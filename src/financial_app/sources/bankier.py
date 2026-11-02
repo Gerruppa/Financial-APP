@@ -15,6 +15,7 @@ from urllib.error import HTTPError
 from urllib.parse import quote as url_quote
 
 from financial_app.domain.prices import BANKIER, CurrencyMismatchError, PriceSourceError, Quote
+from financial_app.sources.network import network_hint
 
 # Investment funds first, then PPK; an unknown fund leads to the home page, without the fund's header
 PAGES = ("https://www.bankier.pl/fundusze/notowania/{symbol}", "https://www.bankier.pl/ppk/notowania/{symbol}")
@@ -62,9 +63,9 @@ class BankierSource:
                     f"bankier.pl zwrócił błąd HTTP {exc.code}. Spróbuj później."
                 )
                 continue
-            except OSError:
+            except OSError as exc:
                 first_error = first_error or PriceSourceError(
-                    "Nie udało się połączyć z bankier.pl. Sprawdź połączenie z internetem."
+                    f"Nie udało się połączyć z bankier.pl. {network_hint(exc)}"
                 )
                 continue
             found = header.search(body) if body is not None else None

@@ -8,6 +8,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from financial_app.domain.app_update import INSTALLER_ARGS, LatestRelease, UpdateError, parse_latest_release
+from financial_app.sources.network import network_hint
 
 LATEST_URL = "https://api.github.com/repos/Gerruppa/Financial-APP/releases/latest"
 
@@ -45,16 +46,18 @@ class UpdateSource:
     def latest(self) -> LatestRelease:
         try:
             body = self.fetch(LATEST_URL)
-        except OSError:
-            raise UpdateError("Brak połączenia z GitHubem; nie sprawdzono, czy jest nowa wersja.") from None
+        except OSError as error:
+            raise UpdateError(
+                f"Nie udało się połączyć z GitHubem; nie sprawdzono, czy jest nowa wersja. {network_hint(error)}"
+            ) from None
         return parse_latest_release(body.decode("utf-8", errors="replace"))
 
     def download(self, release: LatestRelease, folder: Path) -> Path:
         """The installer of ``release`` saved in ``folder``; a file of the wrong size is removed."""
         try:
             data = self.fetch(release.installer_url)
-        except OSError:
-            raise UpdateError("Nie udało się pobrać instalatora; spróbuj ponownie.") from None
+        except OSError as error:
+            raise UpdateError(f"Nie udało się pobrać instalatora. {network_hint(error)}") from None
         if len(data) != release.size:
             raise UpdateError("Pobrany instalator jest uszkodzony; spróbuj ponownie.")
         path = folder / release.installer_url.rsplit("/", 1)[-1]

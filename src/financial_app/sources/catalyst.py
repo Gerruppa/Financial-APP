@@ -17,6 +17,7 @@ from urllib.error import HTTPError
 
 from financial_app.domain.catalyst import IZ_SERIES, BondFacts, IndexationDay, indexed_facts, is_indexed
 from financial_app.domain.prices import PriceSourceError
+from financial_app.sources.network import network_hint
 
 CATALYST_LISTING = "https://gpwcatalyst.pl/o-instrumentach-instrumenty-notowane"
 INDEXATION_PAGE = "https://www.gov.pl/web/finanse/wspolczynniki-indeksacji2"
@@ -82,8 +83,8 @@ class CatalystFacts:
             return parse(self.fetch(url))
         except HTTPError as exc:
             return PriceSourceError(f"{site} zwrócił błąd HTTP {exc.code}. Spróbuj później.")
-        except OSError:
-            return PriceSourceError(f"Nie udało się połączyć z {site}. Sprawdź połączenie z internetem.")
+        except OSError as exc:
+            return PriceSourceError(f"Nie udało się połączyć z {site}. {network_hint(exc)}")
         except PriceSourceError as exc:
             return exc
 
